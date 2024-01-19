@@ -68,9 +68,9 @@ class HyperbolicSpiral:
         return atan2(sin(_theta), cos(_theta))
 
     def n_h(self, _p: Vec2D, _radius: float = None, cw: bool = True) -> Vec2D:
+        #### Unecesssary code ####
         p = _p
 
-        #### Unecesssary code ####
         if _radius is None:
             radius = self.radius
         else:

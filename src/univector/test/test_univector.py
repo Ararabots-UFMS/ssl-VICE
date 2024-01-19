@@ -43,10 +43,10 @@ def test_wrap2pi(wrap2pi, theta, expected_angle):
 
 @pytest.mark.parametrize(
     "vec,           expected_norm", [
-    ([3.0,  4.0],     5.0),           #test_norm_positive_floats
+    ([3.0,  4.0],   5.0),           #test_norm_positive_floats
     ([-5.0, 4.0],   41.0**0.5),     #test_norm_mixed_floats
     ([-1.0, -2.0],  5**0.5),        #test_norm_negative_floats
-    ([0.0,  0.0],     0.0)            #test_norm_zero_values)
+    ([0.0,  0.0],   0.0)            #test_norm_zero_values)
 ])  
 def test_norm(vec, expected_norm):
     result_norm = univector.norm(vec)
