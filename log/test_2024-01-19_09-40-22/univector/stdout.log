@@ -1,0 +1,40 @@
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+cachedir: /home/vsss/repos/vsss24-ws/build/univector/.pytest_cache
+rootdir: /home/vsss/repos/vsss24-ws/src/univector
+plugins: ament-flake8-0.12.9, launch-testing-1.0.4, ament-copyright-0.12.9, ament-xmllint-0.12.9, ament-pep257-0.12.9, ament-lint-0.12.9, launch-testing-ros-0.19.6, rerunfailures-12.0, colcon-core-0.12.1, cov-4.1.0, repeat-0.9.1
+[1mcollecting ... [0m[1m
+collected 0 items / 1 error                                                    [0m
+
+==================================== ERRORS ====================================
+[31m[1m________________________ ERROR collecting test session _________________________[0m
+[1m[31m/usr/lib/python3/dist-packages/pluggy/hooks.py[0m:286: in __call__
+    [94mreturn[39;49;00m [96mself[39;49;00m._hookexec([96mself[39;49;00m, [96mself[39;49;00m.get_hookimpls(), kwargs)
+[1m[31m/usr/lib/python3/dist-packages/pluggy/manager.py[0m:92: in _hookexec
+    [94mreturn[39;49;00m [96mself[39;49;00m._inner_hookexec(hook, methods, kwargs)
+[1m[31m/usr/lib/python3/dist-packages/pluggy/manager.py[0m:83: in <lambda>
+    [96mself[39;49;00m._inner_hookexec = [94mlambda[39;49;00m hook, methods, kwargs: hook.multicall(
+[1m[31m/usr/lib/python3/dist-packages/_pytest/python.py[0m:200: in pytest_collect_file
+    module: Module = ihook.pytest_pycollect_makemodule(path=path, parent=parent)
+[1m[31m/usr/lib/python3/dist-packages/pluggy/hooks.py[0m:286: in __call__
+    [94mreturn[39;49;00m [96mself[39;49;00m._hookexec([96mself[39;49;00m, [96mself[39;49;00m.get_hookimpls(), kwargs)
+[1m[31m/usr/lib/python3/dist-packages/pluggy/manager.py[0m:92: in _hookexec
+    [94mreturn[39;49;00m [96mself[39;49;00m._inner_hookexec(hook, methods, kwargs)
+[1m[31m/usr/lib/python3/dist-packages/pluggy/manager.py[0m:83: in <lambda>
+    [96mself[39;49;00m._inner_hookexec = [94mlambda[39;49;00m hook, methods, kwargs: hook.multicall(
+[1m[31m/opt/ros/humble/lib/python3.10/site-packages/launch_testing/pytest/hooks.py[0m:188: in pytest_pycollect_makemodule
+    entrypoint = find_launch_test_entrypoint(path)
+[1m[31m/opt/ros/humble/lib/python3.10/site-packages/launch_testing/pytest/hooks.py[0m:181: in find_launch_test_entrypoint
+    module = path.pyimport()
+[1m[31m/usr/lib/python3/dist-packages/py/_path/local.py[0m:704: in pyimport
+    [96m__import__[39;49;00m(modname)
+[1m[31m/usr/lib/python3/dist-packages/_pytest/assertion/rewrite.py[0m:170: in exec_module
+    exec(co, module.[91m__dict__[39;49;00m)
+[1m[31mtest/test_hyperbolicSpiral.py[0m:1: in <module>
+    [94mimport[39;49;00m [04m[96munivector[39;49;00m[04m[96m.[39;49;00m[04m[96munivector[39;49;00m[04m[96m.[39;49;00m[04m[96mun_field[39;49;00m [94mas[39;49;00m [04m[96munivector[39;49;00m
+[1m[31mE   ModuleNotFoundError: No module named 'univector.univector'[0m
+-- generated xml file: /home/vsss/repos/vsss24-ws/build/univector/pytest.xml ---
+=========================== short test summary info ============================
+ERROR  - ModuleNotFoundError: No module named 'univector.univector'
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+[31m=============================== [31m[1m1 error[0m[31m in 0.18s[0m[31m ===============================[0m

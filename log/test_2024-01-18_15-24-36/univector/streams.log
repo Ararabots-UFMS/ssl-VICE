@@ -1,0 +1,14 @@
+[0.262s] Invoking command in '/home/vsss/repos/vsss24-ws/src/univector': AMENT_PREFIX_PATH=/home/vsss/repos/vsss24-ws/install/univector:${AMENT_PREFIX_PATH} PYTEST_ADDOPTS=--tb=short --junit-xml=/home/vsss/repos/vsss24-ws/build/univector/pytest.xml --junit-prefix=univector -o cache_dir=/home/vsss/repos/vsss24-ws/build/univector/.pytest_cache PYTHONPATH=/home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -m pytest
+[0.546s] [1m============================= test session starts ==============================[0m
+[0.546s] platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+[0.551s] cachedir: /home/vsss/repos/vsss24-ws/build/univector/.pytest_cache
+[0.551s] rootdir: /home/vsss/repos/vsss24-ws/src/univector
+[0.551s] plugins: ament-flake8-0.12.9, launch-testing-1.0.4, ament-copyright-0.12.9, ament-xmllint-0.12.9, ament-pep257-0.12.9, ament-lint-0.12.9, launch-testing-ros-0.19.6, rerunfailures-12.0, colcon-core-0.12.1, cov-4.1.0, repeat-0.9.1
+[0.654s] [1mcollecting ... [0m[1m
+[0.654s] collected 11 items                                                             [0m
+[0.654s] 
+[0.673s] test/test_univector.py [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m                                       [100%][0m
+[0.674s] 
+[0.674s] -- generated xml file: /home/vsss/repos/vsss24-ws/build/univector/pytest.xml ---
+[0.675s] [32m============================== [32m[1m11 passed[0m[32m in 0.13s[0m[32m ==============================[0m
+[0.724s] Invoked command in '/home/vsss/repos/vsss24-ws/src/univector' returned '0': AMENT_PREFIX_PATH=/home/vsss/repos/vsss24-ws/install/univector:${AMENT_PREFIX_PATH} PYTEST_ADDOPTS=--tb=short --junit-xml=/home/vsss/repos/vsss24-ws/build/univector/pytest.xml --junit-prefix=univector -o cache_dir=/home/vsss/repos/vsss24-ws/build/univector/.pytest_cache PYTHONPATH=/home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -m pytest

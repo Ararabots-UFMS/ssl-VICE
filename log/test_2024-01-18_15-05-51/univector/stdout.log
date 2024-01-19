@@ -1,0 +1,26 @@
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+cachedir: /home/vsss/repos/vsss24-ws/build/univector/.pytest_cache
+rootdir: /home/vsss/repos/vsss24-ws/src/univector
+plugins: ament-flake8-0.12.9, launch-testing-1.0.4, ament-copyright-0.12.9, ament-xmllint-0.12.9, ament-pep257-0.12.9, ament-lint-0.12.9, launch-testing-ros-0.19.6, rerunfailures-12.0, colcon-core-0.12.1, cov-4.1.0, repeat-0.9.1
+[1mcollecting ... [0m[1m
+collected 7 items                                                              [0m
+
+test/test_univector.py [32m.[0m[31mF[0m[31mF[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[31m                                           [100%][0m
+
+=================================== FAILURES ===================================
+[31m[1m____________________________ test_gaussian_neg_int _____________________________[0m
+[1m[31mtest/test_univector.py[0m:23: in test_gaussian_neg_int
+    [94massert[39;49;00m resultado_esperado == [96mround[39;49;00m(resultado_gaussian,[94m9[39;49;00m)
+[1m[31mE   assert 0.37531109885139957 == 0.375311099[0m
+[1m[31mE    +  where 0.375311099 = round(0.37531109885139957, 9)[0m
+[31m[1m_____________________________ test_gaussian_float ______________________________[0m
+[1m[31mtest/test_univector.py[0m:33: in test_gaussian_float
+    [94massert[39;49;00m resultado_esperado == [96mround[39;49;00m(resultado_gaussian,[94m9[39;49;00m)
+[1m[31mE   assert 0.3095632084759744 == 0.309563208[0m
+[1m[31mE    +  where 0.309563208 = round(0.3095632084759744, 9)[0m
+-- generated xml file: /home/vsss/repos/vsss24-ws/build/univector/pytest.xml ---
+=========================== short test summary info ============================
+FAILED test/test_univector.py::test_gaussian_neg_int - assert 0.3753110988513...
+FAILED test/test_univector.py::test_gaussian_float - assert 0.309563208475974...
+[31m========================= [31m[1m2 failed[0m, [32m5 passed[0m[31m in 0.19s[0m[31m ==========================[0m

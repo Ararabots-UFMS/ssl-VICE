@@ -1,0 +1,22 @@
+[0.298s] Invoking command in '/home/vsss/repos/vsss24-ws/src/univector': AMENT_PREFIX_PATH=/home/vsss/repos/vsss24-ws/install/univector:${AMENT_PREFIX_PATH} PYTEST_ADDOPTS=--tb=short --junit-xml=/home/vsss/repos/vsss24-ws/build/univector/pytest.xml --junit-prefix=univector -o cache_dir=/home/vsss/repos/vsss24-ws/build/univector/.pytest_cache PYTHONPATH=/home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -m pytest
+[0.585s] [1m============================= test session starts ==============================[0m
+[0.585s] platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+[0.590s] cachedir: /home/vsss/repos/vsss24-ws/build/univector/.pytest_cache
+[0.590s] rootdir: /home/vsss/repos/vsss24-ws/src/univector
+[0.590s] plugins: ament-flake8-0.12.9, launch-testing-1.0.4, ament-copyright-0.12.9, ament-xmllint-0.12.9, ament-pep257-0.12.9, ament-lint-0.12.9, launch-testing-ros-0.19.6, rerunfailures-12.0, colcon-core-0.12.1, cov-4.1.0, repeat-0.9.1
+[0.697s] [1mcollecting ... [0m[1m
+[0.697s] collected 15 items                                                             [0m
+[0.697s] 
+[0.733s] test/test_hyperbolicSpiral.py [32m.[0m[32m.[0m[32m.[0m[32m.[0m[31mF[0m[31m                                      [ 33%][0m
+[0.740s] test/test_univector.py [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[31m                                        [100%][0m
+[0.741s] 
+[0.741s] =================================== FAILURES ===================================
+[0.741s] [31m[1m__________________________________ test_fi_h_ __________________________________[0m
+[0.741s] [1m[31mtest/test_hyperbolicSpiral.py[0m:64: in test_fi_h_
+[0.770s]     [94massert[39;49;00m angulo_esperado == angulo_fi_h
+[0.771s] [1m[31mE   assert 3 == 2.0793393515833847[0m
+[0.771s] -- generated xml file: /home/vsss/repos/vsss24-ws/build/univector/pytest.xml ---
+[0.771s] =========================== short test summary info ============================
+[0.771s] FAILED test/test_hyperbolicSpiral.py::test_fi_h_ - assert 3 == 2.079339351583...
+[0.771s] [31m========================= [31m[1m1 failed[0m, [32m14 passed[0m[31m in 0.19s[0m[31m =========================[0m
+[0.815s] Invoked command in '/home/vsss/repos/vsss24-ws/src/univector' returned '1': AMENT_PREFIX_PATH=/home/vsss/repos/vsss24-ws/install/univector:${AMENT_PREFIX_PATH} PYTEST_ADDOPTS=--tb=short --junit-xml=/home/vsss/repos/vsss24-ws/build/univector/pytest.xml --junit-prefix=univector -o cache_dir=/home/vsss/repos/vsss24-ws/build/univector/.pytest_cache PYTHONPATH=/home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -m pytest

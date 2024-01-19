@@ -1,0 +1,31 @@
+[0.711s] Invoking command in '/home/vsss/repos/vsss24-ws/src/univector': PYTHONPATH=/home/vsss/repos/vsss24-ws/build/univector/prefix_override:/home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 setup.py egg_info --egg-base ../../build/univector build --build-base /home/vsss/repos/vsss24-ws/build/univector/build install --record /home/vsss/repos/vsss24-ws/build/univector/install.log --single-version-externally-managed
+[0.943s] running egg_info
+[0.944s] writing ../../build/univector/univector.egg-info/PKG-INFO
+[0.944s] writing dependency_links to ../../build/univector/univector.egg-info/dependency_links.txt
+[0.944s] writing entry points to ../../build/univector/univector.egg-info/entry_points.txt
+[0.944s] writing requirements to ../../build/univector/univector.egg-info/requires.txt
+[0.944s] writing top-level names to ../../build/univector/univector.egg-info/top_level.txt
+[0.952s] reading manifest file '../../build/univector/univector.egg-info/SOURCES.txt'
+[0.952s] adding license file 'LICENSE'
+[0.953s] writing manifest file '../../build/univector/univector.egg-info/SOURCES.txt'
+[0.953s] running build
+[0.953s] running build_py
+[0.953s] copying univector/un_field.py -> /home/vsss/repos/vsss24-ws/build/univector/build/lib/univector
+[0.953s] copying univector/debug.py -> /home/vsss/repos/vsss24-ws/build/univector/build/lib/univector
+[0.953s] running install
+[0.954s] /usr/lib/python3/dist-packages/setuptools/command/install.py:34: SetuptoolsDeprecationWarning: setup.py install is deprecated. Use build and pip and other standards-based tools.
+[0.954s]   warnings.warn(
+[0.954s] running install_lib
+[0.955s] copying /home/vsss/repos/vsss24-ws/build/univector/build/lib/univector/un_field.py -> /home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages/univector
+[0.955s] copying /home/vsss/repos/vsss24-ws/build/univector/build/lib/univector/debug.py -> /home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages/univector
+[0.955s] copying /home/vsss/repos/vsss24-ws/build/univector/build/lib/univector/univector/debug.py -> /home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages/univector/univector
+[0.956s] byte-compiling /home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages/univector/un_field.py to un_field.cpython-310.pyc
+[0.958s] byte-compiling /home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages/univector/debug.py to debug.cpython-310.pyc
+[0.959s] byte-compiling /home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages/univector/univector/debug.py to debug.cpython-310.pyc
+[0.960s] running install_data
+[0.961s] running install_egg_info
+[0.962s] removing '/home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages/univector-0.0.0-py3.10.egg-info' (and everything under it)
+[0.962s] Copying ../../build/univector/univector.egg-info to /home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages/univector-0.0.0-py3.10.egg-info
+[0.963s] running install_scripts
+[0.980s] writing list of installed files to '/home/vsss/repos/vsss24-ws/build/univector/install.log'
+[0.998s] Invoked command in '/home/vsss/repos/vsss24-ws/src/univector' returned '0': PYTHONPATH=/home/vsss/repos/vsss24-ws/build/univector/prefix_override:/home/vsss/repos/vsss24-ws/install/univector/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 setup.py egg_info --egg-base ../../build/univector build --build-base /home/vsss/repos/vsss24-ws/build/univector/build install --record /home/vsss/repos/vsss24-ws/build/univector/install.log --single-version-externally-managed

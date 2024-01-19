@@ -1,0 +1,22 @@
+[1m============================= test session starts ==============================[0m
+platform linux -- Python 3.10.12, pytest-6.2.5, py-1.10.0, pluggy-0.13.0
+cachedir: /home/vsss/repos/vsss24-ws/build/univector/.pytest_cache
+rootdir: /home/vsss/repos/vsss24-ws/src/univector
+plugins: ament-flake8-0.12.9, launch-testing-1.0.4, ament-copyright-0.12.9, ament-xmllint-0.12.9, ament-pep257-0.12.9, ament-lint-0.12.9, launch-testing-ros-0.19.6, rerunfailures-12.0, colcon-core-0.12.1, cov-4.1.0, repeat-0.9.1
+[1mcollecting ... [0m[1m
+collected 16 items                                                             [0m
+
+test/test_hyperbolicSpiral.py [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[31mF[0m[31m                                     [ 37%][0m
+test/test_univector.py [32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[32m.[0m[31m                                        [100%][0m
+
+=================================== FAILURES ===================================
+[31m[1m________________________ test_fi_h_neg_p_int_radius_cw _________________________[0m
+[1m[31mtest/test_hyperbolicSpiral.py[0m:77: in test_fi_h_neg_p_int_radius_cw
+    [94massert[39;49;00m angulo_esperado == angulo_fi_h
+[1m[31mE   assert 4.044926798078043 == -2.2382585091015432[0m
+----------------------------- Captured stdout call -----------------------------
+3.605551275463989 4
+-- generated xml file: /home/vsss/repos/vsss24-ws/build/univector/pytest.xml ---
+=========================== short test summary info ============================
+FAILED test/test_hyperbolicSpiral.py::test_fi_h_neg_p_int_radius_cw - assert ...
+[31m========================= [31m[1m1 failed[0m, [32m15 passed[0m[31m in 0.19s[0m[31m =========================[0m
