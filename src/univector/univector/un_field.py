@@ -64,6 +64,7 @@ class HyperbolicSpiral:
         else:
             _theta = wrap2pi(theta - a)
 
+        #atan2 is unecessary, just return _theta
         return atan2(sin(_theta), cos(_theta))
 
     def n_h(self, _p: Vec2D, _radius: float = None, cw: bool = True) -> Vec2D:
