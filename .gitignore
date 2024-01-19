@@ -1,5 +1,6 @@
 *.pyc
 
+.devcontainer/
 build/
 install/
 log/
