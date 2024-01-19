@@ -1,37 +1,25 @@
 import univector.un_field as univector
 import pytest
-from math import exp, pi
+from math import exp, sqrt, pi
 
 ######################### gaussian #########################
-def test_gaussian_positive_integers():
-    x = 3
-    u = 4
-    v = 5
-    expected_gaussian = 0.980198673
 
-    result_gaussian = univector.gaussian(x, u, v)
+@pytest.fixture
+def gaussian():
+    return univector.gaussian 
 
-    assert expected_gaussian == round(result_gaussian,9)
-
-def test_gaussian_negative_integers():
-    x = 3
-    u = -4
-    v = 5
-    expected_gaussian = exp(-((x-u)**2) / (2 * (v**2)))
-
-    result_gaussian = univector.gaussian(x, u, v)
-
-    assert expected_gaussian == result_gaussian
-
-def test_gaussian_mixed_floats():
-    x = 3.657
-    u = -4
-    v = 5
-    expected_gaussian = exp(-((x-u)**2) / (2 * (v**2)))
-
-    result_gaussian = univector.gaussian(x, u, v)
-
-    assert expected_gaussian == result_gaussian
+@pytest.mark.parametrize("x, mu, sigma, expected", [
+    (3, 4, 5,       0.980198673),           # standard normal distribution
+    (3, -4, 5,      0.37531109885139957),   # 1 standard deviation from the mean
+    (3.657, -4, 5,  0.3095632084759744),    # -1 standard deviation from the mean
+    (0, 0, 1,       1),                     # standard normal distribution
+    (1, 0, 1,       0.6065306597126334),    # 1 standard deviation from the mean
+    (-1, 0, 1,      0.6065306597126334),    # -1 standard deviation from the mean
+    (0, 0, 2,       1),                     # standard normal distribution with sigma = 2
+])
+def test_gaussian(gaussian, x, mu, sigma, expected):
+    result = gaussian(x, mu, sigma)
+    assert abs(result - expected) < 1e-9  # use a small tolerance because of floating point precision
 
 ######################### wrap2pi #########################
     
@@ -68,35 +56,14 @@ def test_wrap2pi_theta_equal_to_pi():
     assert expected_angle == wrap2pi_angle
 
 ######################### norm #########################
-def test_norm_positive_floats():
-    #Arrange
-    vec = [3.0,4.0]
-    expected_norm = 5.0
-    #Act
-    result_norm = univector.norm(vec)
-    #Assert
-    assert expected_norm == result_norm
 
-def test_norm_mixed_floats():
-    vec = [-5.0, 4.0]
-    expected_norm = 41.0**0.5
-
-    result_norm = univector.norm(vec)
-
-    assert expected_norm == result_norm
-
-def test_norm_negative_floats():
-    vec = [-1.0, -2.0]
-    expected_norm = 5**0.5
-
-    result_norm = univector.norm(vec)
-
-    assert expected_norm == result_norm
-
-def test_norm_zero_values():
-    vec = [0.0,0.0]
-    expected_norm = 0.0
-
+@pytest.mark.parametrize("vec, expected_norm", [
+    ([3.0,4.0], 5.0),           #test_norm_positive_floats
+    ([-5.0, 4.0], 41.0**0.5),   #test_norm_mixed_floats
+    ([-1.0, -2.0], 5**0.5),     #test_norm_negative_floats
+    ([0.0,0.0], 0.0)             #test_norm_zero_values)
+])  
+def test_norm(vec, expected_norm):
     result_norm = univector.norm(vec)
 
     assert expected_norm == result_norm
