@@ -89,7 +89,7 @@ class Repulsive:
     def update_origin(self, newOrigin: Vec2D) -> None:
         self.origin = newOrigin.copy()
 
-    def fi_r(self, _p, _origin: Vec2D = None, _theta: bool = True):
+    def fi_r(self,  _p,  _origin: Vec2D = None,  _theta: bool = True):
         '''
         REFACTOR
         '''
