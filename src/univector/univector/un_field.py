@@ -4,6 +4,7 @@ import math
 from math import pi
 from math import cos, sin, atan2, exp, sqrt
 from utils.linalg import *
+from typing import Optional
 
 from strategy.arena_utils import ArenaSections, univector_pos_section, Axis, Offsets
 
@@ -35,13 +36,12 @@ class HyperbolicSpiral:
         self.Kr = _Kr
         self.radius = _radius
 
-    def update_params(self, _KR: float, _RADIUS: float) -> None:
+    def update_params(self, _KR: Optional[float], _RADIUS: Optional[float]) -> None:
         '''
-        This is a method
+        Updates parameters of this class.
         '''
-        #Maybe allow to change only one parameter
-        self.Kr = _KR
-        self.radius = _RADIUS
+        self.Kr = _KR if _KR is not None else self.Kr
+        self.radius = _RADIUS if _RADIUS is not None else self.radius
 
     def fi_h(self, _p: Vec2D, radius: float = None, cw: bool = True) -> float:
 
