@@ -9,6 +9,10 @@ from components.utils import wrap2pi, gaussian, LEFT, RIGHT
 from strategy.arena_utils import ArenaSections, univector_pos_section, Axis, Offsets
 
 class UnivectorField:
+    '''
+    Uses the move2goal and avoid obstacle fields to create the univector field
+    '''
+
     def __init__(self):
         self.obstacles = [Vec2D.origin()]
         self.obstaclesSpeed = [Vec2D.origin()]

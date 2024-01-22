@@ -4,6 +4,7 @@ from utils.linalg import Vec2D, Mat2D
 
 from univector.components.move2goal import Move2Goal
 from univector.components.hyperbolic_spiral import HyperbolicSpiral
+
 constructor_kr = 5
 constructor_radius = 5
 
@@ -111,3 +112,22 @@ def test_update_axis_u(move2goal, vec_u):
     u = vec_u/-vec_u.norm()
 
     assert u == move2goal.u
+
+######################### fi_tuf #########################
+@pytest.mark.parametrize(
+        "radius,        origin,        u,              p,              expected_angle", [
+        (5,             Vec2D(0,0),    Vec2D(1, 0),    Vec2D(1, 0),    0),
+        (5,             Vec2D(0,0),    Vec2D(1, 0),    Vec2D(-1, 0),   0),
+        (5,             Vec2D(0,0),    Vec2D(1, 0),    Vec2D(0, 1),    -0.15661999255049955),
+        (1,             Vec2D(0,0),    Vec2D(1, 0),    Vec2D(0, 0),    0),
+        (1,             Vec2D(0,0),    Vec2D(1, 0),    Vec2D(0, 2),    -2.7488935718910694),
+        (1,             Vec2D(0,0),    Vec2D(1, 0),    Vec2D(0, -1),   2.9171931783333793),
+])
+def test_fi_tuf(move2goal, radius, origin, u, p, expected_angle):
+
+    move2goal.update_params(constructor_kr, radius)
+
+    move2goal.update_axis(origin, u)
+    result_angle = move2goal.fi_tuf(p)
+
+    assert abs(expected_angle - result_angle) < 1e-10

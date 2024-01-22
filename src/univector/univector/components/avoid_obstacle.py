@@ -2,6 +2,10 @@ from components.repulsive import Repulsive
 from utils.linalg import *
 
 class AvoidObstacle:
+    '''
+    Uses the repulsive field to create the avoid obstacle field used in the resulting univector field
+    '''
+    
     def __init__(self, _pObs: Vec2D, _vObs: Vec2D, _pRobot: Vec2D, _vRobot: Vec2D, _K0: float):
         self.pObs =_pObs.copy()
         self.vObs = _vObs.copy()

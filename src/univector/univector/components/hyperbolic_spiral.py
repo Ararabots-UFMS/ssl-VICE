@@ -3,6 +3,9 @@ from utils.linalg import Vec2D
 from .utils import wrap2pi
 
 class HyperbolicSpiral:
+    '''
+    Creates the hyperbolic spiral field for the move2goal field
+    '''
 
     def __init__(self, _Kr, _radius):
         self.Kr = _Kr

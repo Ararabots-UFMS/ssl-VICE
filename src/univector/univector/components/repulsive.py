@@ -2,8 +2,14 @@ from math import atan2
 from utils.linalg import Vec2D
 
 class Repulsive:
+    '''
+    Creates the repulsive field for the avoid obstacle field
+    '''
 
     def __init__(self):
+        '''
+        Creates a Vec2D origin as the origin of the repulsive field 
+        '''
         self.origin = Vec2D.origin()
 
     def update_origin(self, newOrigin: Vec2D) -> None:

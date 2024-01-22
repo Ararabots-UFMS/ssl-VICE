@@ -7,6 +7,9 @@ LEFT = 0
 RIGHT = 1
 
 def gaussian(x, u, v):
+    '''
+    Gaussian function
+    '''
     return exp(-((x-u)**2) / (2 * (v**2)))
 
 def wrap2pi(theta: float) -> float:
@@ -23,6 +26,6 @@ def wrap2pi(theta: float) -> float:
 
 def norm(vec):
     '''
-    this function is never used cause Vec2d has a norm method
+    Never used because Vec2d has a norm method
     '''
     return sqrt(vec[0]**2 + vec[1]**2)

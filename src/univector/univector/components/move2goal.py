@@ -3,14 +3,17 @@ from utils.linalg import Vec2D, Mat2D
 from univector.components.hyperbolic_spiral import HyperbolicSpiral
 
 class Move2Goal:
+    '''
+    Uses the hyperbolic spiral field to create the move2goal field used in the resulting univector field
+    '''
 
     def __init__(self, _Kr: float, _radius: float):
         self.Kr = _Kr
         self.radius = _radius
 
-        ###### Should be hyperbolicSpiral ######
+        ###### variable namo should be hyperbolicSpiral ######
         self.hyperSpiral = HyperbolicSpiral(self.Kr, self.radius)
-        ########################################
+        ######################################################
         self.origin = Vec2D.origin()
 
         self.u = Vec2D.origin()
