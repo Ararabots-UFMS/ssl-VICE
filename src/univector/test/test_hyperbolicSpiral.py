@@ -1,5 +1,5 @@
 import pytest
-import univector.un_field as univector
+from univector.components.hyperbolic_spiral import HyperbolicSpiral
 from math import pi
 from utils.linalg import Vec2D
 
@@ -8,7 +8,7 @@ constructor_radius = 5
 
 @pytest.fixture
 def hyperbolicalSpiral():
-    return univector.HyperbolicSpiral(constructor_kr, constructor_radius)
+    return HyperbolicSpiral(constructor_kr, constructor_radius)
 
 ######################### Constructor #########################
 

@@ -1,11 +1,11 @@
 import pytest
-import univector.un_field as univector
+from univector.components.repulsive import Repulsive
 from utils.linalg import Vec2D
 from math import pi
 
 @pytest.fixture
 def repulsive():
-    return univector.Repulsive()
+    return Repulsive()
 
 ######################### Constructor #########################
 
