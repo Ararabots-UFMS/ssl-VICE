@@ -15,34 +15,34 @@ def avoidObstacle():
 
 ######################### Constructor #########################
 def test_constructor_pObs(avoidObstacle):
-    assert isinstance(avoidObstacle._pObs, Vec2D)
+    assert isinstance(avoidObstacle.pObs, Vec2D)
 
 def test_constructor_vObs(avoidObstacle):
-    assert isinstance(avoidObstacle._vObs, Vec2D)
+    assert isinstance(avoidObstacle.vObs, Vec2D)
 
 def test_constructor_pRobot(avoidObstacle):
-    assert isinstance(avoidObstacle._pRobot, Vec2D)
+    assert isinstance(avoidObstacle.pRobot, Vec2D)
 
 def test_constructor_vRobot(avoidObstacle):
-    assert isinstance(avoidObstacle._vRobot, Vec2D)
+    assert isinstance(avoidObstacle.vRobot, Vec2D)
 
 def test_constructor_K0(avoidObstacle):
-    assert constructor_K0 == avoidObstacle._K0
+    assert constructor_K0 == avoidObstacle.K0
 
 ######################### get_s #########################
     
 @pytest.mark.parametrize(
     "K0,    vObs,           vRobot,         expected", [
-    (1,     Vec2D(3, 2),    Vec2D(1, 1),    Vec2D(2, 1)),       # test random positive integer values
-    (2,     Vec2D(-7, 15),  Vec2D(1, 1),    Vec2D(-8, 14)),     # test random mixed integer values
-    (3,     Vec2D(1, 1),    Vec2D(1, 1),    Vec2D(0, 0)),       # edge case: vObs and vRobot are the same
-    (4,     Vec2D(2, 2),    Vec2D(0, 0),    Vec2D(2, 2)),       # edge case: vRobot is the origin
-    (5,     Vec2D(0, 0),    Vec2D(2, 2),    Vec2D(-2, -2)),     # edge case: vObs is the origin
+    (1,     Vec2D(3, 2),    Vec2D(1, 1),    Vec2D(2, 1)),           # test random positive integer values
+    (2,     Vec2D(-7, 15),  Vec2D(1, 1),    Vec2D(-16, 28)),        # test random mixed integer values
+    (3,     Vec2D(1, 1),    Vec2D(1, 1),    Vec2D(0, 0)),           # edge case: vObs and vRobot are the same
+    (4,     Vec2D(2, 2),    Vec2D(0, 0),    Vec2D(8, 8)),           # edge case: vRobot is the origin
+    (5,     Vec2D(0, 0),    Vec2D(2, 2),    Vec2D(-10, -10)),       # edge case: vObs is the origin
 ])
-def test_get_s(avoidObstacle, K0, vObs, vRobot, expected):
-    AvoidObstacle(constructor_pObs, vObs, constructor_pRobot, vRobot, K0)
+def test_get_s(K0, vObs, vRobot, expected):
+    avoidObstacle = AvoidObstacle(constructor_pObs, vObs, constructor_pRobot, vRobot, K0)
     result = avoidObstacle.get_s()
-    assert expected == isinstance(result, Vec2D)
+    assert expected == result
 
 ######################### get_virtual_pos #########################
 
