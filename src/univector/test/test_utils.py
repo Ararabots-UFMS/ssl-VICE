@@ -25,7 +25,7 @@ def test_gaussian(x, mu, sigma, expected):
     (5.0,   5.0 - 2 * pi),      #test theta greater than pi
     (-5.0,  2 * pi - 5.0),      #test theta smaller than minus pi
     (2.0,   2.0),               #test theta between pi and minus pi
-(pi,    pi),                    #test theta equal to pi
+    (pi,    pi),                #test theta equal to pi
 ])
 def test_wrap2pi(theta, expected_angle):
     result = wrap2pi(theta)

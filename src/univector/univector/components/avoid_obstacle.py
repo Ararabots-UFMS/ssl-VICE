@@ -1,4 +1,4 @@
-from components.repulsive import Repulsive
+from univector.components.repulsive import Repulsive
 from utils.linalg import *
 
 class AvoidObstacle:
