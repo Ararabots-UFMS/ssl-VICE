@@ -2,8 +2,8 @@ import pytest
 from math import atan2, cos, sin
 from utils.linalg import Vec2D, Mat2D
 
-from univector.components.move2goal import Move2Goal
-from univector.components.hyperbolic_spiral import HyperbolicSpiral
+from movement.univector.move2goal import Move2Goal
+from movement.univector.hyperbolic_spiral import HyperbolicSpiral
 
 constructor_kr = 5
 constructor_radius = 5

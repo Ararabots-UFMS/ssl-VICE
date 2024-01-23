@@ -1,6 +1,6 @@
 from math import atan2, cos, sin
 from utils.linalg import Vec2D, Mat2D
-from univector.components.hyperbolic_spiral import HyperbolicSpiral
+from movement.univector.hyperbolic_spiral import HyperbolicSpiral
 
 class Move2Goal:
     '''

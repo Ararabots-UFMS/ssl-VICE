@@ -1,4 +1,4 @@
-from univector.components.utils import gaussian, wrap2pi, norm
+from movement.univector.utils import gaussian, wrap2pi, norm
 import pytest
 from math import pi
 

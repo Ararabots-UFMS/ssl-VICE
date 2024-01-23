@@ -1,5 +1,5 @@
 import pytest
-from univector.components.hyperbolic_spiral import HyperbolicSpiral
+from movement.univector.hyperbolic_spiral import HyperbolicSpiral
 from math import pi
 from utils.linalg import Vec2D
 

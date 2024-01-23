@@ -2,9 +2,9 @@ from typing import List
 import numpy as np
 from math import cos, sin
 from utils.linalg import *
-from .components.move2goal import Move2Goal
-from components.avoid_obstacle import AvoidObstacle
-from components.utils import wrap2pi, gaussian, LEFT, RIGHT
+from move2goal import Move2Goal
+from avoid_obstacle import AvoidObstacle
+from utils import wrap2pi, gaussian, LEFT, RIGHT
 
 from strategy.arena_utils import ArenaSections, univector_pos_section, Axis, Offsets
 

@@ -1,5 +1,5 @@
 import pytest
-from univector.components.repulsive import Repulsive
+from movement.univector.repulsive import Repulsive
 from utils.linalg import Vec2D
 from math import pi
 

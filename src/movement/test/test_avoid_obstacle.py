@@ -1,5 +1,5 @@
 import pytest
-from univector.components.avoid_obstacle import AvoidObstacle
+from movement.univector.avoid_obstacle import AvoidObstacle
 from math import pi
 from utils.linalg import Vec2D
 
