@@ -5,7 +5,6 @@ from typing import Optional
 
 class HyperbolicSpiral:
     '''
-    Creates the hyperbolic spiral field for the move2goal field
     Hyperbolic Spiral field class, used to define move2goal field.
 
     Args:
@@ -17,7 +16,7 @@ class HyperbolicSpiral:
     Reference: "Evolutionary Univector Field-based Navigation with Collision Avoidance for Mobile Robot"
     '''
 
-    def __init__(self, Kr, radius):
+    def __init__(self, Kr: float, radius: float):
         self.Kr = Kr
         self.radius = radius
 
@@ -40,16 +39,16 @@ class HyperbolicSpiral:
         r = self.radius if radius is None else radius
 
         theta = atan2(p[1], p[0])
-        ro = p.norm()
+        ro = p.norm() #Distance between center and position p.
 
         if ro > r:
             a = (pi / 2.0) * (2.0 - (r + self.Kr) / (ro + self.Kr))
         else:
             a = (pi / 2.0) * sqrt(ro / r)
 
-        fi_h = (theta + a) if cw else (theta - a)
+        theta_ = (theta + a) if cw else (theta - a)
 
-        return wrap2pi(fi_h)
+        return wrap2pi(theta_)
 
     def n_h(self, p: Vec2D, radius: Optional[float] = None, cw: bool = True) -> Vec2D:
         '''
