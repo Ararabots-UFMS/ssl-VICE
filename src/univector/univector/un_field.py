@@ -4,6 +4,7 @@ import math
 from math import pi
 from math import cos, sin, atan2, exp, sqrt
 from utils.linalg import *
+from typing import Optional
 
 from strategy.arena_utils import ArenaSections, univector_pos_section, Axis, Offsets
 
@@ -35,29 +36,24 @@ class HyperbolicSpiral:
         self.Kr = _Kr
         self.radius = _radius
 
-    def update_params(self, _KR: float, _RADIUS: float) -> None:
+    def update_params(self, _KR: Optional[float], _RADIUS: Optional[float]) -> None:
         '''
-        This is a method
+        Updates parameters of this class.
         '''
-        #Maybe allow to change only one parameter
-        self.Kr = _KR
-        self.radius = _RADIUS
+        self.Kr = _KR if _KR is not None else self.Kr
+        self.radius = _RADIUS if _RADIUS is not None else self.radius
 
-    def fi_h(self, _p: Vec2D, radius: float = None, cw: bool = True) -> float:
+    def fi_h(self, p: Vec2D, radius: Optional[float] = None, cw: bool = True) -> float:
 
-        if radius is None:
-            r = self.radius
-        else:
-            r = radius
+        r = self.radius if radius is None else radius
 
-        p = _p
         theta = atan2(p[1], p[0])
         ro = p.norm()
 
         if ro > r:
             a = (pi / 2.0) * (2.0 - (r + self.Kr) / (ro + self.Kr))
         else:
-            a = (pi / 2.0) * math.sqrt(ro / r)
+            a = (pi / 2.0) * sqrt(ro / r)
 
         if cw:
             _theta = wrap2pi(theta + a)
@@ -67,10 +63,8 @@ class HyperbolicSpiral:
         #atan2 is unecessary, just return _theta
         return atan2(sin(_theta), cos(_theta))
 
-    def n_h(self, _p: Vec2D, _radius: float = None, cw: bool = True) -> Vec2D:
+    def n_h(self, p: Vec2D, _radius: Optional[float] = None, cw: bool = True) -> Vec2D:
         #### Unecesssary code ####
-        p = _p
-
         if _radius is None:
             radius = self.radius
         else:
@@ -89,14 +83,14 @@ class Repulsive:
     def update_origin(self, newOrigin: Vec2D) -> None:
         self.origin = newOrigin.copy()
 
-    def fi_r(self, _p, _origin: Vec2D = None, _theta: bool = True):
+    def fi_r(self, p, _origin: Optional[Vec2D] = None, _theta: bool = True):
         '''
         REFACTOR
         '''
         if _origin is not None:
             self.update_origin(_origin)
 
-        p = _p - self.origin
+        p -= self.origin
 
         if _theta:
             return atan2(p[1], p[0])
