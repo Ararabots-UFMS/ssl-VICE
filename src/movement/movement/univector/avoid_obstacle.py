@@ -3,47 +3,64 @@ from utils.linalg import *
 
 class AvoidObstacle:
     '''
-    Uses the repulsive field to create the avoid obstacle field used in the resulting univector field
+    AvoidObstacle field class, uses Repulsive field to form the resulting univector field.
+    
+    Args:
+        pObs [Vec2D]: Obstacle position.
+        vObs [Vec2D]: Obstacle velocity vector.
+        pRobots [Vec2D]: Robots position.
+        vRobots [Vec2D]: Robots velocity vector.
+        K0 [float]: virtual prediction costant.
     '''
     
-    def __init__(self, _pObs: Vec2D, _vObs: Vec2D, _pRobot: Vec2D, _vRobot: Vec2D, _K0: float):
-        self.pObs =_pObs.copy()
-        self.vObs = _vObs.copy()
-        self.pRobot = _pRobot.copy()
-        self.vRobot = _vRobot.copy()
-        self.K0 = _K0
+    def __init__(self, pObs: Vec2D, vObs: Vec2D, pRobot: Vec2D, vRobot: Vec2D, K0: float):
+        self.pObs = pObs.copy()
+        self.vObs = vObs.copy()
+        self.pRobot = pRobot.copy()
+        self.vRobot = vRobot.copy()
+        self.K0 = K0
         self.repField = Repulsive()
 
     def get_s(self) -> Vec2D:
+        '''
+        's' is the vector from the real obstacle position to the predicted (virtual) obstacle position.
+        '''
         return self.K0 * (self.vObs - self.vRobot)
 
     def get_virtual_pos(self) -> Vec2D:
         s = self.get_s()
         s_norm = s.norm()
         d = (self.pObs - self.pRobot).norm()
-        if d >= s_norm:
-            v_pos = self.pObs + s
-        else:
-            v_pos = self.pObs + (d / s_norm) * s
+
+        # To prevent a collision if the real obstacle position is in front of the robot
+        # but the virtual position is behind.
+        v_pos = self.pObs
+        v_pos += s if d >= s_norm else (d / s_norm) * s
+        
         return v_pos
 
     def fi_auf(self, _robotPos: Vec2D, _vPos: Vec2D = None) -> Vec2D:
-        if _vPos is None:
-            v_pos = self.get_virtual_pos()
-        else:
-            v_pos = _vPos
-        vec = self.repField.fi_r(_robotPos, _origin=v_pos)
+        v_pos = _vPos if _vPos is not None else self.get_virtual_pos()
+        
+        vec = self.repField.fi_r(_robotPos, _origin = v_pos)
         return vec
 
-    def update_param(self, _K0: float) -> None:
-        self.K0 = _K0
+    def update_param(self, K0: float) -> None:
+        '''
+        Update K0 parameter method
+        '''
+        self.K0 = K0
 
-    def update_obstacle(self, _pObs: Vec2D, _vObs: Vec2D) -> None:
+    def update_obstacle(self, pObs: Vec2D, vObs: Vec2D) -> None:
+        '''
+        Update obstacle position and velocity vector.
+        '''
+        self.pObs = pObs
+        self.vObs = vObs
 
-        self.pObs = _pObs
-        self.vObs = _vObs
-
-    def update_robot(self, _pRobot: Vec2D, _vRobot: Vec2D) -> None:
-
-        self.pRobot = _pRobot
-        self.vRobot = _vRobot
+    def update_robot(self, pRobot: Vec2D, vRobot: Vec2D) -> None:
+        '''
+        Update robots position and velocity vector.
+        '''
+        self.pRobot = pRobot
+        self.vRobot = vRobot
