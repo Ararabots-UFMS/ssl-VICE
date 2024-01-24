@@ -27,12 +27,12 @@ class AvoidObstacle:
             v_pos = self.pObs + (d / s_norm) * s
         return v_pos
 
-    def fi_auf(self, _robotPos: Vec2D, _vPos: Vec2D = None, _theta: bool = True) -> Vec2D:
+    def fi_auf(self, _robotPos: Vec2D, _vPos: Vec2D = None) -> Vec2D:
         if _vPos is None:
             v_pos = self.get_virtual_pos()
         else:
             v_pos = _vPos
-        vec = self.repField.fi_r(_robotPos, _origin=v_pos, _theta=_theta)
+        vec = self.repField.fi_r(_robotPos, _origin=v_pos)
         return vec
 
     def update_param(self, _K0: float) -> None:
