@@ -5,28 +5,43 @@ from .utils import wrap2pi
 class HyperbolicSpiral:
     '''
     Creates the hyperbolic spiral field for the move2goal field
+    Hyperbolic Spiral field class, used to define move2goal field.
+
+    Args:
+        Kr [float]: Adjustable parameter.
+        radius [float]: Radius that decides the size of the spiral.
+
+    Note* If Kr becomes larger, the spiral becomes smoother.
+
+    Reference: "Evolutionary Univector Field-based Navigation with Collision Avoidance for Mobile Robot"
     '''
 
-    def __init__(self, _Kr, _radius):
-        self.Kr = _Kr
-        self.radius = _radius
+    def __init__(self, Kr, radius):
+        self.Kr = Kr
+        self.radius = radius
 
-    def update_params(self, _KR: float, _RADIUS: float) -> None:
+    def update_params(self, Kr: float, radius: float) -> None:
         '''
-        This is a method
+        Parameters update method.
         '''
         #Maybe allow to change only one parameter
-        self.Kr = _KR
-        self.radius = _RADIUS
+        self.Kr = Kr
+        self.radius = radius
 
-    def fi_h(self, _p: Vec2D, radius: float = None, cw: bool = True) -> float:
+    def fi_h(self, p: Vec2D, radius: float = None, cw: bool = True) -> float:
+        '''
+        Calculate fi_h method.
 
+        Args:
+            p [Vec2D]: Distance between the origin and position.
+            radius [float]: Radius that decides the size of the spiral.
+            cw [bool]: clockwise if true, otherwise counter clockwise.
+        '''
         if radius is None:
             r = self.radius
         else:
             r = radius
 
-        p = _p
         theta = atan2(p[1], p[0])
         ro = p.norm()
 
@@ -43,15 +58,14 @@ class HyperbolicSpiral:
         #atan2 is unecessary, just return _theta
         return atan2(sin(_theta), cos(_theta))
 
-    def n_h(self, _p: Vec2D, _radius: float = None, cw: bool = True) -> Vec2D:
-        #### Unecesssary code, _radius already on fi_h####
-        p = _p
+    def n_h(self, p: Vec2D, radius: float = None, cw: bool = True) -> Vec2D:
+        '''
+        Calculate n_h method.
 
-        if _radius is None:
-            radius = self.radius
-        else:
-            radius = _radius
-        ##########################
-
+        Args:
+            p [Vec2D]: Distance between the origin and position.
+            radius [float]: Radius that decides the size of the spiral.
+            cw [bool]: clockwise if true, otherwise counter clockwise.
+        '''
         fi = self.fi_h(p, radius, cw)
         return Vec2D(cos(fi), sin(fi))
