@@ -1,19 +1,13 @@
-import sys
-import os
-import numpy as np
-#sys.path[0] = root_path = os.environ['ROS_ARARA_ROOT'] + "src/"
-#path = sys.path[0] + 'parameters/univector_constants.yml'
-from utils.math_utils import angle_between, distancePoints, unitVector, forward_min_diff, raio_vetores, get_orientation_and_angle, predict_speed
+from utils.math_utils import angle_between, distancePoints, unitVector, forward_min_diff, predict_speed
 from utils.yaml_handler import YamlHandler
 
-# from ..control.PID import PID ####TODO: Create PID communication to substitute this
+from control.PIDclient import PIDClientAsync
 from univector.univec_field import UnivectorField
-# from rospy import logfatal
 from utils.linalg import *
 
-univector_list = YamlHandler().read("parameters/univector_constants.yml")
+univector_list = YamlHandler().read("parameters/univector.yml")
 
-# univector
+# univector parameters
 RADIUS = univector_list['RADIUS']
 KR = univector_list['KR']
 K0 = univector_list['K0']
@@ -33,7 +27,7 @@ class Movement():
     """Movement class return leftWheelSpeed(int), rightWheelSpeed(int), done(boolean)"""
 
     def __init__(self, PID_list, error=10, attack_goal=RIGHT, _pid_type=SOFTWARE, _debug_topic = None):
-        self.pid = None #PID(kp=PID_list[0], ki=PID_list[1], kd=PID_list[2])
+        self.pid = PIDClientAsync(kp=PID_list[0], ki=PID_list[1], kd=PID_list[2]) #PID(kp=PID_list[0], ki=PID_list[1], kd=PID_list[2])
         self.last_pos = Vec2D.origin()
         self.error_margin = error
         self.orientation = FORWARD
@@ -68,7 +62,7 @@ class Movement():
         :param pid_list: [float, float, float]
         :return:
         """
-        self.pid.set_constants(pid_list[0], pid_list[1], pid_list[2])
+        self.pid.set_parameters(pid_list[0], pid_list[1], pid_list[2])
 
     def predict_univector(self, speed, number_of_predictions, robot_position, robot_vector, robot_speed, obstacle_position, obstacle_speed, ball_position, only_forward=False):
         """Recive players positions and speed and return the speed to follow univector
@@ -176,7 +170,6 @@ class Movement():
             return 0, 0, True
         direction_vector = unitVector(goal_position - robot_position)
 
-        # logfatal(str(direction_vector))
         return self.follow_vector(speed, robot_vector, direction_vector, only_forward)
 
     def follow_vector(self, speed, robot_vector, goal_vector, only_forward=False, correct_pid = True):
@@ -197,7 +190,6 @@ class Movement():
         #forward, diff_angle = get_orientation_and_angle(self.orientation, robot_vector, goal_vector)
         self.orientation = forward
 
-        #logfatal("DIFF "+str(diff_angle)+" "+str(forward))
         # Return the speed and angle if the PID is in hardware, otherwise
         # returns both wheels speed and its correction
         if self.pid_type == HARDWARE:
@@ -205,7 +197,7 @@ class Movement():
                 return diff_angle, speed, False
             return diff_angle, -speed, False
 
-        correction = self.pid.update(diff_angle)
+        correction = self.pid.request_update(diff_angle)
 
         if forward:
             return self.return_speed(speed, correction)
@@ -219,7 +211,6 @@ class Movement():
 
          :return: returns int, int, boolean
         """
-        #logfatal("SPIN " + str(speed) + " " + str(ccw))
         if ccw:
             return int(-speed), int(speed), False
         return int(speed), int(-speed), False
@@ -242,7 +233,7 @@ class Movement():
         if self.pid_type == HARDWARE:
             return diff_angle, 0, False
 
-        correction = None #multiplicator * self.pid.update(diff_angle)
+        correction = multiplicator * self.pid.request_update(diff_angle)
         return self.normalize(int(correction)), self.normalize(int(-correction)), False
 
     def return_speed(self, speed, correction):
@@ -265,3 +256,12 @@ class Movement():
         if abs(speed) > 255:
             return 255*speed/abs(speed)
         return speed
+
+if __name__ == "__main__":
+    from utils.linalg import Vec2D
+    from utils.math_utils import angle_between
+
+    movement = Movement([1, 1, 1])
+    robot_vector = Vec2D(1, 0)
+    goal_vector = Vec2D(1, 0)
+    print(movement.follow_vector(speed=10, robot_vector=robot_vector, goal_vector=goal_vector))
