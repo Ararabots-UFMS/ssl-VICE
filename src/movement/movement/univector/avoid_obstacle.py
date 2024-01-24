@@ -28,6 +28,10 @@ class AvoidObstacle:
         return v_pos
 
     def fi_auf(self, _robotPos: Vec2D, _vPos: Vec2D = None, _theta: bool = True) -> Vec2D:
+        '''
+            Quando _theta é True, a função fi_r retorna um float e portanto vec é um float e não um Vec2D
+            Além disso, _theta sempre é True
+        '''
         if _vPos is None:
             v_pos = self.get_virtual_pos()
         else:
