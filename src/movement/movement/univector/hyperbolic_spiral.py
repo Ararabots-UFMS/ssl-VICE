@@ -25,7 +25,6 @@ class HyperbolicSpiral:
         '''
         Parameters update method.
         '''
-        #Maybe allow to change only one parameter
         self.Kr = Kr
         self.radius = radius
 
@@ -34,14 +33,11 @@ class HyperbolicSpiral:
         Calculate fi_h method.
 
         Args:
-            p [Vec2D]: Distance between the origin and position.
+            p [Vec2D]: position.
             radius [float]: Radius that decides the size of the spiral.
             cw [bool]: clockwise if true, otherwise counter clockwise.
         '''
-        if radius is None:
-            r = self.radius
-        else:
-            r = radius
+        r = self.radius if radius is None else radius
 
         theta = atan2(p[1], p[0])
         ro = p.norm()
@@ -51,20 +47,16 @@ class HyperbolicSpiral:
         else:
             a = (pi / 2.0) * sqrt(ro / r)
 
-        if cw:
-            _theta = wrap2pi(theta + a)
-        else:
-            _theta = wrap2pi(theta - a)
+        fi_h = (theta + a) if cw else (theta - a)
 
-        #atan2 is unecessary, just return _theta
-        return atan2(sin(_theta), cos(_theta))
+        return wrap2pi(fi_h)
 
     def n_h(self, p: Vec2D, radius: Optional[float] = None, cw: bool = True) -> Vec2D:
         '''
         Calculate n_h method.
 
         Args:
-            p [Vec2D]: Distance between the origin and position.
+            p [Vec2D]: position.
             radius [float]: Radius that decides the size of the spiral.
             cw [bool]: clockwise if true, otherwise counter clockwise.
         '''
