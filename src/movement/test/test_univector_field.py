@@ -1,5 +1,5 @@
 import pytest
-from movement.movement.univector.univector_field import UnivectorField
+from movement.univector.univector_field import UnivectorField
 from movement.univector.utils import LEFT, RIGHT
 from utils.linalg import Vec2D
 
