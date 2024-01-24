@@ -1,6 +1,7 @@
 from math import atan2, sin, cos, sqrt, pi
 from utils.linalg import Vec2D
 from .utils import wrap2pi
+from typing import Optional
 
 class HyperbolicSpiral:
     '''
@@ -28,7 +29,7 @@ class HyperbolicSpiral:
         self.Kr = Kr
         self.radius = radius
 
-    def fi_h(self, p: Vec2D, radius: float = None, cw: bool = True) -> float:
+    def fi_h(self, p: Vec2D, radius: Optional[float] = None, cw: Optional[bool] = True) -> float:
         '''
         Calculate fi_h method.
 
@@ -58,7 +59,7 @@ class HyperbolicSpiral:
         #atan2 is unecessary, just return _theta
         return atan2(sin(_theta), cos(_theta))
 
-    def n_h(self, p: Vec2D, radius: float = None, cw: bool = True) -> Vec2D:
+    def n_h(self, p: Vec2D, radius: Optional[float] = None, cw: bool = True) -> Vec2D:
         '''
         Calculate n_h method.
 
