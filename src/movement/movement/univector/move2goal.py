@@ -46,7 +46,7 @@ class Move2Goal:
         Args:
             u_axis [Vec2D]: axis witch will be the basis of CanonicalMatrix and the invert matrix.
         '''
-        u /= -u_axis.norm()
+        u = u_axis/-u_axis.norm()
         theta = atan2(u[1], u[0])
         v = Vec2D(-sin(theta), cos(theta))
 
