@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'univector'
+package_name = 'movement'
 
 setup(
     name=package_name,

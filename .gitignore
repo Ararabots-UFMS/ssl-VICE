@@ -1,5 +1,7 @@
 *.pyc
 
+.vscode/
+
 .devcontainer/
 build/
 install/
