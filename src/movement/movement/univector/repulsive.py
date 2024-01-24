@@ -21,7 +21,7 @@ class Repulsive:
         '''
         self.origin = newOrigin.copy()
 
-    def fi_r(self,  p: Vec2D,  origin: Optional[Vec2D] = None,  theta: bool = True) -> Union[Vec2D, float]:
+    def fi_r(self,  p: Vec2D,  origin: Optional[Vec2D] = None) -> float:
         '''
         Calculate fi_r method.
 
@@ -35,4 +35,4 @@ class Repulsive:
 
         p = p - self.origin
         
-        return atan2(p[1], p[0]) if theta else p
+        return atan2(p[1], p[0])
