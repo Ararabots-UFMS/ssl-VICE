@@ -55,7 +55,7 @@ class AvoidObstacle:
             _robotPos [Vec2D]: Robot position.
             _vPos [Vec2D]: Virtual position. If None, uses calculates vitual position. 
         '''
-        v_pos = _vPos if _vPos is not None else self.get_virtual_pos()
+        v_pos = _vPos if _vPos else self.get_virtual_pos()
         
         vec = self.repField.fi_r(_robotPos, origin = v_pos)
         return vec
