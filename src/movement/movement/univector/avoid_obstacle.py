@@ -1,4 +1,5 @@
 from movement.univector.repulsive import Repulsive
+from typing import Optional
 from utils.linalg import *
 
 class AvoidObstacle:
@@ -11,6 +12,8 @@ class AvoidObstacle:
         pRobots [Vec2D]: Robots position.
         vRobots [Vec2D]: Robots velocity vector.
         K0 [float]: virtual prediction costant.
+
+    Reference: "Evolutionary Univector Field-based Navigation with Collision Avoidance for Mobile Robot"
     '''
     
     def __init__(self, pObs: Vec2D, vObs: Vec2D, pRobot: Vec2D, vRobot: Vec2D, K0: float):
@@ -28,6 +31,11 @@ class AvoidObstacle:
         return self.K0 * (self.vObs - self.vRobot)
 
     def get_virtual_pos(self) -> Vec2D:
+        '''
+        Get predicted position based on actual position and velocity with K0 future prediction scale of entity.
+
+        For more definition see reference.
+        '''
         s = self.get_s()
         s_norm = s.norm()
         d = (self.pObs - self.pRobot).norm()
@@ -35,11 +43,18 @@ class AvoidObstacle:
         # To prevent a collision if the real obstacle position is in front of the robot
         # but the virtual position is behind.
         v_pos = self.pObs
-        v_pos += s if d >= s_norm else (d / s_norm) * s
+        v_pos += s if (d >= s_norm) else (d / s_norm * s)
         
         return v_pos
 
-    def fi_auf(self, _robotPos: Vec2D, _vPos: Vec2D = None) -> Vec2D:
+    def fi_auf(self, _robotPos: Vec2D, _vPos: Optional[Vec2D] = None) -> Vec2D:
+        '''
+        Calculate fi_auf method.
+
+        Args:
+            _robotPos [Vec2D]: Robot position.
+            _vPos [Vec2D]: Virtual position. If None, uses calculates vitual position. 
+        '''
         v_pos = _vPos if _vPos is not None else self.get_virtual_pos()
         
         vec = self.repField.fi_r(_robotPos, _origin = v_pos)
