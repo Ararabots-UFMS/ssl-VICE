@@ -36,7 +36,7 @@ class AvoidObstacle:
             v_pos = self.get_virtual_pos()
         else:
             v_pos = _vPos
-        vec = self.repField.fi_r(_robotPos, _origin=v_pos, _theta=_theta)
+        vec = self.repField.fi_r(_robotPos, _origin=v_pos)
         return vec
 
     def update_param(self, _K0: float) -> None:
