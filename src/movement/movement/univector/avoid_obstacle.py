@@ -47,7 +47,7 @@ class AvoidObstacle:
         
         return v_pos
 
-    def fi_auf(self, _robotPos: Vec2D, _vPos: Optional[Vec2D] = None) -> Vec2D:
+    def fi_auf(self, robotPos: Vec2D, vPos: Optional[Vec2D] = None) -> Vec2D:
         '''
         Calculate fi_auf method.
 
@@ -55,9 +55,9 @@ class AvoidObstacle:
             _robotPos [Vec2D]: Robot position.
             _vPos [Vec2D]: Virtual position. If None, uses calculates vitual position. 
         '''
-        v_pos = _vPos if _vPos else self.get_virtual_pos()
+        v_pos = vPos if vPos else self.get_virtual_pos()
         
-        vec = self.repField.fi_r(_robotPos, origin = v_pos)
+        vec = self.repField.fi_r(robotPos, origin = v_pos)
         return vec
 
     def update_param(self, K0: float) -> None:
