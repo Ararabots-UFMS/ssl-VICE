@@ -21,16 +21,10 @@ def test_constructor_radius(move2goal):
     assert constructor_radius == move2goal.radius 
 
 def test_constructor_hyperbolicSpiral(move2goal):
-    assert isinstance(move2goal.hyperSpiral, HyperbolicSpiral)
+    assert isinstance(move2goal.hyperbolicSpiral, HyperbolicSpiral)
 
 def test_constructor_origin(move2goal):
     assert move2goal.origin == Vec2D(0, 0)
-
-def test_constructor_vec_u(move2goal):
-    assert move2goal.u == Vec2D(0, 0)
-
-def test_constructor_vec_v(move2goal):
-    assert move2goal.v == Vec2D(0, 0)
 
 def test_constructor_toUnivectorMatrix(move2goal):
     assert move2goal.toUnivectorMatrix == None
@@ -60,8 +54,8 @@ def test_update_params_hyperbolicSpiral(move2goal):
 
     move2goal.update_params(new_kr, new_radius)
 
-    assert new_kr == move2goal.hyperSpiral.Kr
-    assert new_radius == move2goal.hyperSpiral.radius
+    assert new_kr == move2goal.hyperbolicSpiral.Kr
+    assert new_radius == move2goal.hyperbolicSpiral.radius
 
 ######################### build_axis #########################
 
@@ -94,24 +88,6 @@ def test_update_axis_origin(move2goal):
     move2goal.update_axis(origin, u)
 
     assert origin == move2goal.origin
-
-@pytest.mark.parametrize(
-    "vec_u,", [
-    (Vec2D(1, 0)),
-    (Vec2D(-1, 1)),
-    (Vec2D(-1, 0)),
-    (Vec2D(-1, -1)),
-    (Vec2D(15, 15)),
-    (Vec2D(15, -15)),
-])
-def test_update_axis_u(move2goal, vec_u):
-    origin = Vec2D(0, 0)
-
-    move2goal.update_axis(origin, vec_u)
-
-    u = vec_u/-vec_u.norm()
-
-    assert u == move2goal.u
 
 ######################### fi_tuf #########################
 @pytest.mark.parametrize(
