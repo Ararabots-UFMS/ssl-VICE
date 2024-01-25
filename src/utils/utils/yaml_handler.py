@@ -1,6 +1,7 @@
 import yaml
 import sys
 from os import environ
+from pathlib import Path
 
 # @author Allan Menchik <Menchik>
 
@@ -11,18 +12,18 @@ class YamlHandler:
         pass
         
     @staticmethod
-    def read(file_path: str) -> dict:
-        """
-            Takes a yml file path and returns a dictionary object with its contents [
+    def read(file_path: Path) -> dict:
+        '''
+            Takes a yml file path and returns a dictionary object with its contents
             
             Args:
-                file_path [str]: Path to .yml file that will be read from.
-        """
+                file_path [Path]: Path to .yml file that will be read from.
+        '''
         dictionary = dict()
         try:
             params_file = open(file_path, "r")
         except IOError:
-            params_file = open(environ['ROS_ARARA_ROOT']+"src/" + file_path, "r")
+            params_file = open(environ['ROS_ARARA_ROOT'] + "src/" + file_path, "r")
 
         try:
             dictionary = yaml.safe_load(params_file)
@@ -34,20 +35,20 @@ class YamlHandler:
         return dictionary
     
     @staticmethod
-    def write(dictionary: dict, file_path: str) -> bool:
-        """
+    def write(dictionary: dict, file_path: Path) -> bool:
+        '''
             Writes the dictionary's content to a yml file especified by file_path.\n
             Returns True if sucessful, False otherwise.
             Args:
                 dictionary [dict]: Dictionary that will be written in the .yml file.
-                file_path [str]: Path to .yml file that will be read from.
-        """
+                file_path [Path]: Path to .yml file that will be read from.
+        '''
         sucess = True
 
         try:
             file = open(file_path, "w+")
         except IOError:
-            file = open(environ['ROS_ARARA_ROOT'] + "src/" + file_path, "w+")
+            file = open(environ["ROS_ARARA_ROOT"] + "src/" + file_path, "w+")
 
         try:
             yaml.dump(dictionary, file, indent=4, sort_keys=True)
