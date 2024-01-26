@@ -2,8 +2,8 @@ import pytest
 from math import pi
 from utils.linalg import Vec2D, Mat2D
 
-constructor_x = 1.0
-constructor_y = 1.0
+vec2D_constructor_x = 1.0
+vec2D_constructor_y = 1.0
 
 ###############################################################
 ############################ Ved2D ############################
@@ -11,7 +11,7 @@ constructor_y = 1.0
 
 @pytest.fixture
 def vec2D():
-    return Vec2D(constructor_x, constructor_y)
+    return Vec2D(vec2D_constructor_x, vec2D_constructor_y)
 
 ######################### Constructor #########################
 def test_constructor_x(vec2D):
@@ -189,5 +189,128 @@ def test_from_array():
 
 ###########################################################
 ###########################################################
-#########################################################
+###########################################################
     
+###########################################################
+######################### Mat2D ###########################
+###########################################################
+    
+Mat2D_constructor_u = Vec2D(1, 0)
+Mat2D_constructor_v = Vec2D(0, 1)
+
+@pytest.fixture
+def mat2D():
+    return Mat2D(Mat2D_constructor_u, Mat2D_constructor_v)
+
+######################### Constructor #########################
+def test_constructor_u(mat2D):
+    assert isinstance(mat2D.u, Vec2D)
+
+def test_constructor_v(mat2D):
+    assert isinstance(mat2D.v, Vec2D)
+
+######################## Magic methods ########################
+@pytest.mark.parametrize(
+    # Testing __getitem__, __setitem__ method.
+    "ij,         value,          expected", [
+    ((0,0),      1,              1),
+    ((0,1),      1.5,            1.5),
+    ((1,0),      10.9,           10.9),
+    ((1,1),      -9,             -9)
+])
+def test_mat2D_getitem(ij, value, expected):
+    mat = Mat2D(Vec2D(0, 0), Vec2D(0, 0))
+    mat[ij] = value
+    assert mat[ij] == expected
+
+@pytest.mark.parametrize(
+    # Testing __mul__, __rmul__
+    "u,                 v,                  alpha,      mul_expected", [
+    (Vec2D(1,0),        Vec2D(0,1),         1,          Mat2D(Vec2D(1,0), Vec2D(0,1))),
+    (Vec2D(9,2),        Vec2D(3,1),         3,          Mat2D(Vec2D(27,6), Vec2D(9,3))),
+    (Vec2D(-3,1),       Vec2D(-2,-8),       -2,         Mat2D(Vec2D(6,-2), Vec2D(4,16))),
+    (Vec2D(6.32,5.12),  Vec2D(7.45,1.74),   7.45,       Mat2D(Vec2D(47.084,38.144), Vec2D(55.5025,12.963))),
+    (Vec2D(5.55,-4.23), Vec2D(6.99,-10.1),  6.99,       Mat2D(Vec2D(38.7945,-29.5677), Vec2D(48.8601,-70.599))),
+    (Vec2D(2.23,-2.67), Vec2D(0,0),         1,          Mat2D(Vec2D(2.23,-2.67), Vec2D(0,0)))
+])
+def test_mat2D_mul(u, v, alpha, mul_expected):
+    mat = Mat2D(u, v)
+
+    # Mul operator.
+    mul_mat = mat * alpha
+    assert abs(mul_mat.u.x - mul_expected.u.x) < 1e-4
+    assert abs(mul_mat.u.y - mul_expected.u.y) < 1e-4
+    assert abs(mul_mat.v.x - mul_expected.v.x) < 1e-4
+    assert abs(mul_mat.v.y - mul_expected.v.y) < 1e-4
+
+    # Rmul operator.
+    rmul_mat = alpha * mat
+    assert abs(rmul_mat.u.x - mul_expected.u.x) < 1e-4
+    assert abs(rmul_mat.u.y - mul_expected.u.y) < 1e-4
+    assert abs(rmul_mat.v.x - mul_expected.v.x) < 1e-4
+    assert abs(rmul_mat.v.y - mul_expected.v.y) < 1e-4
+
+@pytest.mark.parametrize(
+    # Testing __neg__
+    "u,                 v,                  neg_expected", [
+    (Vec2D(1,0),        Vec2D(0,1),         Mat2D(Vec2D(-1,0), Vec2D(0,-1))),
+    (Vec2D(9,2),        Vec2D(3,1),         Mat2D(Vec2D(-9,-2), Vec2D(-3,-1))),
+    (Vec2D(-3,1),       Vec2D(-2,-8),       Mat2D(Vec2D(3,-1), Vec2D(2,8))),
+    (Vec2D(6.32,5.12),  Vec2D(7.45,1.74),   Mat2D(Vec2D(-6.32,-5.12), Vec2D(-7.45,-1.74))),
+    (Vec2D(5.55,-4.23), Vec2D(6.99,-10.1),  Mat2D(Vec2D(-5.55,4.23), Vec2D(-6.99,10.1))),
+    (Vec2D(2.23,-2.67), Vec2D(0,0),         Mat2D(Vec2D(-2.23,2.67), Vec2D(0,0)))
+])
+def test_mat2D_neg(u, v, neg_expected):
+    mat = Mat2D(u, v)
+
+    # Neg operator.
+    neg_mat = -mat
+    assert neg_mat.u == neg_expected.u
+    assert neg_mat.v == neg_expected.v
+
+###################### Matrix Properties ######################
+@pytest.mark.parametrize(
+    # Testing invert and det methods.
+    "u,                 v,                  det_expected,           invert_expected", [
+    (Vec2D(1,0),        Vec2D(0,1),         1,                      Mat2D(Vec2D(1,0), Vec2D(0,1))),
+    (Vec2D(9,2),        Vec2D(3,1),         3,                      Mat2D(Vec2D(0.33333,-0.66666), Vec2D(-1,3))),
+    (Vec2D(-3,1),       Vec2D(-2,-8),       26,                     Mat2D(Vec2D(-0.30769,-0.03846), Vec2D(0.07692,-0.11538))),
+    (Vec2D(6.32,5.12),  Vec2D(7.45,1.74),   -27.1471,               Mat2D(Vec2D(-0.06409,0.18860), Vec2D(0.27442,-0.23280))),
+    (Vec2D(5.55,-4.23), Vec2D(6.99,-10.1),  -26.4872,               Mat2D(Vec2D(0.38131,-0.15969), Vec2D(0.26390,-0.20953)))
+])
+def test_mat2D_properties(u, v, det_expected, invert_expected):
+    mat = Mat2D(u, v)
+
+    # Det.
+    det = mat.det()
+    assert abs(det - det_expected) < 1e-4
+
+    # Invert.
+    invert = mat.invert()
+    assert abs(invert.u.x - invert_expected.u.x) < 1e-4
+    assert abs(invert.u.y - invert_expected.u.y) < 1e-4
+    assert abs(invert.v.x - invert_expected.v.x) < 1e-4
+    assert abs(invert.v.y - invert_expected.v.y) < 1e-4
+
+@pytest.mark.parametrize(
+    # Testing transform method.
+    "u,                 v,                  vec,                    transform_expected", [
+    (Vec2D(1,0),        Vec2D(0,1),         Vec2D(1,1),             Vec2D(1,1)),
+    (Vec2D(9,2),        Vec2D(3,1),         Vec2D(3,1),             Vec2D(30,7)),
+    (Vec2D(-3,1),       Vec2D(-2,-8),       Vec2D(-2,-8),           Vec2D(22,62)),
+    (Vec2D(6.32,5.12),  Vec2D(7.45,1.74),   Vec2D(7.45,1.74),       Vec2D(60.0470,41.1716)),
+    (Vec2D(5.55,-4.23), Vec2D(6.99,-10.1),  Vec2D(6.99,-10.1),      Vec2D(-31.8045,72.4423))
+])
+def test_mat2D_transform(u, v, vec, transform_expected):
+    mat = Mat2D(u, v)
+
+    # Transform.
+    transform = mat.transform(vec)
+    assert abs(transform.x - transform_expected.x) < 1e-4
+    assert abs(transform.y - transform_expected.y) < 1e-4
+
+###################### Class Methods ######################
+def test_identity():
+    mat = Mat2D.identity()
+    assert mat.u == Vec2D(1,0)
+    assert mat.v == Vec2D(0,1)
