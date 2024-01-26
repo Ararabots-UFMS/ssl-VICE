@@ -109,7 +109,7 @@ class UnivectorField:
             closest_center = centers[index]
             min_distance = dist_vec[index]
 
-            fi_auf = self.avdObsField.fi_auf(self.robotPos, _vPos=closest_center, _theta=True)
+            fi_auf = self.avdObsField.fi_auf(self.robotPos, _vPos=closest_center)
 
         # the first case when the robot is to close from an obstacle
         if min_distance <= self.DMIN:
