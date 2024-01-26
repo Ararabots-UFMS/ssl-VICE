@@ -131,7 +131,7 @@ class Mat2D:
         self.v = v
 
     @classmethod
-    def identy(cls) -> Mat2D:
+    def identity(cls) -> Mat2D:
         # Retorna uma matriz identidade 2x2
         return cls(Vec2D(1, 0), Vec2D(0, 1))
 
