@@ -90,18 +90,18 @@ class UnivectorField:
             # get the Repulsive field centers
             a = len(self.obstacles)
             for i in range(len(self.obstacles)):
-                try:
+                #try:
                     self.avdObsField.update_obstacle(self.obstacles[i], self.obstaclesSpeed[i])
                     center = self.avdObsField.get_virtual_pos()
                     centers.append(center)
 
-                except Exception as e:
-                    pass
+                #except Exception as e:
+                #   pass
                     # import rospy
                     # #TODO: bug -> número de obstáculos é alterado dentro do laço...
                     # # problema de concorrência?
                     # rospy.logfatal(f"obj antes: {a} // obj atuais: {len(self.obstacles)}")
-
+                
             # centers = centers
             # dist_vec = np.linalg.norm(np.subtract(centers, self.robotPos), axis=1)
             dist_vec = [(center - self.robotPos).norm() for center in centers]
