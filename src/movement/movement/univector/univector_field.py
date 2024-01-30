@@ -74,7 +74,7 @@ class UnivectorField:
         if move2Goal:
             self.move2Goal = move2Goal
         else:
-            self.move2Goal = Move2Goal(self.KR, self.RADIUS)
+            self.move2Goal = Move2Goal(self.Kr, self.Radius)
 
     @staticmethod
     def get_attack_goal_axis(attack_goal: bool) -> Vec2D:
@@ -145,19 +145,19 @@ class UnivectorField:
         centers = []
         # At least one obstacle in the field.
         if self.obstaclesPos:
-            for _, i in enumerate(self.obstaclesPos):
+            for i, _ in enumerate(self.obstaclesPos):
                 self.avoidObstacleField.update_obstacle(self.obstaclesPos[i], self.obstaclesVelocity[i])
                 center = self.avoidObstacleField.get_virtual_pos()
                 centers.append(center)
 
             distances = [(center - self.robotsPos).norm() for center in centers]
-            closesest_center = centers[distances.index(min(distances))]
+            closest_center = centers[distances.index(min(distances))]
             min_distance = min(distances)
 
-            fi_auf = self.avoidObstacleField.fi_auf(self.robotsPos, closesest_center)
+            fi_auf = self.avoidObstacleField.fi_auf(self.robotsPos, closest_center)
         
         # When robot is too close to obstacle, only avoid-obstacle field is applied.
-        if min_distance < self.Dmin and len(self.obstaclesPos) > 0:
+        if min_distance <= self.Dmin and self.obstaclesPos:
             return fi_auf
 
         fi_tuf = self.move2Goal.fi_tuf(self.robotsPos)
@@ -168,8 +168,9 @@ class UnivectorField:
         # Normal case, both fields are applied.
         else:
             gaussian_ = gaussian(min_distance, self.Dmin, self.LDelta)
-            difference = wrap2pi(fi_tuf - fi_auf)
+            difference = wrap2pi(fi_auf - fi_tuf)
             return wrap2pi(fi_tuf + (gaussian_ * difference))
+            
 
     def get_vec_with_ball(self,
                           robotsPos:      Optional[Vec2D] = None,
@@ -215,9 +216,9 @@ class UnivectorField:
             elif attack_goal == LEFT and ballPos_section in [ArenaSections.LEFT_DOWN_CORNER, ArenaSections.LEFT_UP_CORNER]:
                 correct_axis = Vec2D.left()
             else:
-                correct_axis = self.get_correct_axis(ballPos, ballPos_section, attack_goal)
+                correct_axis = self.get_correct_axis(ballPos_section, attack_goal)
 
-        offset = self.get_correct_offset(ballPos, ballPos_section)
+        offset = self.get_correct_offset(ballPos_section)
 
         return self.get_angle_vec(robotsPos, robotsVelocity, ballPos, correct_axis - offset)
 
