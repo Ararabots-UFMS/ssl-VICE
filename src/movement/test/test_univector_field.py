@@ -33,8 +33,8 @@ def test_get_attack_goal_axis_right(univectorField):
 def test_update_obstacles(univectorField, _obstacles, _obsSpeeds):
     univectorField.update_obstacles(_obstacles, _obsSpeeds)
 
-    assert _obstacles == univectorField.obstacles
-    assert _obsSpeeds == univectorField.obstaclesSpeed
+    assert _obstacles == univectorField.obstaclesPos
+    assert _obsSpeeds == univectorField.obstaclesVelocity
 
 ######################### update_constants #########################
     
@@ -47,15 +47,15 @@ def test_update_obstacles(univectorField, _obstacles, _obsSpeeds):
 def test_update_constants(univectorField, _RADIUS, _KR, _K0, _DMIN, _LDELTA):
     univectorField.update_constants(_RADIUS, _KR, _K0, _DMIN, _LDELTA)
 
-    assert univectorField.RADIUS == _RADIUS
-    assert univectorField.KR == _KR
+    assert univectorField.Radius == _RADIUS
+    assert univectorField.Kr == _KR
     assert univectorField.K0 == _K0
-    assert univectorField.DMIN == _DMIN
-    assert univectorField.LDELTA == _LDELTA
+    assert univectorField.Dmin == _DMIN
+    assert univectorField.LDelta == _LDELTA
 
-    assert univectorField.avdObsField.K0 == _K0
-    assert univectorField.mv2Goal.Kr == _KR
-    assert univectorField.mv2Goal.radius == _RADIUS
+    assert univectorField.avoidObstacleField.K0 == _K0
+    assert univectorField.move2Goal.Kr == _KR
+    assert univectorField.move2Goal.radius == _RADIUS
 
 ######################### get_vec_with_ball #########################
 @pytest.mark.parametrize(
