@@ -80,6 +80,13 @@ class UnivectorField:
     def get_attack_goal_axis(attack_goal: bool) -> Vec2D:
         '''
         Returns the attack goal axis.
+
+        Args:
+            attack_goal [bool]: Attack goal side.
+
+        Note*
+            LEFT  = False
+            RIGHT = True
         '''
         return Vec2D.right() if attack_goal == RIGHT else Vec2D.left()
 
@@ -87,12 +94,23 @@ class UnivectorField:
     def get_attack_goal_position(attack_goal: bool) -> Vec2D:
         '''
         Returns the goal position based on attack_goal side.
+
+        Args:
+            attack_goal [bool]: Attack goal side.
+
+        Note*
+            LEFT  = False
+            RIGHT = True
         '''
         return Vec2D(attack_goal * 150, 65)
 
     def update_obstacles(self, obstaclesPos: List[Vec2D], obstaclesVelocity: List[Vec2D]) -> None:
         '''
         Update obstacles positions and velocities method.
+
+        Args:
+            obstaclesPos      [Vec2D]: List of obstacles positions.
+            obstaclesVelocity [Vec2D]: List of obstacles velocities.
         '''
         self.obstaclesPos = obstaclesPos
         self.obstaclesVelocity = obstaclesVelocity
@@ -100,6 +118,10 @@ class UnivectorField:
     def update_robot(self, robotsPos: Vec2D, robotsVelocity: Vec2D) -> None:
         '''
         Update Robot position and velocity method.
+
+        Args:
+            robotsPos      [Vec2D]: Robot position.
+            robotsVelocity [Vec2D]: Robot velocity.
         '''
         self.robotsPos = robotsPos
         self.robotsVelocity = robotsVelocity
@@ -109,6 +131,13 @@ class UnivectorField:
     def update_constants(self, Radius: float, Kr: float, K0: float, Dmin: float, LDelta: float) -> Vec2D:
         '''
         Update field constants and fields.
+
+        Args:
+            Radius  [float]: Move2Goal field radius.
+            Kr      [float]: Smoothness hyperbolic spiral constant for Move2Goal field.
+            K0      [float]: Virtual prediction costant for AvoidObstacle field.
+            Dmin    [float]: Minimum distance that move2goal field can be applied. And
+            LDelta  [float]: Gaussian function parameter.
         '''
         self.Radius = Radius
         self.Kr = Kr
@@ -225,6 +254,14 @@ class UnivectorField:
     def get_correct_axis(self, section: ArenaSections, attack_goal: bool = RIGHT) -> Vec2D:
         '''
         Get correct axis based on arena section and attack goal side.
+
+        Args:
+            section     [ArenaSections]: Arena section.
+            attack_goal [bool]:          Attack goal side.
+
+        Note*
+            LEFT  = False
+            RIGHT = True
         '''
         axis = Axis[section.value]
         return axis if attack_goal == RIGHT else axis * -1
@@ -232,5 +269,8 @@ class UnivectorField:
     def get_correct_offset(self, section: ArenaSections) -> Vec2D:
         '''
         Get correct offset based on arena section.
+
+        Args:
+            section [ArenaSections]: Arena section.
         '''
         return Offsets[section.value]
