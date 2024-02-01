@@ -35,7 +35,8 @@ def unitVector(vector):
 
 def angle_between(v1: Vec2D, v2: Vec2D, absol: bool= True) -> float:
     """ Returns the angle in radians between vectors 'v1' and 'v2' """
-
+    v1 = Vec2D(v1[0],v1[1])
+    v2 = Vec2D(v2[0],v2[1])
     cosang = v1.dot(v2)
     sinang = v1.cross(v2)
     if absol:
@@ -45,7 +46,7 @@ def angle_between(v1: Vec2D, v2: Vec2D, absol: bool= True) -> float:
 
 
 def rotateVector(x, angle):
-    """Rotate vector x anticlockwise around the origin by angle degrees, return angle in format [x, y]"""
+    """Rotate vector x anticlockwise around the origin by angle radians, return angle in format [x, y]"""
     y1 = math.cos(angle)*x[0] - math.sin(angle)*x[1]
     y2 = math.sin(angle)*x[0] + math.cos(angle)*x[1]
     return [y1, y2]
@@ -125,7 +126,7 @@ def forward_min_diff(num, orientation, vec, goal, only_forward=False):
     tmp, new_gamma_count = min_diff_vec_and_opposite(num, orientation, vec, goal)
     if tmp or only_forward:
         return True, angle_between(vec, goal, absol=False), new_gamma_count
-    return False, angle_between(opposite_vector(vec), goal, abs=False), new_gamma_count
+    return False, angle_between(opposite_vector(vec), goal, absol=False), new_gamma_count
 
 def raio_vetores(p1, v1, p2, v2, speed_max=255, upper_bound=800, angle = 3,k = 0.01):
     p1 = np.array(p1)
