@@ -21,11 +21,11 @@ def test_unitVector(vector, expected_vector):
 ################## angle_between ################
 @pytest.mark.parametrize(
     "v1,    v2,     absol,   expected_angle",[
-        (Vec2D(3.0,4.0),    Vec2D(1.0,5.0),     True,   0.4461055489), #test with random numbers
-        (Vec2D(5.0,1.0),    Vec2D(10.0,2.0),    True,   0.0),                #angulo = 0
-        (Vec2D(1.0,0.0),    Vec2D(0.0,1.0),     True,   1.5707963267), #angulo = 90
-        (Vec2D(1.0,0.0),    Vec2D(-1.0,0.0),    True,   3.1415926535), #angulo = 180
-        (Vec2D(-1.0,5.0),   Vec2D(1.0,0.0),     True,   1.7681918866), #angulo 
+        (Vec2D(3.0,4.0),    Vec2D(1.0,5.0),     True,   0.4461055489), 
+        (Vec2D(5.0,1.0),    Vec2D(10.0,2.0),    True,   0.0),          
+        (Vec2D(1.0,0.0),    Vec2D(0.0,1.0),     True,   1.5707963267), 
+        (Vec2D(1.0,0.0),    Vec2D(-1.0,0.0),    True,   3.1415926535), 
+        (Vec2D(-1.0,5.0),   Vec2D(1.0,0.0),     True,   1.7681918866),  
     ])
 
 def test_angle_between(v1, v2, absol, expected_angle):
