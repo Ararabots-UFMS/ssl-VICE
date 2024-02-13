@@ -35,7 +35,8 @@ def unitVector(vector):
 
 def angle_between(v1: Vec2D, v2: Vec2D, absol: bool= True) -> float:
     """ Returns the angle in radians between vectors 'v1' and 'v2' """
-
+    v1 = Vec2D(v1[0],v1[1])
+    v2 = Vec2D(v2[0],v2[1])
     cosang = v1.dot(v2)
     sinang = v1.cross(v2)
     if absol:
@@ -45,7 +46,7 @@ def angle_between(v1: Vec2D, v2: Vec2D, absol: bool= True) -> float:
 
 
 def rotateVector(x, angle):
-    """Rotate vector x anticlockwise around the origin by angle degrees, return angle in format [x, y]"""
+    """Rotate vector x anticlockwise around the origin by angle radians, return angle in format [x, y]"""
     y1 = math.cos(angle)*x[0] - math.sin(angle)*x[1]
     y2 = math.sin(angle)*x[0] + math.cos(angle)*x[1]
     return [y1, y2]
@@ -120,12 +121,12 @@ def forward_min_diff(num, orientation, vec, goal, only_forward=False):
     :param vec: [float, float]
     :param goal: [float, float]
     :param only_forward: boolean
-    :return: boolean, float,
+    :return: boolean, float, int
     """
     tmp, new_gamma_count = min_diff_vec_and_opposite(num, orientation, vec, goal)
     if tmp or only_forward:
         return True, angle_between(vec, goal, absol=False), new_gamma_count
-    return False, angle_between(opposite_vector(vec), goal, abs=False), new_gamma_count
+    return False, angle_between(opposite_vector(vec), goal, absol=False), new_gamma_count
 
 def raio_vetores(p1, v1, p2, v2, speed_max=255, upper_bound=800, angle = 3,k = 0.01):
     p1 = np.array(p1)
@@ -147,7 +148,10 @@ def get_orientation_and_angle(orientation, robot_vector, goal_vector,do_nothing_
 
     cos_do_nothing = np.cos((np.pi/180.0)*(90-do_nothing_angle))
     #(90-do_nothing_angle/2.0))
-    theta = angle_between(robot_vector, goal_vector, abs=False)
+    #transforma as variáveis abaixo em Vec2D para usar em angle_between
+    robot_vector = Vec2D(robot_vector[0], robot_vector[1])
+    goal_vector = Vec2D(goal_vector[0], goal_vector[1])
+    theta = angle_between(robot_vector, goal_vector, absol=False)
 
     if abs(cos) < cos_do_nothing:
         return orientation, theta# maintains the same
