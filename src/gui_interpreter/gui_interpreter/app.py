@@ -38,7 +38,7 @@ def background_thread():
         x = 250+radius * math.cos(angle)
         y = 250+radius * math.sin(angle)
         angle += 0.1
-        socketio.emit("position", {"x": x, "y": y})
+        socketio.emit("position", {"x": x, "y": y, "angle": angle})
         # print(f"Sent update: x={x}, y={y}", flush=True)
         socketio.sleep(0.1)  # Adjust the delay as needed
 
