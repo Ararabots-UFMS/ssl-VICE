@@ -15,6 +15,3 @@ fi
 
 # Install GUI dependencies
 npm install
-
-# Build GUI
-npm run build
