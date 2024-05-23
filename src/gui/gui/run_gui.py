@@ -10,8 +10,8 @@ import os
 ####################
 
 # Set folder names for both repos
-VICE_REPO_NAME="vsss-VICE"
-GUI_REPO_NAME="vsss-gui"
+VICE_REPO_NAME="ssl-VICE"
+GUI_REPO_NAME="ssl-gui"
 
 # Get the path to the file being executed
 path_to_repo_parent_folder = pathlib.Path(__file__).parent.absolute()
