@@ -1,0 +1,12 @@
+float32[2] ball_pos
+uint16[5] yellow_team_ids
+float32[10] yellow_team_pos
+float32[10] yellow_team_speed
+float32[5] yellow_team_orientation
+float32[5] yellow_team_vorientation
+uint16[5] blue_team_ids
+float32[10] blue_team_pos
+float32[10] blue_team_speed
+float32[5] blue_team_orientation
+float32[5] blue_team_vorientation
+uint16 vision_fps

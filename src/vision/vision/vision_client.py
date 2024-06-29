@@ -1,6 +1,6 @@
 import socket
 import binascii
-from protobuf.python_proto import messages_robocup_ssl_wrapper_pb2
+from vision import messages_robocup_ssl_wrapper_pb2
 
 class Client:
     
