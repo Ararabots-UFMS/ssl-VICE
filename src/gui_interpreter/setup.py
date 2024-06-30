@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'gui_interpreter = gui_interpreter.app:main'
+            'apiNode = gui_interpreter.app:main'
         ],
     },
 )

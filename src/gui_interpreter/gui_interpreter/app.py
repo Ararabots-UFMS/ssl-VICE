@@ -23,6 +23,22 @@ def handle_disconnect():
     stop_thread = True
     thread = None
 
+@socketio.on("fieldSide")
+def handle_field_side(side):
+    #TODO get side to rest of the code
+    if side == True:
+        print("Field is on the left side", flush=True)
+    elif side == False:
+        print("Field is on the right side", flush=True)
+
+@socketio.on("teamColor")
+def handle_field_side(color):
+    #TODO get side to rest of the code
+    if color == True:
+        print("Team color is blue", flush=True)
+    elif color == False:
+        print("Team color is yellow", flush=True)
+
 @socketio.on("message")
 def handle_message(message):
     print(f"Received message: {message}", flush=True)
