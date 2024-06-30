@@ -2,9 +2,9 @@ from vision.vision_client import Client
 from typing import Optional
 
 import rclpy
-import rclpy.node.Node as Node
+from rclpy.node import Node
 
-from system_interfaces.msg import visionMessage 
+from system_interfaces.msg import VisionMessage 
 
 class Vision(Node):
     '''VICE Vision Node, connects and receives data from ssl-vision'''
@@ -16,33 +16,34 @@ class Vision(Node):
         self.declare_parameter('port', 10006)
         self.declare_parameter('verbose', False)
         
-        ip = self.get_parameter('ip').value.as_str()
-        port = self.get_parameter('port').value.as_int()
+        self.ip = self.get_parameter('ip').get_parameter_value().string_value
+        self.port = self.get_parameter('port').get_parameter_value().integer_value
         # Verbose prints in terminal all received data.
-        self.verbose = self.get_parameter('verbose').value.as_bool()
+        self.verbose = self.get_parameter('verbose').get_parameter_value().bool_value
         
-        self.client = Client(ip = ip, port = port)
+        self.client = Client(ip = self.ip, port = self.port)
 
         self.get_logger().info(f"Binding client on {self.ip}:{self.port}")
         self.client.connect()
 
         # Setting ROS publisher.
         # TODO: Find optimal queue size...
-        self.publisher = self.create_publisher(visionMessage, 'visionTopic', queue_size=10)
+        self.publisher = self.create_publisher(VisionMessage, 'visionTopic', 10)
 
         # TODO: Find the optimal timer.
         self.timer = self.create_timer(0.25, self.receive)
 
     def receive(self):
         try:
-            data = client.receive()
+            data = self.client.receive()
 
             # TODO: apply filter to reduce noise
 
-            if self.verbose:
-                self.get_logger().info(data)
+            # if self.verbose:
+            #     self.get_logger().info(data)
+            self.get_logger().info(data)
 
-            message = visionMessage()
+            message = VisionMessage()
             
             # TODO: Process data...
 
@@ -56,7 +57,7 @@ class Vision(Node):
             print(exception)
 
 def main(args = None):
-    rclpy.init(args=args)
+    rclpy.init(args = args)
     node = Vision()
     rclpy.spin(node)
     rclpy.shutdown()
