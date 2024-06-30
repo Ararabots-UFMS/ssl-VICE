@@ -9,8 +9,7 @@ assignees: ''
 
 # **Objetivos:**
 *%%%Objetivo do item%%%*
-- **Cenário:** %%%Situação atual que descreve a importância do item%%%
-- **Problema:** %%%Problema a ser resolvido pelo item%%%
+- **Contexto:** %%%Situação atual que descreve a importância do item%%%
 - **Resultado Esperado:** %%%Qual deve ser o resultado final%%%
 
 # Critérios de Aceite:
