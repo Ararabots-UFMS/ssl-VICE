@@ -2,10 +2,7 @@ from flask import Flask
 from flask_socketio import SocketIO, emit
 from threading import Thread
 import subprocess
-import select
 import math
-import os
-import signal
 
 app = Flask(__name__)
 socketio = SocketIO(app,  cors_allowed_origins="*")
@@ -45,10 +42,6 @@ def handle_field_side(color):
     elif color == False:
         print("Team color is yellow", flush=True)
 
-@socketio.on("refereeButton")
-def handle_referee_button():
-    pass
-
 def handle_output(pipe, callback):
     """
     Read output from a pipe and pass it to a callback line by line.
@@ -61,8 +54,14 @@ def print_output(line):
     """
     Handle a single line of output.
     """
+    global vision_running
     socketio.emit("visionOutput", {"line": line})
+    socketio.emit("visionStatus", {"status": vision_running})
     print(f'linha{line}', end='')
+
+@socketio.on("refereeButton")
+def handle_referee_button():
+    pass
 
 @socketio.on("visionButton")
 def handle_vision_button():
@@ -70,6 +69,7 @@ def handle_vision_button():
     command = ['ros2', 'run', 'demo_nodes_py', 'talker']
     if vision_running:
         vision_running = False
+        socketio.emit("visionStatus", {"status": vision_running})
         socketio.emit("visionOutput", {"line": "Terminating vision node"})
         subprocess.run(['killall']+[command[-1]])
 
@@ -83,8 +83,6 @@ def handle_vision_button():
         stderr_thread = Thread(target=handle_output, args=(process.stderr, print_output))
         stdout_thread.start()
         stderr_thread.start()
-
-
 
 @socketio.on("communicationButton")
 def handle_communication_button():
