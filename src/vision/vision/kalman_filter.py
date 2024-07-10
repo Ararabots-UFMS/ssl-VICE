@@ -31,7 +31,7 @@ class KalmanFilterClass2D(object):
         # the acceleration which is essentially u from the state update equation 
         self.a = np.matrix([[a_x],[a_y]])
 
-        #  The state transition matrix 
+        # The state transition matrix 
         self.A = np.matrix([[1, 0, self.dt, 0],[0, 1, 0, self.dt],[0, 0, 1, 0],[0, 0, 0, 1]])
 
         # The control input transition matrix 
@@ -50,6 +50,7 @@ class KalmanFilterClass2D(object):
 
         # The error covariance matrix that is Identity for now. It gets updated based on Q, A and R.
         self.P = np.eye(self.A.shape[1])
+        # Adding more confidence to position than velocity
         
         #  Finally the vector in consideration ; it's [ x position ;  y position ; x velocity ; y velocity ; ]
         self.x = np.matrix([[0], [0], [0], [0]])
@@ -62,7 +63,7 @@ class KalmanFilterClass2D(object):
         
         # Updation of the error covariance matrix 
         self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
-        return self.x
+        return self.x[0:2]
 
     def update(self, z):
 
@@ -77,4 +78,4 @@ class KalmanFilterClass2D(object):
 
         self.P = (I -(K*self.H))*self.P  
         
-        return self.x
+        return self.x[0:2]
