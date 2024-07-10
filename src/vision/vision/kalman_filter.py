@@ -62,7 +62,7 @@ class KalmanFilterClass2D(object):
         
         # Updation of the error covariance matrix 
         self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
-        return self.x[0:2]
+        return self.x
 
     def update(self, z):
 

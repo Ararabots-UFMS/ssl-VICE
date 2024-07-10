@@ -1,5 +1,7 @@
 from vision import messages_robocup_ssl_wrapper_pb2
 from kalman_filter import KalmanFilterClass2D
+from system_interfaces.msg import VisionMessage
+
 import numpy as np
 
 class Object(object):
@@ -19,14 +21,56 @@ class ObjectTracker(object):
 
     Args:
         max_frame_skipped: int   = Max object detection memory, if object is not detected for too long, it deletes it
+
+    Reference: 
+
+    - "https://github.com/NickNair/Multiple-Object-Tracking-using-Kalman-Filter"
+
+    Complementary documentation:
+
+    - "https://machinelearningspace.com/2d-object-tracking-using-kalman-filter/"
+    - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
+    
     '''
     def __init__(self, max_frame_skipped: int):
         
         self.max_frame_skipped = max_frame_skipped
-        self.objects_id = objects_id
+        self.objects_id = []
         self.objects = []
 
-    def Update(self, detections, objects_id) -> None:
+    def update(message: VisionMessage) -> VisionMessage:
+        '''
+        Updates the position and velocity of objects based on the detections.
+
+        Note:
+            All ids needs to be unique, so all blue robots will a off set of 100 and the main ball will have 200 as id.
+        '''
+        # Balls dont have ids, so will consider the first ball as the main ball and ignore the rest
+        # TODO Implement a Hungarian algorithm to give the balls a id?
+        detections, objects_id = [], []
+
+        # Blue id offset to maintain all ids unique.
+        blue_offset = 100
+        
+        if message.yellow_robots:
+            for yellow_robot in message.yellow_robots:
+                detections.append([yellow_robot.x, yellow_robot.y])
+                object_id.append(yellow_robot.id)
+
+        if message.blue_robots:
+            for blue_robot in message.blue_robots:
+                detections.append([blue_robot.x, blue_robot.y])
+                object_id.append(blue_robot.id + blue_offset)
+
+        if message.balls:
+            detections.append([(balls[0]).x, (balls[0]).y])
+            object_id.append(200)
+
+        _update(detections, objects_id)
+
+        return self.wrap_message()
+
+    def _update(self, detections, objects_id) -> None:
         # if empty list, assing objects to the ObjectTracker.
         if not self.objects:
             for i, detection in enumerate(detections):
@@ -54,35 +98,13 @@ class ObjectTracker(object):
         for object_ in self.objects:
             # If the object is detected then update his kalman filter predictions, else update with [[0], [0]]
             if object_.ID in objects_id:
-                object_.ID.KF.predict()
+                object_.KF.predict()
                 object_.prediction = object_.KF.update(detections[objects_id.index(object_.ID)])
 
                 object_.skip_count = 0
             else:
                 object_.prediction = object_.KF.update(np.array([[0], [0]]))
 
-
-def convert(msg: messages_robocup_ssl_wrapper_pb2):
-    '''
-    Protobuf message conversor to VisionMessage
-    
-    Args:
-        msg: messages_robocup_ssl_wrapper_pb2 = Protobuf input message.
-
-    Output:
-        ball_position: float32[6] = X and Y position of the balls, 3 balls maximum.
-        
-        yellow_team_ids:          uint16[5]   =  IDs for the yellow team, 5 IDs maximum.
-        yellow_team_pos:          float32[10] =  X and Y position of the yellow team robots.
-        yellow_team_speed:        float32[10] =  X and Y velocity of the yellow team robots.
-        yellow_team_orientation:  float32[5]  =  Robots orientation in radians.
-        yellow_team_vorientation: float32[5]  =  Robots orientation velocity.
- 
-        blue_team_ids:            uint16[5]   =  IDs for the yellow team, 5 IDs maximum.
-        blue_team_pos:            float32[10] =  X and Y position of the yellow team robots.
-        blue_team_speed:          float32[10] =  X and Y velocity of the yellow team robots.
-        blue_team_orientation:    float32[5]  =  Robots orientation in radians.
-        blue_team_vorientation:   float32[5]  =  Robots orientation velocity.
-
-        vision_fps:               uint16      =  Received frames per seconds
-    '''
+    def wrap_message(self) -> VisionMessage:
+        # TODO Get objects and transform to vision message again.
+        pass

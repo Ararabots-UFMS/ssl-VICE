@@ -14,6 +14,8 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/PIDUpdate.srv"
   "msg/VisionMessage.msg"
+  "msg/Balls.msg"
+  "msg/Robots.msg"
 )
 
 if(BUILD_TESTING)

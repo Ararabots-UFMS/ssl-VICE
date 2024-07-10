@@ -1,10 +1,11 @@
 from vision.vision_client import Client
+from vision.tracker import ObjectTracker
 from typing import Optional
 
 import rclpy
 from rclpy.node import Node
 
-from system_interfaces.msg import VisionMessage 
+from system_interfaces.msg import VisionMessage, Robots, Balls
 
 class Vision(Node):
     '''VICE Vision Node, connects and receives data from ssl-vision'''
@@ -31,21 +32,49 @@ class Vision(Node):
         self.publisher = self.create_publisher(VisionMessage, 'visionTopic', 10)
 
         # TODO: Find the optimal timer.
-        self.timer = self.create_timer(0.25, self.receive)
+        self.timer = self.create_timer(0.1, self.receive)
 
     def receive(self):
+        # Set max_frame_skipped as a parameter, not a constant.
+        tracker = ObjectTracker(max_frame_skipped = 10000)
+
         try:
             data = self.client.receive()
 
-            # TODO: apply filter to reduce noise
-
-            # if self.verbose:
-            #     self.get_logger().info(data)
-            self.get_logger().info(data)
+            if self.verbose:
+                self.get_logger().info(data)
 
             message = VisionMessage()
+
+            if data.detection.robots_yellow:
+                for yellow_robot in data.detection.robots_yellow:
+                    robot_msg = Robots()
+                    robot_msg.id = yellow_robot.robot_id
+                    robot_msg.position_x = yellow_robot.x
+                    robot_msg.position_y = yellow_robot.y
+                    robot_msg.orientation = yellow_robot.orientation
+
+                    message.yellow_robots.append(robot_msg)
             
-            # TODO: Process data...
+            if data.detection.robots_blue:
+                for blue_robot in data.detection.robots_blue:
+                    robot_msg = Robots()
+                    robot_msg.id = blue_robot.robot_id
+                    robot_msg.position_x = blue_robot.x
+                    robot_msg.position_y = blue_robot.y
+                    robot_msg.orientation = blue_robot.orientation
+
+                    message.blue_robots.append(robot_msg)
+            
+            if data.detection.balls:
+                for ball in data.detection.balls:
+                    ball_msg = Balls()
+                    ball_msg.position_x = ball.x
+                    ball_msg.position_y = ball.y
+
+                    message.balls.append(ball_msg)
+
+            message = tracker.update(message)
 
             if self.context.ok():
                 self.publisher.publish(message)
