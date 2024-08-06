@@ -1,7 +1,6 @@
-from vision import messages_robocup_ssl_wrapper_pb2
 from vision.kalman_filter import KalmanFilterClass2D
 from system_interfaces.msg import VisionMessage, Robots, Balls, ObjectID
-from vision.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
+from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 
 import numpy as np
 from typing import Optional
@@ -54,14 +53,17 @@ class ObjectTracker(object):
         self.max_frame_skipped = max_frame_skipped
         self.objects_id = []
         self.objects = []
+        self.last_time_stamp = 0
 
     def update(self, message: SSL_WrapperPacket) -> VisionMessage:
         '''
         Updates the position and velocity of objects based on the detections.
         '''
         # TODO Implement a Hungarian algorithm to give the balls an id?
-        detections, objects_id, orientations = [], [], []
+        detections, objects_id, orientations, time_stamp = [], [], [], message.detection.t_capture
         
+        self.dt = time_stamp - self.last_time_stamp
+
         if message.detection.robots_yellow:
             for yellow_robot in message.detection.robots_yellow:
                 objects_id.append(ID(yellow_robot.robot_id, is_ball = False, is_blue = False))
@@ -85,7 +87,7 @@ class ObjectTracker(object):
         return self.wrap_message()
     # Detections == [x, y]
     def _update(self, detections, objects_id, orientations) -> None:
-        # if empty list, assing objects to the ObjectTracker.
+        # if empty list, assigning objects to the ObjectTracker.
         if not self.objects:
             for i, detection in enumerate(detections):
                 self.objects.append(Object(detection, objects_id[i], orientation = orientations[i]))
@@ -105,19 +107,19 @@ class ObjectTracker(object):
         # Check for new detections and adding them to objects.
         for i in range(len(detections)):
             if not objects_id[i] in self.objects_id:
-                self.objects.append(Object(detections[i], objects_id[i]))
+                self.objects.append(Object(detections[i], objects_id[i], orientation = orientations[i]))
                 self.objects_id.append(objects_id[i])
 
         # Updating parameters.
         for object_ in self.objects:
             # If the object is detected then update his kalman filter predictions, else update with [[0], [0]]
             if object_.id in objects_id:
-                object_.KF.predict()
+                object_.KF.predict(self.dt)
                 object_.prediction = object_.KF.update(detections[objects_id.index(object_.id)])
 
                 object_.skip_count = 0
             else:
-                object_.prediction = object_.KF.update(np.array([[0], [0]]))
+                object_.KF.predict(self.dt)
 
     def wrap_message(self) -> VisionMessage:
         message = VisionMessage()

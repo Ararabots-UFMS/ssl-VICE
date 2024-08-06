@@ -31,20 +31,21 @@ class Vision(Node):
         # TODO: Find optimal queue size...
         self.publisher = self.create_publisher(VisionMessage, 'visionTopic', 10)
 
+        # TODO: Create multiple trackers for each camera.
+        # TODO: Set max_frame_skipped as a parameter, not a constant.
+        self.tracker = ObjectTracker(max_frame_skipped = 50)
+
         # TODO: Find the optimal timer.
         self.timer = self.create_timer(0.1, self.receive)
 
     def receive(self):
-        # Set max_frame_skipped as a parameter, not a constant.
-        tracker = ObjectTracker(max_frame_skipped = 10000)
-
         try:
             data = self.client.receive()
 
             if self.verbose:
                 self.get_logger().info(data)
             
-            message = tracker.update(data)
+            message = self.tracker.update(data)
             # self.get_logger().info(message)
             # Orientation does not have a proper processing. Using raw orientantion and setting orientation velocity to 0.
 

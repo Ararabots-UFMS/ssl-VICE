@@ -1,6 +1,6 @@
 import socket
 import binascii
-from vision import messages_robocup_ssl_wrapper_pb2
+from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 
 class Client:
     
@@ -28,5 +28,5 @@ class Client:
         """Receive package and decode."""
 
         data, _ = self.sock.recvfrom(1024)
-        decoded_data = messages_robocup_ssl_wrapper_pb2.SSL_WrapperPacket().FromString(data)
+        decoded_data = SSL_WrapperPacket().FromString(data)
         return decoded_data
