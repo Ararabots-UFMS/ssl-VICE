@@ -23,9 +23,10 @@ class Object(object):
     Tracked object class, mainly robots, but ball also.
     '''
 
-    def __init__(self, detections, Id: ID, orientation: Optional[float] = None):
+    def __init__(self, detections, Id: ID, confidence: float, orientation: Optional[float] = None):
         self.prediction = np.asarray(detections)
         self.id = Id
+        self.confidence = confidence
         self.KF = KalmanFilterClass2D()
         self.skip_count = 0
         # Orientation buffer, orientation needs proper processing.
@@ -48,19 +49,20 @@ class ObjectTracker(object):
     - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
     
     '''
-    def __init__(self, max_frame_skipped: int):
+    def __init__(self, cam_id: int, max_frame_skipped: int):
         
         self.max_frame_skipped = max_frame_skipped
         self.objects_id = []
         self.objects = []
         self.last_time_stamp = 0
+        self.cam_id = cam_id
 
     def update(self, message: SSL_WrapperPacket) -> VisionMessage:
         '''
         Updates the position and velocity of objects based on the detections.
         '''
         # TODO Implement a Hungarian algorithm to give the balls an id?
-        detections, objects_id, orientations, time_stamp = [], [], [], message.detection.t_capture
+        detections, objects_id, confidences, orientations, time_stamp = [], [], [], [], message.detection.t_capture
         
         self.dt = time_stamp - self.last_time_stamp
 
@@ -68,29 +70,33 @@ class ObjectTracker(object):
             for yellow_robot in message.detection.robots_yellow:
                 objects_id.append(ID(yellow_robot.robot_id, is_ball = False, is_blue = False))
                 detections.append([[yellow_robot.x], [yellow_robot.y]])
+                confidences.append(yellow_robot.confidence)
                 orientations.append(yellow_robot.orientation)
         
         if message.detection.robots_blue:
             for blue_robot in message.detection.robots_blue:
                 objects_id.append(ID(blue_robot.robot_id, is_ball = False, is_blue = True))
                 detections.append([[blue_robot.x], [blue_robot.y]])
+                confidences.append(blue_robot.confidence)
                 orientations.append(blue_robot.orientation)
         
         # Balls dont have ids, so will consider the first ball as the main ball and ignore the rest
+        # TODO Implement a way to consider the ball with highest confidence to be the main ball.
         if message.detection.balls:
             objects_id.append(ID(id = 0, is_ball = True))
             detections.append([[(message.detection.balls[0]).x], [(message.detection.balls[0]).y]])
+            confidences.append(message.detection.balls[0].confidence)
             orientations.append(None)
 
-        self._update(detections, objects_id, orientations)
+        self._update(detections, objects_id, confidences, orientations)
 
         return self.wrap_message()
     # Detections == [x, y]
-    def _update(self, detections, objects_id, orientations) -> None:
+    def _update(self, detections, objects_id, confidences, orientations) -> None:
         # if empty list, assigning objects to the ObjectTracker.
         if not self.objects:
             for i, detection in enumerate(detections):
-                self.objects.append(Object(detection, objects_id[i], orientation = orientations[i]))
+                self.objects.append(Object(detection, objects_id[i], confidences[i], orientation = orientations[i]))
                 self.objects_id = objects_id
         
         # Check for objects not begin detected, and if skip_count surpass max_frame_skipped, delete it.
@@ -107,17 +113,18 @@ class ObjectTracker(object):
         # Check for new detections and adding them to objects.
         for i in range(len(detections)):
             if not objects_id[i] in self.objects_id:
-                self.objects.append(Object(detections[i], objects_id[i], orientation = orientations[i]))
+                self.objects.append(Object(detections[i], objects_id[i], confidences[i], orientation = orientations[i]))
                 self.objects_id.append(objects_id[i])
 
         # Updating parameters.
         for object_ in self.objects:
-            # If the object is detected then update his kalman filter predictions, else update with [[0], [0]]
+            # If the object is detected then update his kalman filter predictions, else update with predition
             if object_.id in objects_id:
                 object_.KF.predict(self.dt)
                 object_.prediction = object_.KF.update(detections[objects_id.index(object_.id)])
 
                 object_.skip_count = 0
+                self.last_time_stamp = time_stamp
             else:
                 object_.KF.predict(self.dt)
 
