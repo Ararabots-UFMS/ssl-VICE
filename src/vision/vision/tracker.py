@@ -109,6 +109,7 @@ class ObjectTracker(object):
                 
                 else:
                     self.objects[i].skip_count += 1
+                    self.objects[i].confidence = 0
 
         # Check for new detections and adding them to objects.
         for i in range(len(detections)):
@@ -122,6 +123,7 @@ class ObjectTracker(object):
             if object_.id in objects_id:
                 object_.KF.predict(self.dt)
                 object_.prediction = object_.KF.update(detections[objects_id.index(object_.id)])
+                object_.confidence = confidences[objects_id.index(object_.id)]
 
                 object_.skip_count = 0
                 self.last_time_stamp = time_stamp
