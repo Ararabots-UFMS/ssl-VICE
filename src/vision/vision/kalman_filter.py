@@ -16,7 +16,7 @@ class KalmanFilterClass2D(object):
     - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
     - "https://cookierobotics.com/071/"
     '''
-    def __init__(self, x_sd: float = 0.1, y_sd: float = 0.1, u_x: float = 0.001, u_y: float = 0.001, sd_acceleration: float = 1.0):
+    def __init__(self, x_sd: float = 0.01, y_sd: float = 0.01, u_x: float = 0.1, u_y: float = 0.1, sd_acceleration: float = 1):
         self.sd_acceleration = sd_acceleration
 
         self.u = np.matrix([[u_x],[u_y]])
@@ -54,7 +54,7 @@ class KalmanFilterClass2D(object):
                             [0, (dt**3)/2, 0, dt**2]]) * self.sd_acceleration ** 2
 
         # If we add the B.u it doesnt work... maybe its a dt problem
-        self.x = np.dot(self.A, self.x)# + np.dot(self.B, self.u)
+        self.x = np.dot(self.A, self.x) + np.dot(self.B, self.u)
         
         # Updation of the error covariance matrix 
         self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q

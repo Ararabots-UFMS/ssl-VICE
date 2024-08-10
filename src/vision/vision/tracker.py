@@ -18,6 +18,14 @@ class ID():
         if isinstance(other, self.__class__):
             return self.__dict__ == other.__dict__
 
+    # Defining hash to use ID class as dict key in merge_trackers
+    def __hash__(self):
+        return hash((self.id, self.is_blue))
+    
+    def __ne__(self, other):
+        return not(self == other)
+
+
 class Object(object):
     '''
     Tracked object class, mainly robots, but ball also.
@@ -88,11 +96,10 @@ class ObjectTracker(object):
             confidences.append(message.detection.balls[0].confidence)
             orientations.append(None)
 
-        self._update(detections, objects_id, confidences, orientations)
+        self._update(detections, objects_id, confidences, orientations, time_stamp)
 
-        return self.wrap_message()
     # Detections == [x, y]
-    def _update(self, detections, objects_id, confidences, orientations) -> None:
+    def _update(self, detections, objects_id, confidences, orientations, time_stamp) -> None:
         # if empty list, assigning objects to the ObjectTracker.
         if not self.objects:
             for i, detection in enumerate(detections):
@@ -100,20 +107,20 @@ class ObjectTracker(object):
                 self.objects_id = objects_id
         
         # Check for objects not begin detected, and if skip_count surpass max_frame_skipped, delete it.
-        for i in range(len(self.objects)):
-            if not self.objects[i].id in self.objects_id:
+        for i in range(len(self.objects_id)):
+            if not (self.objects_id[i] in objects_id):
                 
                 if self.objects[i].skip_count > self.max_frame_skipped:
+                    self.objects_id.remove(self.objects[i].id)
                     del self.objects[i]
-                    self.object_id.remove(self.objects[i].id)
                 
                 else:
                     self.objects[i].skip_count += 1
                     self.objects[i].confidence = 0
 
         # Check for new detections and adding them to objects.
-        for i in range(len(detections)):
-            if not objects_id[i] in self.objects_id:
+        for i in range(len(objects_id)):
+            if not (objects_id[i] in self.objects_id):
                 self.objects.append(Object(detections[i], objects_id[i], confidences[i], orientation = orientations[i]))
                 self.objects_id.append(objects_id[i])
 
@@ -129,66 +136,3 @@ class ObjectTracker(object):
                 self.last_time_stamp = time_stamp
             else:
                 object_.KF.predict(self.dt)
-
-    def wrap_message(self) -> VisionMessage:
-        message = VisionMessage()
-
-        for i, object_id in enumerate(self.objects_id):
-            if object_id.is_ball:
-                ball_msg = Balls()
-                ball_id = ObjectID()
-
-                ball_id.id = object_id.id
-                ball_id.is_ball = object_id.is_ball
-                ball_msg.id = ball_id
-
-                # Kalman filter x attribute is a vector [x position, y position, x velocity, y velocity]
-                ball_msg.position_x = float((self.objects[i]).KF.x[0][0])
-                ball_msg.position_y = float((self.objects[i]).KF.x[1][0])
-
-                ball_msg.velocity_x = float((self.objects[i]).KF.x[2][0])
-                ball_msg.velocity_y = float((self.objects[i]).KF.x[3][0])
-
-                message.balls.append(ball_msg)
-
-            elif object_id.is_blue:
-                robot_msg = Robots()
-                robot_id = ObjectID()
-
-                robot_id.id = object_id.id
-                robot_id.is_ball = object_id.is_ball
-                robot_id.is_blue = object_id.is_blue
-                robot_msg.id = robot_id
-
-                robot_msg.position_x = float((self.objects[i]).KF.x[0][0])
-                robot_msg.position_y = float((self.objects[i]).KF.x[1][0])
-
-                robot_msg.velocity_x = float((self.objects[i]).KF.x[2][0])
-                robot_msg.velocity_y = float((self.objects[i]).KF.x[3][0])
-
-                robot_msg.orientation = (self.objects[i]).orientation
-                robot_msg.velocity_orientation = 0.0
-
-                message.blue_robots.append(robot_msg)
-
-            else:
-                robot_msg = Robots()
-                robot_id = ObjectID()
-
-                robot_id.id = object_id.id
-                robot_id.is_ball = object_id.is_ball
-                robot_id.is_blue = object_id.is_blue
-                robot_msg.id = robot_id
-
-                robot_msg.position_x = float((self.objects[i]).KF.x[0][0])
-                robot_msg.position_y = float((self.objects[i]).KF.x[1][0])
-
-                robot_msg.velocity_x = float((self.objects[i]).KF.x[2][0])
-                robot_msg.velocity_y = float((self.objects[i]).KF.x[3][0])
-
-                robot_msg.orientation = (self.objects[i]).orientation
-                robot_msg.velocity_orientation = 0.0
-
-                message.yellow_robots.append(robot_msg)
-            
-        return message
