@@ -1,228 +1,303 @@
 """
 
-Path planning with Rapidly-Exploring Random Trees (RRT)
+Path planning Sample Code with Randomized Rapidly-Exploring Random Trees (RRT)
 
-author: Aakash(@nimrobotics)
-web: nimrobotics.github.io
-
-Ref.: https://github.com/nimRobotics/RRT
+author: AtsushiSakai(@Atsushi_twi)
 
 """
 
-import cv2
-import numpy as np
 import math
 import random
-import argparse
-import os
-import shutil
+import time
+import matplotlib.pyplot as plt
+import numpy as np
 
-class Nodes:
-    """Class to store the RRT graph"""
-    def __init__(self, x,y):
-        self.x = x
-        self.y = y
-        self.parent_x = []
-        self.parent_y = []
+show_animation = True
 
-# check collision
-def collision(x1,y1,x2,y2):
-    color=[]
-    x = list(np.arange(x1,x2,(x2-x1)/100))
-    y = list(((y2-y1)/(x2-x1))*(x-x1) + y1)
-    print("collision",x,y)
-    for i in range(len(x)):
-        print(int(x[i]),int(y[i]))
-        color.append(img[int(y[i]),int(x[i])])
-    if (0 in color):
-        return True #collision
+
+class RRT:
+    """
+    Class for RRT planning
+    """
+
+    class Node:
+        """
+        RRT Node
+        """
+
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+            self.path_x = []
+            self.path_y = []
+            self.parent = None
+
+    class AreaBounds:
+
+        def __init__(self, area):
+            self.xmin = float(area[0])
+            self.xmax = float(area[1])
+            self.ymin = float(area[2])
+            self.ymax = float(area[3])
+
+
+    def __init__(self,
+                 start,
+                 goal,
+                 obstacle_list,
+                 rand_area,
+                 expand_dis=3.0,
+                 path_resolution=0.5,
+                 goal_sample_rate=5,
+                 max_iter=800,
+                 play_area=None,
+                 robot_radius=0.0,
+                 ):
+        """
+        Setting Parameter
+
+        start:Start Position [x,y]
+        goal:Goal Position [x,y]
+        obstacleList:obstacle Positions [[x,y,size],...]
+        randArea:Random Sampling Area [min,max]
+        play_area:stay inside this area [xmin,xmax,ymin,ymax]
+        robot_radius: robot body modeled as circle with given radius
+
+        """
+        self.start = self.Node(start[0], start[1])
+        self.end = self.Node(goal[0], goal[1])
+        self.min_rand = rand_area[0]
+        self.max_rand = rand_area[1]
+        if play_area is not None:
+            self.play_area = self.AreaBounds(play_area)
+        else:
+            self.play_area = None
+        self.expand_dis = expand_dis
+        self.path_resolution = path_resolution
+        self.goal_sample_rate = goal_sample_rate
+        self.max_iter = max_iter
+        self.obstacle_list = obstacle_list
+        self.node_list = []
+        self.robot_radius = robot_radius
+
+    def planning(self, animation=True):
+        """
+        rrt path planning
+
+        animation: flag for animation on or off
+        """
+
+        self.node_list = [self.start]
+        for i in range(self.max_iter):
+            rnd_node = self.get_random_node()
+            nearest_ind = self.get_nearest_node_index(self.node_list, rnd_node)
+            nearest_node = self.node_list[nearest_ind]
+
+            new_node = self.steer(nearest_node, rnd_node, self.expand_dis)
+
+            if self.check_if_outside_play_area(new_node, self.play_area) and \
+               self.check_collision(
+                   new_node, self.obstacle_list, self.robot_radius):
+                self.node_list.append(new_node)
+
+            if animation and i % 5 == 0:
+                self.draw_graph(rnd_node)
+
+            if self.calc_dist_to_goal(self.node_list[-1].x,
+                                      self.node_list[-1].y) <= self.expand_dis:
+                final_node = self.steer(self.node_list[-1], self.end,
+                                        self.expand_dis)
+                if self.check_collision(
+                        final_node, self.obstacle_list, self.robot_radius):
+                    return self.generate_final_course(len(self.node_list) - 1)
+
+            if animation and i % 5:
+                self.draw_graph(rnd_node)
+
+        return None  # cannot find path
+
+    def steer(self, from_node, to_node, extend_length=float("inf")):
+
+        new_node = self.Node(from_node.x, from_node.y)
+        d, theta = self.calc_distance_and_angle(new_node, to_node)
+
+        new_node.path_x = [new_node.x]
+        new_node.path_y = [new_node.y]
+
+        if extend_length > d:
+            extend_length = d
+
+        n_expand = math.floor(extend_length / self.path_resolution)
+
+        for _ in range(n_expand):
+            new_node.x += self.path_resolution * math.cos(theta)
+            new_node.y += self.path_resolution * math.sin(theta)
+            new_node.path_x.append(new_node.x)
+            new_node.path_y.append(new_node.y)
+
+        d, _ = self.calc_distance_and_angle(new_node, to_node)
+        if d <= self.path_resolution:
+            new_node.path_x.append(to_node.x)
+            new_node.path_y.append(to_node.y)
+            new_node.x = to_node.x
+            new_node.y = to_node.y
+
+        new_node.parent = from_node
+
+        return new_node
+
+    def generate_final_course(self, goal_ind):
+        path = [[self.end.x, self.end.y]]
+        node = self.node_list[goal_ind]
+        while node.parent is not None:
+            path.append([node.x, node.y])
+            node = node.parent
+        path.append([node.x, node.y])
+
+        return path
+
+    def calc_dist_to_goal(self, x, y):
+        dx = x - self.end.x
+        dy = y - self.end.y
+        return math.hypot(dx, dy)
+
+    def get_random_node(self):
+        if random.randint(0, 100) > self.goal_sample_rate:
+            rnd = self.Node(
+                random.uniform(self.min_rand, self.max_rand),
+                random.uniform(self.min_rand, self.max_rand))
+        else:  # goal point sampling
+            rnd = self.Node(self.end.x, self.end.y)
+        return rnd
+
+    def draw_graph(self, rnd=None):
+        plt.clf()
+        # for stopping simulation with the esc key.
+        plt.gcf().canvas.mpl_connect(
+            'key_release_event',
+            lambda event: [exit(0) if event.key == 'escape' else None])
+        if rnd is not None:
+            plt.plot(rnd.x, rnd.y, "^k")
+            if self.robot_radius > 0.0:
+                self.plot_circle(rnd.x, rnd.y, self.robot_radius, '-r')
+        for node in self.node_list:
+            if node.parent:
+                plt.plot(node.path_x, node.path_y, "-g")
+
+        for (ox, oy, size) in self.obstacle_list:
+            self.plot_circle(ox, oy, size)
+
+        if self.play_area is not None:
+            plt.plot([self.play_area.xmin, self.play_area.xmax,
+                      self.play_area.xmax, self.play_area.xmin,
+                      self.play_area.xmin],
+                     [self.play_area.ymin, self.play_area.ymin,
+                      self.play_area.ymax, self.play_area.ymax,
+                      self.play_area.ymin],
+                     "-k")
+
+        plt.plot(self.start.x, self.start.y, "xr")
+        plt.plot(self.end.x, self.end.y, "xr")
+        plt.axis("equal")
+        plt.axis([self.min_rand, self.max_rand, self.min_rand, self.max_rand])
+        plt.grid(True)
+        plt.pause(0.01)
+
+    @staticmethod
+    def plot_circle(x, y, size, color="-b"):  # pragma: no cover
+        deg = list(range(0, 360, 5))
+        deg.append(0)
+        xl = [x + size * math.cos(np.deg2rad(d)) for d in deg]
+        yl = [y + size * math.sin(np.deg2rad(d)) for d in deg]
+        plt.plot(xl, yl, color)
+
+    @staticmethod
+    def get_nearest_node_index(node_list, rnd_node):
+        dlist = [(node.x - rnd_node.x)**2 + (node.y - rnd_node.y)**2
+                 for node in node_list]
+        minind = dlist.index(min(dlist))
+
+        return minind
+
+    @staticmethod
+    def check_if_outside_play_area(node, play_area):
+
+        if play_area is None:
+            return True  # no play_area was defined, every pos should be ok
+
+        if node.x < play_area.xmin or node.x > play_area.xmax or \
+           node.y < play_area.ymin or node.y > play_area.ymax:
+            return False  # outside - bad
+        else:
+            return True  # inside - ok
+
+    @staticmethod
+    def check_collision(node, obstacleList, robot_radius):
+
+        if node is None:
+            return False
+
+        for (ox, oy, size) in obstacleList:
+            dx_list = [ox - x for x in node.path_x]
+            dy_list = [oy - y for y in node.path_y]
+            d_list = [dx * dx + dy * dy for (dx, dy) in zip(dx_list, dy_list)]
+
+            if min(d_list) <= (size+robot_radius)**2:
+                return False  # collision
+
+        return True  # safe
+
+    @staticmethod
+    def calc_distance_and_angle(from_node, to_node):
+        dx = to_node.x - from_node.x
+        dy = to_node.y - from_node.y
+        d = math.hypot(dx, dy)
+        theta = math.atan2(dy, dx)
+        return d, theta
+
+
+def main(gx=6.0, gy=10.0):
+    print("start " + __file__)
+
+       # ====Search Path with RRT====
+    obstacleList = [
+        (5, 5, 1),
+        (3, 6, 2),
+        (3, 8, 2),
+        (3, 10, 2),
+        (7, 5, 2),
+        (9, 5, 2),
+        (8, 10, 1),
+        (6, 12, 1),
+    ]  # [x,y,size(radius)]
+    start_time = time.time()
+    rrt = RRT(
+        start=[0, 0],
+        goal=[gx, gy],
+        rand_area=[-2, 15],
+        obstacle_list=obstacleList,
+        # play_area=[0, 10, 0, 14]
+        robot_radius=0.8
+        )
+    path = rrt.planning(animation=show_animation)
+
+    end_time = time.time()
+    execution_time = end_time - start_time
+    print(f"Tempo de execução: {execution_time} segundos")
+
+    if path is None:
+        print("Cannot find path")
     else:
-        return False #no-collision
+        print("found path!!")
 
-# check the  collision with obstacle and trim
-def check_collision(x1,y1,x2,y2):
-    _,theta = dist_and_angle(x2,y2,x1,y1)
-    x=x2 + stepSize*np.cos(theta)
-    y=y2 + stepSize*np.sin(theta)
-    print(x2,y2,x1,y1)
-    print("theta",theta)
-    print("check_collision",x,y)
-
-    # TODO: trim the branch if its going out of image area
-    # print("Image shape",img.shape)
-    hy,hx=img.shape
-    if y<0 or y>hy or x<0 or x>hx:
-        print("Point out of image bound")
-        directCon = False
-        nodeCon = False
-    else:
-        # check direct connection
-        if collision(x,y,end[0],end[1]):
-            directCon = False
-        else:
-            directCon=True
-
-        # check connection between two nodes
-        if collision(x,y,x2,y2):
-            nodeCon = False
-        else:
-            nodeCon = True
-
-    return(x,y,directCon,nodeCon)
-
-# return dist and angle b/w new point and nearest node
-def dist_and_angle(x1,y1,x2,y2):
-    dist = math.sqrt( ((x1-x2)**2)+((y1-y2)**2) )
-    angle = math.atan2(y2-y1, x2-x1)
-    return(dist,angle)
-
-# return the neaerst node index
-def nearest_node(x,y):
-    temp_dist=[]
-    for i in range(len(node_list)):
-        dist,_ = dist_and_angle(x,y,node_list[i].x,node_list[i].y)
-        temp_dist.append(dist)
-    return temp_dist.index(min(temp_dist))
-
-# generate a random point in the image space
-def rnd_point(h,l):
-    new_y = random.randint(0, h)
-    new_x = random.randint(0, l)
-    return (new_x,new_y)
-
-
-def RRT(img, img2, start, end, stepSize):
-    h,l= img.shape # dim of the loaded image
-    # print(img.shape) # (384, 683)
-    # print(h,l)
-
-    # insert the starting point in the node class
-    # node_list = [0] # list to store all the node points         
-    node_list[0] = Nodes(start[0],start[1])
-    node_list[0].parent_x.append(start[0])
-    node_list[0].parent_y.append(start[1])
-
-    # display start and end
-    cv2.circle(img2, (start[0],start[1]), 5,(0,0,255),thickness=3, lineType=8)
-    cv2.circle(img2, (end[0],end[1]), 5,(0,0,255),thickness=3, lineType=8)
-
-    i=1
-    pathFound = False
-    while pathFound==False:
-        nx,ny = rnd_point(h,l)
-        print("Random points:",nx,ny)
-
-        nearest_ind = nearest_node(nx,ny)
-        nearest_x = node_list[nearest_ind].x
-        nearest_y = node_list[nearest_ind].y
-        print("Nearest node coordinates:",nearest_x,nearest_y)
-
-        #check direct connection
-        tx,ty,directCon,nodeCon = check_collision(nx,ny,nearest_x,nearest_y)
-        print("Check collision:",tx,ty,directCon,nodeCon)
-
-        if directCon and nodeCon:
-            print("Node can connect directly with end")
-            node_list.append(i)
-            node_list[i] = Nodes(tx,ty)
-            node_list[i].parent_x = node_list[nearest_ind].parent_x.copy()
-            node_list[i].parent_y = node_list[nearest_ind].parent_y.copy()
-            node_list[i].parent_x.append(tx)
-            node_list[i].parent_y.append(ty)
-
-            cv2.circle(img2, (int(tx),int(ty)), 2,(0,0,255),thickness=3, lineType=8)
-            cv2.line(img2, (int(tx),int(ty)), (int(node_list[nearest_ind].x),int(node_list[nearest_ind].y)), (0,255,0), thickness=1, lineType=8)
-            cv2.line(img2, (int(tx),int(ty)), (end[0],end[1]), (255,0,0), thickness=2, lineType=8)
-
-            print("Path has been found")
-            #print("parent_x",node_list[i].parent_x)
-            for j in range(len(node_list[i].parent_x)-1):
-                cv2.line(img2, (int(node_list[i].parent_x[j]),int(node_list[i].parent_y[j])), (int(node_list[i].parent_x[j+1]),int(node_list[i].parent_y[j+1])), (255,0,0), thickness=2, lineType=8)
-            # cv2.waitKey(1)
-            cv2.imwrite("media/"+str(i)+".jpg",img2)
-            cv2.imwrite("out.jpg",img2)
-            break
-
-        elif nodeCon:
-            print("Nodes connected")
-            node_list.append(i)
-            node_list[i] = Nodes(tx,ty)
-            node_list[i].parent_x = node_list[nearest_ind].parent_x.copy()
-            node_list[i].parent_y = node_list[nearest_ind].parent_y.copy()
-            # print(i)
-            # print(node_list[nearest_ind].parent_y)
-            node_list[i].parent_x.append(tx)
-            node_list[i].parent_y.append(ty)
-            i=i+1
-            # display
-            cv2.circle(img2, (int(tx),int(ty)), 2,(0,0,255),thickness=3, lineType=8)
-            cv2.line(img2, (int(tx),int(ty)), (int(node_list[nearest_ind].x),int(node_list[nearest_ind].y)), (0,255,0), thickness=1, lineType=8)
-            cv2.imwrite("media/"+str(i)+".jpg",img2)
-            cv2.imshow("sdc",img2)
-            cv2.waitKey(1)
-            continue
-
-        else:
-            print("No direct con. and no node con. :( Generating new rnd numbers")
-            continue
-
-def draw_circle(event,x,y,flags,param):
-    global coordinates
-    if event == cv2.EVENT_LBUTTONDBLCLK:
-        cv2.circle(img2,(x,y),5,(255,0,0),-1)
-        coordinates.append(x)
-        coordinates.append(y)
-
+        # Draw final path
+        if show_animation:
+            rrt.draw_graph()
+            plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
+            plt.grid(True)
+            plt.pause(0.01)  # Need for Mac
+            plt.show()
 
 
 if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser(description = 'Below are the params:')
-    parser.add_argument('-p', type=str, default='world2.png',metavar='ImagePath', action='store', dest='imagePath',
-                    help='Path of the image containing mazes')
-    parser.add_argument('-s', type=int, default=10,metavar='Stepsize', action='store', dest='stepSize',
-                    help='Step-size to be used for RRT branches')
-    parser.add_argument('-start', type=int, default=[20,20], metavar='startCoord', dest='start', nargs='+',
-                    help='Starting position in the maze')
-    parser.add_argument('-stop', type=int, default=[450,250], metavar='stopCoord', dest='stop', nargs='+',
-                    help='End position in the maze')
-    parser.add_argument('-selectPoint', help='Select start and end points from figure', action='store_true')
-
-    args = parser.parse_args()
-
-    # remove previously stored data (Unix users)
-    # try:
-    #   os.system("rm -rf media")
-    # except:
-    #   print("Dir already clean")
-    # os.mkdir("media")
-
-    # Remove previously stored data (Windows users)
-    # if os.path.exists("media"):
-    #     shutil.rmtree("media")  # Remove the directory and its contents
-
-    # os.mkdir("media")  # Create a new empty directory
-
-    img = cv2.imread(args.imagePath,0) # load grayscale maze image
-    img2 = cv2.imread(args.imagePath) # load colored maze image
-    start = tuple(args.start) #(20,20) # starting coordinate
-    end = tuple(args.stop) #(450,250) # target coordinate
-    stepSize = args.stepSize # stepsize for RRT
-    node_list = [0] # list to store all the node points
-
-    coordinates=[]
-    if args.selectPoint:
-        print("Select start and end points by double clicking, press 'escape' to exit")
-        cv2.namedWindow('image')
-        cv2.setMouseCallback('image',draw_circle)
-        while(1):
-            cv2.imshow('image',img2)
-            k = cv2.waitKey(20) & 0xFF
-            if k == 27:
-                break
-        # print(coordinates)
-        start=(coordinates[0],coordinates[1])
-        end=(coordinates[2],coordinates[3])
-
-    # run the RRT algorithm 
-    RRT(img, img2, start, end, stepSize)
+    main()
