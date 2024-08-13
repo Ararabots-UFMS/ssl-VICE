@@ -9,7 +9,7 @@ class CommunicationNode(Node):
 
     def __init__(self):
         super().__init__('communication_node')
-        self.subscription = self.create_subscription(Communication,'communicationTopic', self.forward, 10)
+        self.subscription = self.create_subscription(Communication, 'communicationTopic', self.forward, 10)
         self.subscription  # prevent unused variable warning
 
     def forward(self, msg):
