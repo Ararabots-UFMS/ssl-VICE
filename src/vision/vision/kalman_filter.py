@@ -78,6 +78,20 @@ class KalmanFilterClass2D(object):
         self.P = (I -(K*self.H))*self.P  
         
         return self.x
+    
+    def set_param(self, x_sd: Optional[float] = None,
+                        y_sd: Optional[float] = None,
+                        u_x:  Optional[float] = None,
+                        u_y:  Optional[float] = None,
+                        acceleration_sd_2d: Optional[float] = None):
+
+        self.R[0] = [x_sd**2, 0] if x_sd else self.R[0]
+        self.R[1] = [0, y_sd**2] if y_sd else self.R[1]
+        
+        self.u[0] = [u_x] if u_x else self.u[0]
+        self.u[1] = [u_y] if u_y else self.u[1]
+
+        self.sd_acceleration = acceleration_sd_2d if acceleration_sd_2d else self.sd_acceleration
 
 class KalmanFilterClass1D(object):
     '''
@@ -149,3 +163,14 @@ class KalmanFilterClass1D(object):
         self.P = (I -(K*self.H))*self.P  
         
         return self.x
+
+    def set_param(self, a_sd: Optional[float] = None,
+                        u_a:  Optional[float] = None,
+                        acceleration_sd_1d: Optional[float] = None):
+
+        self.R = a_sd ** 2 if a_sd else self.R
+        
+        self.u = u_a if u_a else self.u
+
+        self.sd_acceleration = acceleration_sd_1d if acceleration_sd_1d else self.sd_acceleration
+        

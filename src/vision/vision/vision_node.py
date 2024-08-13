@@ -1,5 +1,6 @@
 from vision.vision_client import Client
 from vision.tracker import ObjectTracker
+
 from typing import Optional
 
 import rclpy
@@ -59,10 +60,24 @@ class Vision(Node):
                 self.get_logger().info(data)
 
         except KeyboardInterrupt:
-            print('Process finished successfully by user, terminating now...')
+            self.get_logger().info('Process finished successfully by user, terminating now...')
         except Exception as exception:
-            print('An unexpected error occurred:')
-            print(exception)
+            self.get_logger().warning(f'An unexpected error occurred: {exception}')
+    
+    def set_filter_param(self, x_sd: Optional[float] = None,
+                               y_sd: Optional[float] = None,
+                               a_sd: Optional[float] = None,
+                               u_x:  Optional[float] = None,
+                               u_y:  Optional[float] = None,
+                               u_a:  Optional[float] = None,
+                               acceleration_sd_2d: Optional[float] = None,
+                               acceleration_sd_1d: Optional[float] = None):
+        # Nested loops are ugly...
+        for tracker in self.trackers:
+            for object_ in tracker.objects:
+                object_.KF.set_param(x_sd, y_sd, u_x, u_y, acceleration_sd_2d)
+                if not object_.id.is_ball:
+                    object_.orientation_KF.set_param(a_sd, u_a, acceleration_sd_1d)
 
     def publish_vision(self):
         message = merge_trackers(self.trackers)
