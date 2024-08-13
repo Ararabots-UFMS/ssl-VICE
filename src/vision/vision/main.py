@@ -51,7 +51,6 @@ class Vision(Node):
             # Orientation does not have a proper processing. Using raw orientantion and setting orientation velocity to 0.
             data: SSL_WrapperPacket = self.client.receive()
 
-            
             data_cam_id = data.detection.camera_id
 
             self.trackers[data_cam_id].update(data)

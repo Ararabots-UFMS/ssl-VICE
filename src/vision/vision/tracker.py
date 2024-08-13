@@ -1,4 +1,4 @@
-from vision.kalman_filter import KalmanFilterClass2D
+from vision.kalman_filter import KalmanFilterClass2D, KalmanFilterClass1D
 from system_interfaces.msg import VisionMessage, Robots, Balls, ObjectID
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 
@@ -39,6 +39,7 @@ class Object(object):
         self.skip_count = 0
         # Orientation buffer, orientation needs proper processing.
         self.orientation = orientation
+        self.orientation_KF = KalmanFilterClass1D()
 
 class ObjectTracker(object):
     '''
@@ -128,11 +129,20 @@ class ObjectTracker(object):
         for object_ in self.objects:
             # If the object is detected then update his kalman filter predictions, else update with predition
             if object_.id in objects_id:
+                # Predict position and velocity.
                 object_.KF.predict(self.dt)
                 object_.prediction = object_.KF.update(detections[objects_id.index(object_.id)])
+
+                # Predict orientation if not ball.
+                if not object_.id.is_ball:
+                    object_.orientation_KF.predict(self.dt)
+                    object_.orientantion = object_.orientation_KF.update(orientations[objects_id.index(object_.id)])
+
                 object_.confidence = confidences[objects_id.index(object_.id)]
 
                 object_.skip_count = 0
                 self.last_time_stamp = time_stamp
             else:
                 object_.KF.predict(self.dt)
+                if not object_.id.is_ball:
+                    object_.orientation_KF.predict(self.dt)

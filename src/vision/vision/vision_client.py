@@ -26,7 +26,8 @@ class Client:
         
     def receive(self):
         """Receive package and decode."""
-
+        
         data, _ = self.sock.recvfrom(1024)
         decoded_data = SSL_WrapperPacket().FromString(data)
+        
         return decoded_data

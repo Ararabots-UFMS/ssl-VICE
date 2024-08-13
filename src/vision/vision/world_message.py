@@ -41,9 +41,9 @@ def wrap_message(objects: List[Object]) -> VisionMessage:
             robot_msg.velocity_x = float(object_.KF.x[2][0])
             robot_msg.velocity_y = float(object_.KF.x[3][0])
 
-            robot_msg.orientation = float(object_.orientation)
+            robot_msg.orientation = float(object_.orientation_KF.x[0][0])
             # TODO Calculate velocity with 1d kalman filter
-            robot_msg.velocity_orientation = 0.0
+            robot_msg.velocity_orientation = float(object_.orientation_KF.x[1][0])
 
             if object_.id.is_blue:
                 message.blue_robots.append(robot_msg)
