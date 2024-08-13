@@ -95,7 +95,7 @@ class KalmanFilterClass2D(object):
 
 class KalmanFilterClass1D(object):
     '''
-    Kalman filter for 2D (Angle and Angular velocity).
+    Kalman filter for 1D (Angle and Angular velocity).
     
     All calculation and code are based on the reference.
 
