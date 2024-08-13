@@ -7,6 +7,7 @@ author: Atsushi Sakai(@Atsushi_twi)
 """
 
 import time
+import timeit
 import math
 import sys
 import matplotlib.pyplot as plt
@@ -36,7 +37,7 @@ class RRTStar(RRT):
                  expand_dis=30.0,
                  path_resolution=1.0,
                  goal_sample_rate=20,
-                 max_iter=800,
+                 max_iter=2000,
                  connect_circle_dist=50.0,
                  search_until_max_iter=False,
                  robot_radius=0.0):
@@ -66,7 +67,8 @@ class RRTStar(RRT):
 
         self.node_list = [self.start]
         for i in range(self.max_iter):
-            print("Iter:", i, ", number of nodes:", len(self.node_list))
+            #Show how many iterations there are
+            #print("Iter:", i, ", number of nodes:", len(self.node_list))
             rnd = self.get_random_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd)
             new_node = self.steer(self.node_list[nearest_ind], rnd,
@@ -251,45 +253,35 @@ class RRTStar(RRT):
 def main():
     print("Start " + __file__)
 
-    # ====Search Path with RRT====
-    obstacleList = [
-        (5, 5, 1),
-        (3, 6, 2),
-        (3, 8, 2),
-        (3, 10, 2),
-        (7, 5, 2),
-        (9, 5, 2),
-        (8, 10, 1),
-        (6, 12, 1),
-    ]  # [x,y,size(radius)]
+    # Configuração do código para o timeit
+    setup_code = """
+from __main__ import RRTStar
+obstacleList = [
+    (5, 5, 1),
+    (3, 6, 2),
+    (3, 8, 2),
+    (3, 10, 2),
+    (7, 5, 2),
+    (9, 5, 2),
+    (8, 10, 1),
+    (6, 12, 1),
+]  # [x,y,size(radius)]
+rrt_star = RRTStar(
+    start=[0, 0],
+    goal=[6, 10],
+    rand_area=[-2, 15],
+    obstacle_list=obstacleList,
+    expand_dis=1,
+    robot_radius=0.8)
+"""
 
-    start_time = time.time()
-    # Set Initial parameters
-    rrt_star = RRTStar(
-        start=[0, 0],
-        goal=[6, 10],
-        rand_area=[-2, 15],
-        obstacle_list=obstacleList,
-        expand_dis=1,
-        robot_radius=0.8)
-    
-    path = rrt_star.planning(animation=show_animation)
-    
-    end_time = time.time()
-    execution_time = end_time - start_time
-    print(f"Tempo de execução: {execution_time} segundos")
+    test_code = """
+path = rrt_star.planning(animation=False)
+"""
 
-    if path is None:
-        print("Cannot find path")
-    else:
-        print("found path!!")
-
-        # Draw final path
-        if show_animation:
-            rrt_star.draw_graph()
-            plt.plot([x for (x, y) in path], [y for (x, y) in path], 'r--')
-            plt.grid(True)
-            plt.show()
+    # Medindo o tempo de execução
+    execution_time = timeit.timeit(stmt=test_code, setup=setup_code, number=50)
+    print(f"Tempo médio de execução: {execution_time:.6f} segundos")
 
 
 if __name__ == '__main__':

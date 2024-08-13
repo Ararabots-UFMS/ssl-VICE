@@ -9,6 +9,7 @@ author: AtsushiSakai(@Atsushi_twi)
 import math
 import random
 import time
+import timeit
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -49,7 +50,7 @@ class RRT:
                  expand_dis=3.0,
                  path_resolution=0.5,
                  goal_sample_rate=5,
-                 max_iter=800,
+                 max_iter=1000,
                  play_area=None,
                  robot_radius=0.0,
                  ):
@@ -259,44 +260,35 @@ class RRT:
 def main(gx=6.0, gy=10.0):
     print("start " + __file__)
 
-       # ====Search Path with RRT====
-    obstacleList = [
-        (5, 5, 1),
-        (3, 6, 2),
-        (3, 8, 2),
-        (3, 10, 2),
-        (7, 5, 2),
-        (9, 5, 2),
-        (8, 10, 1),
-        (6, 12, 1),
-    ]  # [x,y,size(radius)]
-    start_time = time.time()
-    rrt = RRT(
-        start=[0, 0],
-        goal=[gx, gy],
-        rand_area=[-2, 15],
-        obstacle_list=obstacleList,
-        # play_area=[0, 10, 0, 14]
-        robot_radius=0.8
-        )
-    path = rrt.planning(animation=show_animation)
+        # Configuração do código para o timeit
+    setup_code = """
+from __main__ import RRT
+obstacleList = [
+    (5, 5, 1),
+    (3, 6, 2),
+    (3, 8, 2),
+    (3, 10, 2),
+    (7, 5, 2),
+    (9, 5, 2),
+    (8, 10, 1),
+    (6, 12, 1),
+]  # [x,y,size(radius)]
+rrt = RRT(
+    start=[0, 0],
+    goal=[6, 10],
+    rand_area=[-2, 15],
+    obstacle_list=obstacleList,
+    # play_area=[0, 10, 0, 14]
+    robot_radius=0.8)
+"""
 
-    end_time = time.time()
-    execution_time = end_time - start_time
-    print(f"Tempo de execução: {execution_time} segundos")
+    test_code = """
+path = rrt.planning(animation=False)
+"""
 
-    if path is None:
-        print("Cannot find path")
-    else:
-        print("found path!!")
-
-        # Draw final path
-        if show_animation:
-            rrt.draw_graph()
-            plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
-            plt.grid(True)
-            plt.pause(0.01)  # Need for Mac
-            plt.show()
+    # Medindo o tempo de execução
+    execution_time = timeit.timeit(stmt=test_code, setup=setup_code, number=50)
+    print(f"Tempo médio de execução: {execution_time:.6f} segundos")
 
 
 if __name__ == '__main__':
