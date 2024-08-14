@@ -1,2 +1,1 @@
 Command[] commands
-Info[] infos

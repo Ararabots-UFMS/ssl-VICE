@@ -1,21 +1,31 @@
 import rclpy
 from rclpy.node import Node
 
-from system_interfaces.msg import Communication
+from communication import feedback_client
 
-
+from system_interfaces.msg import Communication, Infos
 
 class CommunicationNode(Node):
 
     def __init__(self):
         super().__init__('communication_node')
-        self.subscription = self.create_subscription(Communication, 'communicationTopic', self.forward, 10)
-        self.subscription  # prevent unused variable warning
+        self.subscription = self.create_subscription(Communication, 'commandTopic', self.send_command, 10)
 
-    def forward(self, msg):
+        # Client to receive robots information.
+        self.client = feedback_client()
+        self.publisher = self.create_publisher(Infos, 'infoTopic', 10)
+        
+        # Receiving data at 120 Hz
+        self.timer = self.create_timer(1/120, self.publish_infos)
+
+    def send_command(self, msg):
         # Serialize message and send to hardware.
-        pass
+        if msg.commands:
+            # Send command to robot
+            pass
 
+    def publish_infos(self):
+        pass
 
 def main(args=None):
     rclpy.init(args=args)
