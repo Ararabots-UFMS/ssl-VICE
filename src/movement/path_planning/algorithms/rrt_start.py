@@ -17,7 +17,11 @@ from rrt import RRT
 
 show_animation = True
 
-
+def update_obstacle_positions(obstacle_list, time_step=1.0):
+    for obstacle in obstacle_list:
+        obstacle[0] += obstacle[3] * time_step # Atualiza a posição x
+        obstacle[1] += obstacle[4] * time_step # Atualiza a posição y
+            
 class RRTStar(RRT):
     """
     Class for RRT Star planning
@@ -57,16 +61,21 @@ class RRTStar(RRT):
         self.search_until_max_iter = search_until_max_iter
         self.node_list = []
 
-    def planning(self, animation=True):
+    def planning(self, animation=True, time_step=1.0):
         """
         rrt star path planning
 
         animation: flag for animation on or off .
         """
+        global control
 
         self.node_list = [self.start]
         for i in range(self.max_iter):
             print("Iter:", i, ", number of nodes:", len(self.node_list))
+
+            # Atualiza a posição dos obstáculos
+            update_obstacle_positions(self.obstacle_list, time_step)
+
             rnd = self.get_random_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd)
             new_node = self.steer(self.node_list[nearest_ind], rnd,
@@ -86,6 +95,10 @@ class RRTStar(RRT):
                     self.node_list.append(node_with_updated_parent)
                 else:
                     self.node_list.append(new_node)
+
+            # Verifique se algum nó existente colide com novos obstáculos
+            self.node_list = [node for node in self.node_list if self.check_collision(node, self.obstacle_list, self.robot_radius)]
+            
 
             if animation:
                 self.draw_graph(rnd)
@@ -253,14 +266,15 @@ def main():
 
     # ====Search Path with RRT====
     obstacleList = [
-        (5, 5, 1),
-        (3, 6, 2),
-        (3, 8, 2),
-        (3, 10, 2),
-        (7, 5, 2),
-        (9, 5, 2),
-        (8, 10, 1),
-        (6, 12, 1),
+        # [x, y, size, x_velocity, y_velocity]
+        [5, 5, 1, 0.1, 0.0],
+        [3, 6, 2, 0.0, 0.1],
+        [3, 8, 2, -0.1, 0.0],
+        [3, 10, 2, 0.0, -0.1],
+        [7, 5, 2, 0.05, 0.05],
+        [9, 5, 2, -0.05, 0.05],
+        [8, 10, 1, 0.1, -0.1],
+        [6, 12, 1, -0.1, 0.1],
     ]  # [x,y,size(radius)]
 
 
@@ -274,7 +288,7 @@ def main():
         expand_dis=1,
         robot_radius=0.8)
     
-    path = rrt_star.planning(animation=show_animation)
+    path = rrt_star.planning(animation=show_animation, time_step=1.0)
 
     end_time = time.time()
     execution_time = end_time - start_time
