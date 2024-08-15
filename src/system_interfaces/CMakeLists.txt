@@ -10,8 +10,13 @@ find_package(ament_cmake REQUIRED)
 
 find_package(rosidl_default_generators REQUIRED)
 
+
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/PIDUpdate.srv"
+  "msg/VisionMessage.msg"
+  "msg/Balls.msg"
+  "msg/Robots.msg"
+  "msg/ObjectID.msg"
 )
 
 if(BUILD_TESTING)
