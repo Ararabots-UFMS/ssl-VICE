@@ -13,10 +13,10 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='vsss',
-    maintainer_email='allan.m@ufms.br',
+    maintainer='fabio',
+    maintainer_email='fabiohuang2004@icloud.com',
     description='TODO: Package description',
-    license='Apache-2.0',
+    license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
