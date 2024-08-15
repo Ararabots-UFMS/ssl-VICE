@@ -11,13 +11,9 @@ import random
 import time
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.interpolate import CubicSpline
 
 show_animation = True
-
-def update_obstacle_positions(obstacle_list, time_step=1.0):
-    for obstacle in obstacle_list:
-        obstacle[0] += obstacle[3] * time_step  # Atualiza a posição x
-        obstacle[1] += obstacle[4] * time_step  # Atualiza a posição y
 
 
 class RRT:
@@ -54,7 +50,6 @@ class RRT:
                  expand_dis=3.0,
                  path_resolution=0.5,
                  goal_sample_rate=5,
-                 max_iter=1000,
                  play_area=None,
                  robot_radius=0.0,
                  ):
@@ -80,12 +75,11 @@ class RRT:
         self.expand_dis = expand_dis
         self.path_resolution = path_resolution
         self.goal_sample_rate = goal_sample_rate
-        self.max_iter = max_iter
         self.obstacle_list = obstacle_list
         self.node_list = []
         self.robot_radius = robot_radius
 
-    def planning(self, animation=True, time_step=1.0):
+    def planning(self):
         """
         rrt path planning
 
@@ -93,14 +87,11 @@ class RRT:
         """
 
         self.node_list = [self.start]
-        for i in range(self.max_iter):
+        while True:
             rnd_node = self.get_random_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd_node)
             nearest_node = self.node_list[nearest_ind]
 
-            # Atualiza a posição dos obstáculos
-            update_obstacle_positions(self.obstacle_list, time_step)
-            
             new_node = self.steer(nearest_node, rnd_node, self.expand_dis)
 
             if self.check_if_outside_play_area(new_node, self.play_area) and \
@@ -108,11 +99,7 @@ class RRT:
                    new_node, self.obstacle_list, self.robot_radius):
                 self.node_list.append(new_node)
 
-            # Verifica se os nós existentes colidem com novos obstáculos
-            self.node_list = [node for node in self.node_list if self.check_collision(node, self.obstacle_list, self.robot_radius)]
-            
-            if animation and i % 5 == 0:
-                self.draw_graph(rnd_node)
+            #self.draw_graph(rnd_node)
 
             if self.calc_dist_to_goal(self.node_list[-1].x,
                                       self.node_list[-1].y) <= self.expand_dis:
@@ -122,10 +109,8 @@ class RRT:
                         final_node, self.obstacle_list, self.robot_radius):
                     return self.generate_final_course(len(self.node_list) - 1)
 
-            if animation and i % 5:
-                self.draw_graph(rnd_node)
-
-        return None  # cannot find path
+            
+            #self.draw_graph(rnd_node)
 
     def steer(self, from_node, to_node, extend_length=float("inf")):
 
@@ -165,8 +150,29 @@ class RRT:
             node = node.parent
         path.append([node.x, node.y])
 
-        return path
+        path = path[::-1] # Inverte a ordem do path (inicío -> final)
+        path = self.smooth_path(path)
 
+        return path
+    
+    def smooth_path(self, path, resolution=100):
+        path = np.array(path)
+        x = path[:, 0]
+        y = path[:, 1]
+
+        # Interpolação por spline cúbica
+        t = np.linspace(0, 1, len(x))
+        cs_x = CubicSpline(t, x)
+        cs_y = CubicSpline(t, y)
+
+        t_fine = np.linspace(0, 1, resolution)
+        x_smooth = cs_x(t_fine)
+        y_smooth = cs_y(t_fine)
+
+        smooth_path = np.vstack((x_smooth, y_smooth)).T
+        return smooth_path
+
+    
     def calc_dist_to_goal(self, x, y):
         dx = x - self.end.x
         dy = y - self.end.y
@@ -191,31 +197,28 @@ class RRT:
             plt.plot(rnd.x, rnd.y, "^k")
             if self.robot_radius > 0.0:
                 self.plot_circle(rnd.x, rnd.y, self.robot_radius, '-r')
-
         for node in self.node_list:
             if node.parent:
                 plt.plot(node.path_x, node.path_y, "-g")
 
-        for obstacle in self.obstacle_list:
-            ox, oy, size = obstacle[:3]  # Considera apenas ox, oy, e size para o desenho
+        for (ox, oy, size) in self.obstacle_list:
             self.plot_circle(ox, oy, size)
 
         if self.play_area is not None:
             plt.plot([self.play_area.xmin, self.play_area.xmax,
-                    self.play_area.xmax, self.play_area.xmin,
-                    self.play_area.xmin],
-                    [self.play_area.ymin, self.play_area.ymin,
-                    self.play_area.ymax, self.play_area.ymax,
-                    self.play_area.ymin],
-                    "-k")
+                      self.play_area.xmax, self.play_area.xmin,
+                      self.play_area.xmin],
+                     [self.play_area.ymin, self.play_area.ymin,
+                      self.play_area.ymax, self.play_area.ymax,
+                      self.play_area.ymin],
+                     "-k")
 
         plt.plot(self.start.x, self.start.y, "xr")
         plt.plot(self.end.x, self.end.y, "xr")
         plt.axis("equal")
         plt.axis([self.min_rand, self.max_rand, self.min_rand, self.max_rand])
         plt.grid(True)
-        plt.pause(0.01)
-
+        plt.pause(0.5)
 
     @staticmethod
     def plot_circle(x, y, size, color="-b"):  # pragma: no cover
@@ -247,26 +250,16 @@ class RRT:
 
     @staticmethod
     def check_collision(node, obstacleList, robot_radius):
+
         if node is None:
             return False
 
-        for obstacle in obstacleList:
-            ox, oy, size = obstacle[:3]  # Considera apenas ox, oy, e size
-
-            # Verifica se há um caminho válido
-            if not node.path_x or not node.path_y:
-                continue
-
+        for (ox, oy, size) in obstacleList:
             dx_list = [ox - x for x in node.path_x]
             dy_list = [oy - y for y in node.path_y]
+            d_list = [dx * dx + dy * dy for (dx, dy) in zip(dx_list, dy_list)]
 
-            if not dx_list or not dy_list:
-                continue
-
-            d_list = [dx * dx + dy * dy for dx, dy in zip(dx_list, dy_list)]
-
-            # Verifica se a lista d_list está vazia antes de calcular o mínimo
-            if d_list and min(d_list) <= (size + robot_radius) ** 2:
+            if min(d_list) <= (size+robot_radius)**2:
                 return False  # collision
 
         return True  # safe
@@ -286,14 +279,14 @@ def main(gx=6.0, gy=10.0):
        # ====Search Path with RRT====
     obstacleList = [
        # [x, y, size, x_velocity, y_velocity]
-        [5, 5, 1, 0.1, 0.0],
-        [3, 6, 2, 0.0, 0.1],
-        [3, 8, 2, -0.1, 0.0],
-        [3, 10, 2, 0.0, -0.1],
-        [7, 5, 2, 0.05, 0.05],
-        [9, 5, 2, -0.05, 0.05],
-        [8, 10, 1, 0.1, -0.1],
-        [6, 12, 1, -0.1, 0.1],
+        [5, 5, 1],
+        [3, 6, 2],
+        [3, 8, 2],
+        [3, 10, 2],
+        [7, 5, 2],
+        [9, 5, 2],
+        [8, 10, 1],
+        [6, 12, 1],
     ]  # [x,y,size(radius)]
     start_time = time.time()
     rrt = RRT(
@@ -304,7 +297,7 @@ def main(gx=6.0, gy=10.0):
         # play_area=[0, 10, 0, 14]
         robot_radius=0.8
         )
-    path = rrt.planning(animation=show_animation, time_step=1.0)
+    path = rrt.planning()
 
     end_time = time.time()
     execution_time = end_time - start_time

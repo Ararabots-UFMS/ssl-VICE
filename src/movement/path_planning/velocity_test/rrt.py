@@ -8,10 +8,10 @@ author: AtsushiSakai(@Atsushi_twi)
 
 import math
 import random
-import time
 import timeit
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.interpolate import CubicSpline
 
 show_animation = True
 
@@ -50,7 +50,6 @@ class RRT:
                  expand_dis=3.0,
                  path_resolution=0.5,
                  goal_sample_rate=5,
-                 max_iter=1000,
                  play_area=None,
                  robot_radius=0.0,
                  ):
@@ -76,12 +75,11 @@ class RRT:
         self.expand_dis = expand_dis
         self.path_resolution = path_resolution
         self.goal_sample_rate = goal_sample_rate
-        self.max_iter = max_iter
         self.obstacle_list = obstacle_list
         self.node_list = []
         self.robot_radius = robot_radius
 
-    def planning(self, animation=True):
+    def planning(self):
         """
         rrt path planning
 
@@ -89,7 +87,7 @@ class RRT:
         """
 
         self.node_list = [self.start]
-        for i in range(self.max_iter):
+        while True:
             rnd_node = self.get_random_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd_node)
             nearest_node = self.node_list[nearest_ind]
@@ -101,8 +99,7 @@ class RRT:
                    new_node, self.obstacle_list, self.robot_radius):
                 self.node_list.append(new_node)
 
-            if animation and i % 5 == 0:
-                self.draw_graph(rnd_node)
+            #self.draw_graph(rnd_node)
 
             if self.calc_dist_to_goal(self.node_list[-1].x,
                                       self.node_list[-1].y) <= self.expand_dis:
@@ -112,10 +109,8 @@ class RRT:
                         final_node, self.obstacle_list, self.robot_radius):
                     return self.generate_final_course(len(self.node_list) - 1)
 
-            if animation and i % 5:
-                self.draw_graph(rnd_node)
-
-        return None  # cannot find path
+            
+            #self.draw_graph(rnd_node)
 
     def steer(self, from_node, to_node, extend_length=float("inf")):
 
@@ -155,8 +150,29 @@ class RRT:
             node = node.parent
         path.append([node.x, node.y])
 
-        return path
+        path = path[::-1] # Inverte a ordem do path (inicío -> final)
+        path = self.smooth_path(path)
 
+        return path
+    
+    def smooth_path(self, path, resolution=100):
+        path = np.array(path)
+        x = path[:, 0]
+        y = path[:, 1]
+
+        # Interpolação por spline cúbica
+        t = np.linspace(0, 1, len(x))
+        cs_x = CubicSpline(t, x)
+        cs_y = CubicSpline(t, y)
+
+        t_fine = np.linspace(0, 1, resolution)
+        x_smooth = cs_x(t_fine)
+        y_smooth = cs_y(t_fine)
+
+        smooth_path = np.vstack((x_smooth, y_smooth)).T
+        return smooth_path
+
+    
     def calc_dist_to_goal(self, x, y):
         dx = x - self.end.x
         dy = y - self.end.y
@@ -202,7 +218,7 @@ class RRT:
         plt.axis("equal")
         plt.axis([self.min_rand, self.max_rand, self.min_rand, self.max_rand])
         plt.grid(True)
-        plt.pause(0.01)
+        plt.pause(0.5)
 
     @staticmethod
     def plot_circle(x, y, size, color="-b"):  # pragma: no cover
@@ -283,11 +299,11 @@ rrt = RRT(
 """
 
     test_code = """
-path = rrt.planning(animation=False)
+path = rrt.planning()
 """
 
     # Medindo o tempo de execução
-    execution_time = timeit.timeit(stmt=test_code, setup=setup_code, number=50)
+    execution_time = timeit.timeit(stmt=test_code, setup=setup_code, number=100)
     print(f"Tempo médio de execução: {execution_time:.6f} segundos")
 
 
