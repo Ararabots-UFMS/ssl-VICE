@@ -3,12 +3,12 @@ import pathlib
 import os
 import warnings
 
-####################
+####################################################################
 # This file was created taking into account that it will be run with
 #   the following command: ros2 run gui run_gui
 # If it is run any other way it probably won't work
 # Needs to be built with colcon and sourced beforehand
-####################
+####################################################################
 
 # Set folder names for both repos
 VICE_REPO_NAME="ssl-VICE"
@@ -40,8 +40,10 @@ def main():
     os.chdir(path_to_gui_repo)
 
     # Run the GUI
-    subprocess.run(["sudo", "npm", "run", "dev"])
+    gui_command = ["sudo", "npm", "run", "dev"]
+    subprocess.run(gui_command)
 
+    #TODO: Run gui_interpreter apiNode also
 
 if __name__ == '__main__':
     main()
