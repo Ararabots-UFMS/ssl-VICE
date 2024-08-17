@@ -1,5 +1,7 @@
 import numpy as np
 
+from typing import Optional
+
 class KalmanFilterClass2D(object):
     '''
     Kalman filter for 2D (position and velocity).
