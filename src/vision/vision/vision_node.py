@@ -6,6 +6,7 @@ from typing import Optional
 import rclpy
 from rclpy.node import Node
 
+from google.protobuf import text_format
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 from vision.merge_trackers import merge_trackers
 
@@ -57,7 +58,7 @@ class Vision(Node):
             self.trackers[data_cam_id].update(data)
 
             if self.verbose:
-                self.get_logger().info(data)
+                self.get_logger().info(text_format.MessageToString(data))
 
         except KeyboardInterrupt:
             self.get_logger().info('Process finished successfully by user, terminating now...')
