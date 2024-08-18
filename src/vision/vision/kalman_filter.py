@@ -98,6 +98,8 @@ class KalmanFilterClass2D(object):
 class KalmanFilterClass1D(object):
     '''
     Kalman filter for 1D (Angle and Angular velocity).
+
+    Serves for orientation purposes, employing the information in path planning
     
     All calculation and code are based on the reference.
 
