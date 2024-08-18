@@ -1,5 +1,6 @@
 from vision.vision_client import Client
 from vision.tracker import ObjectTracker
+from vision.world_message import wrap_geo_message
 
 from typing import Optional
 
@@ -8,9 +9,10 @@ from rclpy.node import Node
 
 from google.protobuf import text_format
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
+from vision.proto.messages_robocup_ssl_geometry_pb2 import SSL_GeometryData
 from vision.merge_trackers import merge_trackers
 
-from system_interfaces.msg import VisionMessage, Robots, Balls, ObjectID
+from system_interfaces.msg import VisionMessage, VisionGeometry, Robots, Balls, ObjectID
 
 class Vision(Node):
     '''VICE Vision Node, connects and receives data from ssl-vision'''
@@ -39,6 +41,7 @@ class Vision(Node):
         # Setting ROS publisher.
         # TODO: Find optimal queue size...
         self.publisher = self.create_publisher(VisionMessage, 'visionTopic', 10)
+        self.geometry_publisher = self.create_publisher(VisionGeometry, 'geometryTopic', 10)
 
         self.trackers = []
         for cam in range(self.num_cams):
@@ -56,6 +59,9 @@ class Vision(Node):
             data_cam_id = data.detection.camera_id
 
             self.trackers[data_cam_id].update(data)
+
+            if data.HasField('geometry'):
+                self.publish_geometry(data.geometry)
 
             if self.verbose:
                 self.get_logger().info(text_format.MessageToString(data))
@@ -84,7 +90,13 @@ class Vision(Node):
         message = merge_trackers(self.trackers)
         
         if self.context.ok():
-                self.publisher.publish(message)
+            self.publisher.publish(message)
+
+    def publish_geometry(self, message: SSL_GeometryData):
+        message: VisionGeometry = wrap_geo_message(message)
+
+        if self.context.ok():
+            self.geometry_publisher.publish(message)
 
 def main(args = None):
     rclpy.init(args = args)
