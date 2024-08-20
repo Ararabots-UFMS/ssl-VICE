@@ -23,10 +23,10 @@ class VisionSubscriber(Node):
         return self.data
     
 if __name__ == '__main__':
-    rclpy.init(args=args)
+    rclpy.init()
 
-    minimal_subscriber = MinimalSubscriber()
+    vision_subscriber = VisionSubscriber()
 
-    rclpy.spin(minimal_subscriber)
-    minimal_subscriber.destroy_node()
+    rclpy.spin(vision_subscriber)
+    vision_subscriber.destroy_node()
     rclpy.shutdown()
