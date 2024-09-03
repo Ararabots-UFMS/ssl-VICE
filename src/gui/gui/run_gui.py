@@ -14,18 +14,11 @@ import warnings
 VICE_REPO_NAME="ssl-VICE"
 GUI_REPO_NAME="ssl-gui"
 
-# Get the path to the file being executed
-path_to_repo_parent_folder = pathlib.Path(__file__).parent.absolute()
+# Get the path to the VICE repository
+path_to_repo_folder = pathlib.Path(os.environ['ARARA_VICE_PATH'])
 
-# Find the parent folder to the VICE repo
-while not (path_to_repo_parent_folder / VICE_REPO_NAME).exists():
-
-    # If the path is the root folder, the VICE repo was not found
-    if path_to_repo_parent_folder == pathlib.Path('/'):
-        raise Exception(f"Could not find the {VICE_REPO_NAME} repository folder")
-    
-    # Move to the parent of the current folder
-    path_to_repo_parent_folder = path_to_repo_parent_folder.parent
+# Get the path to the parent folder of the VICE repository
+path_to_repo_parent_folder = path_to_repo_folder.parent
 
 # Add GUI repository name to the path
 path_to_gui_repo = path_to_repo_parent_folder / GUI_REPO_NAME
