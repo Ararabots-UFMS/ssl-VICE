@@ -5,7 +5,7 @@ from py_trees.composites import Sequence
 from py_trees.composites import Selector
 from py_trees import logging as log_tree
 
-# classe para verificar se a sub-árvore será executada
+# Classe para verificar se a sub-árvore será executada
 class CheckStringCondition(Behaviour):
     def __init__(self, name, input_string):
         super(CheckStringCondition, self).__init__(name)
@@ -17,12 +17,12 @@ class CheckStringCondition(Behaviour):
     def update(self):
         self.logger.debug(f"CheckStringCondition::update {self.name}")
         sleep(1)
-        # Condição: Se a string for "timeout", retorne FAILURE
-        if self.input_string == "timeout":
-            self.logger.debug(f"String is 'timeout', returning FAILURE")
-            return Status.FAILURE
-        self.logger.debug(f"String is '{self.input_string}', returning SUCCESS")
-        return Status.SUCCESS
+        # Condição: Se a string de entrada for igual ao nome do comportamento (subárvore)
+        if self.input_string == self.name:
+            self.logger.debug(f"String matches '{self.name}', returning SUCCESS")
+            return Status.SUCCESS
+        self.logger.debug(f"String is '{self.input_string}', does not match '{self.name}', returning FAILURE")
+        return Status.FAILURE
 
     def terminate(self, new_status):
         self.logger.debug(f"CheckStringCondition::terminate {self.name} to {new_status}")
@@ -82,7 +82,9 @@ def make_bt(input_string):
     half_play = Sequence(name="half", memory=True)
 
     # Condição personalizada para verificar a string de entrada
-    string_check = CheckStringCondition("Check Input String", input_string)
+    check_timeout = CheckStringCondition("timeout", input_string)
+    check_stop = CheckStringCondition("stop", input_string)
+    check_half = CheckStringCondition("half", input_string)
 
     # Comportamentos para a sequência
     check_battery = Condition("check_battery")
@@ -92,7 +94,7 @@ def make_bt(input_string):
 
     # Adiciona a verificação de string antes de continuar com o 'timeout_play'
     timeout_play.add_children([
-        string_check,  # Verifica a string antes de executar os outros nós
+        check_timeout,  # Verifica a string antes de executar os outros nós
         check_battery,
         open_gripper,
         approach_object,
@@ -106,6 +108,7 @@ def make_bt(input_string):
     close_gripper1 = Action("close_gripper", 3)
 
     stop_play.add_children([
+        check_stop,
         check_battery1,
         open_gripper1,
         approach_object1,
@@ -118,6 +121,7 @@ def make_bt(input_string):
     close_gripper2 = Action("close_gripper", 3)
 
     half_play.add_children([
+        check_half,
         check_battery2,
         open_gripper2,
         approach_object2,
@@ -129,20 +133,21 @@ def make_bt(input_string):
     root.add_children([
         timeout_play, 
         stop_play,
-        half_play
+        half_play,
+        # kick_off_play,
+        # force_start_play,
+        # penalty_kick_play,
+        # free_kick_play
     ])
 
     return root
 
 def main():
     log_tree.level = log_tree.Level.DEBUG
-    tree = make_bt("timeout") 
-    for i in range(1, 20):
-        try:
-            print("New Tick")
-            tree.tick_once()
-            sleep(0.1)
-        except KeyboardInterrupt:
-            break
+    tree = make_bt("half") 
+    print("New Tick")
+    tree.tick_once()
+    
+
 if __name__ == "__main__":
     main()
