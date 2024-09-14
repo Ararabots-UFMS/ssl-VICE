@@ -1,9 +1,9 @@
-from time import sleep
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
 from py_trees.composites import Sequence
 from py_trees.composites import Selector
 from py_trees import logging as log_tree
+import time
 
 # Classe para verificar se a sub-árvore será executada
 class CheckStringCondition(Behaviour):
@@ -16,7 +16,6 @@ class CheckStringCondition(Behaviour):
 
     def update(self):
         self.logger.debug(f"CheckStringCondition::update {self.name}")
-        sleep(1)
         # Condição: Se a string de entrada for igual ao nome do comportamento (subárvore)
         if self.input_string == self.name:
             self.logger.debug(f"String matches '{self.name}', returning SUCCESS")
@@ -27,7 +26,7 @@ class CheckStringCondition(Behaviour):
     def terminate(self, new_status):
         self.logger.debug(f"CheckStringCondition::terminate {self.name} to {new_status}")
 
-# Ação simples para exemplo
+# Ação simples para exemplo, sem delays
 class Action(Behaviour):
     def __init__(self, name, max_attempt_count=1):
         super(Action, self).__init__(name)
@@ -38,17 +37,11 @@ class Action(Behaviour):
         self.logger.debug(f"Action::setup {self.name}")
 
     def initialise(self):
-        self.attempt_count = self.max_attempt_count
         self.logger.debug(f"Action::initialise {self.name}")
 
     def update(self):
-        self.attempt_count -= 1
         self.logger.debug(f"Action::update {self.name}")
-        sleep(1)
-        if not self.attempt_count:
-            return Status.SUCCESS
-
-        return Status.RUNNING
+        return Status.SUCCESS  # Ação rápida, sem delays
 
     def terminate(self, new_status):
         self.logger.debug(f"Action::terminate {self.name} to {new_status}")
@@ -66,12 +59,10 @@ class Condition(Behaviour):
 
     def update(self):
         self.logger.debug(f"Condition::update {self.name}")
-        sleep(1)
-        return Status.SUCCESS
+        return Status.SUCCESS  # Condição rápida
 
     def terminate(self, new_status):
         self.logger.debug(f"Condition::terminate {self.name} to {new_status}")
-
 
 
 # Função responsável por definir a raiz da árvore
@@ -92,20 +83,26 @@ def make_bt(input_string):
     approach_object = Action("approach_object")
     close_gripper = Action("close_gripper")
 
+    # Comportamentos para a sequência
+    check_battery1 = Condition("check_battery")
+    open_gripper1 = Action("open_gripper")
+    approach_object1 = Action("approach_object")
+    close_gripper1 = Action("close_gripper")
+
+    # Comportamentos para a sequência
+    check_battery2 = Condition("check_battery")
+    open_gripper2 = Action("open_gripper")
+    approach_object2 = Action("approach_object")
+    close_gripper2 = Action("close_gripper")
+
     # Adiciona a verificação de string antes de continuar com o 'timeout_play'
     timeout_play.add_children([
-        check_timeout,  # Verifica a string antes de executar os outros nós
+        check_timeout,
         check_battery,
         open_gripper,
         approach_object,
         close_gripper
     ])
-
-    # Subávores
-    check_battery1 = Condition("check_battery")
-    open_gripper1 = Action("open_gripper", 2)
-    approach_object1 = Action("approach_object", 5)
-    close_gripper1 = Action("close_gripper", 3)
 
     stop_play.add_children([
         check_stop,
@@ -115,11 +112,6 @@ def make_bt(input_string):
         close_gripper1
     ])
 
-    check_battery2 = Condition("check_battery")
-    open_gripper2 = Action("open_gripper", 2)
-    approach_object2 = Action("approach_object", 5)
-    close_gripper2 = Action("close_gripper", 3)
-
     half_play.add_children([
         check_half,
         check_battery2,
@@ -128,26 +120,24 @@ def make_bt(input_string):
         close_gripper2
     ])
 
-
-    # Árvore principal (Play)
+    # Árvore principal
     root.add_children([
         timeout_play, 
         stop_play,
         half_play,
-        # kick_off_play,
-        # force_start_play,
-        # penalty_kick_play,
-        # free_kick_play
     ])
 
     return root
 
 def main():
     log_tree.level = log_tree.Level.DEBUG
+    inicio = time.time()
     tree = make_bt("half") 
     print("New Tick")
     tree.tick_once()
-    
+    fim = time.time()
+    tempo_total = fim - inicio
+    print(f"Tempo de execução: {tempo_total * 1000} milissegundos")
 
 if __name__ == "__main__":
     main()
