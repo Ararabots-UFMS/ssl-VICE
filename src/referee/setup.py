@@ -20,8 +20,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'referee_node = referee.referee_node:main',
             'talker = referee.publisher_member_function:main',
-            'listener = referee.subscriber_member_function:main'
+            'listener = referee.subscriber_member_function:main',
+            'subscriber = referee.referee_subscriber:main'
         ],
     },
 )
