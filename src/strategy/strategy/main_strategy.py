@@ -6,7 +6,7 @@ from py_trees.common import Status
 from py_trees import logging as log_tree
         
 # Function to simulate the state machine and tick the behavior tree
-def run_state_machine_and_tick(tree, blackboard_client, state_machine, iterations=3, interval=0.1):
+def run_state_machine_and_tick(tree, blackboard_client, state_machine, iterations=3):
     for i in range(iterations):
         # Get the next state from the state machine
         next_state = state_machine.get_next_state()
@@ -24,9 +24,6 @@ def run_state_machine_and_tick(tree, blackboard_client, state_machine, iteration
         # Calculate and display execution time
         total_time = (end_time - start_time) * 1000
         print(f"Execution time: {total_time:.2f} ms")
-
-        # Wait for the interval (e.g., 2 seconds)
-        time.sleep(interval)
 
 # Main function to run the state machine and tick the behavior tree
 def main():
