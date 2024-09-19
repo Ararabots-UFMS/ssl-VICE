@@ -1,14 +1,12 @@
 import time
-from state_machine import StateMachine, create_blackboard
-from strategy_node import make_bt
+from strategy.state_machine import StateMachine, create_blackboard
+from strategy.strategy_node import make_bt
 from py_trees.behaviour import Behaviour
 from py_trees.common import Status
-from py_trees.composites import Sequence
-from py_trees.composites import Selector
 from py_trees import logging as log_tree
-
+        
 # Function to simulate the state machine and tick the behavior tree
-def run_state_machine_and_tick(tree, blackboard_client, state_machine, iterations=3, interval=0.5):
+def run_state_machine_and_tick(tree, blackboard_client, state_machine, iterations=3, interval=0.1):
     for i in range(iterations):
         # Get the next state from the state machine
         next_state = state_machine.get_next_state()

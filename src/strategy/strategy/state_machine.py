@@ -1,4 +1,5 @@
 import py_trees
+from strategy.black_board import create_blackboard
 
 # State machine implementation
 class StateMachine:
@@ -10,10 +11,3 @@ class StateMachine:
         # Cycle through states: half -> stop -> timeout -> half
         self.current_state_index = (self.current_state_index + 1) % len(self.states)
         return self.states[self.current_state_index]
-
-# Blackboard client setup
-def create_blackboard():
-    blackboard_client = py_trees.blackboard.Client(name="State Client", namespace="state_machine_")
-    blackboard_client.register_key("current_state", access=py_trees.common.Access.WRITE)
-    blackboard_client.current_state = "half"  # Initial state
-    return blackboard_client
