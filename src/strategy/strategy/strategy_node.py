@@ -129,15 +129,3 @@ def make_bt(input_string):
 
     return root
 
-def main():
-    log_tree.level = log_tree.Level.DEBUG
-    inicio = time.time()
-    tree = make_bt("half") 
-    print("New Tick")
-    tree.tick_once()
-    fim = time.time()
-    tempo_total = fim - inicio
-    print(f"Tempo de execução: {tempo_total * 1000} milissegundos")
-
-if __name__ == "__main__":
-    main()
