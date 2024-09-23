@@ -1,6 +1,6 @@
 from vision.tracker import ObjectTracker, Object, ID
 
-from system_interfaces.msg import VisionMessage, VisionGeometry, Robots, Balls, ObjectID, FieldLineSegment, FieldArcsSegment
+from system_interfaces.msg import VisionMessage, VisionGeometry, Robots, Balls, ObjectID, FieldLineSegment, FieldArcsSegment, FieldLineType
 
 from vision.proto.messages_robocup_ssl_geometry_pb2 import SSL_GeometryData
 
@@ -75,7 +75,11 @@ def wrap_geo_message(message: SSL_GeometryData):
         wraped_msg_line.y2   = message_line_segment.p2.y
 
         wraped_msg_line.thickness = message_line_segment.thickness
-        wraped_msg_line.type.type = message_line_segment.type
+
+        tp = FieldLineType()
+        tp.type = message_line_segment.type
+
+        wraped_msg_line.type = tp
 
         wraped_msg.field_lines.append(wraped_msg_line)
 
@@ -90,7 +94,11 @@ def wrap_geo_message(message: SSL_GeometryData):
         wraped_msg_arc.end_angle        =  message_arc_segment.a2
 
         wraped_msg_arc.thickness  = message_arc_segment.thickness
-        wraped_msg_arc.type.type  = message_arc_segment.type
+
+        tp = FieldLineType()
+        tp.type = message_arc_segment.type
+
+        wraped_msg_arc.type  = tp
 
         wraped_msg.field_arcs.append(wraped_msg_arc)
     

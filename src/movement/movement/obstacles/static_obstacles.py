@@ -1,6 +1,8 @@
-from .interfaces import StaticObstacle
+import numpy as np
+from movement.interfaces import StaticObstacle
 
 from system_interfaces.msg import VisionGeometry
+
 
 # This needs to change to use the FieldLineSegment instead of the distances
 class BoundaryObstacles(StaticObstacle):
@@ -78,34 +80,38 @@ class WallObstacles(StaticObstacle):
 class PenaltyAreaObstacles(StaticObstacle):
     def __init__(self, geometry: VisionGeometry):
         for line in geometry.field_lines:
-            if line.type == 'LEFT_GOAL_LINE':
+
+            if line.name == 'LeftGoalLine':
                 self.left_goal = line
 
-            elif line.type == 'RIGHT_GOAL_LINE':
+            elif line.name == 'RightGoalLine':
                 self.right_goal = line
 
-            elif line.type == 'LEFT_PENALTY_STRETCH':
+            elif line.name == 'LeftPenaltyStretch':
                 self.left_penalty = line
 
-            elif line.type == 'RIGHT_PENALTY_STRETCH':
+            elif line.name == 'RightPenaltyStretch':
                 self.right_penalty = line
 
-            elif line.type == 'LEFT_FIELD_LEFT_PENALTY_STRETCH':
+            elif line.name == 'LeftFieldLeftPenaltyStretch':
                 self.left_field_left_penalty = line
 
-            elif line.type == 'LEFT_FIELD_RIGHT_PENALTY_STRETCH':
+            elif line.name == 'LeftFieldRightPenaltyStretch':
                 self.left_field_right_penalty = line
 
-            elif line.type == 'RIGHT_FIELD_LEFT_PENALTY_STRETCH':
+            elif line.name == 'RightFieldLeftPenaltyStretch':
                 self.right_field_left_penalty = line
 
-            elif line.type == 'RIGHT_FIELD_RIGHT_PENALTY_STRETCH':
+            elif line.name == 'RightFieldRightPenaltyStretch':
                 self.right_field_right_penalty = line
 
     def is_colission(self, x: np.matrix, ignore: bool = False, padding: float = 90):
+        if ignore:
+            return False
+
         # For the left field side
-        if x[0] > self.left_field_left_penalty.x1 and x[0] < self.left_field_left_penalty.x2 + padding:
-            if x[1] > self.left_field_left_penalty.y1 - padding and x[1] > self.left_field_right_penalty.y1 + padding:
+        if x[0] > self.left_field_left_penalty.x1 and x[0] < self.left_field_left_penalty.x2 - padding:
+            if x[1] < self.left_field_left_penalty.y1 + padding and x[1] > self.left_field_right_penalty.y1 - padding:
                 return True
 
         # For the right field side
