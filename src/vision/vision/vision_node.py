@@ -65,8 +65,6 @@ class Vision(Node):
             data_cam_id = data.detection.camera_id
 
             self.trackers[data_cam_id].update(data)
-            
-            message = merge_trackers(self.trackers)
 
             if data.HasField('geometry'):
                 self.publish_geometry(data.geometry)
