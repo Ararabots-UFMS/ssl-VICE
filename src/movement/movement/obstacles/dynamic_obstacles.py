@@ -1,4 +1,4 @@
-from movement.interfaces import DynamicObstacle
+from movement.obstacles.interfaces import DynamicObstacle
 
 import numpy as np
 

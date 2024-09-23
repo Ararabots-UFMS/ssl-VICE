@@ -13,7 +13,7 @@ def main():
     geo_subscriber.get_logger().info('comecando')
 
     obstacles = geo_subscriber.get_obstacles()
-    x = (-3500, 1000, 0, 0)
+    x = (-4489, -1089, 0, 0)
     for obstacle in obstacles:
         if obstacle.is_colission(x):
             geo_subscriber.get_logger().info(f'COLISÃO em {type(obstacle)}')

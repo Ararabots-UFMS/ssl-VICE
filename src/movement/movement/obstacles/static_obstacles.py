@@ -1,5 +1,5 @@
 import numpy as np
-from movement.interfaces import StaticObstacle
+from movement.obstacles.interfaces import StaticObstacle
 
 from system_interfaces.msg import VisionGeometry
 
@@ -46,7 +46,7 @@ class WallObstacles(StaticObstacle):
         self.half_length = geometry.field_length / 2   
         self.boundary_width = geometry.boundary_width
 
-    def is_colission(self, x: np.matrix, ignore: bool = False, padding: float = 90):
+    def is_colission(self, x: np.matrix, ignore: bool = False, padding: float = 180):
         if ignore:
             return False
 
@@ -110,13 +110,14 @@ class PenaltyAreaObstacles(StaticObstacle):
             return False
 
         # For the left field side
-        if x[0] > self.left_field_left_penalty.x1 and x[0] < self.left_field_left_penalty.x2 - padding:
+        # -4500 1000
+        if x[0] > self.left_field_left_penalty.x1 and x[0] < self.left_field_left_penalty.x2 + padding:
             if x[1] < self.left_field_left_penalty.y1 + padding and x[1] > self.left_field_right_penalty.y1 - padding:
                 return True
 
         # For the right field side
-        if x[0] < self.right_field_left_penalty.x1 and x[0] > self.right_field_left_penalty.x2:
-            if x[1] > self.right_field_left_penalty.y1 and x[1] < self.right_field_right_penalty.y1:
+        if x[0] < self.right_field_left_penalty.x1 and x[0] > self.right_field_left_penalty.x2 - padding:
+            if x[1] > self.right_field_left_penalty.y1 - padding and x[1] < self.right_field_right_penalty.y1 + padding:
                 return True
 
         return False
