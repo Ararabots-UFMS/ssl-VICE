@@ -60,7 +60,6 @@ class Vision(Node):
     def update_tracker(self):
         try:
             # Orientation does not have a proper processing. Using raw orientantion and setting orientation velocity to 0.
-            self.time = time.time()
             data: SSL_WrapperPacket = self.client.receive()
 
             data_cam_id = data.detection.camera_id
@@ -72,9 +71,6 @@ class Vision(Node):
             if self.context.ok():
                 self.publisher.publish(message)
             
-            end = time.time()
-            elapsed = end - self.time
-            self.times.append(elapsed)
             self.get_logger().info(f'time taken: {end - self.time}, avg: {sum(self.times) / len(self.times)}')
 
             if data.HasField('geometry'):
@@ -85,8 +81,8 @@ class Vision(Node):
 
         except KeyboardInterrupt:
             self.get_logger().info('Process finished successfully by user, terminating now...')
-        # except Exception as exception:
-        #     self.get_logger().warning(f'An unexpected error occurred: {exception}')
+        except Exception as exception:
+            self.get_logger().warning(f'An unexpected error occurred: {exception}')
     
     def set_filter_param(self, x_sd: Optional[float] = None,
                                y_sd: Optional[float] = None,
