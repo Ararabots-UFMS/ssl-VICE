@@ -100,50 +100,49 @@ class ObjectTracker(object):
             object_.KF.predict(self.dt)
             if not object_.id.is_ball:
                 object_.orientation_KF.predict(self.dt)
+                
+    def read_object_from_message(self, object_, is_ball, is_blue = None) -> ID:
+        if is_ball:
+            id = ID(id = 0, is_ball = is_ball)
+            orientation = None
+        else:
+            id = ID(object_.robot_id, is_ball = is_ball, is_blue = is_blue)
+            orientation = object_.orientation
+            
+        try:
+            index = self.objects_id.index(id)
+            self.update_object(self.objects[index], object_.x, object_.y, object_.confidence, orientation)
+        except ValueError:
+            self.add_object(id, object_.x, object_.y, object_.confidence, orientation)
+        
+        return id
 
     def update(self, message: SSL_WrapperPacket) -> VisionMessage:
         '''
         Updates the position and velocity of objects based on the detections.
         '''
         # TODO Implement a Hungarian algorithm to give the balls an id?
-        detections, recieved_objects_id, confidences, orientations, time_stamp = [], [], [], [], message.detection.t_capture
+        recieved_objects_id, time_stamp = [], message.detection.t_capture
         
         self.dt = time_stamp - self.last_time_stamp
         self.last_time_stamp = time_stamp
 
         if message.detection.robots_yellow:
             for yellow_robot in message.detection.robots_yellow:
-                robot_id = ID(yellow_robot.robot_id, is_ball = False, is_blue = False)
+                robot_id = self.read_object_from_message(yellow_robot, is_ball = False, is_blue = False)
                 recieved_objects_id.append(robot_id)
-                try:
-                    index = self.objects_id.index(robot_id)
-                    self.update_object(self.objects[index], yellow_robot.x, yellow_robot.y, yellow_robot.confidence, yellow_robot.orientation)
-                except ValueError:
-                    self.add_object(robot_id, yellow_robot.x, yellow_robot.y, yellow_robot.confidence, yellow_robot.orientation)
         
         if message.detection.robots_blue:
             for blue_robot in message.detection.robots_blue:
-                robot_id = ID(blue_robot.robot_id, is_ball = False, is_blue = True)
+                robot_id = self.read_object_from_message(blue_robot, is_ball = False, is_blue = True)
                 recieved_objects_id.append(robot_id)
-                try:
-                    index = self.objects_id.index(robot_id)
-                    self.update_object(self.objects[index], blue_robot.x, blue_robot.y, blue_robot.confidence, blue_robot.orientation)
-                except ValueError:
-                    self.add_object(robot_id, blue_robot.x, blue_robot.y, blue_robot.confidence, blue_robot.orientation)
         
         # Balls dont have ids, so will consider the first ball as the main ball and ignore the rest
         # TODO Implement a way to consider the ball with highest confidence to be the main ball.
         if message.detection.balls:
-            ball_id = ID(id = 0, is_ball = True)
+            ball_id = self.read_object_from_message(message.detection.balls[0], is_ball = True)
             recieved_objects_id.append(ball_id)
-            ball = message.detection.balls[0]
-            try:
-                index = self.objects_id.index(ball_id)
-                self.update_object(self.objects[index], ball.x, ball.y, ball.confidence)
-            except ValueError:
-                self.add_object(ball_id, ball.x, ball.y, ball.confidence)
                 
         self.delete_undetected_objects(recieved_objects_id)
 
         self.predict()
-        
