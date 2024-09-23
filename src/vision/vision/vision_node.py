@@ -54,7 +54,7 @@ class Vision(Node):
         self.times = []
 
         # TODO: Find the optimal timer.
-        # self.unify_timer = self.create_timer(0.016, self.publish_vision)
+        self.unify_timer = self.create_timer(0.016, self.publish_vision)
         self.tracker_timer = self.create_timer(0.001, self.update_tracker)
 
     def update_tracker(self):
@@ -67,11 +67,6 @@ class Vision(Node):
             self.trackers[data_cam_id].update(data)
             
             message = merge_trackers(self.trackers)
-        
-            if self.context.ok():
-                self.publisher.publish(message)
-            
-            self.get_logger().info(f'time taken: {end - self.time}, avg: {sum(self.times) / len(self.times)}')
 
             if data.HasField('geometry'):
                 self.publish_geometry(data.geometry)
