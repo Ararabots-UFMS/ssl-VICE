@@ -1,6 +1,7 @@
 from vision.vision_client import Client
 from vision.tracker import ObjectTracker
 from vision.world_message import wrap_geo_message
+from vision.objects import RobotObject
 
 from typing import Optional
 
@@ -12,7 +13,9 @@ from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 from vision.proto.messages_robocup_ssl_geometry_pb2 import SSL_GeometryData
 from vision.merge_trackers import merge_trackers
 
-from system_interfaces.msg import VisionMessage, VisionGeometry, Robots, Balls, ObjectID
+from system_interfaces.msg import VisionMessage, VisionGeometry
+
+import time
 
 class Vision(Node):
     '''VICE Vision Node, connects and receives data from ssl-vision'''
@@ -21,7 +24,7 @@ class Vision(Node):
         
         # Parameters settings.
         self.declare_parameter('ip', '224.5.23.2')
-        self.declare_parameter('port', 10006)
+        self.declare_parameter('port', 10020)
         self.declare_parameter('verbose', False)
         self.declare_parameter('num_cams', 4)
         self.declare_parameter('max_frame_skipped', 5)
@@ -47,18 +50,32 @@ class Vision(Node):
         for cam in range(self.num_cams):
             self.trackers.append(ObjectTracker(cam_id = cam, max_frame_skipped = self.max_frame_skipped))
 
+        self.time = 0
+        self.times = []
+
         # TODO: Find the optimal timer.
-        self.unify_timer = self.create_timer(0.1, self.publish_vision)
+        # self.unify_timer = self.create_timer(0.016, self.publish_vision)
         self.tracker_timer = self.create_timer(0.001, self.update_tracker)
 
     def update_tracker(self):
         try:
             # Orientation does not have a proper processing. Using raw orientantion and setting orientation velocity to 0.
+            self.time = time.time()
             data: SSL_WrapperPacket = self.client.receive()
 
             data_cam_id = data.detection.camera_id
 
             self.trackers[data_cam_id].update(data)
+            
+            message = merge_trackers(self.trackers)
+        
+            if self.context.ok():
+                self.publisher.publish(message)
+            
+            end = time.time()
+            elapsed = end - self.time
+            self.times.append(elapsed)
+            self.get_logger().info(f'time taken: {end - self.time}, avg: {sum(self.times) / len(self.times)}')
 
             if data.HasField('geometry'):
                 self.publish_geometry(data.geometry)
@@ -68,8 +85,8 @@ class Vision(Node):
 
         except KeyboardInterrupt:
             self.get_logger().info('Process finished successfully by user, terminating now...')
-        except Exception as exception:
-            self.get_logger().warning(f'An unexpected error occurred: {exception}')
+        # except Exception as exception:
+        #     self.get_logger().warning(f'An unexpected error occurred: {exception}')
     
     def set_filter_param(self, x_sd: Optional[float] = None,
                                y_sd: Optional[float] = None,
@@ -83,7 +100,7 @@ class Vision(Node):
         for tracker in self.trackers:
             for object_ in tracker.objects:
                 object_.KF.set_param(x_sd, y_sd, u_x, u_y, acceleration_sd_2d)
-                if not object_.id.is_ball:
+                if type(object_) == RobotObject:
                     object_.orientation_KF.set_param(a_sd, u_a, acceleration_sd_1d)
 
     def publish_vision(self):
