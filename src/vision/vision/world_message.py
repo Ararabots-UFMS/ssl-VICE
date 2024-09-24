@@ -10,7 +10,7 @@ from typing import List
 def wrap_message(objects: List[Object]) -> VisionMessage:
     message = VisionMessage()
 
-    for i, object_ in enumerate(objects):
+    for object_ in objects:
         if object_.id.is_ball:
             ball_msg = Balls()
             ball_id = ObjectID()
