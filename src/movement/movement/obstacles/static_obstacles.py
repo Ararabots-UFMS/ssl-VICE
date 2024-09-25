@@ -76,7 +76,6 @@ class WallObstacles(StaticObstacle):
         # Huge mamaco, there may be a better way...
         return np.array([x[0] + (-1 * np.sign(x[0]) * x_distance + offset), x[1] + (-1 * np.sign(x[1]) * y_distance)])
 
-
 class PenaltyAreaObstacles(StaticObstacle):
     def __init__(self, geometry: VisionGeometry):
         for line in geometry.field_lines:

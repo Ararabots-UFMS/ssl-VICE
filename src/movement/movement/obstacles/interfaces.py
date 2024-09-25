@@ -19,21 +19,11 @@ class StaticObstacle(Obstacle):
     
 class DynamicObstacle(Obstacle):
 
-    @property
     @abstractmethod
-    def mode(self):
-        pass
-    
-    @abstractmethod
-    def set_mode(self, mode: str = 'Default') -> None:
-        ''' Set behaviour mode for movimentation '''
-        pass
-
-    @abstractmethod
-    def get_dynamic_range(self, delta: float) -> np.matrix:
+    def get_dynamic_range(self, delta: float) -> (np.matrix, float):
         ''' Returns the center position and radius of dinamic range '''
         pass
-    
+
     @abstractmethod
     def update_state(self, x: np.matrix) -> None:
         pass

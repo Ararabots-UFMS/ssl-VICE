@@ -36,6 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 from math import sqrt, fabs
+import numpy as np
 import random
 
 time_epsilon = 0.0000001
@@ -152,17 +153,23 @@ def control_time(con):
 
 # Assumes 4d state space: x, y, xdot, ydot
 def integrate_control_2d(xi,con):
-    x = xi[0]
-    y = xi[1]
-    xdot = xi[2]
-    ydot = xi[3]
+    # For stationary path
+    if con[0][1] == 0:
+        return xi
+
+    nx = xi.copy()
+
+    x = nx[0]
+    y = nx[1]
+    xdot = nx[2]
+    ydot = nx[3]
     for c in con:
         x += xdot*c[1] + 0.5*c[0][0]*c[1]**2
         xdot += c[0][0]*c[1]
         y += ydot*c[1] + 0.5*c[0][1]*c[1]**2
         ydot += c[0][1]*c[1]
-    return (x,y,xdot,ydot)
-
+    
+    return np.concatenate([x, y, xdot, ydot], axis=0).astype(float)
 
 def integrate_control_nd(xinit,con):
     n = int(0.5*len(xinit))
