@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'coach'
+package_name = 'control_unit'
 
 setup(
     name=package_name,
