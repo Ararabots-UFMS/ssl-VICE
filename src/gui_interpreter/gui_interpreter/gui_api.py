@@ -10,6 +10,7 @@ import rclpy
 
 app = Flask(__name__)
 socketio = SocketIO(app,  cors_allowed_origins="*")
+vision_subs = VisionSubscriber()
 global vision_running
 
 ############# CONNECT TO GUI #############
@@ -28,8 +29,8 @@ def handle_connect():
 ############# RECEIVE VISION INTERPRETER DATA #############
 
 def vision_callback():
-    vision_subs = VisionSubscriber()
     while True:
+        #TODO: check if spin is better than spin_once
         rclpy.spin_once(vision_subs)
         data = vision_subs.get_data()
         data = todict(data)
