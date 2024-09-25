@@ -1,7 +1,6 @@
 from vision.vision_client import Client
 from vision.tracker import ObjectTracker
 from vision.world_message import wrap_geo_message
-from vision.objects import RobotObject
 
 from typing import Optional
 
