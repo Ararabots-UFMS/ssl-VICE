@@ -1,6 +1,9 @@
+from strategy.blackboard import Blackboard
+
 class Robot(Node):
     def __init__(self, id, position, velocity, behaviour_tree) -> None:
         super().__init__('robot')
+        self.blackboard = Blackboard()
         self.id = id
         self.position = position
         self.velocity = velocity

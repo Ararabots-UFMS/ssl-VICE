@@ -7,14 +7,14 @@ from utils.topic_subscriber import TopicSubscriber
 from strategy.blackboard import Blackboard
 
 class Coach(Node):
-    def __init__(self, blackboard, behaviour_tree, max_robots: int) -> None:
+    def __init__(self, behaviour_tree, max_robots: int) -> None:
         super().__init__('coach')
         
         #get coach behaviour tree
         self.behaviour_tree = behaviour_tree
         
         #get blackboard
-        self.blackboard = blackboard
+        self.blackboard = Blackboard()
         
         #TODO: experiment with other timer rates
         self.robot_executor = rclpy.executors.MultiThreadedExecutor(max_threads=max_robots)
