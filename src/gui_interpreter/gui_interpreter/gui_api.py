@@ -2,43 +2,44 @@ from flask import Flask
 from flask_socketio import SocketIO, emit
 from threading import Thread
 import subprocess
-import math
 
+from gui_interpreter.gui_publisher import GUIPublisher
 from utils.vision_subscriber import VisionSubscriber
 from utils.converter import todict
 import rclpy
 
 app = Flask(__name__)
-socketio = SocketIO(app,  cors_allowed_origins="*")
-vision_subs = VisionSubscriber()
+gui_socket = SocketIO(app,  cors_allowed_origins="*")
+rclpy.init()
+gui_publisher = GUIPublisher()
 global vision_running
 
 ############# CONNECT TO GUI #############
 
-@socketio.on("connect")
+@gui_socket.on("connect")
 def handle_connect():
     print("Client connected")
     global thread
     global stop_thread
     stop_thread = False
-    rclpy.init()
     if thread is None:
-        thread = Thread(target=vision_callback)
+        thread = Thread(target=vision_thread)
         thread.start()
 
 ############# RECEIVE VISION INTERPRETER DATA #############
 
-def vision_callback():
+def vision_thread():
+    vision_subs = VisionSubscriber()
     while True:
         #TODO: check if spin is better than spin_once
         rclpy.spin_once(vision_subs)
         data = vision_subs.get_data()
         data = todict(data)
-        socketio.emit("vision_msg", {"data": data})
+        gui_socket.emit("vision_msg", {"data": data})
 
 ############# DISCONECT FROM GUI #############
 
-@socketio.on("disconnect")
+@gui_socket.on("disconnect")
 def handle_disconnect():
     print("Client disconnected")
     global thread
@@ -48,22 +49,24 @@ def handle_disconnect():
 
 ############# FIELD SIDE BUTTON #############
 
-@socketio.on("fieldSide")
-def handle_field_side(side):
-    #TODO get side to rest of the code
-    if side == True:
-        print("Field is on the left side", flush=True)
-    elif side == False:
-        print("Field is on the right side", flush=True)
+@gui_socket.on("fieldSide")
+def handle_field_side(is_field_side_left):
+    if is_field_side_left:
+        print("Team field side is left", flush=True)
+    else:
+        print("Team field side is left", flush=True)
+    print(is_field_side_left)
+    gui_publisher.is_field_side_left = is_field_side_left
+    gui_publisher.publish_gui_data()
 
 ############# TEAM COLOR BUTTON #############
 
-@socketio.on("teamColor")
-def handle_team_color(color):
-    #TODO get color to rest of the code
-    if color == True:
+@gui_socket.on("teamColor")
+def handle_team_color(is_team_color_blue):
+    gui_publisher.is_team_color_blue = is_team_color_blue
+    if is_team_color_blue:
         print("Team color is blue", flush=True)
-    elif color == False:
+    else:
         print("Team color is yellow", flush=True)
 
 ############# OUTPUT HANDLER #############
@@ -83,26 +86,26 @@ def print_output(line):
     Handle a single line of output.
     """
     global vision_running
-    socketio.emit("visionOutput", {"line": line})
-    socketio.emit("visionStatus", {"status": vision_running})
+    gui_socket.emit("visionOutput", {"line": line})
+    gui_socket.emit("visionStatus", {"status": vision_running})
     print(f'linha{line}', end='')
 
 ############# REFEREE BUTTON HANDLER #############
 
-@socketio.on("refereeButton")
+@gui_socket.on("refereeButton")
 def handle_referee_button():
     pass
 
 ############# VISION BUTTON HANDLER #############
 
-@socketio.on("visionButton")
+@gui_socket.on("visionButton")
 def handle_vision_button():
     global vision_running, process
     command = ['ros2', 'run', 'vision', 'visionNode']
     if vision_running:
         vision_running = False
-        socketio.emit("visionStatus", {"status": vision_running})
-        socketio.emit("visionOutput", {"line": "Terminating vision node"})
+        gui_socket.emit("visionStatus", {"status": vision_running})
+        gui_socket.emit("visionOutput", {"line": "Terminating vision node"})
         subprocess.run(['killall']+[command[-1]])
     else:
         vision_running = True
@@ -116,7 +119,7 @@ def handle_vision_button():
 
 ############# COMMUNICATION BUTTON HANDLER #############
 
-@socketio.on("communicationButton")
+@gui_socket.on("communicationButton")
 def handle_communication_button():
     pass
 
@@ -124,7 +127,7 @@ def main():
     global thread, vision_running
     thread = None
     vision_running = False
-    socketio.run(app, debug=True, use_reloader=False, log_output=False)
+    gui_socket.run(app, debug=True, use_reloader=False, log_output=False)
 
 if __name__ == "__main__":
     main()

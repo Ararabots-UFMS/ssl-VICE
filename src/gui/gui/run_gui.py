@@ -11,7 +11,6 @@ import warnings
 ####################################################################
 
 # Set folder names for both repos
-VICE_REPO_NAME="ssl-VICE"
 GUI_REPO_NAME="ssl-gui"
 
 # Get the path to the VICE repository
@@ -27,7 +26,7 @@ def main():
     # If GUI path does not exist, run the installation script
     if not (path_to_gui_repo).exists():
         warnings.warn(f"GUI repository not found at {path_to_gui_repo}. Running installation script")
-        subprocess.run(["bash", f"{path_to_repo_parent_folder}/{VICE_REPO_NAME}/setup_scripts/gui_install_and_update.sh"])
+        subprocess.run(["bash", f"{path_to_repo_folder}/setup_scripts/gui_install_and_update.sh"])
 
     # Change directory to GUI repo
     os.chdir(path_to_gui_repo)
