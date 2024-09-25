@@ -1,12 +1,11 @@
 from vision.tracker import ObjectTracker
-from vision.objects import Object, ID
 from vision.world_message import wrap_message
 
 from system_interfaces.msg import VisionMessage
 
 from typing import List, Dict, Tuple, Union
 
-def unify_object(objects: Dict[ID, Object]) -> List[Object]:
+def unify_object(objects: Dict) -> List:
     '''
     Retuns the object with highest confidence.
     '''
@@ -20,7 +19,7 @@ def merge_trackers(trackers: List[ObjectTracker]) -> VisionMessage:
     '''
     Function to merge all cameras data into one world state message by combining a list of trackers.
     '''
-    objects_dict: Dict[ID, List[Object]] = {}
+    objects_dict: Dict = {}
 
     # TODO Maybe find a way to not use 2 nested loops to do this...
     for tracker in trackers:

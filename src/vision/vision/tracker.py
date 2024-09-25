@@ -4,7 +4,6 @@ from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 
 import numpy as np
 from typing import Optional, List
-from vision.objects import BallID, RobotID, BallObject, RobotObject
 
 # TODO refactor variables, classes and messages names, a lot of similar names being used.
 

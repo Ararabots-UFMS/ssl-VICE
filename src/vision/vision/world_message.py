@@ -1,6 +1,6 @@
 from vision.tracker import ObjectTracker, Object, ID
 
-from system_interfaces.msg import VisionMessage, VisionGeometry, Robots, Balls, ObjectID, FieldLineSegment, FieldArcsSegment
+from system_interfaces.msg import VisionMessage, VisionGeometry, Robots, Balls, FieldLineSegment, FieldArcsSegment
 
 from vision.proto.messages_robocup_ssl_geometry_pb2 import SSL_GeometryData
 
@@ -13,11 +13,8 @@ def wrap_message(objects: List[Object]) -> VisionMessage:
     for object_ in objects:
         if object_.id.is_ball:
             ball_msg = Balls()
-            ball_id = ObjectID()
 
-            ball_id.id = object_.id.id
-            ball_id.is_ball = object_.id.is_ball
-            ball_msg.id = ball_id
+            ball_msg.id = object_.id.id
 
             # Kalman filter x attribute is a vector [x position, y position, x velocity, y velocity]
             ball_msg.position_x = float(object_.KF.x[0][0])
@@ -30,12 +27,8 @@ def wrap_message(objects: List[Object]) -> VisionMessage:
 
         else:
             robot_msg = Robots()
-            robot_id = ObjectID()
 
-            robot_id.id = object_.id.id
-            robot_id.is_ball = object_.id.is_ball
-            robot_id.is_blue = object_.id.is_blue
-            robot_msg.id = robot_id
+            robot_msg.id = object_.id.id
 
             robot_msg.position_x = float(object_.KF.x[0][0])
             robot_msg.position_y = float(object_.KF.x[1][0])
