@@ -1,3 +1,5 @@
+from system_interfaces.msg import Robots, Balls, GUIMessage
+
 class SingletonMeta(type):
     """
     This is a thread-safe implementation of Singleton.
@@ -35,20 +37,27 @@ class SingletonMeta(type):
 
 class Blackboard(metaclass=SingletonMeta):
     def __init__(self) -> None:
-        self.ally_robots = {}
-        self.enemy_robots = {}
-        self.balls = {}
-        self.gui = {
-            is_field_side_left: False,
-            is_team_color_blue: False,
-            is_play_pressed: False
-        }
+        self.ally_robots = {    0: Robots(),
+                                1: Robots(),
+                                2: Robots()}
+        self.enemy_robots = {   0: Robots(),
+                                1: Robots(),
+                                2: Robots()}
+        self.balls = {0: Balls()}
+        self.gui = GUIMessage()
         
     def update_from_vision_message(self, message):
-        pass
+        if self.gui.is_team_color_blue:
+            self.ally_robots = {ally.id: ally for ally in message.blue_robots}
+            self.enemy_robots = {ally.id: ally for ally in message.yellow_robots}
+        else:
+            self.ally_robots =  {ally.id: ally for ally in message.yellow_robots}
+            self.enemy_robots = {ally.id: ally for ally in message.blue_robots}
+            
+        self.balls = message.balls
     
     def update_from_gamecontroller_message(self, message):
         pass
     
     def update_from_gui_message(self, message):
-        pass
+        self.gui = message

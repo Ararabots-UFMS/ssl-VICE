@@ -20,7 +20,7 @@ class Coach(Node):
         self.robot_executor = rclpy.executors.MultiThreadedExecutor(max_threads=max_robots)
         
         self.robots = {}
-        for ally_robot in blackboard.ally_robots:
+        for ally_robot in self.blackboard.ally_robots:
             self.robots[ally_robot.id] = Robot(ally_robot)
             self.robot_executor.add_node(self.robots[ally_robot.id])
             
@@ -30,15 +30,16 @@ class Coach(Node):
         self.robot_executor.spin()
 
     def update(self):
-        for ally_robot in blackboard.ally_robots:
+        for ally_robot in self.blackboard.ally_robots:
             try:
-                self.robots[robot.id].update(ally_robot)
+                self.robots[ally_robot.id]
             except:
-                self.robots[robot.id] = Robot(ally_robot)
+                #TODO: implementar nome dos robos
+                self.robots[ally_robot.id] = Robot(ally_robot.id, f"robo{ally_robot.id}", None)
                 
         #TODO: isso aqui não roda, precisa ser implementado de vdd depois
         for robot in self.robots:
-            if robot not in blackboard.ally_robots:
+            if robot not in self.blackboard.ally_robots:
                 self.robots[robot].destroy_node()
                 self.robots.pop(robot)
         
