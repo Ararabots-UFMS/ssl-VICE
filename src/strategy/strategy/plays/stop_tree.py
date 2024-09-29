@@ -9,12 +9,17 @@ class StopTree(Behaviour):
         super(StopTree, self).__init__(name)
 
     def update(self):
-        self.counter = self.timer()
-        self.logger.debug(f"StopTree::update stop with {self.counter}")
-        if self.counter >= 10:
-            return Status.SUCCESS
-        else:
-            return Status.FAILURE            
+
+        for robot in :
+            robot.comand = "stop"
+        self.logger.debug(f"StopTree::update stopped")
+
+        # self.counter = self.timer()
+        # self.logger.debug(f"StopTree::update stop with {self.counter}")
+        # if self.counter >= 10:
+        #     return Status.SUCCESS
+        # else:
+        #     return Status.FAILURE            
 
     def terminate(self, new_status):
         self.logger.debug(f"StopTree::terminate stop to {new_status}")
