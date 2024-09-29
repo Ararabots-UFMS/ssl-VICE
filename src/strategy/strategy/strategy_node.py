@@ -5,27 +5,6 @@ from py_trees.composites import Selector
 from py_trees import logging as log_tree
 import time
 
-# Classe para verificar se a sub-árvore será executada
-class CheckStringCondition(Behaviour):
-    def __init__(self, name, input_string):
-        super(CheckStringCondition, self).__init__(name)
-        self.input_string = input_string
-
-    def initialise(self):
-        self.logger.debug(f"CheckStringCondition::initialise {self.name}")
-
-    def update(self):
-        self.logger.debug(f"CheckStringCondition::update {self.name}")
-        # Condição: Se a string de entrada for igual ao nome do comportamento (subárvore)
-        if self.input_string == self.name:
-            self.logger.debug(f"String matches '{self.name}', returning SUCCESS")
-            return Status.SUCCESS
-        self.logger.debug(f"String is '{self.input_string}', does not match '{self.name}', returning FAILURE")
-        return Status.FAILURE
-
-    def terminate(self, new_status):
-        self.logger.debug(f"CheckStringCondition::terminate {self.name} to {new_status}")
-
 # Ação simples para exemplo, sem delays
 class Action(Behaviour):
     def __init__(self, name, max_attempt_count=1):
@@ -44,28 +23,28 @@ class Action(Behaviour):
         return Status.SUCCESS  # Ação rápida, sem delays
 
     def terminate(self, new_status):
-        print("Chama a behavior tree.")
         self.logger.debug(f"Action::terminate {self.name} to {new_status}")
 
 # Condição simples para exemplo
 class Condition(Behaviour):
-    def __init__(self, name):
+    def __init__(self, name, input_string):
         super(Condition, self).__init__(name)
-
-    def setup(self):
-        self.logger.debug(f"Condition::setup {self.name}")
+        self.input_string = input_string
 
     def initialise(self):
         self.logger.debug(f"Condition::initialise {self.name}")
 
     def update(self):
         self.logger.debug(f"Condition::update {self.name}")
-        return Status.SUCCESS  # Condição rápida
+        # Condição: Se a string de entrada for igual ao nome do comportamento (subárvore)
+        if self.input_string == self.name:
+            self.logger.debug(f"String matches '{self.name}', returning SUCCESS")
+            return Status.SUCCESS
+        self.logger.debug(f"String is '{self.input_string}', does not match '{self.name}', returning FAILURE")
+        return Status.FAILURE
 
     def terminate(self, new_status):
-        print("Checou condição com resultado \"Sucesso\".")
         self.logger.debug(f"Condition::terminate {self.name} to {new_status}")
-
 
 # Função responsável por definir a raiz da árvore
 def make_bt(input_string):
@@ -80,58 +59,49 @@ def make_bt(input_string):
     forcestart_play = Sequence(name="forcestart", memory=True)
 
     # Condição personalizada para verificar a string de entrada
-    check_timeout = CheckStringCondition("timeout", input_string)
-    check_stop = CheckStringCondition("stop", input_string)
-    check_half = CheckStringCondition("half", input_string)
-    check_run = CheckStringCondition("run", input_string)
-    check_freekick = CheckStringCondition("freekick", input_string)
-    check_kickoff = CheckStringCondition("kickoff", input_string)
-    check_penalty = CheckStringCondition("penalty", input_string)
-    check_forcestart = CheckStringCondition("forcestart", input_string)
+    check_timeout = Condition("timeout", input_string)
+    check_stop = Condition("stop", input_string)
+    check_half = Condition("half", input_string)
+    check_run = Condition("run", input_string)
+    check_freekick = Condition("freekick", input_string)
+    check_kickoff = Condition("kickoff", input_string)
+    check_penalty = Condition("penalty", input_string)
+    check_forcestart = Condition("forcestart", input_string)
     
 
     # Comportamentos para a sequência
-    check_battery = Condition("check_battery")
     open_gripper = Action("open_gripper")
     approach_object = Action("approach_object")
     close_gripper = Action("close_gripper")
 
     # Comportamentos para a sequência
-    check_battery1 = Condition("check_battery")
     open_gripper1 = Action("open_gripper")
     approach_object1 = Action("approach_object")
     close_gripper1 = Action("close_gripper")
 
     # Comportamentos para a sequência
-    check_battery2 = Condition("check_battery")
     open_gripper2 = Action("open_gripper")
     approach_object2 = Action("approach_object")
     close_gripper2 = Action("close_gripper")
 
     # Comportamentos para a sequência
-    check_basic = Condition("check_battery")
     call_tree = Action("call_tree")
 
     # Comportamentos para a sequência
-    check_basic1 = Condition("check_battery")
     call_tree1 = Action("call_tree")
     
     # Comportamentos para a sequência
-    check_basic2 = Condition("check_battery")
     call_tree2 = Action("call_tree")
 
     # Comportamentos para a sequência
-    check_basic3 = Condition("check_battery")
     call_tree3 = Action("call_tree")
 
     # Comportamentos para a sequência
-    check_basic4 = Condition("check_battery")
     call_tree4 = Action("call_tree")
 
     # Adiciona a verificação de string antes de continuar com o 'timeout_play'
     timeout_play.add_children([
         check_timeout,
-        check_battery,
         open_gripper,
         approach_object,
         close_gripper
@@ -139,7 +109,6 @@ def make_bt(input_string):
 
     stop_play.add_children([
         check_stop,
-        check_battery1,
         open_gripper1,
         approach_object1,
         close_gripper1
@@ -147,7 +116,6 @@ def make_bt(input_string):
 
     half_play.add_children([
         check_half,
-        check_battery2,
         open_gripper2,
         approach_object2,
         close_gripper2
@@ -155,27 +123,22 @@ def make_bt(input_string):
 
     run_play.add_children([
         check_run,
-        check_basic,
         call_tree
     ])
     freekick_play.add_children([
         check_freekick,
-        check_basic1,
         call_tree1
     ])
     kickoff_play.add_children([
         check_kickoff,
-        check_basic2,
         call_tree2
     ])
     penalty_play.add_children([
         check_penalty,
-        check_basic3,
         call_tree3
     ])
     forcestart_play.add_children([
         check_forcestart,
-        check_basic4,
         call_tree4
     ])
 
