@@ -44,6 +44,7 @@ class Action(Behaviour):
         return Status.SUCCESS  # Ação rápida, sem delays
 
     def terminate(self, new_status):
+        print("Chama a behavior tree.")
         self.logger.debug(f"Action::terminate {self.name} to {new_status}")
 
 # Condição simples para exemplo
@@ -62,6 +63,7 @@ class Condition(Behaviour):
         return Status.SUCCESS  # Condição rápida
 
     def terminate(self, new_status):
+        print("Checou condição com resultado \"Sucesso\".")
         self.logger.debug(f"Condition::terminate {self.name} to {new_status}")
 
 
@@ -71,11 +73,22 @@ def make_bt(input_string):
     timeout_play = Sequence(name="timeout", memory=True)
     stop_play = Sequence(name="stop", memory=True)
     half_play = Sequence(name="half", memory=True)
+    run_play = Sequence(name="run", memory=True)
+    freekick_play = Sequence(name="freekick", memory=True)
+    kickoff_play = Sequence(name="kickoff", memory=True)
+    penalty_play = Sequence(name="penalty", memory=True)
+    forcestart_play = Sequence(name="forcestart", memory=True)
 
     # Condição personalizada para verificar a string de entrada
     check_timeout = CheckStringCondition("timeout", input_string)
     check_stop = CheckStringCondition("stop", input_string)
     check_half = CheckStringCondition("half", input_string)
+    check_run = CheckStringCondition("run", input_string)
+    check_freekick = CheckStringCondition("freekick", input_string)
+    check_kickoff = CheckStringCondition("kickoff", input_string)
+    check_penalty = CheckStringCondition("penalty", input_string)
+    check_forcestart = CheckStringCondition("forcestart", input_string)
+    
 
     # Comportamentos para a sequência
     check_battery = Condition("check_battery")
@@ -94,6 +107,26 @@ def make_bt(input_string):
     open_gripper2 = Action("open_gripper")
     approach_object2 = Action("approach_object")
     close_gripper2 = Action("close_gripper")
+
+    # Comportamentos para a sequência
+    check_basic = Condition("check_battery")
+    call_tree = Action("call_tree")
+
+    # Comportamentos para a sequência
+    check_basic1 = Condition("check_battery")
+    call_tree1 = Action("call_tree")
+    
+    # Comportamentos para a sequência
+    check_basic2 = Condition("check_battery")
+    call_tree2 = Action("call_tree")
+
+    # Comportamentos para a sequência
+    check_basic3 = Condition("check_battery")
+    call_tree3 = Action("call_tree")
+
+    # Comportamentos para a sequência
+    check_basic4 = Condition("check_battery")
+    call_tree4 = Action("call_tree")
 
     # Adiciona a verificação de string antes de continuar com o 'timeout_play'
     timeout_play.add_children([
@@ -120,11 +153,42 @@ def make_bt(input_string):
         close_gripper2
     ])
 
+    run_play.add_children([
+        check_run,
+        check_basic,
+        call_tree
+    ])
+    freekick_play.add_children([
+        check_freekick,
+        check_basic1,
+        call_tree1
+    ])
+    kickoff_play.add_children([
+        check_kickoff,
+        check_basic2,
+        call_tree2
+    ])
+    penalty_play.add_children([
+        check_penalty,
+        check_basic3,
+        call_tree3
+    ])
+    forcestart_play.add_children([
+        check_forcestart,
+        check_basic4,
+        call_tree4
+    ])
+
     # Árvore principal
     root.add_children([
-        timeout_play, 
-        stop_play,
         half_play,
+        kickoff_play,
+        timeout_play,
+        freekick_play,
+        penalty_play,
+        forcestart_play, 
+        stop_play,
+        run_play,
     ])
 
     return root
@@ -132,7 +196,7 @@ def make_bt(input_string):
 def main():
     log_tree.level = log_tree.Level.DEBUG
     inicio = time.time()
-    tree = make_bt("half") 
+    tree = make_bt("forcestart") 
     print("New Tick")
     tree.tick_once()
     fim = time.time()
