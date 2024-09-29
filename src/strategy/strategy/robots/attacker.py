@@ -11,13 +11,29 @@ class Condition(Behaviour):
 
     def initialise(self):
         for ally_robot in self.blackboard.ally_robots:
-            if ally_robot.position_x > 0 and ally_robot.position_y > 0:
-                self.logger.debug(f"Condition::initialise atacante")
-                
+            if ally_robot.position_x >= 0:
+                self.logger.debug(f"Condition::initialise atacante")                
 
     def update(self):
+        for ally_robot in self.blackboard.ally_robots:
+            ally_robot.behaviour_tree = Attacker()  
         
 
     def terminate(self, new_status):
         self.logger.debug(f"Condition::terminate {self.name} to {new_status}")
+
+class Attacker(Behaviour):
+     def __init__(self):
+        self.blackboard = Blackboard()
+        self.position_x = blackboard.ally_robots.position_x
+        super(Attacker, self).__init__('attacker_action')
+
+    def update(self):
+        if position_x < 0
+        return Status.FAILURE
+
+
+    def terminate(self, new_status):
+        self.logger.debug(f"Condition::terminate {self.name} to {new_status}")
+
 
