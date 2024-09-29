@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'strategy_node = strategy.strategy_node:main'
+            'strategy_node = strategy.main_strategy:main'
         ],
     },
 )
