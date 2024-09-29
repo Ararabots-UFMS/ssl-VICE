@@ -1,5 +1,9 @@
 from rclpy.node import Node
+import rclpy
 
+from utils.topic_subscriber import TopicSubscriber 
+from system_interfaces.msg import VisionMessage, GUIMessage, RefereeMessage
+from strategy.blackboard import Blackboard
 from control_unit.coach import Coach
 
 class GameWatcher(Node):
@@ -8,8 +12,8 @@ class GameWatcher(Node):
         self.blackboard = Blackboard()
         
         self.vision_subscriber = TopicSubscriber('vision_subs', VisionMessage, 'visionTopic')
-        self.referee_subscriber = RefereeSubscriber('gui_subs', GUIMessage, 'guiTopic')
-        self.gui_subscriber = GUISubscriber('referee_subs', RefereeMessage, 'refereeTopic')
+        self.referee_subscriber = TopicSubscriber('gui_subs', GUIMessage, 'guiTopic')
+        self.gui_subscriber = TopicSubscriber('referee_subs', RefereeMessage, 'refereeTopic')
         
         self.coach = Coach(self.behaviour_tree, self.blackboard, max_robots=3)
         
