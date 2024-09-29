@@ -9,29 +9,29 @@ from strategy.blackboard import Blackboard
 class Condition(Behaviour):
     def __init__(self):
         self.blackboard = Blackboard()
-        super(Condition, self).__init__('attacker_condition')
+        super(Condition, self).__init__('Defender_condition')
 
     def initialise(self):
         for ally_robot in self.blackboard.ally_robots:
-            if ally_robot.position_x >= 0:
-                self.logger.debug(f"Condition::initialise atacante")                
+            if ally_robot.position_x < 0:
+                self.logger.debug(f"Condition::initialise defender")                
 
     def update(self):
         for ally_robot in self.blackboard.ally_robots:
-            ally_robot.behaviour_tree = Attacker()  
+            ally_robot.behaviour_tree = Defender()  
         
 
     def terminate(self, new_status):
         self.logger.debug(f"Condition::terminate {self.name} to {new_status}")
 
-class Attacker(Behaviour):
+class Defender(Behaviour):
     def __init__(self):
         self.blackboard = Blackboard()
         self.position_x = blackboard.ally_robots.position_x
-        super(Attacker, self).__init__('attacker_action')
+        super(Defender, self).__init__('Defender_action')
 
     def update(self):
-        if position_x < 0:
+        if position_x >= 0:
             return Status.FAILURE
 
 
