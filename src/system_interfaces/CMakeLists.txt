@@ -21,6 +21,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Balls.msg"
   "msg/Robots.msg"
   "msg/ObjectID.msg"
+  "msg/GameData.msg"
+  "msg/TeamData.msg"
 )
 
 if(BUILD_TESTING)

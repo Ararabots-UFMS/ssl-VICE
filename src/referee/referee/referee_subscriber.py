@@ -1,18 +1,19 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from system_interfaces.msg import GameData
+
 
 class RefereeSubscriber(Node):
     def __init__(self):
         super().__init__('referee_subscriber')
         self.subscription = self.create_subscription(
-            String,
+            GameData,
             'referee_messages',
             self.listener_callback,
             10)
 
     def listener_callback(self, msg):
-        self.get_logger().info(f"Received Referee message: {msg.data}")
+        self.get_logger().info(f"Received Referee message: {msg}")
         # Aqui você pode adicionar qualquer processamento adicional ou lógica de salvamento
 
 def main(args=None):
