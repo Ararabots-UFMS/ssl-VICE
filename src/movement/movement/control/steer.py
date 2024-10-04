@@ -36,6 +36,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 from math import sqrt, fabs
+from movement.path.path import Path, ControlAction
+from typing import List
 import numpy as np
 import random
 
@@ -53,6 +55,13 @@ and t is the length of time for which they are applied.
 
 Note: This does not use the O(n lg n) time sweeping method described in the IROS paper. It is O(n^2) in the worst case, which is significant for very large n. 
 '''
+
+def conver_to_path(con) -> List[ControlAction]:
+    transf = []
+    for c in con:
+        transf.append(ControlAction(np.matrix([[c[0][0]], [c[0][1]]]), float(c[1])))
+    return transf
+
 def time_optimal_steer(xinit,xgoal,umin=0,umax=0):
     n = int(0.5*len(xinit))
     if umin == 0:
@@ -139,6 +148,8 @@ def time_optimal_steer_2d(xinit,xgoal,umin=(-1,-1),umax=(1,1)):
                     c2 = bang_bang_hard_stop_wait(xinit[1],xinit[3],xgoal[1],xgoal[3],t1,umin[1],umax[1])                        
 
     c = merge_scalar_controls([c1,c2])
+
+    c = conver_to_path(c)
     
     return c
 
