@@ -1,13 +1,9 @@
 
 import socket
-import binascii
-import protobuf.grSim_Commands_pb2
-import protobuf.grSim_Replacement_pb2
-import protobuf.grSim_Packet_pb2 as grSim_Packet_pb2
-import struct
+import grsim_messenger.protobuf.grSim_Packet_pb2 as grSim_Packet_pb2
 
 
-class Client:
+class grSimSender:
     
     def __init__(self, ip:str, port:int):
         """Client that connects and receives messages from ssl-vision"""

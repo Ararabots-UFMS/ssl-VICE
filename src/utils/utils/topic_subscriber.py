@@ -1,10 +1,12 @@
 import rclpy
 from rclpy.node import Node
 
+from system_interfaces.msg import VisionMessage
+
 class TopicSubscriber(Node):
     def __init__(self, name: str, message_type, topic: str):
         super().__init__(name)
-        self.data = None
+        self.message = None
         self.subscription = self.create_subscription(
             message_type,
             topic,
@@ -15,7 +17,9 @@ class TopicSubscriber(Node):
         self.data = msg
 
     def get_message(self):
-        return self.data
+        aux = self.message
+        self.message = None
+        return aux
 
 def main(args=None):
     rclpy.init(args=args)

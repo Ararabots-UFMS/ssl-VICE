@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            "grsim_publisher_node = grsim_messenger.grsim_publisher:main",
         ],
     },
 )

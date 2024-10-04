@@ -1,0 +1,2 @@
+bool isteamyellow
+RobotCommand[] robots
