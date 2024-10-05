@@ -1,67 +1,71 @@
-import socket
-import struct
 import rclpy
-import sys
-import os
 from rclpy.node import Node
 from google.protobuf import json_format
 from system_interfaces.msg import GameData
-from referee.referee_client import Client
+from referee_client import Client  
+from referee.proto import ssl_gc_referee_message_pb2  
 
-class Referee(Node):
-    '''VICE Referee Node, connects and receives data from ssl-game-controler'''
+class RefereeNode(Node):
+    """ROS2 Node that listens to ssl-game-controller referee multicast messages."""
 
     def __init__(self):
         super().__init__('refereeNode')
 
         # Parameters settings.
-        self.declare_parameter('ip', '224.5.23.1')
-        self.declare_parameter('port', 10003)
+        self.ip = self.declare_parameter('ip', '224.5.23.1').get_parameter_value().string_value
+        self.port = self.declare_parameter('port', 10003).get_parameter_value().integer_value
+        self.buffer_size = self.declare_parameter('buffer_size', 1024).get_parameter_value().integer_value
 
-        # Verbose prints in terminal all received data.
-        self.ip = self.get_parameter('ip').get_parameter_value().string_value
-        self.port = self.get_parameter('port').get_parameter_value().integer_value
-
-        # Configuração do Client
-        self.client = Client(ip = self.ip, port = self.port)
-
-        self.get_logger().info(f"Binding client on {self.ip}:{self.port}")
+        # Initialize the client
+        self.client = Client(self.ip, self.port, self.buffer_size)
         self.client.connect()
 
-        # Setting ROS publisher.
+        # ROS2 Publisher
         self.publisher_ = self.create_publisher(GameData, 'referee_messages', 10)
-        self.last_message = GameData()  # Variável para armazenar a última mensagem
+        self.last_message = GameData()
 
         self.get_logger().info(f"Listening for multicast messages on {self.ip}:{self.port}")
         self.listen_to_multicast()
 
     def listen_to_multicast(self):
+        """Listen to multicast messages and publish to ROS2 topic."""
         while rclpy.ok():
             try:
-                # Parse the Protobuf message
-                referee_message: Referee = self.client.receive()
-                
-                # Setup GameData format
-                msg = GameData()
-                msg.stage = ssl_gc_referee_message_pb2.Referee.Stage.Name(referee_message.stage)
-                msg.command = ssl_gc_referee_message_pb2.Referee.Command.Name(referee_message.command)
-                msg.command_counter = referee_message.command_counter
+                data = self.client.receive()
+                referee_message = ssl_gc_referee_message_pb2.Referee()
 
-                # Publicar a nova mensagem no formato GameData
-                if(self.last_message.command_counter != msg.command_counter):
-                    self.publisher_.publish(msg)
-                    self.get_logger().info(f"Published new Referee message: {msg}")
-                    self.last_message = msg
-                # self.publisher_.publish(msg)
-                # self.get_logger().info(f"Published new Referee message: {msg}")
-                
+                try:
+                    # Parse the Protobuf message
+                    referee_message.ParseFromString(data)
+
+                    # Create and populate GameData message
+                    msg = self.parse_referee_message(referee_message)
+
+                    # Publish only if command_counter has changed
+                    if self.last_message.command_counter != msg.command_counter:
+                        self.publisher_.publish(msg)
+                        self.get_logger().info(f"Published new Referee message: {msg}")
+                        self.last_message = msg
+
+                except Exception as e:
+                    self.get_logger().warning(f"Failed to parse Protobuf message: {str(e)}")
 
             except Exception as e:
-                self.get_logger().warning(f"Failed to parse Protobuf message: {str(e)}")
-                    
+                self.get_logger().error(f"Error receiving multicast message: {str(e)}")
+
+    def parse_referee_message(self, referee_message):
+        """Converts the referee message into the GameData format."""
+        msg = GameData()
+        msg.stage = ssl_gc_referee_message_pb2.Referee.Stage.Name(referee_message.stage)
+        msg.command = ssl_gc_referee_message_pb2.Referee.Command.Name(referee_message.command)
+        msg.command_counter = referee_message.command_counter
+
+        return msg
+
+
 def main(args=None):
     rclpy.init(args=args)
-    node = Referee()
+    node = RefereeNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
@@ -69,6 +73,7 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

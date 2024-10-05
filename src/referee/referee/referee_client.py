@@ -1,34 +1,28 @@
 import socket
-import binascii
-from referee.proto.ssl_gc_referee_message_pb2 import Referee
+import struct
 
 class Client:
-    def __init__(self, ip:str, port:int):
-        """Client that connects and receives messages from ssl-game-controller"""
-        
+    """Client that handles the UDP multicast communication for SSL referee messages."""
+
+    def __init__(self, ip: str, port: int, buffer_size: int = 1024):
         self.ip = ip
         self.port = port
+        self.buffer_size = buffer_size
+        self.sock = None
 
     def connect(self):
-        """Binds the client with ip and port and configure to UDP multicast."""
-
-
+        """Sets up the multicast socket to receive data."""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(('', self.port))
+
         mreq = struct.pack("4sl", socket.inet_aton(self.ip), socket.INADDR_ANY)
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
     def receive(self):
-        """Receive package and decode."""
-
+        """Receive a message from the multicast group and return it as raw data."""
         try:
-            data, address = self.sock.recvfrom(1024)
+            data, _ = self.sock.recvfrom(self.buffer_size)
+            return data
         except Exception as e:
-            self.get_logger().error(f"Error receiving multicast message: {str(e)}")
-
-        referee_message = ssl_gc_referee_message_pb2.referee().ParseFromString(data)
-        return referee_message
-
-        
-        
+            raise RuntimeError(f"Error receiving multicast message: {e}")
