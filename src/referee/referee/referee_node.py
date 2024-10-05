@@ -3,7 +3,7 @@ from rclpy.node import Node
 from google.protobuf import json_format
 from system_interfaces.msg import GameData
 from referee_client import Client  
-from referee.proto import ssl_gc_referee_message_pb2  
+from referee.proto.ssl_gc_referee_message_pb2 import Referee  
 
 class RefereeNode(Node):
     """ROS2 Node that listens to ssl-game-controller referee multicast messages."""
@@ -32,7 +32,7 @@ class RefereeNode(Node):
         while rclpy.ok():
             try:
                 data = self.client.receive()
-                referee_message = ssl_gc_referee_message_pb2.Referee()
+                referee_message = Referee()
 
                 try:
                     # Parse the Protobuf message
@@ -56,8 +56,8 @@ class RefereeNode(Node):
     def parse_referee_message(self, referee_message):
         """Converts the referee message into the GameData format."""
         msg = GameData()
-        msg.stage = ssl_gc_referee_message_pb2.Referee.Stage.Name(referee_message.stage)
-        msg.command = ssl_gc_referee_message_pb2.Referee.Command.Name(referee_message.command)
+        msg.stage = Referee.Stage.Name(referee_message.stage)
+        msg.command = Referee.Command.Name(referee_message.command)
         msg.command_counter = referee_message.command_counter
 
         return msg
