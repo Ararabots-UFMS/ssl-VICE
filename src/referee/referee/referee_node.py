@@ -42,7 +42,7 @@ class RefereeNode(Node):
                     msg = self.parse_referee_message(referee_message)
 
                     # Publish only if command_counter has changed
-                    if self.last_message.command_counter != msg.command_counter:
+                    if self.last_message != msg:
                         self.publisher_.publish(msg)
                         self.get_logger().info(f"Published new Referee message: {msg}")
                         self.last_message = msg
