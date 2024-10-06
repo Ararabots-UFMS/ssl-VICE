@@ -13,7 +13,7 @@ class GameWatcher(Node):
         
         # self.vision_subscriber = TopicSubscriber('vision_subs', VisionMessage, 'visionTopic')
         self.gui_subscriber = TopicSubscriber('gui_subs', GUIMessage, 'guiTopic')
-        self.referee_subscriber = TopicSubscriber('referee_subs', GameData, 'refereeTopic')
+        self.referee_subscriber = TopicSubscriber('referee_subs', GameData, '/referee_messages')
         
         self.coach = Coach(self.behaviour_tree, self.blackboard, max_robots=3)
         
@@ -23,7 +23,7 @@ class GameWatcher(Node):
         self.executor.add_node(self.gui_subscriber)
         self.executor.add_node(self.coach)
         
-        self.timer = self.create_timer(0.1, self.update_from_interpreters)
+        self.timer = self.create_timer(0.001, self.update_from_interpreters)
         
         #start listening for messages from interpreters
         self.executor.spin()
@@ -47,3 +47,12 @@ class GameWatcher(Node):
         message = self.gui_subscriber.get_message()
         
         self.blackboard.update_from_gui_message(message)
+
+def main(args=None):
+    rclpy.init(args=args)
+    game_watcher = GameWatcher()
+    rclpy.spin(game_watcher)
+    rclpy.shutdown()
+    
+if __name__ == '__main__':
+    main()

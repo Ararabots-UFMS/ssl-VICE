@@ -20,6 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            "coach_node = control_unit.coach:main",
+            "game_watcher_node = control_unit.game_watcher:main"
         ],
     },
 )
