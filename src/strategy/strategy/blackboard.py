@@ -36,30 +36,32 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
+""" Made some changes to run just the referee subscriber """
+
 class Blackboard(metaclass=SingletonMeta):
     def __init__(self) -> None:
-        self.ally_robots = {    0: Robots(),
-                                1: Robots(),
-                                2: Robots()}
-        self.enemy_robots = {   0: Robots(),
-                                1: Robots(),
-                                2: Robots()}
-        self.balls = {0: Balls()}
-        self.gui = GUIMessage()
+        # self.ally_robots = {    0: Robots(),
+        #                         1: Robots(),
+        #                         2: Robots()}
+        # self.enemy_robots = {   0: Robots(),
+        #                         1: Robots(),
+        #                         2: Robots()}
+        # self.balls = {0: Balls()}
+        # self.gui = GUIMessage()
         self.referee = GameData()
-        
-    def update_from_vision_message(self, message):
-        if self.gui.is_team_color_blue:
-            self.ally_robots = {ally.id: ally for ally in message.blue_robots}
-            self.enemy_robots = {ally.id: ally for ally in message.yellow_robots}
-        else:
-            self.ally_robots =  {ally.id: ally for ally in message.yellow_robots}
-            self.enemy_robots = {ally.id: ally for ally in message.blue_robots}
-            
-        self.balls = message.balls
     
     def update_from_gamecontroller_message(self, message):
         self.referee = message
+        
+    # def update_from_vision_message(self, message):
+    #     if self.gui.is_team_color_blue:
+    #         self.ally_robots = {ally.id: ally for ally in message.blue_robots}
+    #         self.enemy_robots = {ally.id: ally for ally in message.yellow_robots}
+    #     else:
+    #         self.ally_robots =  {ally.id: ally for ally in message.yellow_robots}
+    #         self.enemy_robots = {ally.id: ally for ally in message.blue_robots}
+            
+    #     self.balls = message.balls
     
-    def update_from_gui_message(self, message):
-        self.gui = message
+    # def update_from_gui_message(self, message):
+    #     self.gui = message

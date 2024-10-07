@@ -17,7 +17,7 @@ class Coach(Node):
         self.blackboard = Blackboard()
         
         #TODO: experiment with other timer rates
-        self.robot_executor = rclpy.executors.MultiThreadedExecutor(max_threads=max_robots)
+        self.robot_executor = rclpy.executors.MultiThreadedExecutor(num_threads=max_robots)
         
         self.robots = {}
         for ally_robot in self.blackboard.ally_robots:
@@ -44,7 +44,10 @@ class Coach(Node):
                 self.robots.pop(robot)
         
     def run(self):
-        self.behaviour_tree.run(self.blackboard)
+        if self.behaviour_tree != None:
+            self.behaviour_tree.run(self.blackboard)
+        else:
+            pass
         
 def main(args=None):
     rclpy.init(args=args)

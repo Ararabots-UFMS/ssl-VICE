@@ -56,6 +56,7 @@ class RefereeNode(Node):
 
     def parse_referee_message(self, referee_message):
         """Converts the referee message into the GameData format."""
+        # TODO: create a class to wrapper those messages
         msg = GameData()
         msg.stage = Referee.Stage.Name(referee_message.stage)
         msg.command = Referee.Command.Name(referee_message.command)
