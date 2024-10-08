@@ -12,20 +12,20 @@ import time
 # Função responsável por definir a raiz da árvore
 def make_bt(input_string):
     root = Selector(name="root", memory=True)
-    timeout_play = Sequence(name="timeout", memory=True)
-    stop_play = Sequence(name="stop", memory=True)
-    halt_play = Sequence(name="halt", memory=True)
+    timeout_play = Sequence(name="TIMEOUT", memory=True)
+    stop_play = Sequence(name="STOP", memory=True)
+    halt_play = Sequence(name="HALF", memory=True)
 
     # Comportamentos para a sequência
-    check_timeout = Condition("timeout", input_string)
+    check_timeout = Condition("TIMEOUT", input_string)
     timeout_action = TimeoutTree()
 
     # Comportamentos para a sequência
-    check_stop = Condition("stop", input_string)
+    check_stop = Condition("STOP", input_string)
     stop_action = StopTree()
 
     # Comportamentos para a sequência
-    check_halt = Condition("halt", input_string)
+    check_halt = Condition("HALT", input_string)
     halt_action = HaltTree()
 
     # Adiciona a verificação de string antes de continuar com o 'timeout_play'

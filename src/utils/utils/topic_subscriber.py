@@ -13,11 +13,9 @@ class TopicSubscriber(Node):
             10)
 
     def update_message(self, msg) -> None:
-        self.get_logger().info(str(msg))
         self.data = msg
 
     def get_message(self):
-        self.get_logger().info(str(self.data))
         return self.data
 
 def main(args=None):
