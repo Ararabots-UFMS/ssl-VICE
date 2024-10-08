@@ -26,7 +26,6 @@ class GameWatcher(Node):
         self.timer = self.create_timer(0.001, self.update_from_interpreters)
 
     def update_from_interpreters(self):
-        print("Timer callback running...")
         self.update_from_gamecontroller()
         # self.update_from_vision()
         # self.update_from_gui()
@@ -34,8 +33,8 @@ class GameWatcher(Node):
     def update_from_gamecontroller(self):
         message = self.referee_subscriber.get_message()
         if message:
-            print(f"Received message: {message}")
             self.blackboard.update_from_gamecontroller_message(message)
+            self.get_logger().info(str(self.blackboard.referee))
         else:
             print("No message received")
     
@@ -54,9 +53,10 @@ def main(args=None):
     rclpy.init(args=args)
     
     # Initialize the executor outside the class
-    executor = rclpy.executors.MultiThreadedExecutor(num_threads=1)
+    executor = rclpy.executors.MultiThreadedExecutor(num_threads=2)
     
     game_watcher = GameWatcher(executor)
+    executor.add_node(game_watcher)
     executor.spin()  
     rclpy.shutdown()
     

@@ -65,3 +65,12 @@ class Blackboard(metaclass=SingletonMeta):
     
     # def update_from_gui_message(self, message):
     #     self.gui = message
+
+def main(args=None):
+    blackboard = Blackboard()
+    while True:
+        print(blackboard.referee)
+
+
+if __name__ == "__main__":
+    main()

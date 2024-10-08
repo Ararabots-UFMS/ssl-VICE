@@ -13,7 +13,7 @@ class TopicSubscriber(Node):
             10)
 
     def update_message(self, msg) -> None:
-        # self.get_logger().info(str(msg))
+        self.get_logger().info(str(msg))
         self.data = msg
 
     def get_message(self):
