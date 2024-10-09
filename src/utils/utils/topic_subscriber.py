@@ -14,7 +14,7 @@ class TopicSubscriber(Node):
             10)
 
     def update_message(self, msg) -> None:
-        self.data = msg
+        self.message = msg
 
     def get_message(self):
         aux = self.message
