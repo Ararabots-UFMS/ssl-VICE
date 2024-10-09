@@ -3,14 +3,16 @@ from rclpy.node import Node
 from strategy.blackboard import Blackboard
 
 class Robot(Node):
-    def __init__(self, id, name, behaviour_tree) -> None:
-        super().__init__('robot')
+    def __init__(self, id, name) -> None:
+        super().__init__(f'robot_{name}')
         self.blackboard = Blackboard()
         self.name = name
         self.id = id
-        self.behaviour_tree = behaviour_tree
+        self.behaviour_tree = None
         self.address = None
         self.pid = None
+        
+        self.movement = None
         
         self.timer = self.create_timer(0.1, self.run)
     
@@ -26,4 +28,5 @@ class Robot(Node):
         return self.blackboard.ally_robots[self.id].orientation
     
     def run(self):
-        self.behaviour_tree.run()
+        self.get_logger().info(f"Running robot {self.id}")
+        # self.movement = self.behaviour_tree.run()

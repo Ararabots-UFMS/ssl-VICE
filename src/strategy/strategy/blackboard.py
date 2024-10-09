@@ -1,4 +1,5 @@
 from system_interfaces.msg import Robots, Balls, GUIMessage
+from threading import Lock
 
 class SingletonMeta(type):
     """
@@ -37,22 +38,27 @@ class SingletonMeta(type):
 
 class Blackboard(metaclass=SingletonMeta):
     def __init__(self) -> None:
-        self.ally_robots = {    0: Robots(),
-                                1: Robots(),
-                                2: Robots()}
-        self.enemy_robots = {   0: Robots(),
-                                1: Robots(),
-                                2: Robots()}
-        self.balls = {0: Balls()}
+        self.ally_robots = {}
+        self.enemy_robots = {}
+        self.balls = {}
         self.gui = GUIMessage()
         
+        #TODO: Remove this line
+        self.gui.is_team_color_blue = True
+        
     def update_from_vision_message(self, message):
-        if self.gui.is_team_color_blue:
+        if message is None:
+            return
+        elif self.gui.is_team_color_blue:
             self.ally_robots = {ally.id: ally for ally in message.blue_robots}
             self.enemy_robots = {ally.id: ally for ally in message.yellow_robots}
         else:
-            self.ally_robots =  {ally.id: ally for ally in message.yellow_robots}
-            self.enemy_robots = {ally.id: ally for ally in message.blue_robots}
+            for ally in message.yellow_robots:
+                self.ally_robots[ally.id] = ally
+            for enemy in message.blue_robots:
+                self.enemy_robots[enemy.id] = enemy
+            # self.ally_robots =  {ally.id: ally for ally in message.yellow_robots}
+            # self.enemy_robots = {ally.id: ally for ally in message.blue_robots}
             
         self.balls = message.balls
     
@@ -60,4 +66,4 @@ class Blackboard(metaclass=SingletonMeta):
         pass
     
     def update_from_gui_message(self, message):
-        self.gui = message
+        pass
