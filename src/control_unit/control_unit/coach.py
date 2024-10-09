@@ -16,14 +16,7 @@ class Coach(Node):
         #get blackboard
         self.blackboard = Blackboard()
         
-        self.get_logger().info(f"robots: {self.blackboard.ally_robots}")
-        
-        
         self.robots = {}
-        for ally_robot in self.blackboard.ally_robots.values():
-            self.robots[ally_robot.id] = Robot(ally_robot.id, f"robo{ally_robot.id}")
-            _executor.add_node(self.robots[ally_robot.id])
-            self.get_logger().info(f"robots {self.robots}")
             
         #TODO: experiment with other timer rates
         self.timer = self.create_timer(0.5, self.update)

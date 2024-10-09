@@ -7,15 +7,15 @@ from control_unit.coach import Coach
 def main():
     rclpy.init()
     
-    #num_threads is 8 because:
+    #num_threads is 6 because:
     #   1 for game_watcher
-    #   3 for topic subscribers
     #   1 for coach
     #   3 for robots
-    main_executor = MultiThreadedExecutor(num_threads=8)
+    #   1 for command_sender
+    main_executor = MultiThreadedExecutor(num_threads=6)
 
     #Reads all the topics and updates the blackboard
-    game_watcher = GameWatcher(main_executor)
+    game_watcher = GameWatcher()
     
     #Update blackboard for coach creation
     rclpy.spin_once(game_watcher, timeout_sec=0.2)
