@@ -2,7 +2,7 @@ from movement.obstacles.interfaces import Obstacle, StaticObstacle
 
 from ruckig import InputParameter, OutputParameter, Result, Ruckig, Trajectory
 
-from typing import List
+from typing import List, Tuple
 from enum import Enum, auto
 
 

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
+from typing import List, Tuple
+import numpy as np
 
 class Obstacle(ABC):
     

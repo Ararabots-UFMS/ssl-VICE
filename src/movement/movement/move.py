@@ -1,13 +1,13 @@
 from movement.obstacles.interfaces import Obstacle, StaticObstacle
 from system_interfaces.msg import Robots
-from strategy.strategy import Blackboard
+from strategy.blackboard import Blackboard
 from movement.path.path import PathGenerator
 from movement.path.path_acceptor import PathAcceptor, AcceptorStatus
 from movement.path.path_profiles import MovementProfiles
 
 from ruckig import InputParameter, OutputParameter, Result, Ruckig, Trajectory
 
-from typing import List
+from typing import List, Tuple
 
 
 class Movement():
@@ -20,7 +20,7 @@ class Movement():
 
         self.otg = Ruckig(3)
 
-    def __call__(self, obstacles: List[Obstacle], profile: MovementProfiles, **kwargs) -> Tuple(Trajectory):
+    def __call__(self, obstacles: List[Obstacle], profile: MovementProfiles, **kwargs) -> Tuple:
         self.update_state()
 
         trajectory = Trajectory(3)

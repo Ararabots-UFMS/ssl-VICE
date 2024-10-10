@@ -1,23 +1,32 @@
 from rclpy.node import Node
 
-from system_interfaces.msg import TeamCommand
+from system_interfaces.msg import TeamCommand, RobotCommand
+from time import time
 
-#TODO: Implement the command publisher
+
 class CommandPublisher(Node):
     def __init__(self, coach) -> None:
-        super().__init__('command_publisher')
+        super().__init__("command_publisher")
         self.coach = coach
-        self.publisher = self.create_publisher(TeamCommand, 'commandTopic', 10)
+        self.publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
         self.timer = self.create_timer(0.1, self.publish_command)
-        
+
     def publish_command(self):
-        self.get_logger().info(f"Number of robots: {len(self.coach.robots)}")
-        # msg = TeamCommand()
-        
-        # msg.isteamyellow = self.coach.blackboard.gui.is_team_color_yellow
-        
-        # for id, robot in self.coach.robots.items():
-        #     msg.robots.append(robot.trajectory)
-        
-        # msg.robots = self.blackboard.ally_robots
-        # self.publisher.publish(msg)
+
+        msg = TeamCommand()
+
+        msg.isteamyellow = self.coach.blackboard.gui.is_team_color_yellow
+
+        self.trajectory_start_time = {}
+        current_time = time()
+        for robot in self.coach.robots.values():
+            elapsed_time = current_time - robot.trajectory_start_time
+            _, velocities, _ = robot.trajectory.at_time(elapsed_time)
+            command = RobotCommand()
+            command.robot_id = robot.id
+            command.linear_velocity_x = velocities[0]
+            command.linear_velocity_y = velocities[1]
+            command.angular_velocity = velocities[2]
+            msg.robots.append(command)
+
+        self.publisher.publish(msg)
