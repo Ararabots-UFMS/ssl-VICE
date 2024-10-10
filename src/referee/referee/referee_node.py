@@ -5,6 +5,7 @@ from system_interfaces.msg import GameData
 from referee.referee_client import Client  
 from referee.proto.ssl_gc_referee_message_pb2 import Referee
 from strategy.blackboard import Blackboard
+import referee_message_wrapper
 
 class RefereeNode(Node):
     """ROS2 Node that listens to ssl-game-controller referee multicast messages."""
@@ -55,15 +56,9 @@ class RefereeNode(Node):
             self.get_logger().error(f"Error receiving multicast message: {str(e)}")
 
     def parse_referee_message(self, referee_message):
-        """Converts the referee message into the GameData format."""
-        # TODO: create a class to wrapper those messages
-        msg = GameData()
-        msg.stage = Referee.Stage.Name(referee_message.stage)
-        msg.command = Referee.Command.Name(referee_message.command)
-        msg.command_counter = referee_message.command_counter
-
-        return msg
-
+        referee_wrapper = MessageWrapping(referee_message)
+        msg = referee_wrapper.to_game_data()
+        
 
 def main(args=None):
     rclpy.init(args=args)
