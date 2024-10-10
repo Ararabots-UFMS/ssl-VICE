@@ -5,7 +5,7 @@ from system_interfaces.msg import GameData
 from referee.referee_client import Client  
 from referee.proto.ssl_gc_referee_message_pb2 import Referee
 from strategy.blackboard import Blackboard
-import referee_message_wrapper
+from referee.referee_message_wrapper import MessageWrapping
 
 class RefereeNode(Node):
     """ROS2 Node that listens to ssl-game-controller referee multicast messages."""
@@ -39,9 +39,10 @@ class RefereeNode(Node):
             try:
                 # Parse the Protobuf message
                 referee_message.ParseFromString(data)
-
-                # Create and populate GameData message
-                msg = self.parse_referee_message(referee_message)
+                
+                # Create and populate GameData message using MessageWrappping
+                referee_wrapper = MessageWrapping(referee_message)
+                msg = referee_wrapper.to_game_data()
 
                 # Publish only if command_counter has changed
                 if self.last_message != msg:
@@ -55,10 +56,6 @@ class RefereeNode(Node):
         except Exception as e:
             self.get_logger().error(f"Error receiving multicast message: {str(e)}")
 
-    def parse_referee_message(self, referee_message):
-        referee_wrapper = MessageWrapping(referee_message)
-        msg = referee_wrapper.to_game_data()
-        
 
 def main(args=None):
     rclpy.init(args=args)
