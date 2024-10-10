@@ -23,7 +23,7 @@ class grsim_publisher(Node):
         
         self.publisher = grSimSender(ip=self.ip, port=self.port)
         
-        self.subscriber = TopicSubscriber('command_subs', TeamCommand, 'CommandTopic')
+        self.subscriber = TopicSubscriber('command_subs', TeamCommand, 'commandTopic')
         
         self.publish_timer = self.create_timer(0.016, self.send_to_grsim)
         

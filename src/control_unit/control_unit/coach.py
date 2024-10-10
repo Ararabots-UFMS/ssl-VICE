@@ -3,7 +3,6 @@ from rclpy.node import Node
 import rclpy
 
 from control_unit.robot import Robot
-from utils.topic_subscriber import TopicSubscriber
 from strategy.blackboard import Blackboard
 
 class Coach(Node):
@@ -21,9 +20,9 @@ class Coach(Node):
         #TODO: experiment with other timer rates
         self.timer = self.create_timer(0.5, self.update)
         self.timer = self.create_timer(0.1, self.run)
+        self.timer = self.create_timer(0.1, self.send_robot_commands)
 
     def update(self):
-               
         #If a robot is in the blackboard and it doens't exist, it is created
         for ally_robot in self.blackboard.ally_robots.values():
             try:
@@ -41,6 +40,10 @@ class Coach(Node):
                 self._executor.remove_node(self.robots[robot.id])
                 self.robots[robot.id].destroy_node()
                 self.robots.pop(robot.id)
+                
+    def send_robot_commands(self):
+        for robot in self.robots.values():
+            robot.trajectory
                 
     def run(self):
         self.get_logger().info(f"Running")

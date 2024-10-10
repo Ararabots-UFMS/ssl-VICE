@@ -2,6 +2,8 @@ from rclpy.node import Node
 
 from strategy.blackboard import Blackboard
 
+from movement.move import Movement
+
 class Robot(Node):
     def __init__(self, id, name) -> None:
         super().__init__(f'robot_{name}')
@@ -12,7 +14,8 @@ class Robot(Node):
         self.address = None
         self.pid = None
         
-        self.movement = None
+        self.move = Movement(self.id)
+        self.trajectory = None
         
         self.timer = self.create_timer(0.1, self.run)
     
@@ -29,4 +32,5 @@ class Robot(Node):
     
     def run(self):
         self.get_logger().info(f"Running robot {self.id}")
-        # self.movement = self.behaviour_tree.run()
+        # self.behaviour_tree.run()
+        # self.move()
