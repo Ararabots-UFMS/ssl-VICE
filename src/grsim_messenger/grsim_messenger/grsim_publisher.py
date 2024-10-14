@@ -58,7 +58,7 @@ class grsim_publisher(Node):
             robot_command = grSim_Robot_Command()
             robot_command.id = robot.robot_id
             robot_command.wheelsspeed = 1
-            robot_command.kickspeedx = 0
+            robot_command.kickspeedx = robot.kick*1.5
             robot_command.kickspeedz = 0
             robot_command.veltangent = 0
             robot_command.velnormal = 0
