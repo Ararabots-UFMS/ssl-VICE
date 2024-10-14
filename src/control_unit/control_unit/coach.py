@@ -21,7 +21,6 @@ class Coach(Node):
         # TODO: experiment with other timer rates
         self.timer = self.create_timer(0.5, self.update)
         self.timer = self.create_timer(0.1, self.run)
-        self.timer = self.create_timer(0.1, self.send_robot_commands)
 
     def update(self):
         # If a robot is in the blackboard and it doens't exist, it is created
@@ -46,10 +45,6 @@ class Coach(Node):
                 self._executor.remove_node(self.robots[robot.id])
                 self.robots[robot.id].destroy_node()
                 self.robots.pop(robot.id)
-
-    def send_robot_commands(self):
-        for robot in self.robots.values():
-            robot.trajectory
 
     def run(self):
         self.get_logger().info(f"Running")

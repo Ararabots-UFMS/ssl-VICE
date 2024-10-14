@@ -7,8 +7,11 @@ from time import time
 class CommandPublisher(Node):
     def __init__(self, coach) -> None:
         super().__init__("command_publisher")
+
         self.coach = coach
+
         self.publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
+
         self.timer = self.create_timer(0.1, self.publish_command)
 
     def publish_command(self):
@@ -17,7 +20,6 @@ class CommandPublisher(Node):
 
         msg.isteamyellow = self.coach.blackboard.gui.is_team_color_yellow
 
-        self.trajectory_start_time = {}
         current_time = time()
         for robot in self.coach.robots.values():
             elapsed_time = current_time - robot.trajectory_start_time
