@@ -7,7 +7,6 @@ from rclpy.executors import MultiThreadedExecutor
 
 from grsim_messenger.grsim_sender import grSimSender
 from system_interfaces.msg import TeamCommand
-from utils.topic_subscriber import TopicSubscriber
 from grsim_messenger.inverse_kinematics import apply_inverse_kinematics
 
 class grsim_publisher(Node):
@@ -23,18 +22,17 @@ class grsim_publisher(Node):
         
         self.publisher = grSimSender(ip=self.ip, port=self.port)
         
-        self.subscriber = TopicSubscriber('command_subs', TeamCommand, 'CommandTopic')
-        
-        self.publish_timer = self.create_timer(0.016, self.send_to_grsim)
+        self.grsim_subscriber = self.create_subscription(
+            TeamCommand,
+            'CommandTopic',
+            self.send_to_grsim,
+            10)
         
         executor = MultiThreadedExecutor()
         executor.add_node(self)
-        executor.add_node(self.subscriber)  
         executor.spin()
-        
-    def send_to_grsim(self):
-        
-        command = self.subscriber.get_message()
+    
+    def send_to_grsim(self, command):
         
         if command is not None:
             packet = self.get_packet(command)
