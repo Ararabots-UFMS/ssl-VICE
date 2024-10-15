@@ -32,8 +32,8 @@ class APINode(Node):
         self.vision_subscriber = None
         self.vision_node = Vision()
 
-        self.is_field_side_left = False
-        self.is_team_color_blue = False
+        self.is_field_side_left = True
+        self.is_team_color_blue = True
         self.is_play_pressed = False
 
     def handle_connect(self):
@@ -52,7 +52,7 @@ class APINode(Node):
         self.vision_subscriber = None
 
     def handle_field_side(self, is_field_side_left):
-        self.get_logger().info(f"Is team field side? {is_field_side_left}")
+        self.get_logger().info(f"Is team field side left? {is_field_side_left}")
         self.is_field_side_left = is_field_side_left
         self.publish_gui_data()
 
@@ -104,7 +104,9 @@ def main(args=None):
     gui_socket.on_event("fieldSide", node.handle_field_side, namespace="")
     gui_socket.on_event("teamColor", node.handle_team_color, namespace="")
     gui_socket.on_event("visionButton", node.handle_vision_button, namespace="")
-    Thread(target=gui_socket.run, args=(app,)).start()
+    Thread(
+        target=gui_socket.run, args=(app,), kwargs={"allow_unsafe_werkzeug": True}
+    ).start()
     executor.add_node(node)
     executor.spin()
     rclpy.shutdown()

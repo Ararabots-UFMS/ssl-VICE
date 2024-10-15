@@ -2,6 +2,8 @@ import subprocess
 import pathlib
 import os
 import warnings
+import rclpy
+import rclpy.node
 
 ####################################################################
 # This file was created taking into account that it will be run with
@@ -35,6 +37,9 @@ def main():
 
     # Change directory to GUI repo
     os.chdir(path_to_gui_repo)
+
+    rclpy.init()
+    rclpy.node.get_logger("GUI").info("Running GUI")
 
     # Run the GUI
     gui_command = ["sudo", "npm", "run", "dev"]
