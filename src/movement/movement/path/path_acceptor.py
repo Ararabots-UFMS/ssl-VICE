@@ -7,15 +7,22 @@ from enum import Enum, auto
 
 
 class AcceptorStatus(Enum):
-    ACCEPTED   = auto()
-    COLLISION  = auto()
+    ACCEPTED = auto()
+    COLLISION = auto()
     INSIDEAREA = auto()
 
-class PathAcceptor():
+
+class PathAcceptor:
     def __init__(self):
         pass
 
-    def check(self, trajectory: Trajectory, obstacles: List[Obstacle], control_cycle: float = 0.01, max_lookahead: float = 3) -> Tuple[AcceptorStatus, Obstacle]:
+    def check(
+        self,
+        trajectory: Trajectory,
+        obstacles: List[Obstacle],
+        control_cycle: float = 0.01,
+        max_lookahead: float = 3,
+    ) -> Tuple[AcceptorStatus, Obstacle]:
         duration = trajectory.duration
 
         step_size = duration / control_cycle
@@ -33,9 +40,8 @@ class PathAcceptor():
                     if type(obs) == StaticObstacle:
                         return AcceptorStatus.INSIDEAREA, obs
                     return AcceptorStatus.COLLISION, obs
-            
+
             # TODO Not using dynamic step size
             current_time += step_size
 
-        return AcceptorStatus.ACCEPTED, obs
-
+        return AcceptorStatus.ACCEPTED, None

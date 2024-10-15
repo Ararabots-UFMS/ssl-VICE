@@ -10,7 +10,7 @@ from ruckig import InputParameter, OutputParameter, Result, Ruckig, Trajectory
 from typing import List, Tuple
 
 
-class Movement():
+class Movement:
     def __init__(self, robot_id: int):
         self.id = robot_id
         self.blackboard = Blackboard()
@@ -20,13 +20,15 @@ class Movement():
 
         self.otg = Ruckig(3)
 
-    def __call__(self, obstacles: List[Obstacle], profile: MovementProfiles, **kwargs) -> Tuple:
-        self.update_state()
+    def __call__(
+        self, obstacles: List[Obstacle], profile: MovementProfiles, **kwargs
+    ) -> Tuple:
+        self.get_state()
 
         trajectory = Trajectory(3)
 
         # Using ruckig notations
-        inp = self.path_generator.generate_input(self.get_state, profile, **kwargs)
+        inp = self.path_generator.generate_input(self.get_state(), profile, **kwargs)
 
         result = self.otg.calculate(inp, trajectory)
 
@@ -37,19 +39,26 @@ class Movement():
         if status == AcceptorStatus.INSIDEAREA:
             return self.exit_area(collision_obs)
 
-        elif status == AcceptorStatus.ACCEPTED or (profile != MovementProfiles.Normal and profile != MovementProfiles.GetInAngle):
+        elif status == AcceptorStatus.ACCEPTED or (
+            profile != MovementProfiles.Normal
+            and profile != MovementProfiles.GetInAngle
+        ):
             return trajectory, None
 
         else:
-            return self.solve_collision(obstacles, trys = 5, bypass_time = 10, **kwargs)
+            return self.solve_collision(obstacles, trys=5, bypass_time=10, **kwargs)
 
-    def solve_collision(self, obstacles: List[Obstacle], trys: int, bypass_time: float, **kwargs):
+    def solve_collision(
+        self, obstacles: List[Obstacle], trys: int, bypass_time: float, **kwargs
+    ):
         self.update_state()
 
         # Try to find a bypass trajectory, if not found, break
         for _ in range(trys):
             bypass_trajectory = Trajectory(3)
-            bypass_inp = self.path_generator.generate_input(self.get_state, MovementProfiles.Bypass)
+            bypass_inp = self.path_generator.generate_input(
+                self.get_state, MovementProfiles.Bypass
+            )
 
             self.otg.calculate(bypass_inp, bypass_trajectory)
 
@@ -57,9 +66,11 @@ class Movement():
             bypass_status, _ = self.acceptor.check(bypass_trajectory, obstacles)
             if bypass_status == AcceptorStatus.ACCEPTED:
                 bypass_pos, bypass_vel, _ = bypass_trajectory.at_time(bypass_time)
-                
+
                 new_trajectory = Trajectory(3)
-                new_inp = self.path_generator.generate_input((bypass_pos, bypass_vel), kwargs['goal_state'])
+                new_inp = self.path_generator.generate_input(
+                    (bypass_pos, bypass_vel), kwargs["goal_state"]
+                )
 
                 self.otg.calculate(new_inp, new_trajectory)
 
@@ -70,7 +81,9 @@ class Movement():
         # No path was found, breaking
         # TODO Don't know if breaking is the best action to take if no path is found
         break_trajectory = Trajectory(3)
-        break_inp = self.path_generator.generate_input(self.get_state, MovementProfiles.Break)
+        break_inp = self.path_generator.generate_input(
+            self.get_state, MovementProfiles.Break
+        )
 
         self.otg.calculate(break_inp, break_trajectory)
 
@@ -81,13 +94,23 @@ class Movement():
 
         new_trajectory = Trajectory(3)
         outside_point = area.closest_outside_point(self.get_state)
-        new_inp = self.path_generator.generate_input(self.get_state, MovementProfiles.Normal, goal_state = ([outside_point[0], outside_point[1], self.get_state[0][2]], [0, 0, 0]))
+        new_inp = self.path_generator.generate_input(
+            self.get_state,
+            MovementProfiles.Normal,
+            goal_state=(
+                [outside_point[0], outside_point[1], self.get_state[0][2]],
+                [0, 0, 0],
+            ),
+        )
 
         self.otg.calculate(new_inp, new_trajectory)
 
         return new_trajectory, None
 
     def get_state(self):
-        robot = self.blackboard.ally_robots[self.robot_id]
+        robot = self.blackboard.ally_robots[self.id]
 
-        return ([robot.position_x, robot.position_y, robot.orientantion], [robot.velocity_x, robot.velocity_y, robot.velocity_orientation])
+        return (
+            [robot.position_x, robot.position_y, robot.orientation],
+            [robot.velocity_x, robot.velocity_y, robot.velocity_orientation],
+        )

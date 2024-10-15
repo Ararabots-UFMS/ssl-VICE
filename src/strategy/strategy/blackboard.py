@@ -51,15 +51,11 @@ class Blackboard(metaclass=SingletonMeta):
         if message is None:
             return
         elif self.gui.is_team_color_yellow:
-            self.ally_robots = {ally.id: ally for ally in message.blue_robots}
-            self.enemy_robots = {ally.id: ally for ally in message.yellow_robots}
+            self.ally_robots = {ally.id: ally for ally in message.yellow_robots}
+            self.enemy_robots = {enemy.id: enemy for enemy in message.blue_robots}
         else:
-            for ally in message.yellow_robots:
-                self.ally_robots[ally.id] = ally
-            for enemy in message.blue_robots:
-                self.enemy_robots[enemy.id] = enemy
-            # self.ally_robots =  {ally.id: ally for ally in message.yellow_robots}
-            # self.enemy_robots = {ally.id: ally for ally in message.blue_robots}
+            self.ally_robots = {ally.id: ally for ally in message.blue_robots}
+            self.enemy_robots = {enemy.id: enemy for enemy in message.yellow_robots}
 
         self.balls = message.balls
 

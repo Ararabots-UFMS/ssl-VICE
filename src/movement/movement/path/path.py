@@ -3,12 +3,18 @@ from ruckig import InputParameter, OutputParameter, Result, Ruckig, Trajectory
 
 from typing import List, Optional, Tuple
 
-class PathGenerator():
-    def __init__(self, constrainsts: Tuple[List[float]] = ([100, 100, 1], [100, 100, 0.1])):
+
+class PathGenerator:
+    def __init__(
+        self,
+        constrainsts: Tuple[List[float]] = ([2000, 2000, 2000], [1000, 1000, 1000]),
+    ):
         self.vel_constrainst = constrainsts[0]
         self.acc_constrainst = constrainsts[1]
 
-    def generate_input(self, init_state: Tuple[List[float]], profile: PathProfile, **kwargs):
+    def generate_input(
+        self, init_state: Tuple[List[float]], profile: PathProfile, **kwargs
+    ):
         inp = InputParameter(3)
 
         inp.current_position = init_state[0]
@@ -17,11 +23,12 @@ class PathGenerator():
         inp.max_velocity = self.vel_constrainst
         inp.max_acceleration = self.acc_constrainst
 
-        kwargs['inp'] = inp
+        kwargs["inp"] = inp
 
         profile.generate(**kwargs)
 
         return inp
+
 
 # from movement.path.path_profiles import *
 # import matplotlib.pyplot as plt

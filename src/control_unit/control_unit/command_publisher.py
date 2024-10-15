@@ -12,7 +12,7 @@ class CommandPublisher(Node):
 
         self.publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
 
-        self.timer = self.create_timer(0.1, self.publish_command)
+        self.timer = self.create_timer(0.01, self.publish_command)
 
     def publish_command(self):
 
@@ -26,8 +26,8 @@ class CommandPublisher(Node):
             _, velocities, _ = robot.trajectory.at_time(elapsed_time)
             command = RobotCommand()
             command.robot_id = robot.id
-            command.linear_velocity_x = velocities[0]
-            command.linear_velocity_y = velocities[1]
+            command.linear_velocity_x = velocities[0] / 1000
+            command.linear_velocity_y = velocities[1] / 1000
             command.angular_velocity = velocities[2]
             msg.robots.append(command)
 

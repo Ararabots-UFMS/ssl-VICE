@@ -24,19 +24,15 @@ class grsim_publisher(Node):
 
         self.publisher = grSimSender(ip=self.ip, port=self.port)
 
-        self.subscriber = TopicSubscriber("command_subs", TeamCommand, "commandTopic")
-
-        self.publish_timer = self.create_timer(0.016, self.send_to_grsim)
+        self.grsim_subscriber = self.create_subscription(
+            TeamCommand, "commandTopic", self.send_to_grsim, 10
+        )
 
         executor = MultiThreadedExecutor()
         executor.add_node(self)
-        executor.add_node(self.subscriber)
         executor.spin()
 
-    def send_to_grsim(self):
-
-        command = self.subscriber.get_message()
-
+    def send_to_grsim(self, command):
         if command is not None:
             packet = self.get_packet(command)
             self.publisher.send(packet)
@@ -47,6 +43,7 @@ class grsim_publisher(Node):
         packet.commands.timestamp = 0
 
         for robot in command.robots:
+            # precisa revolser o offset para dar certo, de resto, só funciona se o angulo for 0
 
             wheel_speed = apply_inverse_kinematics(
                 robot.linear_velocity_x,
@@ -57,12 +54,13 @@ class grsim_publisher(Node):
 
             robot_command = grSim_Robot_Command()
             robot_command.id = robot.robot_id
-            robot_command.wheelsspeed = 1
-            robot_command.kickspeedx = robot.kick*1.5
+            # Defines if robot will be controlled by wheels speed or by normal, tangent and angular velocity
+            robot_command.wheelsspeed = True
+            robot_command.kickspeedx = robot.kick * 1.5
             robot_command.kickspeedz = 0
-            robot_command.veltangent = 0
-            robot_command.velnormal = 0
-            robot_command.velangular = 0
+            robot_command.veltangent = robot.linear_velocity_x
+            robot_command.velnormal = robot.linear_velocity_y
+            robot_command.velangular = robot.angular_velocity
             robot_command.spinner = 0
             robot_command.wheel1 = wheel_speed[0]
             robot_command.wheel2 = wheel_speed[1]
