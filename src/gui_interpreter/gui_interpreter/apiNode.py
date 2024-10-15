@@ -1,30 +1,36 @@
 from rclpy.node import Node
-
+from rclpy.executors import MultiThreadedExecutor
 from flask import Flask
 from flask_socketio import SocketIO, emit
 import threading
 from threading import Thread
 import subprocess
+import rclpy
 
 from gui_interpreter.gui_publisher import GUIPublisher
 from utils.vision_subscriber import VisionSubscriber
 from utils.converter import todict
-import rclpy
 
 from system_interfaces.msg import VisionMessage, GUIMessage
+from vision.vision_node import Vision
 
 app = Flask(__name__)
 gui_socket = SocketIO(app, cors_allowed_origins="*")
 
+vision_running = threading.Event()
+
 
 class APINode(Node):
-    def __init__(self, name):
+    def __init__(self, name, executor, vision_event):
         super().__init__(name)
 
         self.publisher = self.create_publisher(GUIMessage, "guiTopic", 10)
 
-        self.vision_running = False
+        self.executor = executor
+
+        self.vision_running = vision_event
         self.vision_subscriber = None
+        self.vision_node = Vision()
 
         self.is_field_side_left = False
         self.is_team_color_blue = False
@@ -35,6 +41,11 @@ class APINode(Node):
         self.vision_subscriber = self.create_subscription(
             VisionMessage, "visionTopic", self.emit_vision_message, 10
         )
+        gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
+
+    def emit_vision_message(self, msg: VisionMessage) -> None:
+        data = todict(msg)
+        gui_socket.emit("vision_msg", {"data": data})
 
     def handle_disconnect(self):
         self.get_logger().info("Client disconneted")
@@ -50,52 +61,27 @@ class APINode(Node):
         self.is_team_color_blue = is_team_color_blue
         self.publish_gui_data()
 
-    def handle_output(self, pipe, callback):
-        """
-        Read output from a pipe and pass it to a callback line by line.
-        """
-        with pipe:
-            for line in iter(pipe.readline, b""):
-                callback(line.decode())
-
-    def print_vision_output(self, line):
-        """
-        Handle a single line of output.
-        """
-        gui_socket.emit("visionOutput", {"line": line})
-        gui_socket.emit("visionStatus", {"status": self.vision_running})
-        print(f"{line} //////// {threading.active_count()}", end="")
-
     def handle_vision_button(self):
-        vision_command = ["ros2", "run", "vision", "visionNode"]
-        if self.vision_running:
-            self.vision_running = False
-            gui_socket.emit("visionStatus", {"status": self.vision_running})
-            gui_socket.emit("visionOutput", {"line": "Terminating vision node"})
-            self.vision_stdout_thread = None
-            self.vision_stderr_thread = None
-            subprocess.run(["killall"] + [vision_command[-1]])
+        if self.vision_running.is_set():
+            self.vision_running.clear()
+
+            self.executor.remove_node(self.vision_node)
+
+            gui_socket.emit("visionOutput", {"line": "Vision node stopped"})
+            gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
+            self.get_logger().info("Vision node stopped")
         else:
-            self.vision_running = True
-            self.vision_process = subprocess.Popen(
-                vision_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
+            self.vision_running.set()
 
-            # Create and start threads to handle stdout and stderr
-            self.vision_stdout_thread = Thread(
-                target=self.handle_output,
-                args=(self.vision_process.stdout, self.print_vision_output),
-            )
-            self.vision_stderr_thread = Thread(
-                target=self.handle_output,
-                args=(self.vision_process.stderr, self.print_vision_output),
-            )
-            self.vision_stdout_thread.start()
-            self.vision_stderr_thread.start()
+            gui_socket.emit("visionOutput", {"line": "Starting vision node"})
+            gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
+            self.get_logger().info("Starting vision node")
 
-    def emit_vision_message(self, msg: VisionMessage) -> None:
-        data = todict(msg)
-        gui_socket.emit("vision_msg", {"data": data})
+            self.executor.add_node(self.vision_node)
+
+    def run_vision(self):
+        while vision_running.is_set():
+            rclpy.spin_once(self.vision_node)
 
     def create_message(self) -> GUIMessage:
         msg = GUIMessage()
@@ -111,14 +97,16 @@ class APINode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = APINode("api_node")
+    executor = MultiThreadedExecutor(num_threads=2)
+    node = APINode("api_node", executor, vision_running)
     gui_socket.on_event("connect", node.handle_connect, namespace="")
     gui_socket.on_event("disconnect", node.handle_disconnect, namespace="")
     gui_socket.on_event("fieldSide", node.handle_field_side, namespace="")
     gui_socket.on_event("teamColor", node.handle_team_color, namespace="")
     gui_socket.on_event("visionButton", node.handle_vision_button, namespace="")
     Thread(target=gui_socket.run, args=(app,)).start()
-    rclpy.spin(node)
+    executor.add_node(node)
+    executor.spin()
     rclpy.shutdown()
 
 
