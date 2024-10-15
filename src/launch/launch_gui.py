@@ -17,7 +17,6 @@ def generate_launch_description():
             ),
             # Node(
             #     package="control_unit",
-            #     namespace="main",
             #     executable="mainNode",
             #     name="main",
             # ),

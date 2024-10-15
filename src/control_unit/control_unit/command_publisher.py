@@ -29,7 +29,7 @@ class CommandPublisher(Node):
 
         msg = TeamCommand()
 
-        msg.isteamyellow = self.coach.blackboard.gui.is_team_color_yellow
+        msg.is_team_color_yellow = self.coach.blackboard.gui.is_team_color_yellow
 
         current_time = time()
         for robot in self.coach.robots.values():
@@ -40,7 +40,7 @@ class CommandPublisher(Node):
             vel_norm, vel_tan = rotate_velocities_to_robot_frame(
                 velocities[0] * mm_to_m,
                 velocities[1] * mm_to_m,
-                position[3],
+                position[2],
             )
 
             command = RobotCommand()

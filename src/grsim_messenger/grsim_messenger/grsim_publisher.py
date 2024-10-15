@@ -11,7 +11,7 @@ from utils.topic_subscriber import TopicSubscriber
 from grsim_messenger.inverse_kinematics import apply_inverse_kinematics
 
 
-class grsim_publisher(Node):
+class grSimPublisher(Node):
     def __init__(self) -> None:
         super().__init__("grsim_publisher")
 
@@ -39,7 +39,7 @@ class grsim_publisher(Node):
 
     def get_packet(self, command):
         packet = grSim_Packet()
-        packet.commands.isteamyellow = command.isteamyellow
+        packet.commands.isteamyellow = command.is_team_color_yellow
         packet.commands.timestamp = 0
 
         for robot in command.robots:
@@ -74,7 +74,7 @@ class grsim_publisher(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = grsim_publisher()
+    node = grSimPublisher()
 
     rclpy.spin(node)
 
