@@ -1,0 +1,17 @@
+string color
+string name
+uint8 score
+uint8 red_cards
+uint8 yellow_cards
+uint8 timeouts
+uint8 timeout_time
+uint8 goalkeeper
+uint8 foul_counter
+uint8 ball_placement_failures
+bool can_place_ball
+uint8 max_allowed_bots
+bool bot_substitution_intent
+bool ball_placement_failures_reached
+bool bot_substitution_allowed
+uint8 bot_substitutions_left
+uint8 bot_substitution_time_left

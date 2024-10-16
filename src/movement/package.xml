@@ -4,8 +4,8 @@
   <name>movement</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="allan.m@ufms.br">vsss</maintainer>
-  <license>Apache-2.0</license>
+  <maintainer email="fabiohuang2004@icloud.com">fabio</maintainer>
+  <license>TODO: License declaration</license>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

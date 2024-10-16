@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'subscriber = utils.topic_subscriber:main'
         ],
     },
 )

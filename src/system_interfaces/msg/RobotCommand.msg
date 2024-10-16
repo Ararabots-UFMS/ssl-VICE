@@ -1,0 +1,5 @@
+uint32 robot_id
+float32 linear_velocity_x
+float32 linear_velocity_y
+float32 angular_velocity
+bool kick
