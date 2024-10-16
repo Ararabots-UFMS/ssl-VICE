@@ -1,4 +1,4 @@
-from system_interfaces.msg import Robots, Balls, GUIMessage
+from system_interfaces.msg import GUIMessage, GameData
 from threading import Lock
 
 
@@ -37,12 +37,16 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
+""" Made some changes to run just the referee subscriber """
+
+
 class Blackboard(metaclass=SingletonMeta):
     def __init__(self) -> None:
         self.ally_robots = {}
         self.enemy_robots = {}
         self.balls = {}
         self.gui = GUIMessage()
+        self.referee = GameData()
 
         # TODO: Remove this line
         self.gui.is_team_color_yellow = True
@@ -60,7 +64,7 @@ class Blackboard(metaclass=SingletonMeta):
         self.balls = message.balls
 
     def update_from_gamecontroller_message(self, message):
-        pass
+        self.referee = message
 
     def update_from_gui_message(self, message):
-        pass
+        self.gui = message

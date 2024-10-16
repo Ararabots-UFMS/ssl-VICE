@@ -1,77 +1,70 @@
-import socket
-import struct
 import rclpy
-import sys
-import os
 from rclpy.node import Node
-from std_msgs.msg import String
 from google.protobuf import json_format
+from system_interfaces.msg import GameData
+from referee.referee_client import Client  
+from referee.proto.ssl_gc_referee_message_pb2 import Referee
+from strategy.blackboard import Blackboard
+from referee.referee_message_wrapper import MessageWrapping
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'proto')))
+class RefereeNode(Node):
+    """ROS2 Node that listens to ssl-game-controller referee multicast messages."""
 
-try:
-    import ssl_gc_referee_message_pb2
-except ImportError as e:
-    print(f"Error importing Protobuf: {e}")
-    sys.exit(1)
-
-MULTICAST_GROUP = '224.5.23.1'
-MULTICAST_PORT = 10003
-BUFFER_SIZE = 1024
-
-class MulticastListener(Node):
     def __init__(self):
-        super().__init__('multicast_listener')
-        self.publisher_ = self.create_publisher(String, 'referee_messages', 10)
-        self.last_message = None  # Variável para armazenar a última mensagem
+        super().__init__('refereeNode')
 
-        # Configuração do socket multicast
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind(('', MULTICAST_PORT))
-        mreq = struct.pack("4sl", socket.inet_aton(MULTICAST_GROUP), socket.INADDR_ANY)
-        self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        # Parameters settings.
+        self.ip = self.declare_parameter('ip', '224.5.23.1').get_parameter_value().string_value
+        self.port = self.declare_parameter('port', 10003).get_parameter_value().integer_value
+        self.buffer_size = self.declare_parameter('buffer_size', 1024).get_parameter_value().integer_value
 
-        self.get_logger().info(f"Listening for multicast messages on {MULTICAST_GROUP}:{MULTICAST_PORT}")
+        # Initialize the client
+        self.client = Client(self.ip, self.port, self.buffer_size)
+        self.client.connect()
+
+        # ROS2 Publisher
+        self.publisher_ = self.create_publisher(GameData, 'referee_messages', 10)
+        self.timer_ = self.create_timer(0.001, self.listen_to_multicast)
+        self.last_message = GameData()
+
+        self.get_logger().info(f"Listening for multicast messages on {self.ip}:{self.port}")
         self.listen_to_multicast()
 
     def listen_to_multicast(self):
-        while rclpy.ok():
+        """Listen to multicast messages and publish to ROS2 topic."""
+        try:
+            data = self.client.receive()
+            referee_message = Referee()
+
             try:
-                data, address = self.sock.recvfrom(BUFFER_SIZE)
-                referee_message = ssl_gc_referee_message_pb2.Referee()
+                # Parse the Protobuf message
+                referee_message.ParseFromString(data)
 
-                try:
-                    referee_message.ParseFromString(data)
-                    json_message = json_format.MessageToJson(referee_message)
+                # Create and populate GameData message using MessageWrapping
+                referee_wrapper = MessageWrapping(referee_message)
+                referee_wrapper.to_game_data()
+                referee_wrapper.blue_team_description()
+                referee_wrapper.yellow_team_description()
 
-                    # Verifique se a mensagem é diferente da última antes de publicar
-                    if json_message != self.last_message:
-                        self.last_message = json_message  # Atualize a última mensagem
+                # Publish only if command_counter has changed
+                if self.last_message != referee_wrapper.msg:
+                    self.publisher_.publish(referee_wrapper.msg)
+                    # self.get_logger().info(referee_message)
+                    self.get_logger().info(f"Published new Referee message: {referee_wrapper.msg}")
+                    self.last_message = referee_wrapper.msg
 
-                        # Publicar a nova mensagem
-                        msg = String()
-                        msg.data = json_message
-                        self.publisher_.publish(msg)
-                        self.get_logger().info("Published new Referee message.")
-
-                except Exception as e:
-                    self.get_logger().warning(f"Failed to parse Protobuf message: {str(e)}")
-                    self.get_logger().info(f"Message in hex: {data.hex()}")
-                    
             except Exception as e:
-                self.get_logger().error(f"Error receiving multicast message: {str(e)}")
+                self.get_logger().warning(f"Failed to parse Protobuf message: {str(e)}")
+
+        except Exception as e:
+            self.get_logger().error(f"Error receiving multicast message: {str(e)}")
+        
 
 def main(args=None):
     rclpy.init(args=args)
-    node = MulticastListener()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    node = RefereeNode()
+    rclpy.spin(node)
+    rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
