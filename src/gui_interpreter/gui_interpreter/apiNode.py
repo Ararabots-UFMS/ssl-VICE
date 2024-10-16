@@ -65,45 +65,31 @@ class APINode(Node):
         self.is_team_color_blue = is_team_color_blue
         self.publish_gui_data()
 
-    def handle_vision_button(self):
-        if self.vision_running.is_set():
-            self.vision_running.clear()
+    def handler_vision(self):
+        self.handle_button(self.vision_running, self.vision_node, module="vision") 
 
-            self.executor.remove_node(self.vision_node)
+    def handler_communication(self):
+        self.handle_button(
+            self.communication_running, self.communication_node, module="communication"
+        )     
 
-            gui_socket.emit("visionOutput", {"line": "Vision node stopped"})
-            gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-            self.get_logger().info("Vision node stopped")
+    def handle_referee(self):
+        self.handle_button(self.referee_running, self.referee_node, module="referee")
+
+    def handle_button(self, running, node, module):
+
+        if running.is_set():
+            running.clear()
+            self.executor.remove_node(node)
+            gui_socket.emit("output", {"line": f"{module} node stopped"})
+            gui_socket.emit("status", {"status": running.is_set()})
+            self.get_logger().info("Node stopped")
         else:
-            self.vision_running.set()
-
-            gui_socket.emit("visionOutput", {"line": "Starting vision node"})
-            gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-            self.get_logger().info("Starting vision node")
-
-            self.executor.add_node(self.vision_node)
-
-    def handle_communication_button(self):
-        if self.communication_running.is_set():
-            self.communication_running.clear()
-            self.executor.remove_node(self.communication_node)
-            gui_socket.emit(
-                "communicationOutput", {"line": "Communication node stopped"}
-            )
-            gui_socket.emit(
-                "communicationStatus", {"status": self.communication_running.is_set()}
-            )
-            self.get_logger().info("Communication node stopped")
-        else:
-            self.communication_running.set()
-            gui_socket.emit(
-                "communicationOutput", {"line": "Starting communication node"}
-            )
-            gui_socket.emit(
-                "communicationStatus", {"status": self.communication_running.is_set()}
-            )
-            self.get_logger().info("Starting communication node")
-            self.executor.add_node(self.communication_node)
+            running.set()
+            gui_socket.emit("output", {"line": f"Starting {module} node"})
+            gui_socket.emit("status", {"status": running.is_set()})
+            self.get_logger().info(f"Starting node")
+            self.executor.add_node(node)
 
     def run_vision(self):
         while vision_running.is_set():
@@ -120,7 +106,6 @@ class APINode(Node):
         message = self.create_message()
         self.publisher.publish(message)
 
-
 def main(args=None):
     rclpy.init(args=args)
     executor = MultiThreadedExecutor(num_threads=2)
@@ -129,9 +114,9 @@ def main(args=None):
     gui_socket.on_event("disconnect", node.handle_disconnect, namespace="")
     gui_socket.on_event("fieldSide", node.handle_field_side, namespace="")
     gui_socket.on_event("teamColor", node.handle_team_color, namespace="")
-    gui_socket.on_event("visionButton", node.handle_vision_button, namespace="")
+    gui_socket.on_event("visionButton", node.handler_vision, namespace="")
     gui_socket.on_event(
-        "communicationButton", node.handle_communication_button, namespace=""
+        "communicationButton", node.handler_communication, namespace=""
     )
     Thread(
         target=gui_socket.run, args=(app,), kwargs={"allow_unsafe_werkzeug": True}
