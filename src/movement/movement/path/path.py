@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 class PathGenerator:
     def __init__(
         self,
-        constrainsts: Tuple[List[float]] = ([2000, 2000, 2000], [1000, 1000, 1000]),
+        constrainsts: Tuple[List[float]] = ([3000, 3000, 3], [2000, 2000, 1]),
     ):
         self.vel_constrainst = constrainsts[0]
         self.acc_constrainst = constrainsts[1]

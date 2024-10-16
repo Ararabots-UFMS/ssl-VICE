@@ -3,7 +3,6 @@ from grsim_messenger.protobuf.grSim_Commands_pb2 import grSim_Robot_Command
 
 from rclpy.node import Node
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
 
 from grsim_messenger.grsim_sender import grSimSender
 from system_interfaces.msg import TeamCommand
@@ -28,10 +27,6 @@ class grSimPublisher(Node):
             TeamCommand, "commandTopic", self.send_to_grsim, 10
         )
 
-        executor = MultiThreadedExecutor()
-        executor.add_node(self)
-        executor.spin()
-
     def send_to_grsim(self, command):
         if command is not None:
             packet = self.get_packet(command)
@@ -43,7 +38,6 @@ class grSimPublisher(Node):
         packet.commands.timestamp = 0
 
         for robot in command.robots:
-            # precisa revolser o offset para dar certo, de resto, só funciona se o angulo for 0
 
             wheel_speed = apply_inverse_kinematics(
                 robot.linear_velocity_x,
