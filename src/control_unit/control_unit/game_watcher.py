@@ -17,9 +17,8 @@ class GameWatcher(Node):
             GUIMessage, "guiTopic", self.update_from_gui, 10
         )
 
-        # TODO: fix referee topic
         self.referee_subscriber = self.create_subscription(
-            GameData, "refereeTopic", self.update_from_gamecontroller, 10
+            GameData, "/referee_messages", self.update_from_gamecontroller, 10
         )
 
     def update_from_vision(self, message):
