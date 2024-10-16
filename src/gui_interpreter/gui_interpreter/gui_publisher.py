@@ -11,13 +11,13 @@ class GUIPublisher(Node):
         self.unify_timer = self.create_timer(0.016, self.publish_gui_data)
         
         self.is_field_side_left = False
-        self.is_team_color_blue = False
+        self.is_team_color_yellow = False
         self.is_play_pressed = False
         
     def create_message(self) -> GUIMessage:
         msg = GUIMessage()
         msg.is_field_side_left = self.is_field_side_left
-        msg.is_team_color_blue = self.is_team_color_blue
+        msg.is_team_color_yellow = self.is_team_color_yellow
         msg.is_play_pressed = self.is_play_pressed
         return msg
 

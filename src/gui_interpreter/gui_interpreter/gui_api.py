@@ -34,6 +34,7 @@ def handle_connect():
 def vision_thread():
     vision_subs = VisionSubscriber()
     while True:
+        #TODO: check if spin is better than spin_once
         rclpy.spin_once(vision_subs)
         data = vision_subs.get_data()
         data = todict(data)

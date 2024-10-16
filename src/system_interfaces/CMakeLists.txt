@@ -12,7 +12,6 @@ find_package(rosidl_default_generators REQUIRED)
 
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "srv/PIDUpdate.srv"
   "msg/VisionGeometry.msg"
   "msg/FieldLineSegment.msg"
   "msg/FieldArcsSegment.msg"
@@ -20,7 +19,11 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VisionMessage.msg"
   "msg/Balls.msg"
   "msg/Robots.msg"
+  "msg/GameData.msg"
+  "msg/TeamData.msg"
   "msg/GUIMessage.msg"
+  "msg/RobotCommand.msg"
+  "msg/TeamCommand.msg"
 )
 
 if(BUILD_TESTING)
