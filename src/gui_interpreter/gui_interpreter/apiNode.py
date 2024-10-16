@@ -1,15 +1,14 @@
+import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from flask import Flask
 from flask_socketio import SocketIO, emit
 import threading
 from threading import Thread
-import subprocess
-import rclpy
 
-from gui_interpreter.gui_publisher import GUIPublisher
-from utils.vision_subscriber import VisionSubscriber
 from utils.converter import todict
+
+from grsim_messenger.grsim_publisher import grSimPublisher
 
 from system_interfaces.msg import VisionMessage, GUIMessage
 from vision.vision_node import Vision
@@ -19,9 +18,11 @@ gui_socket = SocketIO(app, cors_allowed_origins="*")
 
 vision_running = threading.Event()
 
+communication_running = threading.Event()
+
 
 class APINode(Node):
-    def __init__(self, name, executor, vision_event):
+    def __init__(self, name, executor, vision_event, communication_event):
         super().__init__(name)
 
         self.publisher = self.create_publisher(GUIMessage, "guiTopic", 10)
@@ -32,8 +33,11 @@ class APINode(Node):
         self.vision_subscriber = None
         self.vision_node = Vision()
 
+        self.communication_running = communication_event
+        self.communication_node = grSimPublisher()
+
         self.is_field_side_left = True
-        self.is_team_color_blue = True
+        self.is_team_color_yellow = False
         self.is_play_pressed = False
 
     def handle_connect(self):
@@ -79,6 +83,28 @@ class APINode(Node):
 
             self.executor.add_node(self.vision_node)
 
+    def handle_communication_button(self):
+        if self.communication_running.is_set():
+            self.communication_running.clear()
+            self.executor.remove_node(self.communication_node)
+            gui_socket.emit(
+                "communicationOutput", {"line": "Communication node stopped"}
+            )
+            gui_socket.emit(
+                "communicationStatus", {"status": self.communication_running.is_set()}
+            )
+            self.get_logger().info("Communication node stopped")
+        else:
+            self.communication_running.set()
+            gui_socket.emit(
+                "communicationOutput", {"line": "Starting communication node"}
+            )
+            gui_socket.emit(
+                "communicationStatus", {"status": self.communication_running.is_set()}
+            )
+            self.get_logger().info("Starting communication node")
+            self.executor.add_node(self.communication_node)
+
     def run_vision(self):
         while vision_running.is_set():
             rclpy.spin_once(self.vision_node)
@@ -86,7 +112,7 @@ class APINode(Node):
     def create_message(self) -> GUIMessage:
         msg = GUIMessage()
         msg.is_field_side_left = self.is_field_side_left
-        msg.is_team_color_blue = self.is_team_color_blue
+        msg.is_team_color_yellow = self.is_team_color_yellow
         msg.is_play_pressed = self.is_play_pressed
         return msg
 
@@ -98,12 +124,15 @@ class APINode(Node):
 def main(args=None):
     rclpy.init(args=args)
     executor = MultiThreadedExecutor(num_threads=2)
-    node = APINode("api_node", executor, vision_running)
+    node = APINode("api_node", executor, vision_running, communication_running)
     gui_socket.on_event("connect", node.handle_connect, namespace="")
     gui_socket.on_event("disconnect", node.handle_disconnect, namespace="")
     gui_socket.on_event("fieldSide", node.handle_field_side, namespace="")
     gui_socket.on_event("teamColor", node.handle_team_color, namespace="")
     gui_socket.on_event("visionButton", node.handle_vision_button, namespace="")
+    gui_socket.on_event(
+        "communicationButton", node.handle_communication_button, namespace=""
+    )
     Thread(
         target=gui_socket.run, args=(app,), kwargs={"allow_unsafe_werkzeug": True}
     ).start()
