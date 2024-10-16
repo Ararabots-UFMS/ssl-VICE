@@ -3,7 +3,9 @@ from movement.control.steer import integrate_control_2d
 
 import numpy as np
 
-# TODO Refactor using ruckig
+# TODO Refactor using ruckig, remove integrate_control_2d and numpy
+
+# (x, y, vx, vy) -> ([x ,y , theta], [vx, vy, v_theta])
 
 class RobotObstacle(DynamicObstacle):
     def __init__(self, x_obs: np.matrix, orientation: float, u_max: float = 1.0, u_min: float = -1.0):
