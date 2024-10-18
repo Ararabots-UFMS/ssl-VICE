@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from google.protobuf import json_format
-from system_interfaces.msg import GameData
+from system_interfaces.msg import RefereeMessage
 from referee.referee_client import Client  
 from referee.proto.ssl_gc_referee_message_pb2 import Referee
 from strategy.blackboard import Blackboard
@@ -23,9 +23,9 @@ class RefereeNode(Node):
         self.client.connect()
 
         # ROS2 Publisher
-        self.publisher_ = self.create_publisher(GameData, 'referee_messages', 10)
+        self.publisher_ = self.create_publisher(RefereeMessage, 'refereeTopic', 10)
         self.timer_ = self.create_timer(0.001, self.listen_to_multicast)
-        self.last_message = GameData()
+        self.last_message = RefereeMessage()
 
         self.get_logger().info(f"Listening for multicast messages on {self.ip}:{self.port}")
         self.listen_to_multicast()
@@ -40,7 +40,7 @@ class RefereeNode(Node):
                 # Parse the Protobuf message
                 referee_message.ParseFromString(data)
 
-                # Create and populate GameData message using MessageWrapping
+                # Create and populate RefereeMessage message using MessageWrapping
                 referee_wrapper = MessageWrapping(referee_message)
                 referee_wrapper.to_game_data()
                 referee_wrapper.blue_team_description()

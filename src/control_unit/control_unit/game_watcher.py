@@ -1,6 +1,6 @@
 from rclpy.node import Node
 
-from system_interfaces.msg import VisionMessage, GUIMessage, GameData
+from system_interfaces.msg import VisionMessage, GUIMessage, RefereeMessage
 from strategy.blackboard import Blackboard
 
 
@@ -18,7 +18,7 @@ class GameWatcher(Node):
         )
 
         self.referee_subscriber = self.create_subscription(
-            GameData, "/referee_messages", self.update_from_gamecontroller, 10
+            RefereeMessage, "refereeTopic", self.update_from_gamecontroller, 10
         )
 
     def update_from_vision(self, message):

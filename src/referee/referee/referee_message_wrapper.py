@@ -1,8 +1,8 @@
-from system_interfaces.msg import GameData, TeamData
+from system_interfaces.msg import RefereeMessage, TeamData
 from referee.proto.ssl_gc_referee_message_pb2 import Referee
 class MessageWrapping():
     def __init__(self, referee_message):
-        self.msg = GameData()
+        self.msg = RefereeMessage()
         blue_team = TeamData()
         yellow_team = TeamData()
 

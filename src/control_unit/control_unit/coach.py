@@ -4,6 +4,8 @@ import rclpy
 
 from control_unit.robot import Robot
 from strategy.blackboard import Blackboard
+from strategy.play.strategy_node import make_bt
+from py_trees import logging as log_tree
 
 
 class Coach(Node):
@@ -47,7 +49,11 @@ class Coach(Node):
                 self.robots.pop(robot.id)
 
     def run(self):
-        self.get_logger().info(f"Running")
+        # self.get_logger().info(f"Running")
+        # The code below just create a simple behaviour tree which is available in strategy
+        log_tree.level = log_tree.Level.DEBUG
+        tree = make_bt(self.blackboard.referee.command)
+        tree.tick_once() 
         # self.behaviour_tree.run(self.blackboard)
 
 
