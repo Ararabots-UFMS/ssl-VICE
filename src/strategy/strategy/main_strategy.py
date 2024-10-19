@@ -8,12 +8,13 @@ from strategy.play.strategy_node import make_bt
 
 # Main function to run the state machine and tick the behavior tree
 def main(args=None):
+    blackboard = Blackboard()
     log_tree.level = log_tree.Level.DEBUG
     # Setup blackboard and state machine
     # Create the initial tree based on the blackboard state
     print("New Tick")
     start_time = time.time()
-    tree = make_bt()  # Update the tree with the new state
+    tree = make_bt(blackboard.referee.command)  # Update the tree with the new state
     tree.tick_once()
     end_time = time.time()
 
