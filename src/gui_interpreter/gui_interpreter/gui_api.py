@@ -3,7 +3,7 @@ from flask_socketio import SocketIO, emit
 from threading import Thread
 import subprocess
 
-from gui_interpreter.gui_publisher import GUIPublisher
+from gui_publisher import GUIPublisher
 from utils.vision_subscriber import VisionSubscriber
 from utils.converter import todict
 import rclpy
