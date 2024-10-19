@@ -4,8 +4,8 @@ import rclpy
 
 from control_unit.robot import Robot
 from strategy.blackboard import Blackboard
-from strategy.play.make_bt import make_bt
-from py_trees import logging as log_tree
+
+from strategy.coach.kickoff import Kickoff
 
 
 class Coach(Node):
@@ -19,8 +19,6 @@ class Coach(Node):
         self.blackboard = Blackboard()
 
         self.robots = {}
-        
-        self.tree = make_bt()
 
         # TODO: experiment with other timer rates
         self.timer = self.create_timer(0.5, self.update)
@@ -54,8 +52,8 @@ class Coach(Node):
     def run(self):
         # self.get_logger().info(f"Running")
         # The code below just create a simple behaviour tree which is available in strategy
-        log_tree.level = log_tree.Level.DEBUG
-        bts=self.tree.tick_once()
+        kickoff = Kickoff("Kickoff")
+        print(kickoff.run())
         # for bt in bts:
         #     robot.tree = bt
         # self.behaviour_tree.run(self.blackboard)
