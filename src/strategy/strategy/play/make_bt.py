@@ -7,7 +7,7 @@ from strategy.play.halt_tree import HaltTree
 from strategy.play.kick_off_tree import KickOff
 from strategy.play.stop_tree import StopTree
 from strategy.play.timeout_tree import TimeoutTree
-from strategy.strategy.play.condition_checkers import CheckState
+from strategy.play.condition_checkers import CheckState
 from strategy.blackboard import Blackboard
 import time
 
@@ -40,9 +40,8 @@ def make_bt():
     )
     ours_or_theirs = Selector(name="ours_or_theirs", memory=True)
     ours = Sequence(name="ours", memory=True)
-    is_kickoff_ours = CheckKickoffTeam()
+    # is_kickoff_ours = CheckKickoffTeam()
     our_kickoff_action = KickOff()
-    ours.''
     theirs = Sequence(name="theirs", memory=True)
     their_kickoff_action = KickOff()
 
@@ -53,7 +52,7 @@ def make_bt():
 
     halt_play.add_children([check_halt, halt_action])
 
-    kick_off_play.add_children([check_kick_off, kick_off_action])
+    # kick_off_play.add_children([check_kick_off, kick_off_action])
 
     # Árvore principal
     root.add_children([timeout_play, stop_play, halt_play, kick_off_play])
