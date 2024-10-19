@@ -1,4 +1,4 @@
-from system_interfaces.msg import GUIMessage, GameData
+from system_interfaces.msg import GUIMessage, RefereeMessage
 from threading import Lock
 
 
@@ -46,7 +46,7 @@ class Blackboard(metaclass=SingletonMeta):
         self.enemy_robots = {}
         self.balls = {}
         self.gui = GUIMessage()
-        self.referee = GameData()
+        self.referee = RefereeMessage()
 
         # TODO: Remove this line
         self.gui.is_team_color_yellow = True
