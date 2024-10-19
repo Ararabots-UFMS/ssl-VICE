@@ -88,25 +88,25 @@ class BallObstacle(DynamicObstacle):
         pass
 
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
-# fig, ax = plt.subplots()
+fig, ax = plt.subplots()
 
-# plt.axis([0, 4500, 0, 3000])
+plt.axis([0, 4500, 0, 3000])
 
-# x_obs = np.matrix([[3000], [0], [1000], [0]]).astype(float)
+x_obs = np.matrix([[3000], [0], [1000], [0]]).astype(float)
 
-# max_delta = 0.5
-# deltas = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+max_delta = 0.5
+deltas = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
 
-# obs = RobotObstacle(x_obs, 0, 1000, -1000)
+obs = RobotObstacle(x_obs, 0, 1000, -1000)
 
-# for i in deltas:
-#     center, radius = obs.get_dynamic_range(i)
+for i in deltas:
+    center, radius = obs.get_dynamic_range(i)
 
-#     obstacle_plt = plt.Circle((float(x_obs[0]), (float(x_obs[1]))), 90, color ='red')
-#     padding_plt = plt.Circle(((float(center[0])), (float(center[1]))), radius + 90, color='red', fill=False)
-#     ax.add_patch( obstacle_plt )
-#     ax.add_patch( padding_plt )
+    obstacle_plt = plt.Circle((float(x_obs[0]), (float(x_obs[1]))), 90, color ='red')
+    padding_plt = plt.Circle(((float(center[0])), (float(center[1]))), radius + 90, color='red', fill=False)
+    ax.add_patch( obstacle_plt )
+    ax.add_patch( padding_plt )
 
-# plt.show()
+plt.show()
