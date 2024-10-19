@@ -42,7 +42,7 @@ class RefereeNode(Node):
 
                 # Create and populate GameData message using MessageWrapping
                 referee_wrapper = MessageWrapping(referee_message)
-                referee_wrapper.to_game_data()
+                #self.get_logger().info(referee_message)
                 referee_wrapper.blue_team_description()
                 referee_wrapper.yellow_team_description()
 

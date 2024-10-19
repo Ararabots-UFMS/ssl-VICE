@@ -25,6 +25,17 @@ class MessageWrapping():
         self.msg.teams[0].red_cards = self.referee.blue.red_cards
         self.msg.teams[0].yellow_cards = self.referee.blue.yellow_cards
 
+        # self.msg.teams[0].kick_offs = self.referee.blue.kick_offs
+        # self.msg.teams[0].penalties = self.referee.blue.penalties
+        # self.msg.teams[0].stoppage = self.referee.blue.stoppage
+        # self.msg.teams[0].challenge_flag = self.referee.blue.challenge_flag
+        # self.msg.teams[0].robot_substitution = self.referee.blue.robot_substitution
+        # self.msg.teams[0].emergency_stop = self.referee.blue.emergency_stop
+        # self.msg.teams[0].keeper_id = self.referee.blue.keeper_id
+        # self.msg.teams[0].robots_currently_allowed = self.referee.blue.robots_currently_allowed
+        # self.msg.teams[0].blue.robots_currently_on_the_field = self.referee.blue.robots_currently_on_the_field
+
+
     def yellow_team_description(self):
         self.msg.teams[1].color = 'yellow'
         self.msg.teams[1].score = self.referee.yellow.score
@@ -32,3 +43,13 @@ class MessageWrapping():
         self.msg.teams[1].goalkeeper = self.referee.yellow.goalkeeper
         self.msg.teams[1].red_cards = self.referee.yellow.red_cards
         self.msg.teams[1].yellow_cards = self.referee.yellow.yellow_cards
+
+        # self.msg.teams[1].kick_offs = self.referee.yellow.kick_offs
+        # self.msg.teams[1].penalties = self.referee.yellow.penalties
+        # self.msg.teams[1].stoppage = self.referee.yellow.stoppage
+        # self.msg.teams[1].challenge_flag = self.referee.yellow.challenge_flag
+        # self.msg.teams[1].robot_substitution = self.referee.yellow.robot_substitution
+        # self.msg.teams[1].emergency_stop = self.referee.yellow.emergency_stop
+        # self.msg.teams[1].keeper_id = self.referee.yellow.keeper_id
+        # self.msg.teams[1].robots_currently_allowed = self.referee.yellow.robots_currently_allowed
+        # self.msg.teams[1].blue.robots_currently_on_the_field = self.referee.yellow.robots_currently_on_the_field
