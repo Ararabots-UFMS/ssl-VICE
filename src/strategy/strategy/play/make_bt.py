@@ -7,9 +7,10 @@ from strategy.play.halt_tree import HaltTree
 from strategy.play.kick_off_tree import KickOff
 from strategy.play.stop_tree import StopTree
 from strategy.play.timeout_tree import TimeoutTree
-from strategy.play.check_state import CheckState
+from strategy.strategy.play.condition_checkers import CheckState
 from strategy.blackboard import Blackboard
 import time
+
 
 # Função responsável por definir a raiz da árvore
 def make_bt():
@@ -25,43 +26,36 @@ def make_bt():
     timeout_action = TimeoutTree()
 
     # Comportamentos para a sequência
-    check_stop = CheckState("STOP", ["STOP"],blackboard)
+    check_stop = CheckState("STOP", ["STOP"], blackboard)
     stop_action = StopTree()
 
     # Comportamentos para a sequência
     check_halt = CheckState("HALT", ["HALT"], blackboard)
     halt_action = HaltTree()
 
-    check_kick_off = CheckState("PREPARE_KICKOFF",["PREPARE_KICKOFF_BLUE","PREPARE_KICKOFF_YELLOW"] ,blackboard)
-    kick_off_action = KickOff()
+    check_kick_off = CheckState(
+        "PREPARE_KICKOFF",
+        ["PREPARE_KICKOFF_BLUE", "PREPARE_KICKOFF_YELLOW"],
+        blackboard,
+    )
+    ours_or_theirs = Selector(name="ours_or_theirs", memory=True)
+    ours = Sequence(name="ours", memory=True)
+    is_kickoff_ours = CheckKickoffTeam()
+    our_kickoff_action = KickOff()
+    ours.''
+    theirs = Sequence(name="theirs", memory=True)
+    their_kickoff_action = KickOff()
 
     # Adiciona a verificação de string antes de continuar com o 'timeout_play'
-    timeout_play.add_children([
-        check_timeout,
-        timeout_action
-    ])
+    timeout_play.add_children([check_timeout, timeout_action])
 
-    stop_play.add_children([
-        check_stop,
-        stop_action
-    ])
+    stop_play.add_children([check_stop, stop_action])
 
-    halt_play.add_children([
-        check_halt,
-        halt_action
-    ])
+    halt_play.add_children([check_halt, halt_action])
 
-    kick_off_play.add_children([
-        check_kick_off,
-        kick_off_action
-    ])
+    kick_off_play.add_children([check_kick_off, kick_off_action])
 
     # Árvore principal
-    root.add_children([
-        timeout_play, 
-        stop_play,
-        halt_play,
-        kick_off_play
-    ])
+    root.add_children([timeout_play, stop_play, halt_play, kick_off_play])
 
     return root
