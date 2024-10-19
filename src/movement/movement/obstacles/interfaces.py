@@ -22,7 +22,7 @@ class StaticObstacle(Obstacle):
 class DynamicObstacle(Obstacle):
 
     @abstractmethod
-    def get_dynamic_range(self, delta: float) -> (np.matrix, float):
+    def get_dynamic_range(self, delta: float) -> Tuple[Tuple[float, float], float]:
         ''' Returns the center position and radius of dinamic range '''
         pass
 
