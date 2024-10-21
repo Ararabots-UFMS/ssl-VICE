@@ -3,7 +3,7 @@ from system_interfaces.msg import Robots
 
 from typing import Tuple
 
-from math import sqrt
+from math import sqrt, sin, cos
 
 from ruckig import InputParameter, OutputParameter, Result, Ruckig, Trajectory, ControlInterface
 
@@ -18,7 +18,6 @@ class RoboObstacle(DynamicObstacle):
         self.max_vel = max_vel
 
     def is_colission(self, delta: float, ref_point: Tuple[float, float], ref_radius = 90, use_dynamic: bool = True) -> bool:
-        
         dynamic_center, dynamic_radius = self.get_dynamic_range(delta) if use_dynamic else ref_point
 
         distance = sqrt((dynamic_center[0] - ref_point[0])**2 + (dynamic_center[1] - ref_point[1])**2)
@@ -28,14 +27,26 @@ class RoboObstacle(DynamicObstacle):
         
         return False
 
-    def get_dynamic_range(self, delta) -> Tuple[Tuple[float, float], float]:
+    def get_dynamic_range(self, delta) -> Tuple[Tuple[float, float], float]:        
         # Using exact formulation of dynamic obstacle modelation from Tigers ETDP from 2024
         if delta < 0:
             delta = 0
         elif delta > self.max_delta:
             delta = self.max_delta
 
-        # TODO Finish this..
+        f_plus, f_minus = self.bb_range(delta)
+
+        # Distance between f_minus and f_plus...
+        dynamic_radius = sqrt((f_plus[0] - f_minus[0]) ** 2 + (f_plus[1] - f_minus[1]) ** 2)
+
+        velocity_mag = (self.state[1][0] ** 2 + self.state[1][1] ** 2)
+        velocity_norm = self.state[1][0] / velocity_mag, self.state[1][1] / velocity_mag
+
+        dynamic_center = self.state[0] + (velocity_norm[0] * (f_minus[0] + dynamic_radius)), self.state[1] + (velocity_norm[1] * (f_minus[1] + dynamic_radius))
+
+        obs_radius = self.radius + dynamic_radius
+
+        return dynamic_center, obs_radius
         
     def bb_range(self, delta) -> Tuple[Tuple[float, float], Tuple[float, float]]:
         # Get f- and f+ 1d bang bang trajectorys given the delta time.
@@ -70,9 +81,8 @@ class RoboObstacle(DynamicObstacle):
         state_plus = f_plus.at_time(delta)
         state_minus = f_minus.at_time(delta)
 
+        # (f+ x, f+ y), (f- x, f- y)
         return ((state_plus[0][0], state_plus[0][0]), (state_minus[0][0], state_minus[0][1]))
-
-
 
     def update_state(self, state: Robots) -> None:
         self.state = state

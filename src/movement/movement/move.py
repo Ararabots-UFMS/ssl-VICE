@@ -1,9 +1,9 @@
 from movement.obstacles.interfaces import Obstacle, StaticObstacle
-from system_interfaces.msg import Robots
-from strategy.blackboard import Blackboard
 from movement.path.path import PathGenerator
 from movement.path.path_acceptor import PathAcceptor, AcceptorStatus
 from movement.path.path_profiles import MovementProfiles, DirectionProfiles
+from strategy.blackboard import Blackboard
+from system_interfaces.msg import Robots
 
 from ruckig import InputParameter, OutputParameter, Result, Ruckig, Trajectory
 
