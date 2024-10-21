@@ -50,14 +50,11 @@ class Sequence(TreeNode):
         super().__init__(name, children)
 
     def run(self):
-        print(self.name, end=" ")
         for c in self.children:
             status, action = c.run()
             if status != TaskStatus.SUCCESS:
-                print(action)
                 return status, action
-        print(action)
-        return status.SUCCESS, action
+        return TaskStatus.SUCCESS, action
 
 
 class Selector(TreeNode):
@@ -73,13 +70,10 @@ class Selector(TreeNode):
         super().__init__(name, children)
 
     def run(self):
-        print(self.name, end=" ")
         for c in self.children:
             status, action = c.run()
             if status != TaskStatus.FAILURE:
-                print(action)
                 return status, action
-        print("None")
         return TaskStatus.FAILURE, "None"
     
 class BaseTree(Selector):

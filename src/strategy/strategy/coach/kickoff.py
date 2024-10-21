@@ -10,7 +10,6 @@ class CheckState(LeafNode):
         self.desired_states = _desired_states
 
     def run(self):
-        print(self.name, None)
         if self.blackboard.referee.command in self.desired_states:
             return TaskStatus.SUCCESS, "None"
 
@@ -22,14 +21,13 @@ class CheckIfOurKickoff(LeafNode):
         self.blackboard = Blackboard()
 
     def run(self):
-        print(self.name, None)
         success = False
+
+        if (self.blackboard.gui.is_team_color_yellow == True) and (self.blackboard.referee.command == "PREPARE_KICKOFF_YELLOW"):
+            success = True
+        elif (self.blackboard.gui.is_team_color_yellow == False) and (self.blackboard.referee.command == "PREPARE_KICKOFF_BLUE"):
+            success = True
         
-        if self.blackboard.gui.is_team_color_yellow == True and self.blackboard.referee.command == "PRAPERE_KICKOFF_YELLOW":
-            success = True
-        elif self.blackboard.gui.is_team_color_yellow == False and self.blackboard.referee.command == "PRAPERE_KICKOFF_BLUE":
-            success = True
-            
         if success:
             return TaskStatus.SUCCESS, "None"
         else:
@@ -40,7 +38,6 @@ class OurKickoffAction(LeafNode):
         super().__init__(name)
         
     def run(self):
-        print(self.name, "OUR KICK OFF")
         return TaskStatus.SUCCESS, "OUR KICK OFF"
     
 class TheirKickoffAction(LeafNode):
@@ -48,30 +45,30 @@ class TheirKickoffAction(LeafNode):
         self.name = name
         
     def run(self):
-        print(self.name, "THEIR KICK OFF")
         return TaskStatus.SUCCESS, "THEIR KICK OFF"
     
 class Kickoff(Sequence):
     def __init__(self, name):
         super().__init__(name, [])
         
+        """ List with possible inputs to this state """
         commands = ["PREPARE_KICKOFF_BLUE", "PREPARE_KICKOFF_YELLOW"]
-        check_kickoff = CheckState("    CheckKickoff", commands)
+        check_kickoff = CheckState("CheckKickoff", commands)
         
-        is_ours = CheckIfOurKickoff("            CheckIfOurKickoff")
-        action_ours = OurKickoffAction("            OurKickoffAction")
+        is_ours = CheckIfOurKickoff("CheckIfOurKickoff")
+        action_ours = OurKickoffAction("OurKickoffAction")
 
-        ours = Sequence("        OurKickoff", [is_ours, action_ours])
+        ours = Sequence("OurKickoff", [is_ours, action_ours])
         
-        action_theirs = TheirKickoffAction("        TheirKickoffAction")
+        action_theirs = TheirKickoffAction("TheirKickoffAction")
         
-        ours_or_theirs = Selector("    OursOrTheirsKickoff", [ours, action_theirs])        
+        ours_or_theirs = Selector("OursOrTheirsKickoff", [ours, action_theirs])        
         
         self.add_children([check_kickoff, ours_or_theirs])
         
     def run(self):
-        print(self.name)
-        super().run()
+        """Access the second element in tuple"""
+        return super().run()[1]
 
 if __name__ == "__main__":
     kickoff = Kickoff("Kickoff")
