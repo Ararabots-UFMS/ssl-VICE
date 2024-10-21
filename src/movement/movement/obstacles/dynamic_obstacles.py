@@ -92,9 +92,6 @@ class RobotObstacle(DynamicObstacle):
         state_plus = f_plus.at_time(delta)
         state_minus = f_minus.at_time(delta)
 
-        print('oi')
-        print((state_plus[0][0], state_plus[0][0]), (state_minus[0][0], state_minus[0][1]))
-
         # (f+ x, f+ y), (f- x, f- y)
         return ((state_plus[0][0], state_plus[0][0]), (state_minus[0][0], state_minus[0][1]))
 
