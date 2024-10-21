@@ -97,32 +97,3 @@ class RobotObstacle(DynamicObstacle):
 
     def update_state(self, state: Robots) -> None:
         self.state = state
-
-
-# import matplotlib.pyplot as plt
-
-# fig, ax = plt.subplots()
-
-# plt.axis([-4500, 4500, -3000, 3000])
-
-# robot = Robots()
-
-# robot.id = 0
-# robot.position_x = 0.0
-# robot.position_y = 0.0
-# robot.velocity_x = 200.0
-# robot.velocity_y = -200.0
-
-# deltas = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-
-# obs = RobotObstacle(robot, max_delta = 0.5, max_acc = 1000, max_vel = 3000)
-
-# for i in deltas:
-#     center, radius = obs.get_dynamic_range(i)
-
-#     obstacle_plt = plt.Circle((robot.position_x, robot.position_y), 90, color ='red')
-#     padding_plt = plt.Circle((center), radius, color='red', fill=False)
-#     ax.add_patch( obstacle_plt )
-#     ax.add_patch( padding_plt )
-
-# plt.show()

@@ -36,38 +36,3 @@ class PathGenerator:
         orientation_profile.generate(kwargs["orientation_kwargs"])
 
         return inp_path, inp_orientation
-
-
-# from movement.path.path_profiles import *
-# import matplotlib.pyplot as plt
-# from math import pi
-
-# gen = PathGenerator()
-# inp = gen.generate_input(([0,0,0],[0,0,0]), BypassProfile)
-
-# otg = Ruckig(3)
-# trajectory = Trajectory(3)
-
-# result = otg.calculate(inp, trajectory)
-# print(f'Trajectory duration: {trajectory.duration:0.4f} [s]')
-
-# x_pos = []
-# y_pos = []
-
-# time_unit = 0.01
-# current_time = 0.0
-# while current_time < 10:
-#     pos, vel, acc = trajectory.at_time(current_time)
-
-#     x_pos.append(pos[0])
-#     y_pos.append(pos[1])
-
-#     current_time += time_unit
-
-# ax = plt.gca()
-# ax.set_xlim([-4500, 4500])
-# ax.set_ylim([-3000, 3000])
-
-
-# plt.plot(x_pos, y_pos)
-# plt.show()
