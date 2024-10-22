@@ -1,4 +1,4 @@
-from system_interfaces.msg import GUIMessage, GameData
+from system_interfaces.msg import GUIMessage, GameData, VisionGeometry
 from threading import Lock
 
 
@@ -47,6 +47,7 @@ class Blackboard(metaclass=SingletonMeta):
         self.balls = {}
         self.gui = GUIMessage()
         self.referee = GameData()
+        self.geometry = VisionGeometry()
 
         # TODO: Remove this line
         self.gui.is_team_color_yellow = True
@@ -63,8 +64,11 @@ class Blackboard(metaclass=SingletonMeta):
 
         self.balls = message.balls
 
-    def update_from_gamecontroller_message(self, message):
+    def update_from_gamecontroller_message(self, message: GameData):
         self.referee = message
 
-    def update_from_gui_message(self, message):
+    def update_from_gui_message(self, message: GUIMessage):
         self.gui = message
+
+    def update_from_geometry(self, message: VisionGeometry):
+        self.geometry = message
