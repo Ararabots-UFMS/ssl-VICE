@@ -15,7 +15,7 @@ class Obstacle(ABC):
 class StaticObstacle(Obstacle):
 
     @abstractmethod
-    def closest_outside_point(self, x: Tuple[List[float]], offset: float) -> np.array:
+    def closest_outside_point(self, x: Tuple[List[float]], offset: float) -> Tuple[List[float]]:
         ''' Return the closest point outside the obstacle '''
         pass
     

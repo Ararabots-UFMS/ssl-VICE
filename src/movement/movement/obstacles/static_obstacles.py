@@ -1,6 +1,8 @@
 from movement.obstacles.interfaces import StaticObstacle
 from system_interfaces.msg import VisionGeometry
 
+from typing import List, Tuple
+
 from math import copysign
 
 # This needs to change to use the FieldLineSegment instead of the distances
@@ -9,7 +11,7 @@ class BoundaryObstacles(StaticObstacle):
         self.half_width = geometry.field_width / 2
         self.half_length = geometry.field_length / 2
     
-    def is_colission(self, x: Tuple[List[float]], ignore: bool = False, padding: float = 90):
+    def is_colission(self, x: Tuple[List[float]], ignore: bool = False, padding: float = 90) -> bool:
         if ignore:
             return False
 
@@ -22,7 +24,7 @@ class BoundaryObstacles(StaticObstacle):
         else:
             return False
 
-    def closest_outside_point(self, x: Tuple[List[float]], offset: float = 90):
+    def closest_outside_point(self, x: Tuple[List[float]], offset: float = 90) -> Tuple[List[float]]:
         x_distance = 0
         y_distance = 0
         if x[0][0] < -1 * self.half_length or x[0][0] > self.half_length:
@@ -45,7 +47,7 @@ class WallObstacles(StaticObstacle):
         self.half_length = geometry.field_length / 2   
         self.boundary_width = geometry.boundary_width
 
-    def is_colission(self, x: Tuple[List[float]], ignore: bool = False, padding: float = 180):
+    def is_colission(self, x: Tuple[List[float]], ignore: bool = False, padding: float = 180) -> bool:
         if ignore:
             return False
 
@@ -58,7 +60,7 @@ class WallObstacles(StaticObstacle):
         else:
             return False
 
-    def closest_outside_point(self, x: Tuple[List[float]]):
+    def closest_outside_point(self, x: Tuple[List[float]]) -> Tuple[List[float]]:
         x_distance = 0
         y_distance = 0
         if x[0][0] < -1 * self.half_length + self.boundary_width or x[0][0] > self.half_length + self.boundary_width:
@@ -103,7 +105,7 @@ class PenaltyAreaObstacles(StaticObstacle):
             elif line.name == 'RightFieldRightPenaltyStretch':
                 self.right_field_right_penalty = line
 
-    def is_colission(self, x: Tuple[List[float]], ignore: bool = False, padding: float = 90):
+    def is_colission(self, x: Tuple[List[float]], ignore: bool = False, padding: float = 90) -> bool:
         if ignore:
             return False
 
@@ -120,7 +122,7 @@ class PenaltyAreaObstacles(StaticObstacle):
 
         return False
 
-    def closest_outside_point(self, x: Tuple[List[float]], offset: float = 90):
+    def closest_outside_point(self, x: Tuple[List[float]], offset: float = 90) -> Tuple[List[float]]:
         x_distance = 0
         y_distance = 0
 
@@ -140,6 +142,6 @@ class PenaltyAreaObstacles(StaticObstacle):
             x_distance = 0
         else:
             y_distance = 0
-
+ 
         # TODO Review offset parameters too...
         return [x[0][0] - copysign(x_distance, x[0][0]) + offset, x[0][1] - copysign(y_distance, x[0][1])]
