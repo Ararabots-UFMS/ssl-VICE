@@ -7,6 +7,8 @@ from movement.move import Movement
 
 from ruckig import Trajectory
 
+from strategy.coach.kickoff import Kickoff
+
 
 class Robot(Node):
     def __init__(self, id, name) -> None:
@@ -14,7 +16,7 @@ class Robot(Node):
         self.blackboard = Blackboard()
         self.name = name
         self.id = id
-        self.behaviour_tree = None
+        self.behaviour_tree = Kickoff("Kickoff")
 
         self.move = Movement(self.id)
         self.trajectory = Trajectory(3)  # Degrees of freedom = 3
