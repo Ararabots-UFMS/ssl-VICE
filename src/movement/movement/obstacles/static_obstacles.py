@@ -60,7 +60,7 @@ class WallObstacles(StaticObstacle):
         else:
             return False
 
-    def closest_outside_point(self, x: Tuple[List[float]]) -> Tuple[List[float]]:
+    def closest_outside_point(self, x: Tuple[List[float]], offset: float) -> Tuple[List[float]]:
         x_distance = 0
         y_distance = 0
         if x[0][0] < -1 * self.half_length + self.boundary_width or x[0][0] > self.half_length + self.boundary_width:
