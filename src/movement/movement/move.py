@@ -125,8 +125,7 @@ class Movement:
             MovementProfiles.Normal,
             DirectionProfiles.Normal,
             path_kwargs = {'goal_state':(
-                [outside_point[0], outside_point[1]],
-                [0, 0]
+                (outside_point[0], outside_point[1]),
             )},
             orientation_kwargs = {'current_state': self.get_state()}
         )

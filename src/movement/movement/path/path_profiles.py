@@ -36,18 +36,17 @@ class StraightProfile(PathProfile):
         return None
 
 class NormalProfile(PathProfile):
-    ''' Return a bang-bang trajectory from initial state to final state given acceleration constrainsts '''
-    def generate(inp: InputParameter, goal_state: Tuple[List[float]]):
+    ''' Return a bang-bang rest to rest trajectory from initial state to final state given acceleration constrainsts '''
+    def generate(inp: InputParameter, goal_state: Tuple[float, float]):
         inp.control_interface = ControlInterface.Position
         
-        inp.target_position = goal_state[0]
-        inp.target_velocity = goal_state[1]
-        
+        inp.target_position = [goal_state[0], goal_state[1]]
+        inp.target_velocity = [0, 0]
         return None
 
 class GetInAngleProfile(PathProfile):
     ''' Return a bang-bang trajectory from initial state to final state arriving with a velocity in a angle'''
-    def generate(inp: InputParameter, goal_state: Tuple[List[float]], theta: float):
+    def generate(inp: InputParameter, goal_state: Tuple[float, float], theta: float):
         inp.control_interface = ControlInterface.Position
 
         # Using 50% of the total velocity.
