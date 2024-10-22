@@ -68,8 +68,8 @@ class Kickoff(Sequence):
         
     def run(self):
         """Access the second element in tuple"""
-        return super().run()[1]
+        return super().run()
 
 if __name__ == "__main__":
     kickoff = Kickoff("Kickoff")
-    print(kickoff.run())
+    print(kickoff.run()[1])

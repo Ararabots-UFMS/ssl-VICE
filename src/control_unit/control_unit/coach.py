@@ -53,7 +53,7 @@ class Coach(Node):
         # self.get_logger().info(f"Running")
         # The code below just create a simple behaviour tree which is available in strategy
         kickoff = Kickoff("Kickoff")
-        print(kickoff.run())
+        print(kickoff.run()[1])
         # for bt in bts:
         #     robot.tree = bt
         # self.behaviour_tree.run(self.blackboard)
