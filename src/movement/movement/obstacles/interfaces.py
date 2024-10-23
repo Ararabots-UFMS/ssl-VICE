@@ -8,14 +8,14 @@ import numpy as np
 class Obstacle(ABC):
     
     @abstractmethod
-    def is_colission(self, x: Tuple[List[float]], ignore: bool, padding: float = 90) -> bool:
+    def is_colission(self, point: Tuple[float, float], ignore: bool, padding: float = 90) -> bool:
         ''' Method to check collisions '''
         pass
 
 class StaticObstacle(Obstacle):
 
     @abstractmethod
-    def closest_outside_point(self, x: Tuple[List[float]], offset: float) -> Tuple[List[float]]:
+    def closest_outside_point(self, point: Tuple[float, float], offset: float) -> Tuple[float, float]:
         ''' Return the closest point outside the obstacle '''
         pass
     
@@ -27,5 +27,5 @@ class DynamicObstacle(Obstacle):
         pass
 
     @abstractmethod
-    def update_state(self, x: Tuple[List[float]]) -> None:
+    def update_state(self, point: Tuple[float, float]) -> None:
         pass
