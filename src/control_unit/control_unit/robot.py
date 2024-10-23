@@ -16,7 +16,7 @@ class Robot(Node):
         self.blackboard = Blackboard()
         self.name = name
         self.id = id
-        self.behaviour_tree = Kickoff("Kickoff")
+        self.behaviour_tree = None
 
         self.move = Movement(self.id)
         self.trajectory = Trajectory(3)  # Degrees of freedom = 3
