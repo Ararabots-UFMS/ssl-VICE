@@ -5,7 +5,9 @@ import rclpy
 from control_unit.robot import Robot
 from strategy.blackboard import Blackboard
 
+from strategy.coach.freekick import FreeKick
 from strategy.coach.kickoff import Kickoff
+from strategy.coach.main import CoachStrategy
 
 
 class Coach(Node):
@@ -53,7 +55,8 @@ class Coach(Node):
         # self.get_logger().info(f"Running")
         # The code below just create a simple behaviour tree which is available in strategy
         kickoff = Kickoff("Kickoff")
-        print(kickoff.run()[1])
+        freekick = FreeKick("FreeKick")
+        print(freekick.run()[1])
         # for bt in bts:
         #     robot.tree = bt
         # self.behaviour_tree.run(self.blackboard)
