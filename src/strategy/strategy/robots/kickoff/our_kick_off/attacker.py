@@ -5,8 +5,8 @@ from strategy.robots.skill.route import MoveToPoint
 """Contains all KickOffActions the robot must do (in order or not) during the match"""
 
 class OurAttackerAction():
-    def __init__(self, name):
-        self.name = name
+    def __init__(self):
+        self.name = "OurAttackerAction"
         self.blackboard = Blackboard()
         self.movement = MoveToPoint(self.name)
 
@@ -15,8 +15,8 @@ class OurAttackerAction():
 
 
 class TheirAttackerAction():
-    def __init__(self, name):
-        self.name = name
+    def __init__(self):
+        self.name = "TheirAttackerAction"
         self.blackboard = Blackboard()
         self.movement = MoveToPoint(self.name)
 
