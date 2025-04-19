@@ -95,10 +95,15 @@ class APINode(Node):
             VisionMessage, "visionTopic", self.emit_vision_message, 10
         )
         gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-
+    
     def emit_vision_message(self, msg: VisionMessage) -> None:
         data = todict(msg)
-        gui_socket.emit("vision_msg", {"data": data})
+
+        gui_socket.emit("vision_update", {
+            "yellow": data["yellow_robots"],
+            "blue":   data["blue_robots"],
+            "balls":  data["balls"],
+        })
 
     def handle_disconnect(self):
         self.get_logger().info("Client disconneted")
