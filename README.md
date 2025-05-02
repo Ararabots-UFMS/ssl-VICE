@@ -23,7 +23,7 @@
 
 To learn how to install the requirement programs and packages, check the [Requirements README](./requirements/README.MD)
 
-Setup
+## Setup
 ---------------------
 First of all, we need to clone the [ssl-VICE](https://github.com/Ararabots-UFMS/ssl-VICE) repository, using the following commmands:
 
