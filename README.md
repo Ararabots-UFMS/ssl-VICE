@@ -76,7 +76,10 @@ pip install --upgrade pip setuptools wheel packaging scikit-build
 pip install protobuf==3.20.*
 ```
 
-After that, the ssl-VICE should be succesfully installed.
+After that, run again the following command and the ssl-VICE should be succesfully installed.
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage
 After setup, let's check if everything works fine testing the gui_interpreter api Node, for this use the following command:
