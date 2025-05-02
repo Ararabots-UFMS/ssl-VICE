@@ -27,8 +27,15 @@ To learn how to install the requirement programs and packages, check the [Requir
 ---------------------
 First of all, we need to clone the [ssl-VICE](https://github.com/Ararabots-UFMS/ssl-VICE) repository, using the following commmands:
 
+With SSH:
+
 ```bash
 git clone git@github.com:Ararabots-UFMS/ssl-VICE.git
+```
+With HTTP:
+
+```bash
+git clone https://github.com/Ararabots-UFMS/ssl-VICE.git
 ```
 
 After cloning the repository, enter the repository folder and build the repository with the following commands:
