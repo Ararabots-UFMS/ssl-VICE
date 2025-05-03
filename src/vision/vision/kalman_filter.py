@@ -18,7 +18,7 @@ class KalmanFilterClass2D(object):
     - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
     - "https://cookierobotics.com/071/"
     '''
-    def __init__(self, x_sd: float = 0.01, y_sd: float = 0.01, u_x: float = 0.1, u_y: float = 0.1, sd_acceleration: float = 1):
+    def __init__(self, x_sd: float = 0.1, y_sd: float = 0.1, u_x: float = 0.1, u_y: float = 0.1, sd_acceleration: float = 1):
         self.sd_acceleration = sd_acceleration
 
         self.u = np.matrix([[u_x],[u_y]])
