@@ -1,6 +1,6 @@
 from vision.vision_client import Client
 from vision.tracker import ObjectTracker
-from vision.world_message import wrap_geo_message
+from vision.world_message import wrap_geo_message, wrap_message
 
 from typing import Optional
 
@@ -10,7 +10,6 @@ from rclpy.node import Node
 from google.protobuf import text_format
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 from vision.proto.messages_robocup_ssl_geometry_pb2 import SSL_GeometryData
-from vision.merge_trackers import merge_trackers
 
 from system_interfaces.msg import VisionMessage, VisionGeometry
 
@@ -53,11 +52,7 @@ class Vision(Node):
             VisionGeometry, "geometryTopic", 10
         )
 
-        self.trackers = []
-        for cam in range(self.num_cams):
-            self.trackers.append(
-                ObjectTracker(cam_id=cam, max_frame_skipped=self.max_frame_skipped)
-            )
+        self.tracker = ObjectTracker(max_frame_skipped=self.max_frame_skipped)
 
         # TODO: Find the optimal timer.
         self.unify_timer = self.create_timer(0.016, self.publish_vision)
@@ -68,9 +63,7 @@ class Vision(Node):
             # Orientation does not have a proper processing. Using raw orientantion and setting orientation velocity to 0.
             data: SSL_WrapperPacket = self.client.receive()
 
-            data_cam_id = data.detection.camera_id
-
-            self.trackers[data_cam_id].update(data)
+            self.tracker.update(data)
 
             if data.HasField("geometry"):
                 self.publish_geometry(data.geometry)
@@ -96,15 +89,14 @@ class Vision(Node):
         acceleration_sd_2d: Optional[float] = None,
         acceleration_sd_1d: Optional[float] = None,
     ):
-        # Nested loops are ugly...
-        for tracker in self.trackers:
-            for object_ in tracker.objects:
-                object_.KF.set_param(x_sd, y_sd, u_x, u_y, acceleration_sd_2d)
-                if not object_.id.is_ball:
-                    object_.orientation_KF.set_param(a_sd, u_a, acceleration_sd_1d)
+        
+        for object_ in self.tracker.objects:
+            object_.KF.set_param(x_sd, y_sd, u_x, u_y, acceleration_sd_2d)
+            if not object_.id.is_ball:
+                object_.orientation_KF.set_param(a_sd, u_a, acceleration_sd_1d)
 
     def publish_vision(self):
-        message = merge_trackers(self.trackers)
+        message = wrap_message(self.tracker.objects)
 
         if self.context.ok():
             self.publisher.publish(message)

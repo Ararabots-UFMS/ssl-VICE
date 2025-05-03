@@ -58,13 +58,12 @@ class ObjectTracker(object):
     - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
     
     '''
-    def __init__(self, cam_id: int, max_frame_skipped: int):
+    def __init__(self, max_frame_skipped: int):
         
         self.max_frame_skipped = max_frame_skipped
         self.objects_id = []
         self.objects = []
         self.last_time_stamp = 0
-        self.cam_id = cam_id
         
     def update_object(self, object_: Object, x: float, y: float, confidence: float, orientation: Optional[float] = None) -> None:
         # Predict position and velocity.
