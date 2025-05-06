@@ -1,53 +1,46 @@
 from system_interfaces.msg import RefereeMessage, TeamData
 from referee.proto.ssl_gc_referee_message_pb2 import Referee
 
-class MessageWrapping():
-    """It is responsible to filter the data send by the game-controller and populate our Data"""
+BLUE = "blue"
+YELLOW = "yellow"
+
+
+class MessageWrapping:
+    """Converts Referee protobuf message into a RefereeMessage ROS message."""
+
     def __init__(self, referee_message):
-        self.msg = RefereeMessage()
-        blue_team = TeamData()
-        yellow_team = TeamData()
-
-        self.msg.teams.append(blue_team)
-        self.msg.teams.append(yellow_team)
-        
         self.referee = referee_message
-    
-    def to_game_data(self):
-        self.msg.stage = Referee.Stage.Name(self.referee.stage)
-        self.msg.stage_time_left = self.referee.stage_time_left
-        self.msg.command = Referee.Command.Name(self.referee.command)
-        self.msg.command_counter = self.referee.command_counter
-        self.msg.current_action_time_remaining = self.referee.current_action_time_remaining
+        self.msg = self.wrap()
 
-    def blue_team_description(self):
-        self.msg.teams[0].color = 'blue'
-        self.msg.teams[0].name = self.referee.blue.name
-        self.msg.teams[0].score = self.referee.blue.score
-        self.msg.teams[0].timeouts = self.referee.blue.timeouts
-        self.msg.teams[0].goalkeeper = self.referee.blue.goalkeeper
-        self.msg.teams[0].foul_counter = self.referee.blue.foul_counter
-        self.msg.teams[0].ball_placement_failures = self.referee.blue.ball_placement_failures
-        self.msg.teams[0].can_place_ball = self.referee.blue.can_place_ball
-        self.msg.teams[0].max_allowed_bots = self.referee.blue.max_allowed_bots
-        self.msg.teams[0].bot_substitution_intent = self.referee.blue.bot_substitution_intent
-        self.msg.teams[0].bot_substitution_allowed = self.referee.blue.bot_substitution_allowed
-        self.msg.teams[0].bot_substitutions_left = self.referee.blue.bot_substitutions_left
-        self.msg.teams[0].red_cards = self.referee.blue.red_cards
-        self.msg.teams[0].yellow_cards = self.referee.blue.yellow_cards
+    def wrap(self) -> RefereeMessage:
+        # Create a new RefereeMessage with the teams
+        msg = RefereeMessage()
+        msg.stage = Referee.Stage.Name(self.referee.stage)
+        msg.stage_time_left = self.referee.stage_time_left
+        msg.command = Referee.Command.Name(self.referee.command)
+        msg.command_counter = self.referee.command_counter
+        msg.current_action_time_remaining = self.referee.current_action_time_remaining
 
-    def yellow_team_description(self):
-        self.msg.teams[1].color = 'yellow'
-        self.msg.teams[1].name = self.referee.yellow.name
-        self.msg.teams[1].score = self.referee.yellow.score
-        self.msg.teams[1].timeouts = self.referee.yellow.timeouts
-        self.msg.teams[1].goalkeeper = self.referee.yellow.goalkeeper
-        self.msg.teams[1].foul_counter = self.referee.yellow.foul_counter
-        self.msg.teams[1].ball_placement_failures = self.referee.yellow.ball_placement_failures
-        self.msg.teams[1].can_place_ball = self.referee.yellow.can_place_ball
-        self.msg.teams[1].max_allowed_bots = self.referee.yellow.max_allowed_bots
-        self.msg.teams[1].bot_substitution_intent = self.referee.yellow.bot_substitution_intent
-        self.msg.teams[1].bot_substitution_allowed = self.referee.yellow.bot_substitution_allowed
-        self.msg.teams[1].bot_substitutions_left = self.referee.yellow.bot_substitutions_left
-        self.msg.teams[1].red_cards = self.referee.yellow.red_cards
-        self.msg.teams[1].yellow_cards = self.referee.yellow.yellow_cards
+        msg.teams.append(self._build_team(self.referee.blue, BLUE))
+        msg.teams.append(self._build_team(self.referee.yellow, YELLOW))
+
+        return msg
+
+    def _build_team(self, team_proto, color: str) -> TeamData:
+        team = TeamData()
+        team.color = color
+        team.name = team_proto.name
+        team.score = team_proto.score
+        team.red_cards = team_proto.red_cards
+        team.yellow_cards = team_proto.yellow_cards
+        team.timeouts = team_proto.timeouts
+        team.goalkeeper = team_proto.goalkeeper
+        team.foul_counter = team_proto.foul_counter
+        team.ball_placement_failures = team_proto.ball_placement_failures
+        team.can_place_ball = team_proto.can_place_ball
+        team.max_allowed_bots = team_proto.max_allowed_bots
+        team.bot_substitution_intent = team_proto.bot_substitution_intent
+        team.bot_substitution_allowed = team_proto.bot_substitution_allowed
+        team.bot_substitutions_left = team_proto.bot_substitutions_left
+
+        return team
