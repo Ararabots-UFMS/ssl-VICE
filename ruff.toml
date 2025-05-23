@@ -1,0 +1,30 @@
+# Never enforce `E501` (line length violations).
+lint.ignore = ["E501", "E401", "E701"]
+
+lint.fixable = ["ALL"]
+
+lint.exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv"
+]
+
+lint.select = ["E", "W", "F"]
