@@ -44,6 +44,11 @@ Em seguida, execute dentro da pasta do `ssl-VICE`:
 ```bash
 docker-compose up --build
 ```
+Se não for sua primeira execução rode sem o *--build*
+
+```bash
+docker-compose up
+```
 
 Após isso, dois serviços serão criados:
 - `ssl-vice`
