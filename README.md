@@ -49,8 +49,8 @@ Após isso, dois serviços serão criados:
 - `ssl-vice`
 - `ssl-gui`
 
-A interface gráfica (GUI) estará disponível em:
-http://localhost:5173/
+A interface gráfica (GUI) estará disponível em: [http://localhost:5173](http://localhost:5173)
+
 
 Até agora temos o `ssl-VICE` e o `ssl-GUI` rodando.
 ---
@@ -105,3 +105,21 @@ Agora entre na pasta do `grSim` e siga as instruções de instalação por lá.
 **Importante:** Priorize a parte da instalação que cita realizar a instalação pelo Docker
 
 Faça a mesma coisa com o `ssl-vision`.
+
+--- 
+## Extras:
+
+### Análise de Código com Ruff no VSCode
+- Ruff é uma ferramenta rápida e eficiente para linting (análise de estilo) e formatação de código Python.
+- Este projeto já inclui um arquivo ruff.toml com as configurações necessárias.
+
+### Como usar o Ruff no VSCode
+- Instale a extensão oficial do Ruff:
+    - “Ruff” na aba de extensões do VSCode e instale a extensão de Charles Marsh.
+
+### Correção automática:
+Use o atalho padrão (Ctrl + Shift + P) e selecione "Ruff: Format Document" para formatar um arquivo inteiro.
+
+**Linting em tempo real:** 
+- O VSCode irá sublinhar automaticamente os trechos que não seguem os padrões definidos.
+- Passe o mouse sobre os avisos para ver sugestões ou explicações.
