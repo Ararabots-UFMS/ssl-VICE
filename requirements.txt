@@ -4,3 +4,5 @@ ruckig
 pyserial
 protobuf
 numpy
+pytest
+pytest-mock

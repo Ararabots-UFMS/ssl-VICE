@@ -1,96 +1,130 @@
+
 <div align="center">
 <a href="https://quackfy.vercel.app/">
 <img height="100" src="https://ararabots-ufms.github.io/img/arara_no_bg.png" alt="Arara">
+</a>
 </div>
 
 <div align="center">
 <img src="https://img.shields.io/badge/build-latest-blue">
 <img src="https://img.shields.io/github/issues/Ararabots-UFMS/ssl-VICE">
-
 </div>
 
-## Software Requirements
-- [Python3](https://www.python.org/downloads/)
-- [ROS2](https://docs.ros.org/en/humble/index.html)
+## Configuração de Ambiente
 
+<!-- Para aprender como instalar os programas e pacotes necessários, confira o [README dos Requisitos](./requirements/README.MD) -->
 
-## Python Libraries
-- Flask
+**Importante:** Além do repositório `ssl-VICE`, é necessário clonar os repositórios `ssl-gui` e `ssl-game-controller` na **mesma pasta** para que o sistema funcione corretamente.
 
+Então é recomendado criar uma pasta "ararabots" e dentro clonar os respectivos repositórios de desenvolvimento
+Se for clonado repositórios posteriores clonar dentro da pasta.
 
-
-## Installing Requirements
-
-To learn how to install the requirement programs and packages, check the [Requirements README](./requirements/README.MD)
-
-## Setup
----------------------
-First of all, we need to clone the [ssl-VICE](https://github.com/Ararabots-UFMS/ssl-VICE) repository, using the following commmands:
-
-With SSH:
-
+Com HTTP:
 ```bash
+mkdir ararabots
+cd ararabots
+git clone https://github.com/Ararabots-UFMS/ssl-gui.git # com HTTP
+git clone https://github.com/Ararabots-UFMS/ssl-VICE.git # com HTTP
+git clone https://github.com/RoboCup-SSL/ssl-game-controller.git # com HTTP
+```
+
+Com SSH:
+```bash
+mkdir ararabots
+cd ararabots
+git clone git@github.com:Ararabots-UFMS/ssl-gui.git
 git clone git@github.com:Ararabots-UFMS/ssl-VICE.git
+git clone git@github.com:RoboCup-SSL/ssl-game-controller.git
 ```
-With HTTP:
+
+
+## Execução
+Em seguida, execute dentro da pasta do `ssl-VICE`:
 
 ```bash
-git clone https://github.com/Ararabots-UFMS/ssl-VICE.git
+docker-compose up --build
 ```
-
-After cloning the repository, enter the repository folder and build the repository with the following commands:
-```bash
-cd ssl-VICE/
-colcon build # builds the repository
-```
-Now we have to setup the ssl-VICE environment by adding it to the terminal configuration file.
-
-For this, let's get our setup.bash path, using the following commands:
-```bash
-cd install/
-pwd # copy the path that is show in the terminal and add /setup.bash
-```
-
-pwd shows the current path that we are in the terminal, the final path to the setup.bash should be something like this:
+Se não for sua primeira execução rode sem o *--build*
 
 ```bash
-.../ssl-VICE/install/setup.bash
+docker-compose up
 ```
 
-Now to add the copied path to the terminal configuration file, use the following command:
-```bash
-echo 'source path' >> ~/.bashrc
-```
+Após isso, dois serviços serão criados:
+- `ssl-vice`
+- `ssl-gui`
 
-Then, we have to add the path to the cloned repository to our terminal configuration file using the following commands:
-```bash
-cd ..
-pwd #check if the final of the path is /ssl-VICE, then copy this path
-echo 'export ARARA_VICE_PATH=path/to/repo' >> ~/.bashrc
-```
+A interface gráfica (GUI) estará disponível em: [http://localhost:5173](http://localhost:5173)
 
-Attention: make sure you have copied correctly the path to the repository folder and didn't leave a space after the equal sign
 
-Finally, we have to install the requirement packages of **requirements.txt** file, for this use the following commands inside ssl-VICE folder:
+Até agora temos o `ssl-VICE` e o `ssl-GUI` rodando.
+---
+Para escutar tópicos específicos do ROS2:
+
+Entre no container `ssl-vice`:
 
 ```bash
-pip install -r requirements.txt
+docker exec -it ssl-vice bash
+source /root/ssl-VICE/install/setup.bash
 ```
 
-If you get and error after that, probably it's about flask python package. To solve this, use the following commands:
+E para listar e escutar tópicos, use:
+
 ```bash
-pip install --upgrade pip setuptools wheel packaging scikit-build
-pip install protobuf==3.20.*
+ros2 topic list          # lista todos os tópicos disponíveis
+ros2 topic echo /refereeTopic  # escuta um tópico de exemplo
 ```
 
-After that, run again the following command and the ssl-VICE should be succesfully installed.
+Agora vamos rodar as aplicações externas
+---
+Para rodar o `ssl-game-controller`.
 ```bash
-pip install -r requirements.txt
+cd ssl-game-controller
 ```
 
-## Usage
-After setup, let's check if everything works fine testing the gui_interpreter api Node, for this use the following command:
+Dentro da pasta do `ssl-game-controller`:
 ```bash
-ros2 run gui_interpreter apiNode
+docker compose up --build ssl-game-controller
 ```
-If it works, ssl-VICE was succesfully installed.
+
+
+Agora vamos instalar o `grSim` e o `ssl-vision-client`
+---
+
+Com HTTP:
+```bash
+cd ararabots
+git clone https://github.com/RoboCup-SSL/grSim.git
+git clone https://github.com/RoboCup-SSL/ssl-vision.git
+```
+
+Com SSH:
+```bash
+cd ararabots
+git clone git@github.com:RoboCup-SSL/grSim.git
+git clone git@github.com:RoboCup-SSL/ssl-vision.git
+```
+
+Agora entre na pasta do `grSim` e siga as instruções de instalação por lá.
+
+**Importante:** Priorize a parte da instalação que cita realizar a instalação pelo Docker
+
+Faça a mesma coisa com o `ssl-vision`.
+
+--- 
+## Extras:
+
+### Análise de Código com Ruff no VSCode
+- Ruff é uma ferramenta rápida e eficiente para linting (análise de estilo) e formatação de código Python.
+- Este projeto já inclui um arquivo ruff.toml com as configurações necessárias.
+
+### Como usar o Ruff no VSCode
+- Instale a extensão oficial do Ruff:
+    - “Ruff” na aba de extensões do VSCode e instale a extensão de Charles Marsh.
+
+### Correção automática:
+Use o atalho padrão (Ctrl + Shift + P) e selecione "Ruff: Format Document" para formatar um arquivo inteiro.
+
+**Linting em tempo real:** 
+- O VSCode irá sublinhar automaticamente os trechos que não seguem os padrões definidos.
+- Passe o mouse sobre os avisos para ver sugestões ou explicações.

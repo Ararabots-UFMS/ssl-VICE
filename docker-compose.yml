@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  ssl-vice:
+    build: .
+    container_name: ssl-vice
+    network_mode: "host"
+    volumes:
+    - ./src:/root/ssl-VICE/src
+    - ./install:/root/ssl-VICE/install
+    environment:
+      - ARARA_VICE_PATH=/root/ssl-VICE
+    command: ["bash", "/root/ssl-VICE/entrypoint.sh"]
+
+  ssl-gui:
+    build:
+      context: ../ssl-gui
+    container_name: ssl-gui
+    network_mode: "host"
+    volumes:
+      - ../ssl-gui:/src
+    stdin_open: true
+    tty: true

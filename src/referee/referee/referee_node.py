@@ -20,7 +20,7 @@ class RefereeNode(Node):
     def _declare_parameters(self):
         # In ROS2 Humble declare_parameter return the value directly
         self.ip = self.declare_parameter("ip", "224.5.23.1").value
-        self.port = self.declare_parameter("port", 10003).value
+        self.port = self.declare_parameter("port", 11003).value
         self.buffer_size = self.declare_parameter("buffer_size", 20240).value
 
     def _setup_client(self):
