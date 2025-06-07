@@ -9,12 +9,12 @@ class Vector2D:
 
     def __neg__(self):
         return Vector2D(-self.x, -self.y)
-    
+
     # Not returning the sum of vector mathematically, overloading the add operator to
     # format the vectors to be inputed in the BB steer.
     def __add__(self, other) -> list:
         return [self.x, self.y, other.x, other.y]
-    
+
     def __getitem__(self, index):
         if index == 0:
             return self.x
@@ -23,11 +23,13 @@ class Vector2D:
         else:
             raise IndexError("Index out of range. Use 0 for x, 1 for y.")
 
+
 @dataclass
 class State:
     position: Vector2D
     velocity: Vector2D
     acceleration: Optional[Vector2D] = None
+
 
 @dataclass
 class MoveConstraints:
