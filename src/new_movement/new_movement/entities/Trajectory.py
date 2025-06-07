@@ -3,6 +3,7 @@ from Motion import MotionPath
 from TrajGenerator import TrajectoryGenerator
 from typing import Optional
 from utils.BB_steer import integrate_control_2d as integrate
+from utils.BB_steer import integrate_control_2d_at_time as integrate_t
 
 
 class TrajectorySegment:
@@ -18,8 +19,7 @@ class TrajectorySegment:
         self.child = child
 
     def get_state(self, t) -> State:
-        """Get the State at a time t in path"""
-        pass
+        ''' Get the State at a time t in path '''
 
     def get_destination(self) -> State:
         """Get final destination (Position Vector2D)"""
