@@ -17,7 +17,7 @@ class Client:
         """Sets up the multicast socket to receive data."""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind(('', self.port))
+        self.sock.bind(("", self.port))
 
         mreq = struct.pack("4sl", socket.inet_aton(self.ip), socket.INADDR_ANY)
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)

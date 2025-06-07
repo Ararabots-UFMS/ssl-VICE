@@ -1,28 +1,130 @@
 
-Software Requirements
----------------------
+<div align="center">
+<a href="https://quackfy.vercel.app/">
+<img height="100" src="https://ararabots-ufms.github.io/img/arara_no_bg.png" alt="Arara">
+</a>
+</div>
 
-- [Python3](https://www.python.org/downloads/)
-- [ROS2](https://docs.ros.org/en/humble/index.html)
+<div align="center">
+<img src="https://img.shields.io/badge/build-latest-blue">
+<img src="https://img.shields.io/github/issues/Ararabots-UFMS/ssl-VICE">
+</div>
 
-Python Libraries
----------------------
+## Configuração de Ambiente
 
-- Flask
+<!-- Para aprender como instalar os programas e pacotes necessários, confira o [README dos Requisitos](./requirements/README.MD) -->
 
-Setup
----------------------
+**Importante:** Além do repositório `ssl-VICE`, é necessário clonar os repositórios `ssl-gui` e `ssl-game-controller` na **mesma pasta** para que o sistema funcione corretamente.
 
-After cloning the repository it is necessary to build it, enter the repository folder and use the following command:
+Então é recomendado criar uma pasta "ararabots" e dentro clonar os respectivos repositórios de desenvolvimento
+Se for clonado repositórios posteriores clonar dentro da pasta.
+
+Com HTTP:
+```bash
+mkdir ararabots
+cd ararabots
+git clone https://github.com/Ararabots-UFMS/ssl-gui.git # com HTTP
+git clone https://github.com/Ararabots-UFMS/ssl-VICE.git # com HTTP
+git clone https://github.com/RoboCup-SSL/ssl-game-controller.git # com HTTP
 ```
-colcon build
+
+Com SSH:
+```bash
+mkdir ararabots
+cd ararabots
+git clone git@github.com:Ararabots-UFMS/ssl-gui.git
+git clone git@github.com:Ararabots-UFMS/ssl-VICE.git
+git clone git@github.com:RoboCup-SSL/ssl-game-controller.git
 ```
 
-Then add the enviroment variable with the path to the VICE folder to your .bashrc file:
+
+## Execução
+Em seguida, execute dentro da pasta do `ssl-VICE`:
+
+```bash
+docker-compose up --build
 ```
-echo 'export ARARA_VICE_PATH = path/to/repo' >> ~/.bashrc 
+Se não for sua primeira execução rode sem o *--build*
+
+```bash
+docker-compose up
 ```
 
-Usage
----------------------
-After the setup just use ```ros2 run PACKAGE_NAME EXECUTABLE_NAME``` replacing the package and executable names with the ones you want to run.
+Após isso, dois serviços serão criados:
+- `ssl-vice`
+- `ssl-gui`
+
+A interface gráfica (GUI) estará disponível em: [http://localhost:5173](http://localhost:5173)
+
+
+Até agora temos o `ssl-VICE` e o `ssl-GUI` rodando.
+---
+Para escutar tópicos específicos do ROS2:
+
+Entre no container `ssl-vice`:
+
+```bash
+docker exec -it ssl-vice bash
+source /root/ssl-VICE/install/setup.bash
+```
+
+E para listar e escutar tópicos, use:
+
+```bash
+ros2 topic list          # lista todos os tópicos disponíveis
+ros2 topic echo /refereeTopic  # escuta um tópico de exemplo
+```
+
+Agora vamos rodar as aplicações externas
+---
+Para rodar o `ssl-game-controller`.
+```bash
+cd ssl-game-controller
+```
+
+Dentro da pasta do `ssl-game-controller`:
+```bash
+docker compose up --build ssl-game-controller
+```
+
+
+Agora vamos instalar o `grSim` e o `ssl-vision-client`
+---
+
+Com HTTP:
+```bash
+cd ararabots
+git clone https://github.com/RoboCup-SSL/grSim.git
+git clone https://github.com/RoboCup-SSL/ssl-vision.git
+```
+
+Com SSH:
+```bash
+cd ararabots
+git clone git@github.com:RoboCup-SSL/grSim.git
+git clone git@github.com:RoboCup-SSL/ssl-vision.git
+```
+
+Agora entre na pasta do `grSim` e siga as instruções de instalação por lá.
+
+**Importante:** Priorize a parte da instalação que cita realizar a instalação pelo Docker
+
+Faça a mesma coisa com o `ssl-vision`.
+
+--- 
+## Extras:
+
+### Análise de Código com Ruff no VSCode
+- Ruff é uma ferramenta rápida e eficiente para linting (análise de estilo) e formatação de código Python.
+- Este projeto já inclui um arquivo ruff.toml com as configurações necessárias.
+
+### Como usar o Ruff no VSCode
+- Instale a extensão oficial do Ruff:
+    - “Ruff” na aba de extensões do VSCode e instale a extensão de Charles Marsh.
+
+### Correção automática:
+Use o atalho padrão (Ctrl + Shift + P) e selecione "Ruff: Format Document" para formatar um arquivo inteiro.
+
+**Linting em tempo real:** 
+- O VSCode irá sublinhar automaticamente os trechos que não seguem os padrões definidos.
+- Passe o mouse sobre os avisos para ver sugestões ou explicações.
