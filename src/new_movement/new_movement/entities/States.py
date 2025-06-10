@@ -29,11 +29,13 @@ class Vector2D:
         else:
             raise IndexError("Index out of range. Use 0 for x, 1 for y.")
 
+
 @dataclass
 class State:
     position: Vector2D
     velocity: Vector2D
     acceleration: Optional[Vector2D] = None
+
 
 @dataclass
 class MoveConstraints:
