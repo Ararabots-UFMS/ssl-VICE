@@ -42,14 +42,14 @@ float_epsilon = 1.0e-200
 
 
 """
-Given a vector of n double integrators, this function calculates a time-optimal control that steers the system from state xinit to state xgoal. 
+Given a vector of n double integrators, this function calculates a time-optimal control that steers the system from state xinit to state xgoal.
 Each state is formatted as a 2n-dimensional vector with n positions listed first, followed by n velocities. The acceleration limits are set
-by umin and umax, which are n-dimensional vectors. 
+by umin and umax, which are n-dimensional vectors.
 
 The output is a list of constant controls, each of which is formatted as [u, t], in which u is an n-dimensional vector of acceleration inputs
-and t is the length of time for which they are applied. 
+and t is the length of time for which they are applied.
 
-Note: This does not use the O(n lg n) time sweeping method described in the IROS paper. It is O(n^2) in the worst case, which is significant for very large n. 
+Note: This does not use the O(n lg n) time sweeping method described in the IROS paper. It is O(n^2) in the worst case, which is significant for very large n.
 """
 
 
@@ -95,7 +95,7 @@ def time_optimal_steer(xinit, xgoal, umin=0, umax=0):
                 # print("Bang double failure",i,"new max time",tmax)
             cvec[i] = c
             tvec[i] = control_time(c)
-            if restart == True:
+            if restart:
                 i = -1
         i += 1
 
@@ -104,7 +104,7 @@ def time_optimal_steer(xinit, xgoal, umin=0, umax=0):
 
 
 """
-This is a faster version of time_optimal_steer for the special case of two double integrators. 
+This is a faster version of time_optimal_steer for the special case of two double integrators.
 """
 
 
