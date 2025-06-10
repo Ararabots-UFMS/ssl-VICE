@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import dist
 from typing import Optional
 
 
@@ -6,6 +7,11 @@ from typing import Optional
 class Vector2D:
     x: float
     y: float
+
+    def distance(self, other) -> float:
+        if not isinstance(other, Vector2D):
+            raise AttributeError("Argument other in euclidean distance must be a Vector2D")
+        return dist([self.x, self.y], [other.x, other.y])
 
     def __neg__(self):
         return Vector2D(-self.x, -self.y)
@@ -23,13 +29,11 @@ class Vector2D:
         else:
             raise IndexError("Index out of range. Use 0 for x, 1 for y.")
 
-
 @dataclass
 class State:
     position: Vector2D
     velocity: Vector2D
     acceleration: Optional[Vector2D] = None
-
 
 @dataclass
 class MoveConstraints:
