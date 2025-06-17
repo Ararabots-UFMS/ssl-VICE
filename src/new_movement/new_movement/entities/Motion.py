@@ -5,7 +5,7 @@ from States import Vector2D
 @dataclass
 class MotionPrimitive:
     acceleration: Vector2D
-    duration: float
+    duration: float # seconds
 
 
 @dataclass
