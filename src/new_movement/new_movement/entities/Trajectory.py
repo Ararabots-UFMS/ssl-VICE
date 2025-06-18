@@ -1,8 +1,8 @@
-from utils.BB_steer import integrate_control_2d_at_time as integrate_t
-from utils.BB_steer import integrate_control_2d as integrate
-from States import State, Vector2D, MoveConstraints
+from ..utils.BB_steer import integrate_control_2d_at_time as integrate_t
+from ..utils.BB_steer import integrate_control_2d as integrate
+from .States import State, Vector2D, MoveConstraints
 from typing import Optional, List
-from Motion import MotionPath
+from .Motion import MotionPath
 
 
 class TrajectorySegment:
