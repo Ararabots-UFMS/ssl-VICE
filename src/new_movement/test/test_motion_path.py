@@ -3,7 +3,7 @@ from new_movement.new_movement.entities.States import Vector2D
 from new_movement.new_movement.entities.Motion import MotionPrimitive, MotionPath
 
 def test_motion_path_creation():
-    p1 = MotionPrimitive(Vector2D(0, 0), Vector2D(1, 1), 2)
+    p1 = MotionPrimitive(Vector2D(0, 0), 2)
     p2 = MotionPrimitive(Vector2D(1, 1), Vector2D(2, 2), 3)
     path = MotionPath([p1, p2])
     assert len(path.primitives) == 2
