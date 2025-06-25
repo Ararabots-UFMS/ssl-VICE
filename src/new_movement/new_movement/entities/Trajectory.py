@@ -40,7 +40,6 @@ class TrajectorySegment:
 
         local_duration = self.get_local_duration()
 
-        # REFACTOR (BUG FIX): A lógica da recursão foi corrigida.
         # Se o tempo t está dentro deste segmento, calcula localmente.
         if t <= local_duration:
             # Assumindo que a função de integração espera um tuple (x, y, vx, vy)
@@ -180,7 +179,6 @@ class Trajectory:
     def get_acceleration(self, t: float) -> Optional[Vector2D]:
         state = self.get_state(t)
         return state.acceleration if state else None
-
 
     def get_destination(self) -> Optional[State]:
         return self.root.get_destination() if self.root is not None else None
