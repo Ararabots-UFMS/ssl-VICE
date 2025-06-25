@@ -1,5 +1,4 @@
 from __future__ import annotations
-from dataclasses import dataclass
 from typing import Optional, List, Union
 from .States import State, Vector2D
 from .Motion import MotionPath
@@ -8,7 +7,7 @@ from ..utils.BB_steer import (
     integrate_control_2d as integrate,
 )
 
-@dataclass
+
 class TrajectorySegment:
     """Representa um único segmento contínuo de uma trajetória."""
 
@@ -100,7 +99,7 @@ class TrajectorySegment:
             total_time += self.child.get_total_duration()
         return total_time
 
-@dataclass
+
 class Trajectory:
     """Gerencia uma sequência de TrajectorySegments."""
 
