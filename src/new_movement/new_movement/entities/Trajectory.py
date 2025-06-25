@@ -178,8 +178,9 @@ class Trajectory:
         return state.velocity if state else None
 
     def get_acceleration(self, t: float) -> Optional[Vector2D]:
-        # REFACTOR (BUG FIX): Corrigido para obter aceleração do segmento.
-        return self.root.get_acceleration(t) if self.root is not None else None
+        state = self.get_state(t)
+        return state.acceleration if state else None
+
 
     def get_destination(self) -> Optional[State]:
         return self.root.get_destination() if self.root is not None else None
