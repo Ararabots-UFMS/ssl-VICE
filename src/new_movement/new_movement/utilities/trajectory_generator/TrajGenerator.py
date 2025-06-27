@@ -20,11 +20,11 @@ class TrajectoryGenerator:
                 DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST
             )
 
-    def generate(self, curPos: Vector2D, curVel: Vector2D, tarState: State) -> TrajectorySegment:
+    def generate(self, curState: State, tarState: State) -> TrajectorySegment:
         """Generates a piecewise constant acceleration motion path using the BB_Steer"""
 
         bb_output = bb_steer(
-            curPos + curVel,
+            curState.position + curState.velocity,
             tarState.position + tarState.velocity,
             umin=self.constrainsts.min_acceleration,
             umax=self.constrainsts.max_acceleration,

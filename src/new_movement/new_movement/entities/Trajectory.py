@@ -1,6 +1,7 @@
-from utils.BB_steer import integrate_control_2d_at_time as integrate_t
-from utils.BB_steer import integrate_control_2d as integrate
-from States import State, Vector2D, MoveConstraints
+
+from utilities.BB_steer import integrate_control_2d as integrate
+from utilities.BB_steer import integrate_control_2d_at_time as integrate_t
+from States import State, Vector2D
 from typing import Optional, List
 from Motion import MotionPath
 
@@ -88,7 +89,7 @@ class Trajectory:
             cur_segment.add_child(traj)
 
     def connect(self, traj: TrajectorySegment, t: float) -> None:
-        """Connect a TrajectorySegment at a time t"""
+        """ Connect a TrajectorySegment at a time t """
         # If there is no root segment or the time to connect exceeds the trajectory total time.
         if self.root is None or self.get_total_time() < t:
             raise Exception("Trying to connect a TrajectorySegment in a unreached time space")
