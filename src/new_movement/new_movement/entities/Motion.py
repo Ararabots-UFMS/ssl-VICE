@@ -1,11 +1,19 @@
+from .States import Vector2D
 from dataclasses import dataclass
-from States import Vector2D
 from typing import Tuple
 
 @dataclass
 class MotionPrimitive:
     acceleration: Vector2D
     duration: float # seconds
+
+    def __getitem__(self, index):
+        if index == 0:
+            return self.acceleration[0], self.acceleration[1]
+        elif index == 1:
+            return self.duration
+        else:
+            raise IndexError("Index out of range. Use 0 for x, 1 for y.")
 
 
 @dataclass

@@ -1,5 +1,5 @@
-from States import Vector2D, State
-from Trajectory import Trajectory
+from .States import Vector2D, State
+from .Trajectory import Trajectory
 from typing import Optional
 
 

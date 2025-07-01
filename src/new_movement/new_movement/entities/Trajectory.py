@@ -1,9 +1,9 @@
 
 from utilities.BB_steer import integrate_control_2d as integrate
 from utilities.BB_steer import integrate_control_2d_at_time as integrate_t
-from States import State, Vector2D
+from .States import State, Vector2D
+from .Motion import MotionPath
 from typing import Optional, List
-from Motion import MotionPath
 
 
 class TrajectorySegment:
@@ -28,7 +28,7 @@ class TrajectorySegment:
 
     def get_state(self, t: float) -> State:
         """Get the State at a time t in path"""
-        if self.get_local_time() <= t:
+        if self.get_local_time() >= t:
             bb_integrate = integrate_t(self.initPos + self.initVel, self.motionPath.motion_path, t)
         else:
             bb_integrate = self.child.get_state(self.get_local_time() - t)

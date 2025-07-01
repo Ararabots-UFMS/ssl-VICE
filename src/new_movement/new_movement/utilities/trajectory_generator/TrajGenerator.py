@@ -1,4 +1,4 @@
-from utils.BB_steer import time_optimal_steer_2d as bb_steer
+from utilities.BB_steer import time_optimal_steer_2d as bb_steer
 from entities.States import State, Vector2D, MoveConstraints
 from entities.Motion import MotionPath, MotionPrimitive
 from entities.Trajectory import TrajectorySegment
@@ -35,4 +35,4 @@ class TrajectoryGenerator:
             [MotionPrimitive(Vector2D(out[0][0], out[0][1]), out[1]) for out in bb_output]
         )
 
-        return TrajectorySegment(curPos, curVel, motion_path)
+        return TrajectorySegment(curState.position, curState.velocity, motion_path)
