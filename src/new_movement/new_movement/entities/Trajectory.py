@@ -30,13 +30,13 @@ class TrajectorySegment:
         """Get the State at a time t in path"""
         if self.get_local_time() >= t:
             bb_integrate = integrate_t(self.initPos + self.initVel, self.motionPath.motion_path, t)
-        else:
-            bb_integrate = self.child.get_state(self.get_local_time() - t)
 
-        return State(
-            position=Vector2D(bb_integrate[0], bb_integrate[1]),
-            velocity=Vector2D(bb_integrate[2], bb_integrate[3]),
-        )
+            return State(
+                position=Vector2D(bb_integrate[0], bb_integrate[1]),
+                velocity=Vector2D(bb_integrate[2], bb_integrate[3])
+            )
+        else:
+            return self.child.get_state(t - self.get_local_time())
 
     def get_destination(self) -> State:
         """Get final destination State"""
