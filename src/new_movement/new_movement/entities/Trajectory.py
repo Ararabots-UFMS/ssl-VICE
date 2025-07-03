@@ -84,7 +84,7 @@ class Trajectory:
         if self.root is None:
             self.root = traj
         else:
-            # Iterating the Segments utils end TrajectorySegment
+            # Iterating the Segments until end TrajectorySegment
             cur_segment = self.root
             while cur_segment.child is not None:
                 cur_segment = cur_segment.child
