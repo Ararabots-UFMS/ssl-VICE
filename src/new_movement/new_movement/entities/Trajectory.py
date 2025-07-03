@@ -28,6 +28,8 @@ class TrajectorySegment:
 
     def get_state(self, t: float) -> State:
         """Get the State at a time t in path"""
+        if self.get_total_time() < t:
+            return self.get_state(self.get_total_time())
         if self.get_local_time() >= t:
             bb_integrate = integrate_t(self.initPos + self.initVel, self.motionPath.motion_path, t)
 
@@ -92,7 +94,7 @@ class Trajectory:
         """ Connect a TrajectorySegment at a time t """
         # If there is no root segment or the time to connect exceeds the trajectory total time.
         if self.root is None or self.get_total_time() < t:
-            raise Exception("Trying to connect a TrajectorySegment in a unreached time space")
+            return self.append(traj)
 
         cur_segment = self.root
         cur_time = self.get_total_time()
@@ -100,7 +102,7 @@ class Trajectory:
             cur_time -= cur_segment.get_local_time()
             cur_segment = cur_segment.child
 
-        cur_segment.motionPath.trucate(t)
+        cur_segment.motionPath.truncate(t)
 
         cur_segment.add_child(traj)
 

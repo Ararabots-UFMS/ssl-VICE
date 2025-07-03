@@ -114,15 +114,24 @@ from entities.Trajectory import Trajectory
 
 plotter = TrajectoryPlotter()
 
-initState = State(Vector2D(0, 0), Vector2D(0, 0))
-midState = State(Vector2D(100, 100), Vector2D(1000, 0))
+initState = State(Vector2D(0, 0), Vector2D(-1000, 0))
+# midState = State(Vector2D(100, 100), Vector2D(1000, 0))
 tarState = State(Vector2D(100, 100), Vector2D(0, 1000))
 
 planner = Planner()
-trajseg = planner.find(initState, midState, [])
-trajfinal = planner.find(midState, tarState, [])
-traj = Trajectory(trajseg)
-traj.append(trajfinal)
+trajfinal = planner.find(initState, tarState, [])
+traj = Trajectory(trajfinal)
 
+plotter.plot(traj)
+
+t = 10
+midState = traj.get_state(t)
+newtraj = planner.find(midState, initState, [])
+traj.connect(newtraj, t)
+
+plotter.plot(traj)
+
+tarState1 = State(Vector2D(100, 2000), Vector2D(0, 0))
+traj.append(planner.find(initState, tarState1, []))
 
 plotter.plot(traj)
