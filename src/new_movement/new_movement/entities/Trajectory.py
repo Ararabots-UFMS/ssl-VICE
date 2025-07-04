@@ -24,7 +24,7 @@ class TrajectorySegment:
         ):
             self.child = child
         else:
-            raise Exception("Attempting to add a non continuous trajectory")
+            raise Exception("Attempting to add a non continuous trajectory")        
 
     def get_state(self, t: float) -> State:
         """Get the State at a time t in path"""
@@ -74,7 +74,6 @@ class TrajectorySegment:
 
         return total_time
 
-
 class Trajectory:
     def __init__(self, initial_segment: Optional[TrajectorySegment] = None):
         self.root: Optional[TrajectorySegment] = initial_segment
@@ -97,16 +96,16 @@ class Trajectory:
             return self.append(traj)
 
         cur_segment = self.root
-        cur_time = self.get_total_time()
+        cur_time = t
         while cur_segment.get_local_time() < cur_time:
             cur_time -= cur_segment.get_local_time()
             cur_segment = cur_segment.child
 
-        cur_segment.motionPath.truncate(t)
+        cur_segment.motionPath.truncate(cur_time)
 
         cur_segment.add_child(traj)
 
-    def relocate(self, traj: TrajectorySegment):
+    def relocate(self, traj: TrajectorySegment, t: float) -> None:
         """Relocate the initial state of the first TrajectorySegment"""
         if self.root is not None and self.root.child is not None:
             traj.add_child(self.root.child)

@@ -18,5 +18,7 @@ class TrajectoryPlotter:
         plt.title("Trajectory Plot")
         plt.legend()
         plt.grid(True)
+        plt.xlim(-2250, 2250)
+        plt.ylim(-1500, 1500)
         if show:
             plt.show()

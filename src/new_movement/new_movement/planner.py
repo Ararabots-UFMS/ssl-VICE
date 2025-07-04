@@ -1,5 +1,6 @@
-from entities.Trajectory import TrajectorySegment
+from entities.Trajectory import TrajectorySegment, Trajectory
 from entities.States import State, Vector2D
+from entities.Motion import MotionPath
 from entities.obstacles import Obstacle
 from utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
 
@@ -9,40 +10,6 @@ from copy import deepcopy
 from typing import List, Optional
 from random import uniform, randint
 
-
-class TrajectoryOptimizer():
-    def __init__(self):
-        pass
-
-    def optimize(self, trajectory: TrajectorySegment, generator: TrajectoryGenerator) -> TrajectorySegment:
-        trajectory = deepcopy(trajectory) # Dont know if necessary
-        total_time = trajectory.get_total_time()
-
-        if total_time <= 0:
-            return trajectory
-        
-        mode = ["Head", "Normal", "Tail"][randint(0, 2)]
-
-        first_time = uniform(0, total_time)
-
-        if(mode == "Head"):
-            curState = trajectory.get_state(0.0)
-            tarState = trajectory.get_state(first_time)
-
-            return generator.generate(curState, tarState), 0.0, first_time
-        
-        elif(mode == "Tail"):
-            curState = trajectory.get_state(first_time)
-            tarState = trajectory.get_destination()
-
-            return generator.generate(curState, tarState), first_time, total_time
-        
-        elif(mode == "Normal"):
-            second_time = uniform(first_time, total_time)
-            curState = trajectory.get_state(first_time)
-            tarState = trajectory.get_state(second_time)
-
-            return generator.generate(curState, tarState), first_time, second_time
 
 class CollisionSolver():
     def __init__(self, trys: int = 50):
@@ -62,6 +29,7 @@ class CollisionSolver():
 
             to_point.add_child(from_point)
 
+            # TODO Define what is the best trajectory.
             if self.is_collision(to_point, obstacles) is True:
                 continue
             else:
@@ -85,12 +53,68 @@ class CollisionSolver():
 
         return Vector2D(uniform(-field_length/2, field_length/2), uniform(-field_width/2, field_width/2))
 
+class TrajectoryOptimizer():
+    def __init__(self, trys: int):
+        self.trys = trys
+
+    def optimize(self, trajectory: Trajectory, generator: TrajectoryGenerator, collisionSolver: CollisionSolver, obstacles: List[Obstacle]) -> Trajectory:
+        """ 
+        Optimizes a trajectory, by random sampling a range in the trajectory and finding a new collision free segment 
+        
+        How it works:
+            - A random mode is chosen, either head, normal or tail
+            - if the mode is normal, then 2 points are randomly chosen and a new path is generated from point 1 to point 2
+            - if the mode is head or tail, one point is randomly chosen and a new path is generated from the begining 
+            to the point (in head mode) or the point to the ending (tail mode)
+            - a collision check is made, and if no collision is detected, then this new patch is stiched. 
+
+        This approach is discribed in the article "Bang Bang Boosting of RRTs" 
+        
+        """
+        trajectory = deepcopy(trajectory) # Dont know if necessary
+        total_time = trajectory.get_total_time()
+
+        if total_time <= 0:
+            return trajectory
+        
+        for _ in range(self.trys):
+
+            mode = ["Head", "Normal", "Tail"][randint(0, 2)]
+
+            first_time = uniform(0, total_time) if (mode == "Normal" or mode == "Tail") else 0.0
+            second_time = uniform(first_time, total_time) if (mode == "Normal" or mode == "Head") else total_time
+            
+            firstState = trajectory.get_state(first_time)
+            secondState = trajectory.get_state(second_time)
+
+            optimized_segment = generator.generate(firstState, secondState)
+            print(total_time, first_time, second_time)
+
+            if(not collisionSolver.is_collision(optimized_segment, obstacles)):
+                curSegment = trajectory.root
+                curTime = second_time
+                while(curSegment.get_local_time() < curTime and curSegment.child is not None):
+                    curTime -= curSegment.get_local_time()
+                    curSegment = curSegment.child
+                
+                _, last_motion = curSegment.motionPath.split(curTime)
+                last_segment = TrajectorySegment(secondState.position, secondState.velocity, last_motion)
+                
+                if(curSegment.child is not None):
+                    last_segment.child = curSegment.child
+
+                optimized_segment.add_child(last_segment)
+
+                trajectory.connect(optimized_segment, first_time)
+
+        return Trajectory(trajectory)
+
 class Planner():
     ''' Its responsible for finding a collision free optimal trajectory to target state '''
     def __init__(self, bypass_trys: Optional[int] = None, optimizer_trys: Optional[int] = 50):
         self.generator = TrajectoryGenerator()
         self.solver = CollisionSolver() if bypass_trys is None else CollisionSolver(trys=bypass_trys)
-        self.optimizer = TrajectoryOptimizer()
+        self.optimizer = TrajectoryOptimizer(optimizer_trys)
         self.optimizer_trys = optimizer_trys
 
     def find(self, curState: State, tarState: State, obstacles: List[Obstacle]) -> TrajectorySegment:
@@ -98,40 +122,28 @@ class Planner():
 
         if(self.solver.is_collision(best_trajectory, obstacles)):
             best_trajectory = self.solver.solve(curState, tarState, obstacles, self.generator)
-            for _ in range(self.optimizer_trys):
-                opt_segment, first_time, second_time = self.optimizer.optimize(best_trajectory)
-                if not self.solver.is_collision(opt_segment):
-                    # ISSO É TALVEZ NAO SEJA LEGAL ESTAR AQUI, TALVEZ ENCAIXAR ESSA PARTE EM TRAJECTORY.py
-                    # AQUI TA SEPARANDO O CAMINHO EM (PRIMEIRA PARTE) + (PARTE QUE VAI SER SUBSTITUIDA) + (SEGUNDA PARTE)
-                    _, second_segment = best_trajectory.motionPath.split(second_time)
-                    first_segment, _ = best_trajectory.motionPath.split(first_time)
-                    best_trajectory.motionPath = first_segment.motion_path + opt_segment.motionPath.motion_path + second_segment.motion_path
-        else:
-            return best_trajectory
+            self.optimizer.optimize(best_trajectory, self.generator, self.solver, obstacles)
+
+        return best_trajectory
         
 from utilities.trajectory_plotter import TrajectoryPlotter
-from entities.Trajectory import Trajectory
 
 plotter = TrajectoryPlotter()
 
 initState = State(Vector2D(0, 0), Vector2D(-1000, 0))
-# midState = State(Vector2D(100, 100), Vector2D(1000, 0))
-tarState = State(Vector2D(100, 100), Vector2D(0, 1000))
+midState = State(Vector2D(1000, -500), Vector2D(0, 0))
+tarState = State(Vector2D(-1000, 1000), Vector2D(0, 0))
 
 planner = Planner()
-trajfinal = planner.find(initState, tarState, [])
-traj = Trajectory(trajfinal)
+trajfirst = planner.find(initState, midState, [])
+trajsecond = planner.find(midState, tarState, [])
+
+traj = Trajectory(trajfirst)
+traj.append(trajsecond)
 
 plotter.plot(traj)
 
-t = 10
-midState = traj.get_state(t)
-newtraj = planner.find(midState, initState, [])
-traj.connect(newtraj, t)
-
-plotter.plot(traj)
-
-tarState1 = State(Vector2D(100, 2000), Vector2D(0, 0))
-traj.append(planner.find(initState, tarState1, []))
+opt = TrajectoryOptimizer(50)
+traj = opt.optimize(traj, planner.generator, planner.solver, [])
 
 plotter.plot(traj)
