@@ -88,7 +88,6 @@ class TrajectoryOptimizer():
             secondState = trajectory.get_state(second_time)
 
             optimized_segment = generator.generate(firstState, secondState)
-            print(total_time, first_time, second_time)
 
             if(not collisionSolver.is_collision(optimized_segment, obstacles)):
                 curSegment = trajectory.root
