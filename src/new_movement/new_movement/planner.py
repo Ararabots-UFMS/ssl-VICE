@@ -1,12 +1,10 @@
 from entities.Trajectory import TrajectorySegment, Trajectory
 from entities.States import State, Vector2D
-from entities.Motion import MotionPath
 from entities.obstacles import Obstacle
 from utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
 
 from strategy.blackboard import Blackboard
 
-from copy import deepcopy
 from typing import List, Optional
 from random import uniform, randint
 
@@ -20,7 +18,7 @@ class CollisionSolver():
         ''' Finds a new trajectory without collisions based on a random sampling method similar to RRT '''
         best_trajectory = None
         for i in range(self.trys):
-            # random point to attemp bypass
+            # random point to attempt bypass
             random_point: Vector2D = self.generate_random_point()
             bypassState = State(random_point, Vector2D(0, 0))
 
@@ -71,7 +69,6 @@ class TrajectoryOptimizer():
         This approach is discribed in the article "Bang Bang Boosting of RRTs" 
         
         """
-        trajectory = deepcopy(trajectory) # Dont know if necessary
         total_time = trajectory.get_total_time()
 
         if total_time <= 0:
@@ -106,7 +103,7 @@ class TrajectoryOptimizer():
 
                 trajectory.connect(optimized_segment, first_time)
 
-        return Trajectory(trajectory)
+        return trajectory
 
 class Planner():
     ''' Its responsible for finding a collision free optimal trajectory to target state '''
