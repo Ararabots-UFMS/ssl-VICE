@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from States import Vector2D
+from .States import Vector2D
 
 
 @dataclass

@@ -6,3 +6,4 @@ protobuf
 numpy
 pytest
 pytest-mock
+pytest-cov
