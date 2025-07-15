@@ -38,7 +38,11 @@ class FieldBorderObstacle(StaticObstacle):
             return abs(curPosition.y - closest_corner.y)
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
-        pass
+        if(curPosition.x > self.top_left_point.x and curPosition.x < self.top_right_point):
+            if(curPosition.y > self.bot_left_point.y and curPosition.y < self.top_left_point.y):
+                return True
+        
+        return False
 
     def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
         pass
