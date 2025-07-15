@@ -1,5 +1,13 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from .States import Vector2D
+
+@dataclass
+class ObstaclePriority():
+    HIGHEST = 40
+    HIGH = 30
+    MEDIUM = 20
+    LOW = 10
 
 class Obstacle(ABC):
     @abstractmethod
@@ -19,12 +27,15 @@ class Obstacle(ABC):
         then return a alternative destination outside obstacle,
         '''
         pass
-
+    
+    @property
     @abstractmethod
     def velocity(self) -> float:
         ''' Returns the velocity of the obstacle '''
         pass
 
-class StaticObstacle(Obstacle):
-    def velocity(self):
-        return 0.0
+    @property
+    @abstractmethod
+    def getPriority(self) -> ObstaclePriority:
+        ''' Get obstacles priority '''
+        pass
