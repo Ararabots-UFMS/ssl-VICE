@@ -65,8 +65,21 @@ class FieldBorderObstacle(StaticObstacle):
 
 class PenaltyAreaObstacle(StaticObstacle):
     def __init__(self):
+        # TODO
         pass
-    
+
+    def distanceTo(self, curPosition: Vector2D) -> float:
+        # TODO
+        pass
+
+    def isCollidingAt(self, curPosition: Vector2D) -> bool:
+        # TODO
+        pass
+
+    def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
+        # TODO
+        pass
+
     def getPriority(self) -> ObstaclePriority:
         return ObstaclePriority.LOW
 
