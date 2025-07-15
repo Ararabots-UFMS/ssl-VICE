@@ -14,6 +14,7 @@ WORKDIR /root/ssl-VICE
 COPY . .
 
 # Instala dependências Python
+RUN pip install pre-commit
 RUN pip install --upgrade pip setuptools wheel packaging scikit-build
 RUN pip install -r requirements.txt
 RUN pip install protobuf==3.20.*
