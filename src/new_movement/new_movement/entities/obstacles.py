@@ -24,3 +24,7 @@ class Obstacle(ABC):
     def velocity(self) -> float:
         ''' Returns the velocity of the obstacle '''
         pass
+
+class StaticObstacle(Obstacle):
+    def velocity(self):
+        return 0.0
