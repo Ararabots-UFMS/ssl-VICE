@@ -8,7 +8,7 @@ class StaticObstacle(Obstacle):
         return 0.0
     
 class FieldBorderObstacle(StaticObstacle):
-    def __init__(self, geometry: VisionGeometry, padding: float = 90): # 90mm = robots radius
+    def __init__(self, geometry: VisionGeometry, padding: float = 90.0): # 90mm = robots radius
         self.top_left_point:  Vector2D = None
         self.top_right_point: Vector2D = None
         self.bot_left_point:  Vector2D = None
@@ -71,8 +71,29 @@ class PenaltyAreaObstacle(StaticObstacle):
         return ObstaclePriority.LOW
 
 class GenericCircleObstacle(StaticObstacle):
-    def __init__(self):
-        pass
-    
+    def __init__(self, center: Vector2D, radius: float, padding: float = 90.0):
+        self.center: Vector2D = center
+        self.radius: float = radius + padding
+
+    def distanceTo(self, curPosition: Vector2D) -> float:
+        return self.center.distance(curPosition)
+
+    def isCollidingAt(self, curPosition: Vector2D) -> bool:
+        if self.distanceTo(curPosition) < self.radius:
+            return True
+        return False
+
+    def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
+        # Projects the inside target point into the outer edge of the circle
+        # TODO Check if the order of subtraction is correct
+        center_to_target = Vector2D(tarPosition.x - self.center.x, tarPosition.y - self.center.y)
+
+        distance = self.center.distance(tarPosition)
+        scalar = self.radius / distance
+
+        center_to_target.multiplyByScalar(scalar)
+
+        return Vector2D(tarPosition.x + center_to_target.x, tarPosition.y + center_to_target.y)
+
     def getPriority(self) -> ObstaclePriority:
         return ObstaclePriority.LOWEST

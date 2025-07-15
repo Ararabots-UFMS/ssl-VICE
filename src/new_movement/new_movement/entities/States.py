@@ -12,6 +12,10 @@ class Vector2D:
         if not isinstance(other, Vector2D):
             raise AttributeError("Argument other in euclidean distance must be a Vector2D")
         return dist([self.x, self.y], [other.x, other.y])
+    
+    def multiplyByScalar(self, scalar: float):
+        self.x = self.x * scalar
+        self.y = self.y * scalar
 
     def __neg__(self):
         return Vector2D(-self.x, -self.y)
