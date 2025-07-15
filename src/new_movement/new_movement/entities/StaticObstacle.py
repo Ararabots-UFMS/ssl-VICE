@@ -26,11 +26,7 @@ class FieldBorderObstacle(StaticObstacle):
                 self.bot_right_point = Vector2D(line.x2 - padding, line.y2 + padding)
 
     def distanceTo(self, curPosition: Vector2D) -> float:
-        # Searching closest corner
-        closest_corner = None
-        for corner in [self.top_left_point, self.top_right_point, self.bot_left_point, self.bot_right_point]:
-            if closest_corner is None or corner.distance(curPosition) < closest_corner:
-                closest_corner = corner
+        closest_corner = self._findClosestCorner(curPosition)
 
         if closest_corner.x < closest_corner.y:
             return abs(curPosition.x - closest_corner.x)
@@ -45,7 +41,24 @@ class FieldBorderObstacle(StaticObstacle):
         return False
 
     def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
-        pass
+        closest_corner = self._findClosestCorner(tarPosition)
+
+        new_destination = Vector2D(tarPosition.x , tarPosition.y)
+
+        if(abs(tarPosition.x) > closest_corner.x):
+            new_destination.x = closest_corner.x
+        if(abs(tarPosition.y) > closest_corner.y):
+            new_destination.y = closest_corner.y
+
+        return new_destination
+
+    def _findClosestCorner(self, curPosition: Vector2D) -> Vector2D:
+        closest_corner = None
+        for corner in [self.top_left_point, self.top_right_point, self.bot_left_point, self.bot_right_point]:
+            if closest_corner is None or corner.distance(curPosition) < closest_corner:
+                closest_corner = corner
+
+        return closest_corner
 
     def getPriority(self) -> ObstaclePriority:
         return ObstaclePriority.HIGHEST
