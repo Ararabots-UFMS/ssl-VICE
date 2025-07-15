@@ -13,15 +13,17 @@ class FieldBorderObstacle(StaticObstacle):
         self.top_right_point: Vector2D = None
         self.bot_left_point:  Vector2D = None
         self.bot_right_point: Vector2D = None
+
     
         for line in geometry.field_lines:
             if line.name == 'TopTouchLine':
-                self.top_left_point = Vector2D(line.x1, line.y1) # Not sure if x1 is on the left or right side
-                self.top_right_point = Vector2D(line.x2, line.y2)
+                # TODO Check if padding signal is correct
+                self.top_left_point = Vector2D(line.x1 + padding, line.y1 - padding) # Not sure if x1 is on the left or right side
+                self.top_right_point = Vector2D(line.x2 - padding, line.y2 - padding)
 
             elif line.name == 'BottomTouchLine':
-                self.bot_left_point = Vector2D(line.x1, line.y1)
-                self.bot_right_point = Vector2D(line.x2, line.y2)
+                self.bot_left_point = Vector2D(line.x1 + padding, line.y1 + padding)
+                self.bot_right_point = Vector2D(line.x2 - padding, line.y2 + padding)
 
     def distanceTo(self, curPosition: Vector2D) -> float:
         # Searching closest corner
