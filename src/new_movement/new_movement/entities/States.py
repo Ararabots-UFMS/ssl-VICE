@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from math import dist
+from math import dist, sqrt
 from typing import Optional
 
 
@@ -16,6 +16,24 @@ class Vector2D:
     def multiplyByScalar(self, scalar: float):
         self.x = self.x * scalar
         self.y = self.y * scalar
+
+    def size(self):
+        return sqrt(self.x ** 2, self.y ** 2)
+    
+    def norm(self):
+        return (Vector2D(self.x, self.y)).multiplyByScalar(1 / self.size())
+    
+    def subtract(self, other):
+        return Vector2D(self.x - other.x, self.y - other.y)
+    
+    def dot(self, other):
+        return self.x * other.x + self.y * other.y
+    
+    def cross(self, other):
+        return self.x * other.y - self.y * other.x
+    
+    def add(self, other):
+        return Vector2D(self.x + other.x, self.y + other.y)
 
     def __neg__(self):
         return Vector2D(-self.x, -self.y)

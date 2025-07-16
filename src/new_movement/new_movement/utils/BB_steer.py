@@ -516,4 +516,3 @@ def bang_bang_hard_stop_wait(ix, iv, gx, gv, tf, umin=-1.0, umax=1.0):
     return c
 
 
-test_bang_bang_optimal()
