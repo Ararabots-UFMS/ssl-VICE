@@ -1,7 +1,12 @@
 from .obstacles import Obstacle, ObstaclePriority
 from .States import Vector2D
+from dataclasses import dataclass
 from system_interfaces.msg import VisionGeometry
 
+@dataclass
+class FieldSide():
+    RIGHT = 0
+    LEFT = 1
 
 class StaticObstacle(Obstacle):
     def velocity(self) -> float:
@@ -13,7 +18,6 @@ class FieldBorderObstacle(StaticObstacle):
         self.top_right_point: Vector2D = None
         self.bot_left_point:  Vector2D = None
         self.bot_right_point: Vector2D = None
-
     
         for line in geometry.field_lines:
             if line.name == 'TopTouchLine':
@@ -28,10 +32,7 @@ class FieldBorderObstacle(StaticObstacle):
     def distanceTo(self, curPosition: Vector2D) -> float:
         closest_corner = self._findClosestCorner(curPosition)
 
-        if closest_corner.x < closest_corner.y:
-            return abs(curPosition.x - closest_corner.x)
-        else:
-            return abs(curPosition.y - closest_corner.y)
+        return min(abs(curPosition.x - closest_corner.x), abs(curPosition.x - closest_corner.x))
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
         if(curPosition.x > self.top_left_point.x and curPosition.x < self.top_right_point):
@@ -64,10 +65,28 @@ class FieldBorderObstacle(StaticObstacle):
         return ObstaclePriority.HIGHEST
 
 class PenaltyAreaObstacle(StaticObstacle):
-    def __init__(self):
-        # TODO
-        pass
+    def __init__(self, geometry: VisionGeometry, side: FieldSide):
+        self.top_left_point = None
+        self.top_right_point = None
+        self.bot_left_point = None
+        self.bot_right_point = None
 
+        if side is FieldSide.LEFT:
+            self.top_line = 'LeftFieldRightPenaltyStretch'
+            self.bot_line = 'LeftFieldLeftPenaltyStretch'
+        else:
+            self.top_line = 'RightFieldRightPenaltyStretch'
+            self.bot_line = 'RightFieldLeftPenaltyStretch'
+        
+        for line in geometry.field_lines:
+            if line.name == self.top_line:
+                #TODO CHECK ORDER OF x and y
+                self.top_left_point = Vector2D()
+                self.top_right_point = Vector2D()
+            if line.name == self.bot_line:
+                self.bot_left_point = Vector2D()
+                self.bot_right_point = Vector2D()
+        
     def distanceTo(self, curPosition: Vector2D) -> float:
         # TODO
         pass
