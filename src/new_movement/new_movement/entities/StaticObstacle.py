@@ -37,8 +37,8 @@ class FieldBorderObstacle(StaticObstacle):
             return distance
         
         else:
-            dx = max(min(self.top_left_point.x, self.top_right_point.x) - curPosition.x, 0 , curPosition.x - max(self.top_left_point.x, self.top_right_point.x))
-            dy = max(min(self.top_left_point.y, self.top_right_point.y) - curPosition.y, 0 , curPosition.y - max(self.top_left_point.y, self.top_right_point.y))
+            dx = max(self.top_left_point.x - curPosition.x, 0 , curPosition.x - self.top_right_point.x)
+            dy = max(self.top_right_point.y - curPosition.y, 0 , curPosition.y - self.bot_right_point.y)
             distance = Vector2D(dx, dy).size()
         
             return -distance
@@ -100,8 +100,8 @@ class PenaltyAreaObstacle(StaticObstacle):
     def distanceTo(self, curPosition: Vector2D) -> float:
         if(not self.isCollidingAt(curPosition)):
             # isso ta muito longo, mas se diminuir fica feio kk
-            dx = max(min(self.top_left_point.x, self.top_right_point.x) - curPosition.x, 0 , curPosition.x - max(self.top_left_point.x, self.top_right_point.x))
-            dy = max(min(self.top_left_point.y, self.top_right_point.y) - curPosition.y, 0 , curPosition.y - max(self.top_left_point.y, self.top_right_point.y))
+            dx = max(self.top_left_point.x - curPosition.x, 0 , curPosition.x - self.top_right_point.x)
+            dy = max(self.top_right_point.y - curPosition.y, 0 , curPosition.y - self.bot_right_point.y)
             distance = Vector2D(dx, dy).size()
 
             return distance
@@ -124,8 +124,13 @@ class PenaltyAreaObstacle(StaticObstacle):
         return False
 
     def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
-        # TODO
-        pass
+        new_destination = Vector2D(tarPosition.x, tarPosition.y)
+        
+        # Ignoring the side that faces the goal, to prevent it to be stuck between the field border and the penalty area
+        if(self.side == FieldSide.LEFT):
+
+        else:
+            pass
 
     def _findClosestCorner(self, curPosition: Vector2D) -> Vector2D:
         closest_corner = None
