@@ -113,14 +113,9 @@ class PenaltyAreaObstacle(StaticObstacle):
             return -distance
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
-        if self.side is FieldSide.LEFT:
-            if (curPosition.y < self.top_right_point.y and curPosition.y > self.bot_right_point.y) and \
-               (curPosition.x < self.top_left_point.x and curPosition.x > self.bot_left_point.x):
-                return True
-        else:
-            if (curPosition.x > self.top_left_point.x and curPosition.x < self.bot_left_point.x) and \
-               (curPosition.y < self.top_right_point.y and curPosition.y > self.bot_right_point.y):
-                return True
+        if (curPosition.y < self.top_right_point.y and curPosition.y > self.bot_right_point.y) and \
+            (curPosition.x > self.top_left_point.x and curPosition.x < self.bot_left_point.x):
+            return True
 
         return False
 
