@@ -64,8 +64,14 @@ class FieldBorderObstacle(StaticObstacle):
 
     def _findClosestCorner(self, curPosition: Vector2D) -> Vector2D:
         closest_corner = None
+        min_distance = float('inf') # Initialize with a very large distance
+
         for corner in [self.top_left_point, self.top_right_point, self.bot_left_point, self.bot_right_point]:
-            if closest_corner is None or corner.distance(curPosition) < closest_corner:
+            if corner is None: # Handle cases where points might not be initialized yet
+                continue
+            current_distance = corner.distance(curPosition)
+            if current_distance < min_distance:
+                min_distance = current_distance
                 closest_corner = corner
 
         return closest_corner
@@ -143,8 +149,14 @@ class PenaltyAreaObstacle(StaticObstacle):
 
     def _findClosestCorner(self, curPosition: Vector2D) -> Vector2D:
         closest_corner = None
+        min_distance = float('inf') # Initialize with a very large distance
+
         for corner in [self.top_left_point, self.top_right_point, self.bot_left_point, self.bot_right_point]:
-            if closest_corner is None or corner.distance(curPosition) < closest_corner:
+            if corner is None: # Handle cases where points might not be initialized yet
+                continue
+            current_distance = corner.distance(curPosition)
+            if current_distance < min_distance:
+                min_distance = current_distance
                 closest_corner = corner
 
         return closest_corner
