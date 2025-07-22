@@ -123,7 +123,6 @@ class PenaltyAreaObstacle(StaticObstacle):
 
         return False
 
-
     def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
         # TODO
         pass
@@ -145,7 +144,7 @@ class GenericCircleObstacle(StaticObstacle):
         self.radius: float = radius + padding
 
     def distanceTo(self, curPosition: Vector2D) -> float:
-        return self.center.distance(curPosition)
+        return self.center.distance(curPosition) - self.radius
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
         if self.distanceTo(curPosition) < self.radius:
