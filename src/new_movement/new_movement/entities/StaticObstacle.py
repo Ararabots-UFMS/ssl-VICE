@@ -55,8 +55,10 @@ class FieldBorderObstacle(StaticObstacle):
 
         new_destination = Vector2D(tarPosition.x , tarPosition.y)
 
-        new_destination.x = max(abs(tarPosition.x), closest_corner.x)
-        new_destination.y = max(abs(tarPosition.y), closest_corner.y)
+        if(abs(tarPosition.x) > abs(closest_corner.x)):
+            new_destination.x = closest_corner.x
+        if(abs(tarPosition.y) > abs(closest_corner.y)):
+            new_destination.y = closest_corner.y
 
         return new_destination
 
@@ -99,7 +101,6 @@ class PenaltyAreaObstacle(StaticObstacle):
         
     def distanceTo(self, curPosition: Vector2D) -> float:
         if(not self.isCollidingAt(curPosition)):
-            # isso ta muito longo, mas se diminuir fica feio kk
             dx = max(self.top_left_point.x - curPosition.x, 0 , curPosition.x - self.top_right_point.x)
             dy = max(self.top_right_point.y - curPosition.y, 0 , curPosition.y - self.bot_right_point.y)
             distance = Vector2D(dx, dy).size()
