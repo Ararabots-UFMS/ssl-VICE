@@ -30,13 +30,18 @@ class FieldBorderObstacle(StaticObstacle):
                 self.bot_right_point = Vector2D(line.x2 - padding, line.y2 + padding)
 
     def distanceTo(self, curPosition: Vector2D) -> float:
-        closest_corner = self._findClosestCorner(curPosition)
-
-        min_distance_on_axis = min(abs(curPosition.x - closest_corner.x), abs(curPosition.y - closest_corner.y))
         if(not self.isCollidingAt()):
-            return min_distance_on_axis
+            closest_corner = self._findClosestCorner(curPosition)
+            distance = min(abs(curPosition.x - closest_corner.x), abs(curPosition.y - closest_corner.y))
+            
+            return distance
         
-        return min_distance_on_axis
+        else:
+            dx = max(min(self.top_left_point.x, self.top_right_point.x) - curPosition.x, 0 , curPosition.x - max(self.top_left_point.x, self.top_right_point.x))
+            dy = max(min(self.top_left_point.y, self.top_right_point.y) - curPosition.y, 0 , curPosition.y - max(self.top_left_point.y, self.top_right_point.y))
+            distance = Vector2D(dx, dy).size()
+        
+            return -distance
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
         if(curPosition.x > self.top_left_point.x and curPosition.x < self.top_right_point):
@@ -100,7 +105,6 @@ class PenaltyAreaObstacle(StaticObstacle):
             distance = Vector2D(dx, dy).size()
 
             return distance
-
         else:
             closest_coner = self._findClosestCorner(curPosition)
             distance = min(abs(curPosition.x - closest_coner.x), abs(curPosition.y - closest_coner.y))
