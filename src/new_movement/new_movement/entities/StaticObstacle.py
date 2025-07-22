@@ -50,10 +50,8 @@ class FieldBorderObstacle(StaticObstacle):
 
         new_destination = Vector2D(tarPosition.x , tarPosition.y)
 
-        if(abs(tarPosition.x) > closest_corner.x):
-            new_destination.x = closest_corner.x
-        if(abs(tarPosition.y) > closest_corner.y):
-            new_destination.y = closest_corner.y
+        new_destination.x = max(abs(tarPosition.x), closest_corner.x)
+        new_destination.y = max(abs(tarPosition.y), closest_corner.y)
 
         return new_destination
 
@@ -101,11 +99,13 @@ class PenaltyAreaObstacle(StaticObstacle):
             dy = max(min(self.top_left_point.y, self.top_right_point.y) - curPosition.y, 0 , curPosition.y - max(self.top_left_point.y, self.top_right_point.y))
             distance = Vector2D(dx, dy).size()
 
+            return distance
+
         else:
             closest_coner = self._findClosestCorner(curPosition)
             distance = min(abs(curPosition.x - closest_coner.x), abs(curPosition.y - closest_coner.y))
 
-        return distance
+            return -distance
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
         if self.side == FieldSide.LEFT:
