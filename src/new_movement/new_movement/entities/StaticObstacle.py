@@ -82,7 +82,7 @@ class PenaltyAreaObstacle(StaticObstacle):
         self.bot_right_point = None
         self.padding = padding
 
-        if self.side == FieldSide.LEFT:
+        if self.side is FieldSide.LEFT:
             self.top_line = 'LeftFieldRightPenaltyStretch'
             self.bot_line = 'LeftFieldLeftPenaltyStretch'
         else:
@@ -113,7 +113,7 @@ class PenaltyAreaObstacle(StaticObstacle):
             return -distance
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
-        if self.side == FieldSide.LEFT:
+        if self.side is FieldSide.LEFT:
             if (curPosition.y < self.top_right_point.y and curPosition.y > self.bot_right_point.y) and \
                (curPosition.x < self.top_left_point.x and curPosition.x > self.bot_left_point.x):
                 return True
@@ -125,13 +125,26 @@ class PenaltyAreaObstacle(StaticObstacle):
         return False
 
     def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
-        new_destination = Vector2D(tarPosition.x, tarPosition.y)
-        
-        # Ignoring the side that faces the goal, to prevent it to be stuck between the field border and the penalty area
-        if(self.side == FieldSide.LEFT):
+        if(not self.isCollidingAt(tarPosition)):
+            return tarPosition
 
+        closest_corner = self._findClosestCorner(tarPosition)
+        new_destination = Vector2D(tarPosition.x, tarPosition.y)
+
+        if(self.side is FieldSide.LEFT):
+            x_ref = self.top_right_point.x
         else:
-            pass
+            x_ref = self.top_left_point.x
+
+        dx = abs(tarPosition.x - x_ref)
+        dy = abs(tarPosition.y - closest_corner.y)
+
+        if(dx > dy):
+            new_destination.x = x_ref
+        else:
+            new_destination.y = closest_corner.y
+            
+        return new_destination
 
     def _findClosestCorner(self, curPosition: Vector2D) -> Vector2D:
         closest_corner = None
