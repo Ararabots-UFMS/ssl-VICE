@@ -1,7 +1,7 @@
-from .obstacles import Obstacle, ObstaclePriority
-from .States import Vector2D, State, MoveConstraints
-from .Motion import MotionPrimitive
-from ..utils.BB_steer import integrate_control_2d
+from new_movement.entities.obstacles import Obstacle, ObstaclePriority
+from new_movement.entities.States import Vector2D, State, MoveConstraints
+from new_movement.entities.Motion import MotionPrimitive
+from new_movement.utils.BB_steer import integrate_control_2d
 from copy import deepcopy
 from typing import Tuple
 

@@ -1,5 +1,5 @@
-from .obstacles import Obstacle, ObstaclePriority
-from .States import Vector2D
+from new_movement.entities.obstacles import Obstacle, ObstaclePriority
+from new_movement.entities.States import Vector2D
 from dataclasses import dataclass
 from system_interfaces.msg import VisionGeometry
 
