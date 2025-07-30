@@ -92,16 +92,16 @@ class PenaltyAreaObstacle(StaticObstacle):
         for line in geometry.field_lines:
             if line.name == self.top_line:
                 #TODO CHECK ORDER OF x and y
-                self.top_left_point = Vector2D(self.top_line.x1 + self.padding, self.top_line.y1 + self.padding)
-                self.top_right_point = Vector2D(self.top_line.x2 + self.padding, self.top_line.y2 + self.padding)
+                self.top_left_point = Vector2D(line.x1 - self.padding, line.y1 + self.padding)
+                self.top_right_point = Vector2D(line.x2 + self.padding, line.y2 + self.padding)
             if line.name == self.bot_line:
-                self.bot_left_point = Vector2D(self.bot_line.x1 + self.padding, self.bot_line.y1 + self.padding)
-                self.bot_right_point = Vector2D(self.bot_line.x2 + self.padding, self.bot_line.y2 + self.padding)
+                self.bot_left_point = Vector2D(line.x1 - self.padding, line.y1 - self.padding)
+                self.bot_right_point = Vector2D(line.x2 + self.padding, line.y2 - self.padding)
         
     def distanceTo(self, curPosition: Vector2D) -> float:
         if(not self.isCollidingAt(curPosition)):
             dx = max(self.top_left_point.x - curPosition.x, 0 , curPosition.x - self.top_right_point.x)
-            dy = max(self.top_right_point.y - curPosition.y, 0 , curPosition.y - self.bot_right_point.y)
+            dy = max(self.bot_right_point.y - curPosition.y, 0 , curPosition.y - self.top_right_point.y)
             distance = Vector2D(dx, dy).size()
 
             return distance
@@ -112,9 +112,9 @@ class PenaltyAreaObstacle(StaticObstacle):
             return -distance
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
-        if (curPosition.y < self.top_right_point.y and curPosition.y > self.bot_right_point.y) and \
-            (curPosition.x > self.top_left_point.x and curPosition.x < self.bot_left_point.x):
-            return True
+        if (curPosition.y < self.top_right_point.y and curPosition.y > self.bot_right_point.y):
+            if(curPosition.x > self.top_left_point.x and curPosition.x < self.top_right_point.x):
+                return True
 
         return False
 
@@ -125,15 +125,16 @@ class PenaltyAreaObstacle(StaticObstacle):
         closest_corner = self._findClosestCorner(tarPosition)
         new_destination = Vector2D(tarPosition.x, tarPosition.y)
 
+        # This blocks a new destination on the side of the goal
         if(self.side is FieldSide.LEFT):
             x_ref = self.top_right_point.x
         else:
             x_ref = self.top_left_point.x
 
-        dx = abs(tarPosition.x - x_ref)
-        dy = abs(tarPosition.y - closest_corner.y)
+        dx = abs(x_ref - tarPosition.x)
+        dy = abs(closest_corner.y - tarPosition.y)
 
-        if(dx > dy):
+        if(dx <= dy): #Maybe give a preference to be close to the center, so give dx more importance of dy?
             new_destination.x = x_ref
         else:
             new_destination.y = closest_corner.y
@@ -143,7 +144,7 @@ class PenaltyAreaObstacle(StaticObstacle):
     def _findClosestCorner(self, curPosition: Vector2D) -> Vector2D:
         closest_corner = None
         for corner in [self.top_left_point, self.top_right_point, self.bot_left_point, self.bot_right_point]:
-            if closest_corner is None or corner.distance(curPosition) < closest_corner:
+            if closest_corner is None or corner.distance(curPosition) < closest_corner.distance(curPosition):
                 closest_corner = corner
 
         return closest_corner
@@ -178,3 +179,73 @@ class GenericCircleObstacle(StaticObstacle):
 
     def getPriority(self) -> ObstaclePriority:
         return ObstaclePriority.LOWEST
+    
+# --- Penalty Area Tests ---
+
+geometry = VisionGeometry()
+lines = []
+
+from system_interfaces.msg import FieldLineSegment
+
+# Define penalty area lines (example for LEFT side)
+LeftFieldRightPenaltyStretch = FieldLineSegment()
+LeftFieldRightPenaltyStretch.name = "LeftFieldRightPenaltyStretch"
+LeftFieldRightPenaltyStretch.x1 = -2250.0
+LeftFieldRightPenaltyStretch.y1 = 800.0
+LeftFieldRightPenaltyStretch.x2 = -1650.0
+LeftFieldRightPenaltyStretch.y2 = 800.0
+
+LeftFieldLeftPenaltyStretch = FieldLineSegment()
+LeftFieldLeftPenaltyStretch.name = "LeftFieldLeftPenaltyStretch"
+LeftFieldLeftPenaltyStretch.x1 = -2250.0
+LeftFieldLeftPenaltyStretch.y1 = -800.0
+LeftFieldLeftPenaltyStretch.x2 = -1650.0
+LeftFieldLeftPenaltyStretch.y2 = -800.0
+
+lines.append(LeftFieldRightPenaltyStretch)
+lines.append(LeftFieldLeftPenaltyStretch)
+
+geometry.field_lines = lines
+
+# Test Constructor
+penalty = PenaltyAreaObstacle(geometry, FieldSide.LEFT, padding=90.0)
+
+print(" --- PenaltyAreaObstacle Constructor ---")
+print(f"top_left: {penalty.top_left_point}")
+print(f"top_right: {penalty.top_right_point}")
+print(f"bot_left: {penalty.bot_left_point}")
+print(f"bot_right: {penalty.bot_right_point}")
+print(" --- END ---\n")
+
+# Test positions (adjust as needed for your field)
+position_tests = [
+    Vector2D(-2000.0, 0.0),
+    Vector2D(-1700.0, 700.0),
+    Vector2D(-1800.0, -700.0),
+    Vector2D(-2250.0, 800.0),
+    Vector2D(-1650.0, -800.0),
+    Vector2D(-1600.0, 0.0),
+    Vector2D(-2300.0, 0.0),
+    Vector2D(-1950.0, 900.0),
+    Vector2D(-1950.0, -900.0),
+]
+
+print(" --- TEST DISTANCE --- ")
+for position in position_tests:
+    print(f"Position: {position} Distance: {penalty.distanceTo(position)}")
+print(" --- END ---\n")
+
+print(" --- TEST COLLISION --- ")
+for position in position_tests:
+    print(f"Position: {position} Colliding: {penalty.isCollidingAt(position)}")
+print(" --- END ---\n")
+
+print(" --- TEST ADAPT DESTINATION --- ")
+for position in position_tests:
+    print(f"Position: {position} New_destination: {penalty.adaptDestination(position)}")
+print(" --- END ---\n")
+
+print(" --- TEST CLOSEST CORNER --- ")
+for position in position_tests:
+    print(f"Position: {position} ClosestCorner: {penalty._findClosestCorner(position)}")
+print(" --- END ---\n")
