@@ -25,30 +25,29 @@ class FieldBorderObstacle(StaticObstacle):
                 self.top_left_point = Vector2D(line.x1 + padding, line.y1 - padding) # Not sure if x1 is on the left or right side
                 self.top_right_point = Vector2D(line.x2 - padding, line.y2 - padding)
 
-            elif line.name == 'BottomTouchLine':
+            elif line.name == 'BottonTouchLine':
                 self.bot_left_point = Vector2D(line.x1 + padding, line.y1 + padding)
                 self.bot_right_point = Vector2D(line.x2 - padding, line.y2 + padding)
 
     def distanceTo(self, curPosition: Vector2D) -> float:
-        if(not self.isCollidingAt()):
+        if(not self.isCollidingAt(curPosition)):
             closest_corner = self._findClosestCorner(curPosition)
             distance = min(abs(curPosition.x - closest_corner.x), abs(curPosition.y - closest_corner.y))
-            
             return distance
         
         else:
             dx = max(self.top_left_point.x - curPosition.x, 0 , curPosition.x - self.top_right_point.x)
-            dy = max(self.top_right_point.y - curPosition.y, 0 , curPosition.y - self.bot_right_point.y)
+            dy = max(self.bot_right_point.y - curPosition.y, 0 , curPosition.y - self.top_right_point.y)
             distance = Vector2D(dx, dy).size()
         
             return -distance
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
-        if(curPosition.x > self.top_left_point.x and curPosition.x < self.top_right_point):
+        if(curPosition.x > self.top_left_point.x and curPosition.x < self.top_right_point.x):
             if(curPosition.y > self.bot_left_point.y and curPosition.y < self.top_left_point.y):
-                return True
+                return False
         
-        return False
+        return True
 
     def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
         closest_corner = self._findClosestCorner(tarPosition)
@@ -65,7 +64,7 @@ class FieldBorderObstacle(StaticObstacle):
     def _findClosestCorner(self, curPosition: Vector2D) -> Vector2D:
         closest_corner = None
         for corner in [self.top_left_point, self.top_right_point, self.bot_left_point, self.bot_right_point]:
-            if closest_corner is None or corner.distance(curPosition) < closest_corner:
+            if closest_corner is None or corner.distance(curPosition) < closest_corner.distance(curPosition):
                 closest_corner = corner
 
         return closest_corner
@@ -179,3 +178,154 @@ class GenericCircleObstacle(StaticObstacle):
 
     def getPriority(self) -> ObstaclePriority:
         return ObstaclePriority.LOWEST
+    
+
+# Field Border Tests
+# --- Geometry Field Border ---
+geometry = VisionGeometry()
+
+lines = []
+
+from system_interfaces.msg import FieldLineSegment
+TopTouchLine = FieldLineSegment()
+TopTouchLine.name = "TopTouchLine"
+# Cima esquerdo
+TopTouchLine.x1 = -2250.0
+TopTouchLine.y1 = 1500.0
+# Cima direito
+TopTouchLine.x2 = 2250.0
+TopTouchLine.y2 = 1500.0
+
+BottonTouchLine = FieldLineSegment()
+BottonTouchLine.name = "BottonTouchLine"
+# Baixo esquerdo
+BottonTouchLine.x1 = -2250.0
+BottonTouchLine.y1 = -1500.0
+# Baixo direito
+BottonTouchLine.x2 = 2250.0
+BottonTouchLine.y2 = -1500.0
+
+lines.append(TopTouchLine)
+lines.append(BottonTouchLine)
+
+geometry.field_lines = lines
+
+# --- END ---
+
+# --- Field Border ---
+
+# Test Construtor
+borda = FieldBorderObstacle(geometry, padding=90.0)
+
+print(" --- Constructor ---")
+print()
+print(f"top_left: {borda.top_left_point}")
+print(f"top_right: {borda.top_right_point}")
+print(f"bot_left: {borda.bot_left_point}")
+print(f"bot_right: {borda.bot_right_point}")
+print()
+print(" --- END ---")
+
+# x= +- 2160.0, y= +- 1410.0
+
+# Test DistanceTo
+position_tests = []
+position_tests.append(Vector2D(0.0, 0.0)) # (0, 0) # Calculated: 1410
+position_tests.append(Vector2D(72.0, 84.0)) # (70, 84) Calculated: 1326
+position_tests.append(Vector2D(-283.0, 24.0)) #(-283 , 24) Calculated: 1386
+position_tests.append(Vector2D(-700.0, 500.0)) # (700, 500) Calculated: 910
+position_tests.append(Vector2D(820.0, -180.0)) # (820, -180) Calculated: 1230
+
+position_tests.append(Vector2D(2160.0, 1410.0)) # (borda top right) Calculated:0
+position_tests.append(Vector2D(2160.0, -1410.0)) # (borda bot right) Calculated:0
+position_tests.append(Vector2D(-2160.0, 1410.0)) # (borda top left) Calculated:0
+position_tests.append(Vector2D(-2160.0, -1410.0)) # (borda bot left) Calculated:0
+
+position_tests.append(Vector2D(0, 2000)) # (meio cima) Calculated:590
+position_tests.append(Vector2D(0, -2000)) # (meio baixo)  Calculated: 590
+position_tests.append(Vector2D(5000, 0)) # (direita meio) Calculated:2840
+position_tests.append(Vector2D(-5000, 0)) # (esquerda meio) Calculated:2840
+
+position_tests.append(Vector2D(5000, 2000)) # (canto direito superior) Calculated: 2900.6378
+position_tests.append(Vector2D(-5000, 2000)) # (canto esquerdo superior) Calculated:2900.6378
+position_tests.append(Vector2D(5000, -2000)) # (canto direito inferior) Calculated:2900.6378
+position_tests.append(Vector2D(-5000, -2000)) # (canto esquerdo inferior) Calculated:2900.6378
+
+
+print(" --- TEST DISTANCE --- ")
+print()
+for position in position_tests:
+    print(borda.distanceTo(position))
+print()
+print(" --- END --- ")
+    
+# Test isCollidingAt
+
+
+print(" --- TEST DISTANCE --- ")
+print()
+for position in position_tests:
+
+    # False
+    # False
+    # False
+    # False
+    # False
+    
+    # False
+    # False
+    # False
+    # False
+
+    # True
+    # True
+    # True
+    # True
+
+    # True
+    # True
+    # True
+    # True
+    print(f"Position: {position} Result: {borda.isCollidingAt(position)}")
+print()
+print(" --- END --- ")
+
+# Test adaptDestination
+
+#(0.0, 0.0) = (2160, 1410) Calculated: 1410  ----> (0,0)
+#(72.0, 84.0)) = (2088, 1326) Calculated: 1326 ------> (72,84)
+#(-283.0, 24.0) = (1877, 1386) Calculated: 1386 ------> (-283 , 24)
+#(-700.0, 500.0) = (2090, 910) Calculated: 910 ------> (700, 500)
+#(820.0, -180.0) = (1340, 1230) Calculated 1230 -------> (820, -180)
+
+#(2160.0, 1410.0) -----> #(2160.0, 1410.0)
+#(2160.0, -1410.0) -----> #(2160.0, -1410.0)
+#(-2160.0, 1410.0) -----> #(-2160.0, 1410.0)
+#(-2160.0, -1410.0) ------> #(-2160.0, -1410.0)
+
+#(0, 2000)  -------> #(0, 1410) (0, 2000)
+#(0, -2000) -------> #(0, -1410)
+#(5000, 0)) ------->  #(2160, 0)
+#(-5000, 0) -------> #(-2160, 0)
+
+#(5000, 2000)   ------> #(2160, 1410)
+#(-5000, 2000)  ------> #(-2160, 1410)
+#(5000, -2000)  ------> #(2160, -1410)
+#(-5000, -2000) ------>  #(-2160, -1410)
+
+print(" --- TEST ADAPT DESTINATION --- ")
+print()
+for position in position_tests:
+    print(f"Position: {position} New_destination: {borda.adaptDestination(position)}")
+print()
+print(" --- END --- ")
+# Test find closest corner
+
+print(" --- TEST DISTANCE --- ")
+print()
+for position in position_tests:
+    # 
+    print(f"Position: {position} closestCorner: {borda._findClosestCorner(position)}")
+print()
+print(" --- END --- ")
+# --- END ---

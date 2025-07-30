@@ -18,7 +18,7 @@ class Vector2D:
         self.y = self.y * scalar
 
     def size(self):
-        return sqrt(self.x ** 2, self.y ** 2)
+        return sqrt(self.x ** 2 + self.y ** 2)
     
     def norm(self):
         return (Vector2D(self.x, self.y)).multiplyByScalar(1 / self.size())
