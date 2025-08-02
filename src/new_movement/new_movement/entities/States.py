@@ -13,27 +13,31 @@ class Vector2D:
             raise AttributeError("Argument other in euclidean distance must be a Vector2D")
         return dist([self.x, self.y], [other.x, other.y])
     
-    def multiplyByScalar(self, scalar: float):
-        self.x = self.x * scalar
-        self.y = self.y * scalar
-
-    def size(self):
-        return sqrt(self.x ** 2 + self.y ** 2)
-    
-    def norm(self):
-        return (Vector2D(self.x, self.y)).multiplyByScalar(1 / self.size())
+    def add(self, other):
+        return Vector2D(self.x + other.x, self.y + other.y)
     
     def subtract(self, other):
         return Vector2D(self.x - other.x, self.y - other.y)
     
+    def multiplyByScalar(self, scalar: float):
+        self.x = self.x * scalar
+        self.y = self.y * scalar
+
     def dot(self, other):
         return self.x * other.x + self.y * other.y
     
     def cross(self, other):
         return self.x * other.y - self.y * other.x
     
-    def add(self, other):
-        return Vector2D(self.x + other.x, self.y + other.y)
+    def size(self):
+        return sqrt(self.x ** 2 + self.y ** 2)
+    
+    def norm(self):
+        return (Vector2D(self.x, self.y)).multiplyByScalar(1 / self.size())
+    
+    def perpendicular(self):
+        # turning clockwise
+        return Vector2D(self.y, -self.x)
 
     def __neg__(self):
         return Vector2D(-self.x, -self.y)
