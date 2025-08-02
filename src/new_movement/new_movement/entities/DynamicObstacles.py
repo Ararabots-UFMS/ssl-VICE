@@ -1,6 +1,6 @@
 from new_movement.entities.obstacles import Obstacle, ObstaclePriority
 from new_movement.entities.States import Vector2D, State, MoveConstraints
-from new_movement.entities.Motion import MotionPrimitive
+from new_movement.entities.Trajectory import Trajectory
 from new_movement.utils.BB_steer import integrate_control_2d
 from typing import Tuple
 
@@ -19,10 +19,10 @@ class EnemyRobotObstacle(Obstacle):
         start_point = self._getPos()
         end_point = self._getPredictedPos(t)
 
-        return curPosition.distance(self._closestPointInLine(curPosition, start_point, end_point))
+        return curPosition.distance(self._closestPointInLine(curPosition, start_point, end_point)) - self.radius
 
     def isCollidingAt(self, curPosition: Vector2D, t: float) -> bool:
-        if self.distanceTo(curPosition, t) <= self.radius:
+        if self.distanceTo(curPosition, t) <= 0: # Negative distance, by convention, is inside obstacle.
             return True
         
         return False
@@ -81,8 +81,36 @@ class EnemyRobotObstacle(Obstacle):
         return closest
 
 class AllyRobotObstacle(Obstacle):
-    def __init__(self):
-        pass
+    def __init__(self, robotState: State, trajectory: Trajectory, radius: float = 90):
+        self.robotState = robotState
+        self.trajectory = trajectory
+        self.radius = radius
+
+    def distanceTo(self, curPosition: Vector2D, t: float) -> float:
+        return self.trajectory.get_position(t).distance(curPosition) - self.radius
+    
+    def isCollidingAt(self, curPosition: Vector2D, t: float) -> bool:
+        if self.distanceTo(curPosition, t) <= 0:
+            return True
+        
+        return False
+    
+    def adaptDestination(self, tarPosition: Vector2D, t: float) -> Vector2D:
+        center_to_target = tarPosition.subtract(self.trajectory.get_position(t))
+
+        dist = center_to_target.size()
+        if dist == 0:
+            center_to_target = Vector2D(1, 0) # arbitrary direction
+
+        center_to_target = center_to_target.norm()
+
+        return self.trajectory.get_position(t).add(center_to_target.multiplyByScalar(self.radius))
+    
+    def updateState(self, robotState: State) -> None:
+        self.robotState = robotState
+
+    def updateTrajectory(self, trajectory: Trajectory) -> None:
+        self.trajectory = trajectory
 
     def getPriority(self) -> ObstaclePriority:
         return ObstaclePriority.MEDIUM
