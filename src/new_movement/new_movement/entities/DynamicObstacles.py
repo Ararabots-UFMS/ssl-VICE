@@ -3,6 +3,8 @@ from new_movement.entities.States import Vector2D, State
 from new_movement.entities.Trajectory import Trajectory
 
 
+#TODO maybe give preference in adapt destination to give a new destination
+# close to the initial position instead of the closest of the target position...
 class EnemyRobotObstacle(Obstacle):
     ''' 
     Enemy Robots are modeled as a tube with thickness equal to the diameter of the robots, 
@@ -79,6 +81,9 @@ class EnemyRobotObstacle(Obstacle):
         return closest
 
 class AllyRobotObstacle(Obstacle):
+    '''
+    Allies Robots are modeled by their trajectory, in a tube shaped manner.
+    '''
     def __init__(self, robotState: State, trajectory: Trajectory, radius: float = 90):
         self.robotState = robotState
         self.trajectory = trajectory

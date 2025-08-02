@@ -3,6 +3,7 @@ from new_movement.entities.States import Vector2D
 from dataclasses import dataclass
 from system_interfaces.msg import VisionGeometry
 
+
 @dataclass
 class FieldSide():
     RIGHT = 0
