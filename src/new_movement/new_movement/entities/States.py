@@ -20,8 +20,7 @@ class Vector2D:
         return Vector2D(self.x - other.x, self.y - other.y)
     
     def multiplyByScalar(self, scalar: float):
-        self.x = self.x * scalar
-        self.y = self.y * scalar
+        return Vector2D(self.x * scalar, self.y * scalar)
 
     def dot(self, other):
         return self.x * other.x + self.y * other.y

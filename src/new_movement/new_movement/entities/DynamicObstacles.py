@@ -56,12 +56,15 @@ class EnemyRobotObstacle(Obstacle):
     def getPriority(self) -> ObstaclePriority:
         return ObstaclePriority.HIGH
     
+    def velocity(self) -> Vector2D:
+        return self.robotState.velocity
+    
     def _getPos(self) -> Vector2D:
         return self.robotState.position
 
     def _getPredictedPos(self, t: float) -> Vector2D:
         # curPos + curVel * t
-        return self.robotState.position.add(self.robotState.velocity.multiplyByScalar(t))
+        return self._getPos().add(self.velocity().multiplyByScalar(t))
     
     def _closestPointInLine(self, curPos: Vector2D, start_point: Vector2D, end_point: Vector2D) -> Vector2D:
         ''' Returns the closest point in a line segment to a position '''
@@ -99,6 +102,9 @@ class AllyRobotObstacle(Obstacle):
         return False
     
     def adaptDestination(self, tarPosition: Vector2D, t: float) -> Vector2D:
+        if not self.isCollidingAt(tarPosition, t):
+            return tarPosition
+        
         center_to_target = tarPosition.subtract(self.trajectory.get_position(t))
 
         dist = center_to_target.size()
@@ -117,5 +123,6 @@ class AllyRobotObstacle(Obstacle):
 
     def getPriority(self) -> ObstaclePriority:
         return ObstaclePriority.MEDIUM
-
-
+    
+    def velocity(self) -> Vector2D:
+        return self.robotState.velocity
