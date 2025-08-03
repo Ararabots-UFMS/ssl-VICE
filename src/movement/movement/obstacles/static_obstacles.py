@@ -148,8 +148,6 @@ class PenaltyAreaObstacles(StaticObstacle):
     def __init__(self, geometry: VisionGeometry):
         for line in geometry.field_lines:
 
-            
-
             if line.name == 'LeftPenaltyStretch':
                 self.left_penalty = line
 
