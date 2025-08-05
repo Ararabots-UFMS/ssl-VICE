@@ -1,7 +1,7 @@
-from entities.Trajectory import TrajectorySegment, Trajectory
-from entities.States import State, Vector2D
-from entities.obstacles import Obstacle
-from utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
+from new_movement.entities.Trajectory import TrajectorySegment, Trajectory
+from new_movement.entities.States import State, Vector2D
+from new_movement.entities.obstacles import Obstacle
+from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
 
 from strategy.blackboard import Blackboard
 
@@ -69,7 +69,7 @@ class TrajectoryOptimizer():
         This approach is discribed in the article "Bang Bang Boosting of RRTs" 
         
         """
-        total_time = trajectory.get_total_time()
+        total_time = trajectory.get_total_duration()
 
         if total_time <= 0:
             return trajectory
@@ -89,19 +89,20 @@ class TrajectoryOptimizer():
             if(not collisionSolver.is_collision(optimized_segment, obstacles)):
                 curSegment = trajectory.root
                 curTime = second_time
-                while(curSegment.get_local_time() < curTime and curSegment.child is not None):
-                    curTime -= curSegment.get_local_time()
+                while(curSegment.get_local_duration() < curTime and curSegment.child is not None):
+                    curTime -= curSegment.get_local_duration()
                     curSegment = curSegment.child
                 
-                _, last_motion = curSegment.motionPath.split(curTime)
+                _, last_motion = curSegment.motion_path.split(curTime)
                 last_segment = TrajectorySegment(secondState.position, secondState.velocity, last_motion)
                 
                 if(curSegment.child is not None):
                     last_segment.child = curSegment.child
 
                 optimized_segment.add_child(last_segment)
-
                 trajectory.connect(optimized_segment, first_time)
+
+                total_time = trajectory.get_total_duration()
 
         return trajectory
 
@@ -121,25 +122,3 @@ class Planner():
             self.optimizer.optimize(best_trajectory, self.generator, self.solver, obstacles)
 
         return best_trajectory
-        
-from utilities.trajectory_plotter import TrajectoryPlotter
-
-plotter = TrajectoryPlotter()
-
-initState = State(Vector2D(0, 0), Vector2D(-1000, 0))
-midState = State(Vector2D(1000, -500), Vector2D(0, 0))
-tarState = State(Vector2D(-1000, 1000), Vector2D(0, 0))
-
-planner = Planner()
-trajfirst = planner.find(initState, midState, [])
-trajsecond = planner.find(midState, tarState, [])
-
-traj = Trajectory(trajfirst)
-traj.append(trajsecond)
-
-plotter.plot(traj)
-
-opt = TrajectoryOptimizer(50)
-traj = opt.optimize(traj, planner.generator, planner.solver, [])
-
-plotter.plot(traj)
