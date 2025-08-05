@@ -1,7 +1,7 @@
-from utilities.BB_steer import integrate_control_2d as integrate
-from utilities.BB_steer import integrate_control_2d_at_time as integrate_t
-from .States import State, Vector2D
-from .Motion import MotionPath
+from new_movement.utilities.BB_steer import integrate_control_2d as integrate
+from new_movement.utilities.BB_steer import integrate_control_2d_at_time as integrate_t
+from new_movement.entities.States import State, Vector2D
+from new_movement.entities.Motion import MotionPath
 from typing import Optional, List, Union
 
 
@@ -19,13 +19,13 @@ class TrajectorySegment:
         """Retorna o estado inicial do segmento."""
         return State(position=self.init_pos, velocity=self.init_vel)
 
-    def add_child(self, child: TrajectorySegment) -> None:
+    def add_child(self, child) -> None:
         """Adiciona um segmento filho, garantindo a continuidade da trajetória."""
         local_destination = self.get_local_destination()
         # Verifica a continuidade da posição e velocidade
         if (
-            local_destination.position.distance(child.init_pos) > 1e-6
-            or local_destination.velocity.distance(child.init_vel) > 1e-6
+            local_destination.position.distance(child.init_pos) < 1e-6
+            or local_destination.velocity.distance(child.init_vel) < 1e-6
         ):
             self.child = child
         else:
@@ -33,17 +33,17 @@ class TrajectorySegment:
 
     def get_state(self, t: float) -> State:
         """Get the State at a time t in path"""
-        if self.get_total_time() < t:
-            return self.get_state(self.get_total_time())
-        if self.get_local_time() >= t:
-            bb_integrate = integrate_t(self.initPos + self.initVel, self.motionPath.motion_path, t)
+        if self.get_total_duration() < t:
+            return self.get_state(self.get_total_duration())
+        if self.get_local_duration() >= t:
+            bb_integrate = integrate_t(self.init_pos + self.init_vel, self.motion_path.motion_path, t)
 
             return State(
                 position=Vector2D(bb_integrate[0], bb_integrate[1]),
                 velocity=Vector2D(bb_integrate[2], bb_integrate[3])
             )
         else:
-            return self.child.get_state(t - self.get_local_time())
+            return self.child.get_state(t - self.get_local_duration())
 
     def get_destination(self) -> State:
         """Obtém o estado final de toda a trajetória a partir deste segmento."""
