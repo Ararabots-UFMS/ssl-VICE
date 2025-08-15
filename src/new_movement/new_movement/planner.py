@@ -55,7 +55,7 @@ class TrajectoryOptimizer():
     def __init__(self, trys: int):
         self.trys = trys
 
-    def optimize(self, trajectory: Trajectory, generator: TrajectoryGenerator, collisionSolver: CollisionSolver, obstacles: List[Obstacle]) -> Trajectory:
+    def optimize(self, trajectory: Trajectory, generator: TrajectoryGenerator, collisionSolver: CollisionSolver, obstacles: List[Obstacle], initial_time: float = 0.0) -> Trajectory:
         """ 
         Optimizes a trajectory, by random sampling a range in the trajectory and finding a new collision free segment 
         
@@ -78,7 +78,7 @@ class TrajectoryOptimizer():
 
             mode = ["Head", "Normal", "Tail"][randint(0, 2)]
 
-            first_time = uniform(0, total_time) if (mode == "Normal" or mode == "Tail") else 0.0
+            first_time = uniform(initial_time, total_time) if (mode == "Normal" or mode == "Tail") else 0.0
             second_time = uniform(first_time, total_time) if (mode == "Normal" or mode == "Head") else total_time
             
             firstState = trajectory.get_state(first_time)
