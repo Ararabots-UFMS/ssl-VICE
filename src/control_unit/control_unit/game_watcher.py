@@ -2,6 +2,7 @@ from rclpy.node import Node
 from system_interfaces.msg import VisionMessage, GUIMessage, RefereeMessage, VisionGeometry
 from strategy.blackboard import Blackboard
 
+import rclpy
 
 class GameWatcher(Node):
     def __init__(self) -> None:
@@ -35,3 +36,12 @@ class GameWatcher(Node):
 
     def update_from_geometry(self, message: VisionGeometry):
         self.blackboard.update_from_geometry(message)
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = GameWatcher()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

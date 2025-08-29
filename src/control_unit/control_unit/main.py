@@ -2,8 +2,12 @@ import rclpy
 from rclpy.executors import MultiThreadedExecutor
 
 from control_unit.game_watcher import GameWatcher
-from control_unit.coach import Coach
-from control_unit.command_publisher import CommandPublisher
+from vision.vision_node import Vision
+from new_movement.driver import PathDriver
+from control.control import Controller
+from grsim_messenger.grsim_publisher import grSimPublisher
+# from control_unit.coach import Coach
+# from control_unit.command_publisher import CommandPublisher
 
 
 def main():
@@ -11,9 +15,14 @@ def main():
 
     # Reads all the topics and updates the blackboard
     game_watcher = GameWatcher()
+    vision = Vision()
+    driver = PathDriver()
+    control = Controller()
+    grsim = grSimPublisher()
+    # gui = StrategyCommandGUI()
 
     # Update blackboard for coach creation
-    rclpy.spin_once(game_watcher, timeout_sec=0.2)
+    # rclpy.spin_once(game_watcher, timeout_sec=0.2)
 
     # #If there is no GUI, the default max number of robots is 3
     # if game_watcher.blackboard is None:
@@ -28,16 +37,23 @@ def main():
     #   max_robots for robots
     main_executor = MultiThreadedExecutor(num_threads=(3 + max_robots))
 
-    # Has strategy for macro plays, has all ally robots
-    coach = Coach(main_executor, None)
+    # # Has strategy for macro plays, has all ally robots
+    # coach = Coach(main_executor, None)
 
-    command_publisher = CommandPublisher(coach)
+    # command_publisher = CommandPublisher(coach)
 
     main_executor.add_node(game_watcher)
-    main_executor.add_node(coach)
-    main_executor.add_node(command_publisher)
+    main_executor.add_node(vision)
+    main_executor.add_node(driver)
+    main_executor.add_node(control)
+    main_executor.add_node(grsim)
+    # main_executor.add_node(gui)
 
     main_executor.spin()
+
+    # rclpy.spin(game_watcher)
+
+    rclpy.shutdown()
 
 
 if __name__ == "__main__":

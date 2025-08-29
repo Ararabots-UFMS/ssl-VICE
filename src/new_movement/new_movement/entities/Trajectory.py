@@ -24,12 +24,12 @@ class TrajectorySegment:
         local_destination = self.get_local_destination()
         # Verifica a continuidade da posição e velocidade
         if (
-            local_destination.position.distance(child.init_pos) < 1e-6
-            or local_destination.velocity.distance(child.init_vel) < 1e-6
+            local_destination.position.distance(child.init_pos) < 1e-3
+            or local_destination.velocity.distance(child.init_vel) < 1e-3
         ):
             self.child = child
         else:
-            raise Exception("Attempting to add a non continuous trajectory")        
+            raise Exception(f"Attempting to add a non continuous trajectory {local_destination.position.distance(child.init_pos)}")        
 
     def get_state(self, t: float) -> State:
         """Get the State at a time t in path"""
@@ -112,7 +112,7 @@ class Trajectory:
         """
         total_duration = self.get_total_duration()
         if self.root is None or t > total_duration or t < 0:
-            raise ValueError("Tempo de conexão fora dos limites da trajetória.")
+            raise ValueError(f"Tempo de conexão fora dos limites da trajetória. {t, total_duration}")
 
         # REFACTOR (BUG FIX): Lógica de busca de segmento e truncamento corrigida.
         current_segment = self.root

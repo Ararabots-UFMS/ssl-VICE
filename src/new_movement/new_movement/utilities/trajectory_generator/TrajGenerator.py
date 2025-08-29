@@ -1,4 +1,4 @@
-from new_movement.utils.BB_steer import time_optimal_steer_2d as bb_steer
+from new_movement.utilities.BB_steer import time_optimal_steer_2d as bb_steer
 from new_movement.entities.States import State, Vector2D, MoveConstraints
 from new_movement.entities.Motion import MotionPath, MotionPrimitive
 from new_movement.entities.Trajectory import TrajectorySegment
@@ -6,8 +6,8 @@ from typing import Optional
 import numpy as np
 
 
-DEFAULT_VELOCITY_CONSTRAINST = Vector2D(3000, 3000)
-DEFAULT_ACCELERATION_CONSTRAINST = Vector2D(1000, 1000)
+DEFAULT_VELOCITY_CONSTRAINST = Vector2D(900, 900)
+DEFAULT_ACCELERATION_CONSTRAINST = Vector2D(1900, 1900)
 
 
 class TrajectoryGenerator:
