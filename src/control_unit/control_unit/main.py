@@ -53,6 +53,8 @@ def main():
 
     # rclpy.spin(game_watcher)
 
+    rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()

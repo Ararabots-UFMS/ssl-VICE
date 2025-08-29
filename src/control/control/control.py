@@ -30,12 +30,19 @@ class Controller(Node):
         team_command.robots = []
         team_command.is_team_color_yellow = self.blackboard.gui.is_team_color_yellow
 
+        commanded_robot_ids = set()
+
         for robot in message.command:
+            robot_command = RobotCommand()
+            robot_command.robot_id = robot.id
+            commanded_robot_ids.add(robot.id)
+            
             try:
-                robot_command = RobotCommand()
-                robot_command.robot_id = robot.id
+                if robot.id not in self.blackboard.ally_robots:
+                    continue
                 
                 current_robot = self.blackboard.ally_robots[robot.id]
+                
                 current_position = Vector2D(current_robot.position_x / 1000, current_robot.position_y / 1000)
                 current_velocity = Vector2D(current_robot.velocity_x / 1000, current_robot.velocity_y / 1000)
                 current_state = State(current_position, current_velocity)
@@ -53,10 +60,13 @@ class Controller(Node):
                 robot_command.angular_velocity = 0.0  # TODO: Add orientation controller
                 robot_command.orientation = current_robot.orientation
                 robot_command.kick = 0.0
+                
+                team_command.robots.append(robot_command)
+                
             except:
-                self.get_logger().info(f"Robot {robot.id} NOT FOUND")
+                self.get_logger().info("ERROR")
 
-            team_command.robots.append(robot_command)
+        self.robot_controller.cleanup_unused_robots(commanded_robot_ids)
 
         self.publisher.publish(team_command)
 

@@ -2,8 +2,9 @@ from new_movement.entities.Trajectory import Trajectory
 from new_movement.planner import Planner
 from new_movement.entities.States import Vector2D, State
 from new_movement.entities.obstacles import Obstacle
+
 from system_interfaces.msg import ControlCommand, RobotControlCommand
-from system_interfaces.srv import StrategyCommand
+from system_interfaces.srv import StrategyCommand, UpdateObstacles
 
 from strategy.blackboard import Blackboard
 
@@ -24,7 +25,7 @@ class PathDriver(Node):
         self.update_target_service = self.create_service(StrategyCommand, 'strategy_command', self.update_target)
 
         # Update Obstacles
-        # self.update_obstacles_service = self.create_service(UpdateObstacles, 'update_obstacles', self.update_obstacles)
+        self.update_obstacles_service = self.create_service(UpdateObstacles, 'update_obstacles', self.update_obstacles)
 
         # Online Collision Check
         # self.collision_timer = self.create_timer(0.5, self.check_collision)
@@ -52,8 +53,8 @@ class PathDriver(Node):
                     'obstacles': []
                 }
 
-        for traked_id in self.robot_data.keys():
-            if id not in ally_robots_ids:
+        for traked_id in list(self.robot_data.keys()):
+            if traked_id not in ally_robots_ids:
                 self.robot_data.pop(traked_id)
                 
     def publish_control(self):
@@ -68,7 +69,7 @@ class PathDriver(Node):
             robotState = robot_info['trajectory'].get_state(robot_info['time_offset'])
 
             robotControlCommand.id = robot_id
-            robotControlCommand.position_x = robotState.position.x / 1000
+            robotControlCommand.position_x = robotState.position.x / 1000 # to m/s
             robotControlCommand.position_y = robotState.position.y / 1000
             robotControlCommand.velocity_x = robotState.velocity.x / 1000
             robotControlCommand.velocity_y = robotState.velocity.y / 1000
@@ -89,7 +90,7 @@ class PathDriver(Node):
             return
             
         cur_state = self.robot_data[robot_id]['trajectory'].get_state(self.robot_data[robot_id]['time_offset'])
-        new_trajectory = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles']) #TODO Add the obstacles
+        new_trajectory = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles'])
         
         self.robot_data[robot_id]['trajectory'] = Trajectory(new_trajectory)
         self.robot_data[robot_id]['time_offset'] = 0.0  # Reset Time offset
