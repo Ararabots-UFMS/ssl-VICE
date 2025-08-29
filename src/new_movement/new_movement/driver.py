@@ -113,12 +113,6 @@ class PathDriver(Node):
 
         destinations_distance = new_destination.position.distance(cur_destination.position)
 
-        # if destinations_distance < self.APPEND_POSITION_THRESHOLD:
-        #     bridge_path = self.planner.find(cur_destination, new_destination, robot_info['obstacles']) #TODO Add the obstacles
-        #     robot_info['trajectory'].append(bridge_path)
-        
-        #     self.planner.optimizer.optimize(robot_info['trajectory'], self.planner.generator, self.planner.solver, robot_info['obstacles'], initial_time = robot_info['time_offset']) #TODO add obstacles
-        # else:
         self.replan(request.id, new_destination)
 
         response.success = True
