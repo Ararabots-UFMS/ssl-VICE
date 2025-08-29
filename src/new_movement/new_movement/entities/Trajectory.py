@@ -1,11 +1,8 @@
-from __future__ import annotations
+from new_movement.utilities.BB_steer import integrate_control_2d as integrate
+from new_movement.utilities.BB_steer import integrate_control_2d_at_time as integrate_t
+from new_movement.entities.States import State, Vector2D
+from new_movement.entities.Motion import MotionPath
 from typing import Optional, List, Union
-from .States import State, Vector2D
-from .Motion import MotionPath
-from ..utils.BB_steer import (
-    integrate_control_2d_at_time as integrate_t,
-    integrate_control_2d as integrate,
-)
 
 
 class TrajectorySegment:
@@ -22,44 +19,31 @@ class TrajectorySegment:
         """Retorna o estado inicial do segmento."""
         return State(position=self.init_pos, velocity=self.init_vel)
 
-    def add_child(self, child: TrajectorySegment) -> None:
+    def add_child(self, child) -> None:
         """Adiciona um segmento filho, garantindo a continuidade da trajetória."""
         local_destination = self.get_local_destination()
         # Verifica a continuidade da posição e velocidade
         if (
-            local_destination.position.distance(child.init_pos) > 1e-6
-            or local_destination.velocity.distance(child.init_vel) > 1e-6
+            local_destination.position.distance(child.init_pos) < 1e-6
+            or local_destination.velocity.distance(child.init_vel) < 1e-6
         ):
-            raise ValueError("Tentativa de adicionar um segmento de trajetória não contínuo.")
-        self.child = child
+            self.child = child
+        else:
+            raise Exception("Attempting to add a non continuous trajectory")        
 
     def get_state(self, t: float) -> State:
-        """Obtém o estado (posição, velocidade) em um tempo t no caminho."""
-        if t < 0:
-            raise ValueError("O tempo não pode ser negativo.")
+        """Get the State at a time t in path"""
+        if self.get_total_duration() < t:
+            return self.get_state(self.get_total_duration())
+        if self.get_local_duration() >= t:
+            bb_integrate = integrate_t(self.init_pos + self.init_vel, self.motion_path.motion_path, t)
 
-        local_duration = self.get_local_duration()
-
-        # Se o tempo t está dentro deste segmento, calcula localmente.
-        if t <= local_duration:
-            # Assumindo que a função de integração espera um tuple (x, y, vx, vy)
-            initial_state_tuple = (
-                self.init_pos.x,
-                self.init_pos.y,
-                self.init_vel.x,
-                self.init_vel.y,
-            )
-            bb_integrate = integrate_t(initial_state_tuple, self.motion_path.motion_path, t)
             return State(
                 position=Vector2D(bb_integrate[0], bb_integrate[1]),
-                velocity=Vector2D(bb_integrate[2], bb_integrate[3]),
+                velocity=Vector2D(bb_integrate[2], bb_integrate[3])
             )
-        # Se o tempo t for maior, delega para o segmento filho com o tempo restante.
-        elif self.child:
-            return self.child.get_state(t - local_duration)
         else:
-            # Se o tempo for maior que a duração e não há filho, retorna o estado final.
-            return self.get_local_destination()
+            return self.child.get_state(t - self.get_local_duration())
 
     def get_destination(self) -> State:
         """Obtém o estado final de toda a trajetória a partir deste segmento."""
@@ -98,7 +82,6 @@ class TrajectorySegment:
             total_time += self.child.get_total_duration()
         return total_time
 
-
 class Trajectory:
     """Gerencia uma sequência de TrajectorySegments."""
 
@@ -119,10 +102,9 @@ class Trajectory:
             self.root = segment
             self.tail = segment
         else:
-            # REFACTOR: Operação O(1) usando self.tail
             self.tail.add_child(segment)
             self.tail = segment
-
+            
     def connect(self, new_segment: TrajectorySegment, t: float) -> None:
         """
         Divide a trajetória em um tempo t e conecta um novo segmento,

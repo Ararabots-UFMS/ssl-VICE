@@ -514,5 +514,3 @@ def bang_bang_hard_stop_wait(ix, iv, gx, gv, tf, umin=-1.0, umax=1.0):
             c.insert(1, [0.0, tf - tt])
 
     return c
-
-
