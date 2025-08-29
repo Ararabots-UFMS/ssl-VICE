@@ -1,7 +1,5 @@
-from .States import Vector2D
 from dataclasses import dataclass
-from typing import Tuple
-from .States import Vector2D
+from new_movement.entities.States import Vector2D
 
 
 @dataclass
