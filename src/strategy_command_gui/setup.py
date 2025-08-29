@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'control'
+package_name = 'strategy_command_gui'
 
 setup(
     name=package_name,
@@ -14,13 +14,13 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='fabio',
-    maintainer_email='fabiohuang2004@icloud.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    maintainer_email='fabio@example.com',
+    description='ROS2 GUI for sending strategy commands to PathDriver',
+    license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "controller = control.control:main",
+            'strategy_gui = strategy_command_gui.strategy_gui:main',
         ],
     },
 )

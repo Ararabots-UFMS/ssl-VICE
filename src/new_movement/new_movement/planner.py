@@ -78,6 +78,8 @@ class TrajectoryOptimizer():
 
             mode = ["Head", "Normal", "Tail"][randint(0, 2)]
 
+            total_time = trajectory.get_total_duration()
+
             first_time = uniform(initial_time, total_time) if (mode == "Normal" or mode == "Tail") else 0.0
             second_time = uniform(first_time, total_time) if (mode == "Normal" or mode == "Head") else total_time
             
@@ -86,23 +88,24 @@ class TrajectoryOptimizer():
 
             optimized_segment = generator.generate(firstState, secondState)
 
-            if(not collisionSolver.is_collision(optimized_segment, obstacles)):
-                curSegment = trajectory.root
-                curTime = second_time
-                while(curSegment.get_local_duration() < curTime and curSegment.child is not None):
-                    curTime -= curSegment.get_local_duration()
-                    curSegment = curSegment.child
-                
-                _, last_motion = curSegment.motion_path.split(curTime)
-                last_segment = TrajectorySegment(secondState.position, secondState.velocity, last_motion)
-                
-                if(curSegment.child is not None):
-                    last_segment.child = curSegment.child
+            try:
+                if(not collisionSolver.is_collision(optimized_segment, obstacles)):
+                    curSegment = trajectory.root
+                    curTime = second_time
+                    while(curSegment.get_local_duration() < curTime and curSegment.child is not None):
+                        curTime -= curSegment.get_local_duration()
+                        curSegment = curSegment.child
+                    
+                    _, last_motion = curSegment.motion_path.split(curTime)
+                    last_segment = TrajectorySegment(secondState.position, secondState.velocity, last_motion)
+                    
+                    if(curSegment.child is not None):
+                        last_segment.child = curSegment.child
 
-                optimized_segment.add_child(last_segment)
-                trajectory.connect(optimized_segment, first_time)
-
-                total_time = trajectory.get_total_duration()
+                    optimized_segment.add_child(last_segment)
+                    trajectory.connect(optimized_segment, first_time)
+            except:
+                continue
 
         return trajectory
 

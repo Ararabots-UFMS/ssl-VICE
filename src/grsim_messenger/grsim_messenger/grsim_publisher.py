@@ -43,6 +43,7 @@ class grSimPublisher(Node):
                 robot.linear_velocity_x,
                 robot.linear_velocity_y,
                 robot.angular_velocity,
+                robot.orientation
             )
 
             robot_command = grSim_Robot_Command()
