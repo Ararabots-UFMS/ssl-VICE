@@ -4,7 +4,7 @@ from new_movement.entities.States import Vector2D, State
 from new_movement.entities.obstacles import Obstacle
 
 from system_interfaces.msg import ControlCommand, RobotControlCommand
-from system_interfaces.srv import StrategyCommand, UpdateObstacles
+from system_interfaces.srv import StrategyCommand
 
 from strategy.blackboard import Blackboard
 
@@ -25,7 +25,7 @@ class PathDriver(Node):
         self.update_target_service = self.create_service(StrategyCommand, 'strategy_command', self.update_target)
 
         # Update Obstacles
-        self.update_obstacles_service = self.create_service(UpdateObstacles, 'update_obstacles', self.update_obstacles)
+        #self.update_obstacles_service = self.create_service(UpdateObstacles, 'update_obstacles', self.update_obstacles)
 
         # Online Collision Check
         # self.collision_timer = self.create_timer(0.5, self.check_collision)
