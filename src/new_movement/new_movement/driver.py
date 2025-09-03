@@ -2,9 +2,10 @@ from new_movement.entities.Trajectory import Trajectory
 from new_movement.planner import Planner
 from new_movement.entities.States import Vector2D, State
 from new_movement.entities.obstacles import Obstacle
+from new_movement.utilities.obstacle_factory import ObstacleFactory
 
 from system_interfaces.msg import ControlCommand, RobotControlCommand
-from system_interfaces.srv import StrategyCommand, UpdateObstacles
+from system_interfaces.srv import StrategyCommand, UpdateObstacle
 
 from strategy.blackboard import Blackboard
 
@@ -25,7 +26,8 @@ class PathDriver(Node):
         self.update_target_service = self.create_service(StrategyCommand, 'strategy_command', self.update_target)
 
         # Update Obstacles
-        self.update_obstacles_service = self.create_service(UpdateObstacles, 'update_obstacles', self.update_obstacles)
+        self.obstacle_factory = ObstacleFactory(self.blackboard)
+        self.update_obstacles_service = self.create_service(UpdateObstacle, 'update_obstacles', self.update_obstacles)
 
         # Online Collision Check
         # self.collision_timer = self.create_timer(0.5, self.check_collision)
@@ -88,7 +90,7 @@ class PathDriver(Node):
     def replan(self, robot_id: int, new_destination: State) -> None:
         if robot_id not in self.robot_data:
             return
-            
+        
         cur_state = self.robot_data[robot_id]['trajectory'].get_state(self.robot_data[robot_id]['time_offset'])
         new_trajectory = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles'])
         
@@ -99,7 +101,14 @@ class PathDriver(Node):
         pass
 
     def update_obstacles(self, request, response):
-        pass
+        cur_trajectory = self.robot_data[request.id]['trajectory']
+        
+        new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(request, cur_trajectory)
+
+        self.robot_data[request.id]['obstacles'] = new_obstacles
+
+        response.success = True
+        return response
 
     def update_target(self, request, response):
         self.driver_init()
@@ -107,11 +116,7 @@ class PathDriver(Node):
             response.success = False
             return response
 
-        robot_info = self.robot_data[request.id]
-        cur_destination: State = robot_info['trajectory'].get_destination()
         new_destination: State = State(Vector2D(request.position_x, request.position_y), Vector2D(request.velocity_x, request.velocity_y))
-
-        destinations_distance = new_destination.position.distance(cur_destination.position)
 
         self.replan(request.id, new_destination)
 
