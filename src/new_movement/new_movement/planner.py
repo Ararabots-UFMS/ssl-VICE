@@ -38,9 +38,15 @@ class CollisionSolver():
                 
     def is_collision(self, trajectory: TrajectorySegment, obstacles: List[Obstacle]) -> bool:
         ''' Checks if a trajectory has collision with any obstacles given, returns True is theres is, otherwise returns False '''
-        for obs in obstacles:
-            if obs.collisionAt(trajectory) is None:
-                return True
+        time_step = 0.01
+        total_time = 0.0
+        while total_time <= trajectory.get_total_duration():
+            for obs in obstacles:
+                if obs.isCollidingAt(trajectory.get_state(total_time)) is True:
+                    return True
+            
+            total_time += time_step
+
 
         return False
 

@@ -104,10 +104,10 @@ class PenaltyAreaObstacle(StaticObstacle):
                 self.bot_left_point = Vector2D(line.x1 - self.padding, line.y1 - self.padding)
                 self.bot_right_point = Vector2D(line.x2 + self.padding, line.y2 - self.padding)
 
-        if all(points is not None for points in [
+        if not all(points is not None for points in [
             self.top_left_point, self.top_right_point, self.bot_left_point, self.bot_right_point
         ]):
-            raise Exception("PenaltyAreaObstacle: Geometry incomplete")
+            raise Exception(f"PenaltyAreaObstacle: Geometry incomplete")
         
     def distanceTo(self, curPosition: Vector2D) -> float:
         if(not self.isCollidingAt(curPosition)):

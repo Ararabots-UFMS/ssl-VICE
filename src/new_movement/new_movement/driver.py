@@ -105,11 +105,6 @@ class PathDriver(Node):
 
         self.robot_data[request.id]['obstacles'] = new_obstacles
 
-        # TEST
-        for obs in self.robot_data[request.id]['obstacles']:
-            self.get_logger().info(type(obs).__name__)
-        # TEST
-
         response.success = True
         return response
 
