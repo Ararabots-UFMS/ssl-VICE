@@ -17,6 +17,7 @@ class CollisionSolver():
     def solve(self, curState: State, tarState: State, obstacles: List[Obstacle], generator: TrajectoryGenerator) -> TrajectorySegment:
         ''' Finds a new trajectory without collisions based on a random sampling method similar to RRT '''
         best_trajectory = None
+        best_time = None
         for i in range(self.trys):
             # random point to attempt bypass
             random_point: Vector2D = self.generate_random_point()
@@ -27,12 +28,12 @@ class CollisionSolver():
 
             to_point.add_child(from_point)
 
-            # TODO Define what is the best trajectory.
             if self.is_collision(to_point, obstacles) is True:
                 continue
             else:
                 # TODO Run points systems to compare trajectorys found
-                best_trajectory = to_point
+                if best_time is None or best_time > to_point.get_total_duration():
+                    best_trajectory = to_point
 
         return best_trajectory
                 
@@ -46,7 +47,6 @@ class CollisionSolver():
                     return True
             
             total_time += time_step
-
 
         return False
 
@@ -124,6 +124,10 @@ class Planner():
         self.optimizer_trys = optimizer_trys
 
     def find(self, curState: State, tarState: State, obstacles: List[Obstacle]) -> TrajectorySegment:
+        for obs in obstacles:
+            if obs.isCollidingAt(tarState.position):
+                # Adapting destination and setting velocity to zero, is this the best??
+                tarState = State(obs.adaptDestination(tarState.position), Vector2D(0.0, 0.0))
         best_trajectory: TrajectorySegment = self.generator.generate(curState, tarState)
 
         if(self.solver.is_collision(best_trajectory, obstacles)):
