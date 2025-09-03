@@ -49,7 +49,7 @@ class CommandPublisher(Node):
             )
 
             vel_angular = float(velocities[2])
-            
+
             if robot.current_command != None:
                 if robot.current_command["path_profile"] == MovementProfiles.Break:
                     vel_norm, vel_tan = 0.0, 0.0
@@ -64,7 +64,7 @@ class CommandPublisher(Node):
             command.angular_velocity = vel_angular
             command.kick = robot.kick*1.5 #1.5 m/s is our kick speed
             msg.robots.append(command)
-        
+
 
 
         self.publisher.publish(msg)
