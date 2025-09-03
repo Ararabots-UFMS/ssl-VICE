@@ -9,7 +9,7 @@ class ObstacleFactory():
     def __init__(self, blackboard: Blackboard):
         self.blackboard = blackboard
 
-    def create_obstacles(self, request, trajectories: Trajectory) -> list:
+    def create_obstacles(self, request, robot_data) -> list:
         obstacles = []
         
         if request.field_border:
@@ -37,8 +37,7 @@ class ObstacleFactory():
             if ally_id in self.blackboard.ally_robots and ally_id != request.id:
                 robot = self.blackboard.ally_robots[ally_id]
                 state = State(Vector2D(robot.x, robot.y), Vector2D(robot.vx, robot.vy))
-                # Using EnemyRobotObstacle for allies as well, since trajectory not available here
-                obstacles.append(EnemyRobotObstacle(state))
+                obstacles.append(AllyRobotObstacle(state, robot_data[ally_id]["trajectory"]))
         
         return obstacles
 

@@ -101,11 +101,14 @@ class PathDriver(Node):
         pass
 
     def update_obstacles(self, request, response):
-        cur_trajectory = self.robot_data[request.id]['trajectory']
-        
-        new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(request, cur_trajectory)
+        new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(request, self.robot_data)
 
         self.robot_data[request.id]['obstacles'] = new_obstacles
+
+        # TEST
+        for obs in self.robot_data[request.id]['obstacles']:
+            self.get_logger().info(type(obs).__name__)
+        # TEST
 
         response.success = True
         return response
