@@ -1,9 +1,8 @@
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.timer import Timer
 
-from strategy.skills.robot_client import RobotClient
 from strategy.skills.move_to import MoveTo
+from strategy.skills.robot_client import RobotClient
 
 
 def alternate_command(args=None):
@@ -25,7 +24,9 @@ def alternate_command(args=None):
             if last_ok:
                 indices[rid] = (indices[rid] + 1) % len(pts)
                 x, y = pts[indices[rid]]
-                skill = MoveTo(f"move_{rid}_{indices[rid]}", rid, target_x=x, target_y=y)
+                skill = MoveTo(
+                    f"move_{rid}_{indices[rid]}", rid, target_x=x, target_y=y
+                )
                 robot_cli.set_skill(skill)
 
     robot_cli.create_timer(4.0, cycle_skills)
@@ -45,6 +46,7 @@ def alternate_command(args=None):
         executor.remove_node(robot_cli)
         robot_cli.destroy_node()
         rclpy.shutdown()
+
 
 def unique_command(args=None):
     rclpy.init(args=args)
@@ -72,6 +74,7 @@ def unique_command(args=None):
         robot_cli.destroy_node()
         rclpy.shutdown()
 
+
 if __name__ == "__main__":
-    alternate_command()
-    #unique_command()
+    # alternate_command()
+    unique_command()
