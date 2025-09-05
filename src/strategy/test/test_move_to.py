@@ -1,16 +1,22 @@
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
+
+from strategy.strategy import Strategy
 
 from strategy.skills.move import MoveSkill
-from strategy.robot_client import RobotClient
-import time
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    strategy = Strategy()
+    rclpy.spin(strategy)
+    rclpy.shutdown()
 
 def alternate_command(args=None):
     rclpy.init(args=args)
 
-    robot_cli = RobotClient()
-    executor = MultiThreadedExecutor()
-    executor.add_node(robot_cli)
+    # robot_cli = RobotClient()
+    # executor = MultiThreadedExecutor()
+    # executor.add_node(robot_cli)
 
     # três vértices do triângulo
     triangle = [(0.0, 0.0), (1200.0, 1000.0), (-1200.0, 1000.0)]
@@ -30,14 +36,14 @@ def alternate_command(args=None):
                     target_x=x,
                     target_y=y,
                 )
-                robot_cli.send_request(cmd)
+                #robot_cli.send_request(cmd)
                 indices[rid] = (idx + 1) % len(triangle)
-            time.sleep(4)
+            #time.sleep(4)
     except KeyboardInterrupt:
         pass
     finally:
-        executor.remove_node(robot_cli)
-        robot_cli.destroy_node()
+        #executor.remove_node(robot_cli)
+        #robot_cli.destroy_node()
         rclpy.shutdown()
 
 
@@ -45,7 +51,7 @@ def alternate_command(args=None):
 def unique_command(args=None):
     rclpy.init(args=args)
 
-    robot_cli = RobotClient()
+    # robot_cli = RobotClient()
 
     cmds = [
         MoveSkill(name="tri_r0", robot_id=0, target_x=0.0, target_y=0.0),
@@ -54,12 +60,14 @@ def unique_command(args=None):
     ]
 
     for cmd in cmds:
-        robot_cli.send_request(cmd)
+        pass
+        #robot_cli.send_request(cmd)
 
-    rclpy.spin(robot_cli)
+    rclpy.spin()
     rclpy.shutdown()
 
 
 if __name__ == "__main__":
-    alternate_command()
+    main()
+    #alternate_command()
     #unique_command()

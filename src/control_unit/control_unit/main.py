@@ -48,7 +48,7 @@ def main():
     main_executor.add_node(driver)
     main_executor.add_node(control)
     main_executor.add_node(grsim)
-    main_executor.add_node(strategy)
+    # main_executor.add_node(strategy)
     # main_executor.add_node(gui)
 
     main_executor.spin()
