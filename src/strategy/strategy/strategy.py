@@ -11,11 +11,9 @@ class Strategy(Node):
         self.timer = self.create_timer(0.1, self.run)
 
     def run(self):
-        # The code below just create a simple behaviour tree which is available in strategy
-
         status, action = RootTree("RootStrategy").run()
 
-        if action is not None:
+        if status == status.RUNNING and action is not None:
             self.cli.send_request(action)
         else:
             self.get_logger().info("No valid action found")
