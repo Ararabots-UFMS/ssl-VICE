@@ -7,7 +7,6 @@ from new_movement.driver import PathDriver
 from control.control import Controller
 from grsim_messenger.grsim_publisher import grSimPublisher
 from strategy.strategy import Strategy
-# from control_unit.coach import Coach
 # from control_unit.command_publisher import CommandPublisher
 
 
