@@ -6,6 +6,7 @@ from vision.vision_node import Vision
 from new_movement.driver import PathDriver
 from control.control import Controller
 from grsim_messenger.grsim_publisher import grSimPublisher
+from strategy.strategy import Strategy
 # from control_unit.coach import Coach
 # from control_unit.command_publisher import CommandPublisher
 
@@ -19,6 +20,7 @@ def main():
     driver = PathDriver()
     control = Controller()
     grsim = grSimPublisher()
+    strategy = Strategy()
     # gui = StrategyCommandGUI()
 
     # Update blackboard for coach creation
@@ -47,6 +49,7 @@ def main():
     main_executor.add_node(driver)
     main_executor.add_node(control)
     main_executor.add_node(grsim)
+    main_executor.add_node(strategy)
     # main_executor.add_node(gui)
 
     main_executor.spin()

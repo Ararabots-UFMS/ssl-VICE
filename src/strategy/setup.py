@@ -13,15 +13,15 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='marcelo',
-    maintainer_email='marcelo_l_filho@ufms.br',
-    description='TODO: Package description',
+    maintainer='geffte',
+    maintainer_email='geffte.caetano@ufms.br',
+    description='Hierarchical strategy system for robot soccer using Plays → Tactics → Skills architecture',
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'main_strategy = strategy.main_strategy:main',
-            'black = strategy.blackboard:main'
+            'strategy = strategy.strategy:main',
+            'strategy_examples = strategy.examples:main',
         ],
     },
 )

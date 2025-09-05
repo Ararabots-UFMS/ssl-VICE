@@ -66,7 +66,7 @@ class Controller(Node):
             except:
                 self.get_logger().info("ERROR")
 
-        self.robot_controller.cleanup_unused_robots(commanded_robot_ids)
+        # self.robot_controller.cleanup_unused_robots(commanded_robot_ids)
 
         self.publisher.publish(team_command)
 

@@ -1,70 +1,76 @@
 from abc import abstractmethod
 from enum import Enum
-from typing import List, Optional
-
 
 class TaskStatus(Enum):
     SUCCESS = 0
     FAILURE = 1
     RUNNING = 2
 
-
-class LeafNode:
-    def __init__(self, name: str):
+class LeafNode():
+    def __init__(self, name):
         self.name = name
 
     @abstractmethod
-    def run(self) -> TaskStatus:
-        raise NotImplementedError
-
+    def run(self):
+        raise Exception("subclass must override run")
 
 class TreeNode:
-    def __init__(self, name: str, children: Optional[List[LeafNode]] = None):
+    def __init__(self, name, children):
         self.name = name
         self.children = []
-        if children:
-            self.add_children(children)
+        self.add_children(children)
 
     def add_children(self, children) -> None:
         for child in children:
             self.children.append(child)
 
     @abstractmethod
-    def run(self) -> TaskStatus:
-        raise NotImplementedError
+    def run(self):
+        raise Exception("subclass must override run")
 
 
 class Sequence(TreeNode):
-    def __init__(self, name: str, children: Optional[List[LeafNode]] = None):
+    """
+    A sequence runs each task in order until one fails,
+    at which point it returns FAILURE. If all tasks succeed, a SUCCESS
+    status is returned.  If a subtask is still RUNNING, then a RUNNING
+    status is returned and processing continues until either SUCCESS
+    or FAILURE is returned from the subtask.
+    """
+
+    def __init__(self, name, children):
         super().__init__(name, children)
 
-    def run(self) -> TaskStatus:
-        if not self.children:
-            return TaskStatus.SUCCESS
+    def run(self):
         for c in self.children:
-            status = c.run()
+            status, action = c.run()
             if status != TaskStatus.SUCCESS:
-                return status
-        return TaskStatus.SUCCESS
+                return status, action
+        return TaskStatus.SUCCESS, action
 
 
 class Selector(TreeNode):
-    def __init__(self, name: str, children: Optional[List[LeafNode]] = None):
+    """
+    A selector runs each task in order until one succeeds,
+    at which point it returns SUCCESS. If all tasks fail, a FAILURE
+    status is returned.  If a subtask is still RUNNING, then a RUNNING
+    status is returned and processing continues until either SUCCESS
+    or FAILURE is returned from the subtask.
+    """
+
+    def __init__(self, name, children):
         super().__init__(name, children)
 
-    def run(self) -> TaskStatus:
-        if not self.children:
-            return TaskStatus.FAILURE
+    def run(self):
         for c in self.children:
-            status = c.run()
+            status, action = c.run()
             if status != TaskStatus.FAILURE:
-                return status
-        return TaskStatus.FAILURE
-
+                return status, action
+        return TaskStatus.FAILURE, None
 
 class BaseTree(Selector):
-    def __init__(self, name: str, children: Optional[List[LeafNode]] = None):
+    def __init__(self, name, children):
         super().__init__(name, children)
 
-    def run(self) -> TaskStatus:
+    def run(self):
         return super().run()

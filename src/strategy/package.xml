@@ -3,10 +3,13 @@
 <package format="3">
   <name>strategy</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="marcelo_l_filho@ufms.br">marcelo</maintainer>
+  <description>Hierarchical strategy system for robot soccer using Plays → Tactics → Skills architecture</description>
+  <maintainer email="geffte.caetano@ufms.br">geffte</maintainer>
   <license>Apache-2.0</license>
 
+  <depend>rclpy</depend>
+  <depend>system_interfaces</depend>
+  
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

@@ -1,7 +1,7 @@
 from strategy.behaviour import LeafNode, TaskStatus
 
 
-class MoveTo(LeafNode):
+class MoveSkill(LeafNode):
     """
     Nó de comportamento responsável por mover um robô para uma posição alvo.
 
@@ -41,4 +41,4 @@ class MoveTo(LeafNode):
             TaskStatus: Sempre retorna TaskStatus.RUNNING,
             indicando que a ação está em progresso.
         """
-        return TaskStatus.RUNNING
+        return TaskStatus.RUNNING, self
