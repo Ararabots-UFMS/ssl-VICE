@@ -23,17 +23,19 @@ class CollisionSolver():
             random_point: Vector2D = self.generate_random_point()
             bypassState = State(random_point, Vector2D(0, 0))
 
-            to_point: TrajectorySegment = generator(curState, bypassState)
-            from_point: TrajectorySegment = generator(bypassState, tarState)
+            to_point: TrajectorySegment = generator.generate(curState, bypassState)
+            from_point: TrajectorySegment = generator.generate(bypassState, tarState)
 
             to_point.add_child(from_point)
 
-            if self.is_collision(to_point, obstacles) is True:
+            if self.is_collision(to_point, obstacles):
                 continue
             else:
                 # TODO Run points systems to compare trajectorys found
                 if best_time is None or best_time > to_point.get_total_duration():
                     best_trajectory = to_point
+                    best_time = to_point.get_total_duration()
+                    raise Exception("CHEGA AQUI????w")
 
         return best_trajectory
                 
@@ -43,7 +45,7 @@ class CollisionSolver():
         total_time = 0.0
         while total_time <= trajectory.get_total_duration():
             for obs in obstacles:
-                if obs.isCollidingAt(trajectory.get_state(total_time)) is True:
+                if obs.isCollidingAt(trajectory.get_state(total_time).position):
                     return True
             
             total_time += time_step
@@ -94,24 +96,24 @@ class TrajectoryOptimizer():
 
             optimized_segment = generator.generate(firstState, secondState)
 
-            try:
-                if(not collisionSolver.is_collision(optimized_segment, obstacles)):
-                    curSegment = trajectory.root
-                    curTime = second_time
-                    while(curSegment.get_local_duration() < curTime and curSegment.child is not None):
-                        curTime -= curSegment.get_local_duration()
-                        curSegment = curSegment.child
-                    
-                    _, last_motion = curSegment.motion_path.split(curTime)
-                    last_segment = TrajectorySegment(secondState.position, secondState.velocity, last_motion)
-                    
-                    if(curSegment.child is not None):
-                        last_segment.child = curSegment.child
+            # try:
+            if(not collisionSolver.is_collision(optimized_segment, obstacles)):
+                curSegment = trajectory.root
+                curTime = second_time
+                while(curSegment.get_local_duration() < curTime and curSegment.child is not None):
+                    curTime -= curSegment.get_local_duration()
+                    curSegment = curSegment.child
+                
+                _, last_motion = curSegment.motion_path.split(curTime)
+                last_segment = TrajectorySegment(secondState.position, secondState.velocity, last_motion)
+                
+                if(curSegment.child is not None):
+                    last_segment.child = curSegment.child
 
-                    optimized_segment.add_child(last_segment)
-                    trajectory.connect(optimized_segment, first_time)
-            except:
-                continue
+                optimized_segment.add_child(last_segment)
+                trajectory.connect(optimized_segment, first_time)
+            # except:
+            #     continue
 
         return trajectory
 
@@ -124,14 +126,22 @@ class Planner():
         self.optimizer_trys = optimizer_trys
 
     def find(self, curState: State, tarState: State, obstacles: List[Obstacle]) -> TrajectorySegment:
+        final_trajectory = Trajectory()
         for obs in obstacles:
             if obs.isCollidingAt(tarState.position):
-                # Adapting destination and setting velocity to zero, is this the best??
-                tarState = State(obs.adaptDestination(tarState.position), Vector2D(0.0, 0.0))
+                tarState = State(obs.adaptDestination(tarState.position), tarState.velocity)
+            if obs.isCollidingAt(curState.position):
+                out_obs = State(obs.adaptDestination(curState.position), curState.velocity)
+                final_trajectory.append(self.generator.generate(curState, out_obs))
+                curState = out_obs
+        
         best_trajectory: TrajectorySegment = self.generator.generate(curState, tarState)
 
         if(self.solver.is_collision(best_trajectory, obstacles)):
+            # TODO sometimes, the solver return None if a path was not find, resolve this...
             best_trajectory = self.solver.solve(curState, tarState, obstacles, self.generator)
             self.optimizer.optimize(best_trajectory, self.generator, self.solver, obstacles)
 
-        return best_trajectory
+        final_trajectory.append(best_trajectory)
+
+        return final_trajectory

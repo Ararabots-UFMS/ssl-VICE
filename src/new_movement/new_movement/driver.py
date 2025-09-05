@@ -22,7 +22,7 @@ class PathDriver(Node):
         self.control_timer = self.create_timer(0.01, self.publish_control)
 
         # Update Target Service
-        self.planner = Planner(50)
+        self.planner = Planner(200)
         self.update_target_service = self.create_service(StrategyCommand, 'strategy_command', self.update_target)
 
         # Update Obstacles
@@ -43,18 +43,25 @@ class PathDriver(Node):
         ally_robots_ids = self.blackboard.ally_robots.keys()
 
         for id in ally_robots_ids:
+            # insert new found robot
             if id not in self.robot_data:
                 cur_robot = self.blackboard.ally_robots[id]
                 cur_state = State(Vector2D(cur_robot.position_x, cur_robot.position_y), Vector2D(cur_robot.velocity_x, cur_robot.velocity_y))
 
-                init_trajectory = Trajectory(self.planner.find(cur_state, cur_state, []))
+                init_trajectory = self.planner.find(cur_state, cur_state, [])
                 
                 self.robot_data[id] = {
                     'trajectory': init_trajectory,
                     'time_offset': 0.0,
-                    'obstacles': []
+                    'obstacles': [],
+                    'last_obs_request': None
                 }
+            
+            # Update obstacles for all ids
+            if self.robot_data[id]['last_obs_request'] is not None:
+                self.robot_data[id]['obstacles'] = self.obstacle_factory.create_obstacles(self.robot_data[id]['last_obs_request'], self.robot_data)
 
+        # Removing not longer found robot
         for traked_id in list(self.robot_data.keys()):
             if traked_id not in ally_robots_ids:
                 self.robot_data.pop(traked_id)
@@ -67,6 +74,11 @@ class PathDriver(Node):
         for robot_id, robot_info in self.robot_data.items():
 
             robotControlCommand = RobotControlCommand()
+
+            self.get_logger().info(f"{robot_info['trajectory']}")
+            self.get_logger().info(f"{robot_info['time_offset']}")
+            self.get_logger().info(f"{robot_info['trajectory'].root}")
+            self.get_logger().info(f"{robot_info['trajectory'].get_state(robot_info['time_offset'])}")
 
             robotState = robot_info['trajectory'].get_state(robot_info['time_offset'])
 
@@ -94,16 +106,21 @@ class PathDriver(Node):
         cur_state = self.robot_data[robot_id]['trajectory'].get_state(self.robot_data[robot_id]['time_offset'])
         new_trajectory = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles'])
         
-        self.robot_data[robot_id]['trajectory'] = Trajectory(new_trajectory)
+        self.robot_data[robot_id]['trajectory'] = new_trajectory
         self.robot_data[robot_id]['time_offset'] = 0.0  # Reset Time offset
     
     def check_collision(self):
         pass
 
     def update_obstacles(self, request, response):
+        self.driver_init()
+        if request.id not in self.robot_data:
+            response.success = False
+
         new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(request, self.robot_data)
 
         self.robot_data[request.id]['obstacles'] = new_obstacles
+        self.robot_data[request.id]['last_obs_request'] = request
 
         response.success = True
         return response

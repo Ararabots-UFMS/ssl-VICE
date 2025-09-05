@@ -1,5 +1,6 @@
 from new_movement.entities.obstacles import Obstacle, ObstaclePriority
 from new_movement.entities.States import Vector2D
+from math import copysign
 from dataclasses import dataclass
 from system_interfaces.msg import VisionGeometry
 
@@ -26,11 +27,11 @@ class FieldBorderObstacle(StaticObstacle):
                 self.top_left_point = Vector2D(line.x1 + padding, line.y1 - padding) # Not sure if x1 is on the left or right side
                 self.top_right_point = Vector2D(line.x2 - padding, line.y2 - padding)
 
-            elif line.name == 'BottonTouchLine':
+            elif line.name == 'BottomTouchLine':
                 self.bot_left_point = Vector2D(line.x1 + padding, line.y1 + padding)
                 self.bot_right_point = Vector2D(line.x2 - padding, line.y2 + padding)
 
-        if all(points is not None for points in [
+        if not all(points is not None for points in [
             self.top_left_point, self.top_right_point, self.bot_left_point, self.bot_right_point
         ]):
             raise Exception("FieldBorderObstacle: Geometry incomplete")
@@ -55,22 +56,26 @@ class FieldBorderObstacle(StaticObstacle):
         
         return True
 
-    def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
+    def adaptDestination(self, tarPosition: Vector2D, margin: float = 50) -> Vector2D:
         closest_corner = self._findClosestCorner(tarPosition)
 
         new_destination = Vector2D(tarPosition.x , tarPosition.y)
 
         if(abs(tarPosition.x) > abs(closest_corner.x)):
-            new_destination.x = closest_corner.x
+            new_destination.x = closest_corner.x - copysign(margin, closest_corner.x)
         if(abs(tarPosition.y) > abs(closest_corner.y)):
-            new_destination.y = closest_corner.y
+            new_destination.y = closest_corner.y - copysign(margin, closest_corner.y)
 
         return new_destination
 
     def _findClosestCorner(self, curPosition: Vector2D) -> Vector2D:
         closest_corner = None
         for corner in [self.top_left_point, self.top_right_point, self.bot_left_point, self.bot_right_point]:
-            if closest_corner is None or corner.distance(curPosition) < closest_corner.distance(curPosition):
+            
+            if closest_corner is not None:
+                if corner.distance(curPosition) < closest_corner.distance(curPosition):
+                    closest_corner = corner
+            else:
                 closest_corner = corner
 
         return closest_corner
@@ -129,7 +134,7 @@ class PenaltyAreaObstacle(StaticObstacle):
 
         return False
 
-    def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
+    def adaptDestination(self, tarPosition: Vector2D, margin: float = 30) -> Vector2D:
         if(not self.isCollidingAt(tarPosition)):
             return tarPosition
 
@@ -176,17 +181,21 @@ class GenericCircleObstacle(StaticObstacle):
             return True
         return False
 
-    def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
+    def adaptDestination(self, tarPosition: Vector2D, margin: float = 30) -> Vector2D:
         # Projects the inside target point into the outer edge of the circle
         # TODO Check if the order of subtraction is correct
-        center_to_target = Vector2D(tarPosition.x - self.center.x, tarPosition.y - self.center.y)
+        if not self.isCollidingAt(tarPosition):
+            return tarPosition
+        
+        center_to_target = tarPosition.subtract(self.center)
 
-        distance = self.center.distance(tarPosition)
-        scalar = self.radius / distance
+        dist = center_to_target.size()
+        if dist == 0:
+            center_to_target = Vector2D(1, 0) # arbitrary direction
 
-        center_to_target.multiplyByScalar(scalar)
+        center_to_target = center_to_target.norm()
 
-        return Vector2D(tarPosition.x + center_to_target.x, tarPosition.y + center_to_target.y)
+        return self.center.add(center_to_target.multiplyByScalar(self.radius + margin))
 
     def getPriority(self) -> ObstaclePriority:
         return ObstaclePriority.LOWEST
