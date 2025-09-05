@@ -75,10 +75,10 @@ class PathDriver(Node):
 
             robotControlCommand = RobotControlCommand()
 
-            self.get_logger().info(f"{robot_info['trajectory']}")
-            self.get_logger().info(f"{robot_info['time_offset']}")
-            self.get_logger().info(f"{robot_info['trajectory'].root}")
-            self.get_logger().info(f"{robot_info['trajectory'].get_state(robot_info['time_offset'])}")
+            # self.get_logger().info(f"{robot_info['trajectory']}")
+            # self.get_logger().info(f"{robot_info['time_offset']}")
+            # self.get_logger().info(f"{robot_info['trajectory'].root}")
+            # self.get_logger().info(f"{robot_info['trajectory'].get_state(robot_info['time_offset'])}")
 
             robotState = robot_info['trajectory'].get_state(robot_info['time_offset'])
 
