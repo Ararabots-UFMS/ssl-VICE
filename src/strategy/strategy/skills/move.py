@@ -33,12 +33,10 @@ class MoveSkill(LeafNode):
         self.vel_x = float(vel_x)
         self.vel_y = float(vel_y)
 
-    def run(self) -> TaskStatus:
-        """
-        Executa o comportamento do nó.
+def run(self) -> TaskStatus:
+    # se tiver acesso à posição atual do robô
+    #pos = self.get_robot_position(self.robot_id)  # precisa implementar
+    #if pos and self._is_close(pos, (self.target_x, self.target_y)):
+     #   return TaskStatus.SUCCESS, self
+    return TaskStatus.RUNNING, self
 
-        Returns:
-            TaskStatus: Sempre retorna TaskStatus.RUNNING,
-            indicando que a ação está em progresso.
-        """
-        return TaskStatus.RUNNING, self
