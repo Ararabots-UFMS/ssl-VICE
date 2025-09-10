@@ -35,6 +35,8 @@ class PathDriver(Node):
         # Robot data dictionary: id -> {trajectory, time_offset, obstacles}
         self.robot_data: dict[int, dict] = {}
 
+        self.last_time = self.get_clock().now()
+
         self.driver_init()
 
         self.APPEND_POSITION_THRESHOLD = 300
@@ -67,6 +69,10 @@ class PathDriver(Node):
                 self.robot_data.pop(traked_id)
                 
     def publish_control(self):
+        current_time = self.get_clock().now()
+        dt = (current_time - self.last_time).nanoseconds / 1e9  # Convert to seconds
+        self.last_time = current_time
+        
         controlCommand = ControlCommand()
         controlCommandList = []
         
@@ -75,10 +81,10 @@ class PathDriver(Node):
 
             robotControlCommand = RobotControlCommand()
 
-            self.get_logger().info(f"{robot_info['trajectory']}")
-            self.get_logger().info(f"{robot_info['time_offset']}")
-            self.get_logger().info(f"{robot_info['trajectory'].root}")
-            self.get_logger().info(f"{robot_info['trajectory'].get_state(robot_info['time_offset'])}")
+            # self.get_logger().info(f"{robot_info['trajectory']}")
+            # self.get_logger().info(f"{robot_info['time_offset']}")
+            # self.get_logger().info(f"{robot_info['trajectory'].root}")
+            # self.get_logger().info(f"{robot_info['trajectory'].get_state(robot_info['time_offset'])}")
 
             robotState = robot_info['trajectory'].get_state(robot_info['time_offset'])
 
@@ -91,7 +97,7 @@ class PathDriver(Node):
             controlCommandList.append(robotControlCommand)
 
             if robot_info['time_offset'] <= robot_info['trajectory'].get_total_duration():
-                robot_info['time_offset'] += 0.01
+                robot_info['time_offset'] += dt
             else:
                 robot_info['time_offset'] += robot_info['trajectory'].get_total_duration()
 
@@ -116,6 +122,7 @@ class PathDriver(Node):
         self.driver_init()
         if request.id not in self.robot_data:
             response.success = False
+            return response
 
         new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(request, self.robot_data)
 
