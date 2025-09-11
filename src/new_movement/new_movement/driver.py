@@ -111,6 +111,10 @@ class PathDriver(Node):
         
         cur_state = self.robot_data[robot_id]['trajectory'].get_state(self.robot_data[robot_id]['time_offset'])
         new_trajectory = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles'])
+
+        if new_trajectory is None:
+            #TODO if NOne, then it means no trajectory was found, so need to implement a fallback here
+            return
         
         self.robot_data[robot_id]['trajectory'] = new_trajectory
         self.robot_data[robot_id]['time_offset'] = 0.0  # Reset Time offset
