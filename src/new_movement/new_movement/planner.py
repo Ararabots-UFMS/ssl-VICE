@@ -14,7 +14,7 @@ class CollisionSolver():
         self.trys = trys
         self.blackboard = Blackboard()
     
-    def solve(self, curState: State, tarState: State, obstacles: List[Obstacle], generator: TrajectoryGenerator) -> TrajectorySegment:
+    def solve(self, curState: State, tarState: State, obstacles: List[Obstacle], generator: TrajectoryGenerator) -> Trajectory:
         ''' Finds a new trajectory without collisions based on a random sampling method similar to RRT '''
         best_trajectory = None
         best_time = None
@@ -49,7 +49,7 @@ class CollisionSolver():
                     best_trajectory = to_point
                     best_time = to_point.get_total_duration()
 
-        return best_trajectory
+        return Trajectory(best_trajectory)
                 
     def is_collision(self, trajectory: TrajectorySegment, obstacles: List[Obstacle]) -> bool:
         ''' Checks if a trajectory has collision with any obstacles given, returns True is theres is, otherwise returns False '''
