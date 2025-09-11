@@ -26,28 +26,30 @@ class CollisionSolver():
 
             to_point: TrajectorySegment = generator.generate(curState, bypassState)
             from_point: TrajectorySegment = generator.generate(bypassState, tarState)
+            if not self.is_collision(from_point, obstacles) and not self.is_collision(to_point, obstacles):
+                to_point.add_child(from_point)
 
-            if self.is_collision(from_point, obstacles) and not self.is_collision(to_point, obstacles):
+            elif self.is_collision(from_point, obstacles) and not self.is_collision(to_point, obstacles):
                 random_point: Vector2D = self.generate_random_point()
                 random_velocity: Vector2D = self.generate_random_velocity(velocity_constraints=Vector2D(2000, 2000)) # max velocity
                 new_bypassState = State(random_point, random_velocity)
 
-                to_second_point: TrajectorySegment = generator(bypassState, new_bypassState)
-                to_point.add_child(to_second_point)
+                to_second_point: TrajectorySegment = generator.generate(bypassState, new_bypassState)
+                if self.is_collision(to_second_point, obstacles):
+                    continue
 
                 from_point: TrajectorySegment = generator.generate(new_bypassState, tarState)
+
+                to_second_point.add_child(from_point)
+                to_point.add_child(to_second_point)
             else:
                 continue
 
-            to_point.add_child(from_point)
 
-            if self.is_collision(to_point, obstacles):
-                continue
-            else:
-                # TODO Run points systems to compare trajectorys found
-                if best_time is None or best_time > to_point.get_total_duration():
-                    best_trajectory = to_point
-                    best_time = to_point.get_total_duration()
+            # TODO Run points systems to compare trajectorys found
+            if best_time is None or best_time > to_point.get_total_duration():
+                best_trajectory = to_point
+                best_time = to_point.get_total_duration()
 
         return Trajectory(best_trajectory)
                 
