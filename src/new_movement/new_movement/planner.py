@@ -21,10 +21,23 @@ class CollisionSolver():
         for i in range(self.trys):
             # random point to attempt bypass
             random_point: Vector2D = self.generate_random_point()
-            bypassState = State(random_point, Vector2D(0, 0))
+            random_velocity: Vector2D = self.generate_random_velocity(velocity_constraints=Vector2D(2000, 2000)) # max velocity
+            bypassState = State(random_point, random_velocity)
 
             to_point: TrajectorySegment = generator.generate(curState, bypassState)
             from_point: TrajectorySegment = generator.generate(bypassState, tarState)
+
+            if self.is_collision(from_point, obstacles) and not self.is_collision(to_point, obstacles):
+                random_point: Vector2D = self.generate_random_point()
+                random_velocity: Vector2D = self.generate_random_velocity(velocity_constraints=Vector2D(2000, 2000)) # max velocity
+                new_bypassState = State(random_point, random_velocity)
+
+                to_second_point: TrajectorySegment = generator(bypassState, new_bypassState)
+                to_point.add_child(to_second_point)
+
+                from_point: TrajectorySegment = generator.generate(new_bypassState, tarState)
+            else:
+                continue
 
             to_point.add_child(from_point)
 
@@ -35,7 +48,6 @@ class CollisionSolver():
                 if best_time is None or best_time > to_point.get_total_duration():
                     best_trajectory = to_point
                     best_time = to_point.get_total_duration()
-                    raise Exception("CHEGA AQUI????w")
 
         return best_trajectory
                 
@@ -51,6 +63,10 @@ class CollisionSolver():
             total_time += time_step
 
         return False
+
+    def generate_random_velocity(self, velocity_constraints: Vector2D) -> Vector2D:
+        ''' Generates a random velocity within the max and min velocity '''
+        return Vector2D(uniform(-velocity_constraints.x, velocity_constraints.x), uniform(-velocity_constraints.y, velocity_constraints.y))
 
     def generate_random_point(self) -> Vector2D:
         ''' Generates a random point inside game field '''

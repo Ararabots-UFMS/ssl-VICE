@@ -148,7 +148,6 @@ class PathDriver(Node):
 
         response.success = True
         return response
-    
 
 def main(args=None):
     rclpy.init(args=args)
