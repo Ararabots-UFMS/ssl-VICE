@@ -174,7 +174,7 @@ class GenericCircleObstacle(StaticObstacle):
         self.radius: float = radius + padding
 
     def distanceTo(self, curPosition: Vector2D) -> float:
-        return self.center.distance(curPosition) - self.radius
+        return self.center.distance(curPosition)
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
         if self.distanceTo(curPosition) < self.radius:
