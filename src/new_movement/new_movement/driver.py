@@ -18,7 +18,7 @@ class PathDriver(Node):
         self.blackboard = Blackboard()
         # Publish Control
         self.publisher = self.create_publisher(ControlCommand, 'control_command', 10)
-        self.control_timer = self.create_timer(0.01, self.publish_control)
+        self.control_timer = self.create_timer(0.02, self.publish_control)  # Alterado para 0.02s (50Hz)
 
         # Update Target Service
         self.planner = Planner(50)
@@ -66,32 +66,41 @@ class PathDriver(Node):
 
             robotControlCommand = RobotControlCommand()
 
+            total_duration = robot_info['trajectory'].get_total_duration()
+            if robot_info['time_offset'] > total_duration:
+                robot_info['time_offset'] = total_duration
+
             robotState = robot_info['trajectory'].get_state(robot_info['time_offset'])
+            destination = robot_info['trajectory'].get_destination()
 
             robotControlCommand.id = robot_id
-            robotControlCommand.position_x = robotState.position.x / 1000 # to m/s
+            robotControlCommand.position_x = robotState.position.x / 1000
             robotControlCommand.position_y = robotState.position.y / 1000
             robotControlCommand.velocity_x = robotState.velocity.x / 1000
             robotControlCommand.velocity_y = robotState.velocity.y / 1000
 
+            distance_to_goal = robotState.position.distance(destination.position)
+            if (distance_to_goal < 10.0 and robot_info['time_offset'] >= total_duration) or robot_info['time_offset'] >= total_duration:
+                robotControlCommand.velocity_x = 0.0
+                robotControlCommand.velocity_y = 0.0
+                robot_info['time_offset'] = total_duration
+
             controlCommandList.append(robotControlCommand)
 
-            if robot_info['time_offset'] <= robot_info['trajectory'].get_total_duration():
-                robot_info['time_offset'] += 0.01
-            else:
-                robot_info['time_offset'] += robot_info['trajectory'].get_total_duration()
+            if robot_info['time_offset'] < total_duration and distance_to_goal >= 10.0:
+                robot_info['time_offset'] += 0.02  # Igual ao timer
 
         controlCommand.command = controlCommandList
-
         self.publisher.publish(controlCommand)
 
     def replan(self, robot_id: int, new_destination: State) -> None:
         if robot_id not in self.robot_data:
             return
-            
+        # Garante que o destino tem velocidade zero
+        zero_velocity = Vector2D(0.0, 0.0)
+        new_destination = State(new_destination.position, zero_velocity)
         cur_state = self.robot_data[robot_id]['trajectory'].get_state(self.robot_data[robot_id]['time_offset'])
         new_trajectory = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles'])
-        
         self.robot_data[robot_id]['trajectory'] = Trajectory(new_trajectory)
         self.robot_data[robot_id]['time_offset'] = 0.0  # Reset Time offset
     
@@ -113,7 +122,9 @@ class PathDriver(Node):
 
         destinations_distance = new_destination.position.distance(cur_destination.position)
 
-        self.replan(request.id, new_destination)
+        # Só faz replan se o destino mudou significativamente
+        if destinations_distance > 10.0:
+            self.replan(request.id, new_destination)
 
         response.success = True
         return response
