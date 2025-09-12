@@ -35,7 +35,7 @@ class grSimPublisher(Node):
     def get_packet(self, command):
         packet = grSim_Packet()
         packet.commands.isteamyellow = command.is_team_color_yellow
-        packet.commands.timestamp = 0
+        packet.commands.timestamp = self.get_clock().now().nanoseconds // 1000  # microseconds since epoch
 
         for robot in command.robots:
 
