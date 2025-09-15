@@ -57,6 +57,7 @@ def main(args=None):
 def unique_command(args=None):
 
     cmds = [
+        #Alterar id's e coordenada para testes nessa área
         MoveSkill(name="tri_r0", robot_id=2, target_x=-250.0, target_y=0.0),
         MoveSkill(name="tri_r1", robot_id=1, target_x=-1225.0, target_y=750.0),
         MoveSkill(name="tri_r2", robot_id=0, target_x=-1225.0, target_y=-750.0),
