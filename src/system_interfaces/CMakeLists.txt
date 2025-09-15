@@ -29,6 +29,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ControlCommand.msg"
   "srv/StrategyCommand.srv"
   "srv/ControlParams.srv"
+  "srv/UpdateObstacles.srv"
+  "srv/SetOrientation.srv"
+  "srv/SetKp.srv"
+  
 )
 
 if(BUILD_TESTING)
