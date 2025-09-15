@@ -6,7 +6,6 @@ import rclpy
 
 from grsim_messenger.grsim_sender import grSimSender
 from system_interfaces.msg import TeamCommand
-from utils.topic_subscriber import TopicSubscriber
 from grsim_messenger.inverse_kinematics import apply_inverse_kinematics
 
 
