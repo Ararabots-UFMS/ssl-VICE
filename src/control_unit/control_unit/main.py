@@ -15,10 +15,10 @@ def main():
 
     # Reads all the topics and updates the blackboard
     game_watcher = GameWatcher()
-    vision = Vision()
+    # vision = Vision()
     driver = PathDriver()
     control = Controller()
-    grsim = grSimPublisher()
+    # grsim = grSimPublisher()
     # gui = StrategyCommandGUI()
 
     # Update blackboard for coach creation
@@ -43,10 +43,10 @@ def main():
     # command_publisher = CommandPublisher(coach)
 
     main_executor.add_node(game_watcher)
-    main_executor.add_node(vision)
+    # main_executor.add_node(vision)
     main_executor.add_node(driver)
     main_executor.add_node(control)
-    main_executor.add_node(grsim)
+    # main_executor.add_node(grsim)
     # main_executor.add_node(gui)
 
     main_executor.spin()
