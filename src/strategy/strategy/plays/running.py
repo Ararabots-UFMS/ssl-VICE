@@ -1,4 +1,4 @@
-from strategy.behaviour import Selector
+ 
 
 from strategy.tatics.triangle import TriangleFormation
 
