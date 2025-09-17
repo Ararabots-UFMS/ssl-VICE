@@ -22,7 +22,7 @@ class PathDriver(Node):
         self.control_timer = self.create_timer(0.01, self.publish_control)
 
         # Update Target Service
-        self.planner = Planner(200)
+        self.planner = Planner(50)
         self.update_target_service = self.create_service(StrategyCommand, 'strategy_command', self.update_target)
 
         # Update Obstacles
@@ -81,11 +81,6 @@ class PathDriver(Node):
 
             robotControlCommand = RobotControlCommand()
 
-            # self.get_logger().info(f"{robot_info['trajectory']}")
-            # self.get_logger().info(f"{robot_info['time_offset']}")
-            # self.get_logger().info(f"{robot_info['trajectory'].root}")
-            # self.get_logger().info(f"{robot_info['trajectory'].get_state(robot_info['time_offset'])}")
-
             robotState = robot_info['trajectory'].get_state(robot_info['time_offset'])
 
             robotControlCommand.id = robot_id
@@ -118,6 +113,7 @@ class PathDriver(Node):
         
         self.robot_data[robot_id]['trajectory'] = new_trajectory
         self.robot_data[robot_id]['time_offset'] = 0.0  # Reset Time offset
+        self.last_time = self.get_clock().now()
     
     def check_collision(self):
         pass
