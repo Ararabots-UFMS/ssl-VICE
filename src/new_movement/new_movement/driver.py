@@ -22,7 +22,7 @@ class PathDriver(Node):
         self.control_timer = self.create_timer(0.01, self.publish_control)
 
         # Update Target Service
-        self.planner = Planner(50)
+        self.planner = Planner(50, 100)
         self.update_target_service = self.create_service(StrategyCommand, 'strategy_command', self.update_target)
 
         # Update Obstacles
@@ -77,24 +77,30 @@ class PathDriver(Node):
         controlCommandList = []
         
         self.driver_init()
-        for robot_id, robot_info in self.robot_data.items():
+        try:
+            for robot_id, robot_info in self.robot_data.items():
 
-            robotControlCommand = RobotControlCommand()
+                robotControlCommand = RobotControlCommand()
 
-            robotState = robot_info['trajectory'].get_state(robot_info['time_offset'])
+                robotState = robot_info['trajectory'].get_state(robot_info['time_offset'])
 
-            robotControlCommand.id = robot_id
-            robotControlCommand.position_x = robotState.position.x / 1000 # to m/s
-            robotControlCommand.position_y = robotState.position.y / 1000
-            robotControlCommand.velocity_x = robotState.velocity.x / 1000
-            robotControlCommand.velocity_y = robotState.velocity.y / 1000
+                if robotState is None:
+                    raise Exception("Robots is None")
 
-            controlCommandList.append(robotControlCommand)
+                robotControlCommand.id = robot_id
+                robotControlCommand.position_x = robotState.position.x / 1000 # to m/s
+                robotControlCommand.position_y = robotState.position.y / 1000
+                robotControlCommand.velocity_x = robotState.velocity.x / 1000
+                robotControlCommand.velocity_y = robotState.velocity.y / 1000
 
-            if robot_info['time_offset'] <= robot_info['trajectory'].get_total_duration():
-                robot_info['time_offset'] += dt
-            else:
-                robot_info['time_offset'] += robot_info['trajectory'].get_total_duration()
+                controlCommandList.append(robotControlCommand)
+
+                if robot_info['time_offset'] <= robot_info['trajectory'].get_total_duration():
+                    robot_info['time_offset'] += dt
+                else:
+                    robot_info['time_offset'] += robot_info['trajectory'].get_total_duration()
+        except Exception as e:
+            self.get_logger(f"{e}")
 
         controlCommand.command = controlCommandList
 
@@ -107,7 +113,7 @@ class PathDriver(Node):
         cur_state = self.robot_data[robot_id]['trajectory'].get_state(self.robot_data[robot_id]['time_offset'])
         new_trajectory = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles'])
 
-        if new_trajectory.root is None:
+        if new_trajectory.root is None or new_trajectory.get_state(0) is None:
             #TODO if None, then it means no trajectory was found, so need to implement a fallback here
             return False
         

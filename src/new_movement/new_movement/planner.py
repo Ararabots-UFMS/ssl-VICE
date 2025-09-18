@@ -70,7 +70,7 @@ class CollisionSolver():
         return Vector2D(uniform(-field_length/2, field_length/2), uniform(-field_width/2, field_width/2))
 
 class TrajectoryOptimizer():
-    def __init__(self, trys: int, early_stop: int = 10):
+    def __init__(self, trys: int, early_stop: int = 20):
         self.trys = trys
         self.early_stop = early_stop
 
