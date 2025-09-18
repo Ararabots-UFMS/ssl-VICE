@@ -1,4 +1,3 @@
-from new_movement.entities.Trajectory import Trajectory
 from new_movement.planner import Planner
 from new_movement.entities.States import Vector2D, State
 from new_movement.entities.obstacles import Obstacle
@@ -28,6 +27,9 @@ class PathDriver(Node):
         # Update Obstacles
         self.obstacle_factory = ObstacleFactory(self.blackboard)
         self.update_obstacles_service = self.create_service(UpdateObstacle, 'update_obstacles', self.update_obstacles)
+
+        # Obstacles Update Timer
+        self.update_obstacles_timer = self.create_timer(0.5, self.update_obstacles_timer_callback)
 
         # Online Collision Check
         # self.collision_timer = self.create_timer(0.5, self.check_collision)
@@ -130,7 +132,6 @@ class PathDriver(Node):
         self.driver_init()
         if request.id not in self.robot_data:
             response.success = False
-            return response
 
         new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(request, self.robot_data)
 
@@ -139,6 +140,12 @@ class PathDriver(Node):
 
         response.success = True
         return response
+
+    def update_obstacles_timer_callback(self):
+        for robot_id, robot_info in self.robot_data.items():
+            if robot_info['last_obs_request'] is not None:
+                new_obstacles = self.obstacle_factory.create_obstacles(robot_info['last_obs_request'], self.robot_data)
+                self.robot_data[robot_id]['obstacles'] = new_obstacles
 
     def update_target(self, request, response):
         self.driver_init()

@@ -36,6 +36,6 @@ class ObstacleFactory():
             if ally_id in self.blackboard.ally_robots and ally_id != request.id:
                 robot = self.blackboard.ally_robots[ally_id]
                 state = State(Vector2D(robot.position_x, robot.position_y), Vector2D(robot.velocity_x, robot.velocity_y))
-                obstacles.append(AllyRobotObstacle(state, robot_data[ally_id]["trajectory"], radius=110))
+                obstacles.append(AllyRobotObstacle(state, robot_data[ally_id]["trajectory"], radius=190))
         
         return obstacles
