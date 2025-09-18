@@ -1,8 +1,6 @@
 from new_movement.entities.StaticObstacle import FieldBorderObstacle, PenaltyAreaObstacle, GenericCircleObstacle, FieldSide
 from new_movement.entities.DynamicObstacles import AllyRobotObstacle, EnemyRobotObstacle
-from new_movement.entities.obstacles import Obstacle
 from new_movement.entities.States import State, Vector2D
-from new_movement.entities.Trajectory import Trajectory
 from strategy.blackboard import Blackboard
 
 

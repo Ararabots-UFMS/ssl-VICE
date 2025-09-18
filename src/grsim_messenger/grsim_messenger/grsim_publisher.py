@@ -48,7 +48,7 @@ class grSimPublisher(Node):
             robot_command = grSim_Robot_Command()
             robot_command.id = robot.robot_id
             # Defines if robot will be controlled by wheels speed or by normal, tangent and angular velocity
-            robot_command.wheelsspeed = False
+            robot_command.wheelsspeed = True
             robot_command.kickspeedx = robot.kick
             robot_command.kickspeedz = 0
             robot_command.veltangent = robot.linear_velocity_x
