@@ -14,9 +14,22 @@ class CollisionSolver():
         self.trys = trys
         self.blackboard = Blackboard()
     
+    def is_collision(self, trajectory: TrajectorySegment, obstacles: List[Obstacle], time_step: float = 0.02, distance_threshold: float = 150.0) -> bool:
+        ''' Checks if a trajectory has collision with any obstacles given, returns True is theres is, otherwise returns False '''
+        total_time = 0.0
+        duration = trajectory.get_total_duration()
+        while total_time <= duration:
+            pos = trajectory.get_state(total_time).position
+            for obs in obstacles:
+                # Only check obstacles close to the trajectory point
+                if abs(obs.distanceTo(pos)) < distance_threshold:
+                    if obs.isCollidingAt(pos):
+                        return True
+            total_time += time_step
+        return False
+
     def solve(self, curState: State, tarState: State, obstacles: List[Obstacle], generator: TrajectoryGenerator) -> Trajectory:
         ''' Finds a new trajectory without collisions based on a random sampling method similar to RRT '''
-        best_trajectory = None
         for i in range(self.trys):
             # random point to attempt bypass
             random_point: Vector2D = self.generate_random_point()
@@ -27,6 +40,7 @@ class CollisionSolver():
             from_point: TrajectorySegment = generator.generate(bypassState, tarState)
             if not self.is_collision(from_point, obstacles) and not self.is_collision(to_point, obstacles):
                 to_point.add_child(from_point)
+                return Trajectory(to_point)
 
             elif self.is_collision(from_point, obstacles) and not self.is_collision(to_point, obstacles):
                 random_point: Vector2D = self.generate_random_point()
@@ -41,26 +55,9 @@ class CollisionSolver():
 
                 to_second_point.add_child(from_point)
                 to_point.add_child(to_second_point)
-            else:
-                continue
-
-            best_trajectory = to_point
-
-        return Trajectory(best_trajectory)
+                return Trajectory(to_point)
+        return Trajectory(None)
                 
-    def is_collision(self, trajectory: TrajectorySegment, obstacles: List[Obstacle]) -> bool:
-        ''' Checks if a trajectory has collision with any obstacles given, returns True is theres is, otherwise returns False '''
-        time_step = 0.01
-        total_time = 0.0
-        while total_time <= trajectory.get_total_duration():
-            for obs in obstacles:
-                if obs.isCollidingAt(trajectory.get_state(total_time).position):
-                    return True
-            
-            total_time += time_step
-
-        return False
-
     def generate_random_velocity(self, velocity_constraints: Vector2D) -> Vector2D:
         ''' Generates a random velocity within the max and min velocity '''
         return Vector2D(uniform(-velocity_constraints.x, velocity_constraints.x), uniform(-velocity_constraints.y, velocity_constraints.y))
