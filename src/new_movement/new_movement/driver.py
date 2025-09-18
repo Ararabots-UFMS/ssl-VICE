@@ -100,20 +100,22 @@ class PathDriver(Node):
 
         self.publisher.publish(controlCommand)
 
-    def replan(self, robot_id: int, new_destination: State) -> None:
+    def replan(self, robot_id: int, new_destination: State) -> bool:
         if robot_id not in self.robot_data:
-            return
+            return False
         
         cur_state = self.robot_data[robot_id]['trajectory'].get_state(self.robot_data[robot_id]['time_offset'])
         new_trajectory = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles'])
 
-        if new_trajectory is None:
-            #TODO if NOne, then it means no trajectory was found, so need to implement a fallback here
-            return
+        if new_trajectory.root is None:
+            #TODO if None, then it means no trajectory was found, so need to implement a fallback here
+            return False
         
         self.robot_data[robot_id]['trajectory'] = new_trajectory
         self.robot_data[robot_id]['time_offset'] = 0.0  # Reset Time offset
         self.last_time = self.get_clock().now()
+
+        return True
     
     def check_collision(self):
         pass
@@ -140,9 +142,9 @@ class PathDriver(Node):
 
         new_destination: State = State(Vector2D(request.position_x, request.position_y), Vector2D(request.velocity_x, request.velocity_y))
 
-        self.replan(request.id, new_destination)
+        status: bool = self.replan(request.id, new_destination)
 
-        response.success = True
+        response.success = status
         return response
 
 def main(args=None):
