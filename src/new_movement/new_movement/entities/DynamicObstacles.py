@@ -96,7 +96,7 @@ class AllyRobotObstacle(Obstacle):
         return self.trajectory.get_position(t).distance(curPosition) - self.radius
     
     def isCollidingAt(self, curPosition: Vector2D, t: float) -> bool:
-        if self.distanceTo(curPosition, t) <= 0:
+        if self.distanceTo(curPosition, t) < 0:
             return True
         
         return False

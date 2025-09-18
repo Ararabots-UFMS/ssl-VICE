@@ -1,6 +1,7 @@
 from new_movement.entities.Trajectory import TrajectorySegment, Trajectory
 from new_movement.entities.States import State, Vector2D
 from new_movement.entities.obstacles import Obstacle
+from new_movement.entities.StaticObstacle import StaticObstacle
 from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
 
 from strategy.blackboard import Blackboard
@@ -14,7 +15,7 @@ class CollisionSolver():
         self.trys = trys
         self.blackboard = Blackboard()
     
-    def is_collision(self, trajectory: TrajectorySegment, obstacles: List[Obstacle], time_step: float = 0.02, distance_threshold: float = 150.0) -> bool:
+    def is_collision(self, trajectory: TrajectorySegment, obstacles: List[Obstacle], time_step: float = 0.02) -> bool:
         ''' Checks if a trajectory has collision with any obstacles given, returns True is theres is, otherwise returns False '''
         total_time = 0.0
         duration = trajectory.get_total_duration()
@@ -22,9 +23,13 @@ class CollisionSolver():
             pos = trajectory.get_state(total_time).position
             for obs in obstacles:
                 # Only check obstacles close to the trajectory point
-                if abs(obs.distanceTo(pos)) < distance_threshold:
+                if isinstance(obs, StaticObstacle):
                     if obs.isCollidingAt(pos):
                         return True
+                else: # Dynamic Obstacles
+                    if obs.isCollidingAt(pos, total_time):
+                            return True
+                        
             total_time += time_step
         return False
 
@@ -116,7 +121,6 @@ class TrajectoryOptimizer():
 
             optimized_segment = generator.generate(firstState, secondState)
 
-            # try:
             if(not collisionSolver.is_collision(optimized_segment, obstacles)):
                 curSegment = trajectory.root
                 curTime = second_time
@@ -135,8 +139,6 @@ class TrajectoryOptimizer():
 
                 if abs(before_time - trajectory.get_total_duration()) < 0.01: # if no improvement in path duration
                     early_stop_count += 1
-            # except:
-            #     continue
 
         return trajectory
 
@@ -151,17 +153,17 @@ class Planner():
     def find(self, curState: State, tarState: State, obstacles: List[Obstacle]) -> TrajectorySegment:
         final_trajectory = Trajectory()
         for obs in obstacles:
-            if obs.isCollidingAt(tarState.position):
-                tarState = State(obs.adaptDestination(tarState.position), tarState.velocity)
-            if obs.isCollidingAt(curState.position):
-                out_obs = State(obs.adaptDestination(curState.position), curState.velocity)
-                final_trajectory.append(self.generator.generate(curState, out_obs))
-                curState = out_obs
+            if isinstance(obs, StaticObstacle):
+                if obs.isCollidingAt(tarState.position):
+                    tarState = State(obs.adaptDestination(tarState.position), tarState.velocity)
+                if obs.isCollidingAt(curState.position):
+                    out_obs = State(obs.adaptDestination(curState.position), curState.velocity)
+                    final_trajectory.append(self.generator.generate(curState, out_obs))
+                    curState = out_obs
         
         best_trajectory: TrajectorySegment = self.generator.generate(curState, tarState)
 
         if(self.solver.is_collision(best_trajectory, obstacles)):
-            # TODO sometimes, the solver return None if a path was not find, resolve this...
             best_trajectory = self.solver.solve(curState, tarState, obstacles, self.generator)
             self.optimizer.optimize(best_trajectory, self.generator, self.solver, obstacles)
 
