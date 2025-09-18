@@ -70,10 +70,16 @@ class CollisionSolver():
         return Vector2D(uniform(-field_length/2, field_length/2), uniform(-field_width/2, field_width/2))
 
 class TrajectoryOptimizer():
-    def __init__(self, trys: int):
+    def __init__(self, trys: int, early_stop: int = 10):
         self.trys = trys
+        self.early_stop = early_stop
 
-    def optimize(self, trajectory: Trajectory, generator: TrajectoryGenerator, collisionSolver: CollisionSolver, obstacles: List[Obstacle], initial_time: float = 0.0) -> Trajectory:
+    def optimize(self, trajectory: Trajectory, 
+                       generator: TrajectoryGenerator, 
+                       collisionSolver: CollisionSolver, 
+                       obstacles: List[Obstacle], 
+                       initial_time: float = 0.0
+                       ) -> Trajectory:
         """ 
         Optimizes a trajectory, by random sampling a range in the trajectory and finding a new collision free segment 
         
@@ -92,11 +98,15 @@ class TrajectoryOptimizer():
         if total_time <= 0:
             return trajectory
         
+        early_stop_count = 0
         for _ in range(self.trys):
+            if early_stop_count > self.early_stop:
+                break
 
             mode = ["Head", "Normal", "Tail"][randint(0, 2)]
 
             total_time = trajectory.get_total_duration()
+            before_time = total_time
 
             first_time = uniform(initial_time, total_time) if (mode == "Normal" or mode == "Tail") else 0.0
             second_time = uniform(first_time, total_time) if (mode == "Normal" or mode == "Head") else total_time
@@ -122,6 +132,9 @@ class TrajectoryOptimizer():
 
                 optimized_segment.add_child(last_segment)
                 trajectory.connect(optimized_segment, first_time)
+
+                if abs(before_time - trajectory.get_total_duration()) < 0.01: # if no improvement in path duration
+                    early_stop_count += 1
             # except:
             #     continue
 
