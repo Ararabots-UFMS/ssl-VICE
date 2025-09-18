@@ -115,23 +115,26 @@ class PenaltyAreaObstacle(StaticObstacle):
             raise Exception(f"PenaltyAreaObstacle: Geometry incomplete")
         
     def distanceTo(self, curPosition: Vector2D) -> float:
-        if(not self.isCollidingAt(curPosition)):
-            dx = max(self.top_left_point.x - curPosition.x, 0 , curPosition.x - self.top_right_point.x)
-            dy = max(self.bot_right_point.y - curPosition.y, 0 , curPosition.y - self.top_right_point.y)
-            distance = Vector2D(dx, dy).size()
+        min_x = min(self.top_left_point.x, self.top_right_point.x)
+        max_x = max(self.top_left_point.x, self.top_right_point.x)
+        min_y = min(self.top_right_point.y, self.bot_right_point.y)
+        max_y = max(self.top_right_point.y, self.bot_right_point.y)
 
-            return distance
-        else:
-            closest_coner = self._findClosestCorner(curPosition)
-            distance = min(abs(curPosition.x - closest_coner.x), abs(curPosition.y - closest_coner.y))
-
-            return -distance
+        x, y = curPosition.x, curPosition.y
+        dx = max(min_x - x, 0, x - max_x)
+        dy = max(min_y - y, 0, y - max_y)
+        if dx or dy:
+            return Vector2D(dx, dy).size()
+        return -min(x - min_x, max_x - x, y - min_y, max_y - y)
 
     def isCollidingAt(self, curPosition: Vector2D) -> bool:
-        if (curPosition.y < self.top_right_point.y and curPosition.y > self.bot_right_point.y):
-            if(curPosition.x > self.top_left_point.x and curPosition.x < self.top_right_point.x):
+        min_y = min(self.top_right_point.y, self.bot_right_point.y)
+        max_y = max(self.top_right_point.y, self.bot_right_point.y)
+        min_x = min(self.top_left_point.x, self.top_right_point.x)
+        max_x = max(self.top_left_point.x, self.top_right_point.x)
+        if (min_y < curPosition.y < max_y):
+            if (min_x < curPosition.x < max_x):
                 return True
-
         return False
 
     def adaptDestination(self, tarPosition: Vector2D, margin: float = 30) -> Vector2D:
@@ -141,11 +144,7 @@ class PenaltyAreaObstacle(StaticObstacle):
         closest_corner = self._findClosestCorner(tarPosition)
         new_destination = Vector2D(tarPosition.x, tarPosition.y)
 
-        # This blocks a new destination on the side of the goal
-        if(self.side is FieldSide.LEFT):
-            x_ref = self.top_right_point.x
-        else:
-            x_ref = self.top_left_point.x
+        x_ref = self.top_right_point.x
 
         dx = abs(x_ref - tarPosition.x)
         dy = abs(closest_corner.y - tarPosition.y)
