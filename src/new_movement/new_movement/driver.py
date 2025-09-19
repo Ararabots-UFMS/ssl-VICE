@@ -1,6 +1,7 @@
 from new_movement.planner import Planner
 from new_movement.entities.States import Vector2D, State
 from new_movement.entities.obstacles import Obstacle
+from new_movement.entities.StaticObstacle import StaticObstacle
 from new_movement.utilities.obstacle_factory import ObstacleFactory
 
 from system_interfaces.msg import ControlCommand, RobotControlCommand
@@ -30,9 +31,10 @@ class PathDriver(Node):
 
         # Obstacles Update Timer
         self.update_obstacles_timer = self.create_timer(0.5, self.update_obstacles_timer_callback)
-
+        
         # Online Collision Check
-        # self.collision_timer = self.create_timer(0.5, self.check_collision)
+        self.collision_timer = self.create_timer(0.5, self.check_collision)
+        self.collision_look_ahead = 1.5 # Seconds
 
         # Robot data dictionary: id -> {trajectory, time_offset, obstacles}
         self.robot_data: dict[int, dict] = {}
@@ -113,7 +115,7 @@ class PathDriver(Node):
         cur_state = self.robot_data[robot_id]['trajectory'].get_state(self.robot_data[robot_id]['time_offset'])
         new_trajectory = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles'])
 
-        if new_trajectory.root is None or new_trajectory.get_state(0) is None:
+        if new_trajectory.root is None or new_trajectory.get_state(0.0) is None:
             #TODO if None, then it means no trajectory was found, so need to implement a fallback here
             return False
         
@@ -124,7 +126,28 @@ class PathDriver(Node):
         return True
     
     def check_collision(self):
-        pass
+        for id, robot in self.robot_data.items():
+            total_time: float = 0.0
+            time_step = 0.01
+            while(total_time <= self.collision_look_ahead):
+                need_replan: bool = False
+                for obs in robot['obstacles']:
+                    curPosition: Vector2D = (robot['trajectory'].get_state(total_time + robot['time_offset'])).position
+                    if isinstance(obs, StaticObstacle):
+                        if obs.isCollidingAt(curPosition):
+                            need_replan = True
+                            break
+                    else:
+                        if obs.isCollidingAt(curPosition, total_time):
+                            need_replan = True
+                            break
+
+                if need_replan is True:
+                    self.replan(id, robot['trajectory'].get_destination())
+                    self.get_logger().info(f"Replan Activated for {id}")
+                    break
+
+                total_time += time_step
 
     def update_obstacles(self, request, response):
         self.driver_init()
