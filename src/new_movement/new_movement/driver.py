@@ -41,8 +41,6 @@ class PathDriver(Node):
 
         self.driver_init()
 
-        self.APPEND_POSITION_THRESHOLD = 300
-
     def driver_init(self):
         ally_robots_ids = self.blackboard.ally_robots.keys()
 

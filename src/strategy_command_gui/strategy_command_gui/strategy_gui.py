@@ -53,53 +53,66 @@ class StrategyCommandGUI(Node):
         # Strategy tab frame
         strategy_frame = ttk.Frame(notebook, padding="10")
         notebook.add(strategy_frame, text="Strategy Commands")
-        
+
         # Service status
         self.status_label = ttk.Label(strategy_frame, text="Service Status: Checking...", foreground="orange")
         self.status_label.grid(row=0, column=0, columnspan=3, pady=(0, 10))
-        
+
         # Update Obstacles Service status
         self.obstacles_status_label = ttk.Label(strategy_frame, text="Obstacles Service Status: Checking...", foreground="orange")
         self.obstacles_status_label.grid(row=1, column=0, columnspan=3, pady=(0, 10))
-        
+
         # Robot ID
         ttk.Label(strategy_frame, text="Robot ID:").grid(row=2, column=0, sticky=tk.W, pady=2)
         self.robot_id_var = tk.IntVar(value=0)
         robot_id_spinbox = ttk.Spinbox(strategy_frame, from_=0, to=15, width=10, textvariable=self.robot_id_var)
         robot_id_spinbox.grid(row=2, column=1, sticky=tk.W, pady=2)
-        
+
+        # Campaign controls: select robot and start/stop
+        ttk.Label(strategy_frame, text="Campaign Robot ID:").grid(row=2, column=2, sticky=tk.W, pady=2)
+        self.campaign_robot_var = tk.IntVar(value=0)
+        campaign_robot_spinbox = ttk.Spinbox(strategy_frame, from_=0, to=15, width=8, textvariable=self.campaign_robot_var)
+        campaign_robot_spinbox.grid(row=2, column=3, sticky=tk.W, pady=2)
+
+        self.campaign_running = False
+        self.campaign_thread = None
+        self.campaign_stop_event = threading.Event()
+
+        self.campaign_button = ttk.Button(strategy_frame, text="Start Campaign", command=self.toggle_campaign)
+        self.campaign_button.grid(row=2, column=4, padx=8)
+
         # Position X
         ttk.Label(strategy_frame, text="Position X (mm):").grid(row=3, column=0, sticky=tk.W, pady=2)
         self.position_x_var = tk.DoubleVar(value=0.0)
         position_x_entry = ttk.Entry(strategy_frame, textvariable=self.position_x_var, width=15)
         position_x_entry.grid(row=3, column=1, sticky=tk.W, pady=2)
-        
+
         # Position Y
         ttk.Label(strategy_frame, text="Position Y (mm):").grid(row=4, column=0, sticky=tk.W, pady=2)
         self.position_y_var = tk.DoubleVar(value=0.0)
         position_y_entry = ttk.Entry(strategy_frame, textvariable=self.position_y_var, width=15)
         position_y_entry.grid(row=4, column=1, sticky=tk.W, pady=2)
-        
+
         # Velocity X
         ttk.Label(strategy_frame, text="Velocity X (mm/s):").grid(row=5, column=0, sticky=tk.W, pady=2)
         self.velocity_x_var = tk.DoubleVar(value=0.0)
         velocity_x_entry = ttk.Entry(strategy_frame, textvariable=self.velocity_x_var, width=15)
         velocity_x_entry.grid(row=5, column=1, sticky=tk.W, pady=2)
-        
+
         # Velocity Y
         ttk.Label(strategy_frame, text="Velocity Y (mm/s):").grid(row=6, column=0, sticky=tk.W, pady=2)
         self.velocity_y_var = tk.DoubleVar(value=0.0)
         velocity_y_entry = ttk.Entry(strategy_frame, textvariable=self.velocity_y_var, width=15)
         velocity_y_entry.grid(row=6, column=1, sticky=tk.W, pady=2)
-        
+
         # Buttons frame
         button_frame = ttk.Frame(strategy_frame)
         button_frame.grid(row=7, column=0, columnspan=3, pady=20)
-        
+
         # Send Command Button
         self.send_button = ttk.Button(button_frame, text="Send Command", command=self.send_command)
         self.send_button.grid(row=0, column=0, padx=5)
-        
+
         # Clear Button
         clear_button = ttk.Button(button_frame, text="Clear", command=self.clear_fields)
         clear_button.grid(row=0, column=1, padx=5)
@@ -177,6 +190,19 @@ class StrategyCommandGUI(Node):
         
         # Disable update obstacles button initially
         self.update_obstacles_button.configure(state='disabled')
+        
+        # Vertical Campaign controls
+        ttk.Label(strategy_frame, text="Vertical Campaign Robot ID:").grid(row=3, column=2, sticky=tk.W, pady=2)
+        self.vcampaign_robot_var = tk.IntVar(value=0)
+        vcampaign_spinbox = ttk.Spinbox(strategy_frame, from_=0, to=15, width=8, textvariable=self.vcampaign_robot_var)
+        vcampaign_spinbox.grid(row=3, column=3, sticky=tk.W, pady=2)
+
+        self.vcampaign_running = False
+        self.vcampaign_thread = None
+        self.vcampaign_stop_event = threading.Event()
+
+        self.vcampaign_button = ttk.Button(strategy_frame, text="Start Vertical Campaign", command=self.toggle_vcampaign)
+        self.vcampaign_button.grid(row=3, column=4, padx=8)
         
     def setup_pid_tab(self, notebook):
         """Setup the PID tuning tab"""
@@ -549,6 +575,91 @@ class StrategyCommandGUI(Node):
             self.root.mainloop()
         finally:
             self.get_logger().info('Shutting down Strategy Command GUI')
+    
+    def toggle_campaign(self):
+        """Toggle the alternate-goal campaign on or off"""
+        if not self.campaign_running:
+            # start campaign
+            self.campaign_stop_event.clear()
+            self.campaign_thread = threading.Thread(target=self._campaign_runner, daemon=True)
+            self.campaign_thread.start()
+            self.campaign_running = True
+            self.campaign_button.configure(text="Stop Campaign")
+            self.get_logger().info("Campaign started")
+        else:
+            # stop campaign
+            self.campaign_stop_event.set()
+            self.campaign_running = False
+            self.campaign_button.configure(text="Start Campaign")
+            self.get_logger().info("Campaign stopped")
+
+    def toggle_vcampaign(self):
+        """Toggle the vertical campaign on or off"""
+        if not self.vcampaign_running:
+            # start vertical campaign
+            self.vcampaign_stop_event.clear()
+            self.vcampaign_thread = threading.Thread(target=self._vcampaign_runner, daemon=True)
+            self.vcampaign_thread.start()
+            self.vcampaign_running = True
+            self.vcampaign_button.configure(text="Stop Vertical Campaign")
+            self.get_logger().info("Vertical campaign started")
+        else:
+            # stop vertical campaign
+            self.vcampaign_stop_event.set()
+            self.vcampaign_running = False
+            self.vcampaign_button.configure(text="Start Vertical Campaign")
+            self.get_logger().info("Vertical campaign stopped")
+
+    def _send_strategy(self, robot_id: int, x: float, y: float, vx: float = 0.0, vy: float = 0.0):
+        if not self.strategy_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().warning('Strategy service unavailable when sending campaign command')
+            return False
+        try:
+            request = StrategyCommand.Request()
+            request.id = int(robot_id)
+            request.position_x = float(x)
+            request.position_y = float(y)
+            request.velocity_x = float(vx)
+            request.velocity_y = float(vy)
+            # optional team color handling
+            team_color = getattr(self, 'team_color_var', None)
+            if team_color and hasattr(request, 'team_color'):
+                request.team_color = self.team_color_var.get()
+            future = self.strategy_client.call_async(request)
+            # no blocking; caller may rely on visual feedback
+            self.get_logger().info(f"Campaign sent to robot {robot_id}: ({x},{y})")
+            return True
+        except Exception as e:
+            self.get_logger().error(f"Failed to send campaign command: {e}")
+            return False
+
+    def _campaign_runner(self):
+        robot_id = int(self.campaign_robot_var.get())
+        our_goal = (-2250, 0)
+        enemy_goal = (2250, 0)
+        target_toggle = False
+        while not self.campaign_stop_event.is_set():
+            if target_toggle:
+                self._send_strategy(robot_id, enemy_goal[0], enemy_goal[1])
+            else:
+                self._send_strategy(robot_id, our_goal[0], our_goal[1])
+            target_toggle = not target_toggle
+            # wait 5 seconds or until stopped
+            self.campaign_stop_event.wait(5.0)
+
+    def _vcampaign_runner(self):
+        robot_id = int(self.vcampaign_robot_var.get())
+        top = (0, 1500)
+        bottom = (0, -1500)
+        target_toggle = False
+        while not self.vcampaign_stop_event.is_set():
+            if target_toggle:
+                self._send_strategy(robot_id, bottom[0], bottom[1])
+            else:
+                self._send_strategy(robot_id, top[0], top[1])
+            target_toggle = not target_toggle
+            # wait 5 seconds or until stopped
+            self.vcampaign_stop_event.wait(5.0)
 
 
 def main(args=None):

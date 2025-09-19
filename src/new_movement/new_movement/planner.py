@@ -161,12 +161,17 @@ class Planner():
                     final_trajectory.append(self.generator.generate(curState, out_obs))
                     curState = out_obs
         
-        best_trajectory: TrajectorySegment = self.generator.generate(curState, tarState)
+        best_trajectory = self.generator.generate(curState, tarState)
 
-        if(self.solver.is_collision(best_trajectory, obstacles)):
-            best_trajectory = self.solver.solve(curState, tarState, obstacles, self.generator)
-            self.optimizer.optimize(best_trajectory, self.generator, self.solver, obstacles)
+        if self.solver.is_collision(best_trajectory, obstacles):
+            solved_trajectory = self.solver.solve(curState, tarState, obstacles, self.generator)
+            solved_trajectory = self.optimizer.optimize(solved_trajectory, self.generator, self.solver, obstacles)
+            if solved_trajectory is None or solved_trajectory.root is None:
+                return final_trajectory
+            best_seg = solved_trajectory.root
+        else:
+            best_seg = best_trajectory
 
-        final_trajectory.append(best_trajectory)
+        final_trajectory.append(best_seg)
 
         return final_trajectory
