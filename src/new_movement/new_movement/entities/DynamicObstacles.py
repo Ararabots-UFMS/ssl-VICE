@@ -11,11 +11,15 @@ class EnemyRobotObstacle(Obstacle):
     in the same orientation of the robot velocity
     and length calculated based on the current velocity and lookahead time.
     '''
-    def __init__(self, robotState: State, radius: float = 90):
+    def __init__(self, robotState: State, radius: float = 90, max_lookahead: float = 0.5):
         self.robotState = robotState
         self.radius = radius
+        self.max_lookahead = max_lookahead
 
     def distanceTo(self, curPosition: Vector2D, t: float) -> float:
+        if t > self.max_lookahead:
+            t = self.max_lookahead
+            
         start_point = self._getPos()
         end_point = self._getPredictedPos(t)
 
