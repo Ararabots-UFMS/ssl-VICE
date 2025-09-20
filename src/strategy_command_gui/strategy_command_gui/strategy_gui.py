@@ -6,6 +6,7 @@ from rclpy.client import Client
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
+from std_srvs.srv import SetBool
 from system_interfaces.srv import StrategyCommand, ControlParams, UpdateObstacle
 import time
 
@@ -18,17 +19,19 @@ class StrategyCommandGUI(Node):
         self.strategy_client = self.create_client(StrategyCommand, 'strategy_command')
         self.pid_client = self.create_client(ControlParams, 'update_pid')
         self.update_obstacles_client = self.create_client(UpdateObstacle, 'update_obstacles')
-        
+        # Client to request team color change on the game watcher
+        self.set_team_color_client = self.create_client(SetBool, 'set_team_color')
+
         # Wait for services to become available
         self.get_logger().info('Waiting for services...')
-        
+
         # Initialize GUI
         self.setup_gui()
-        
+
         # Start ROS2 spinning in a separate thread
         self.ros_thread = threading.Thread(target=self.spin_ros, daemon=True)
         self.ros_thread.start()
-        
+
         # Check service availability periodically
         self.check_service_timer = self.create_timer(1.0, self.check_service_availability)
         
@@ -61,6 +64,14 @@ class StrategyCommandGUI(Node):
         # Update Obstacles Service status
         self.obstacles_status_label = ttk.Label(strategy_frame, text="Obstacles Service Status: Checking...", foreground="orange")
         self.obstacles_status_label.grid(row=1, column=0, columnspan=3, pady=(0, 10))
+
+        # Team color selector (Yellow / Blue)
+        ttk.Label(strategy_frame, text="Team Color:").grid(row=0, column=3, sticky=tk.W, pady=2)
+        self.team_color_var = tk.StringVar(value="Blue")
+        team_color_combo = ttk.Combobox(strategy_frame, values=["Yellow", "Blue"], width=8, textvariable=self.team_color_var)
+        team_color_combo.current(0)
+        team_color_combo.grid(row=0, column=4, sticky=tk.W, pady=2)
+        team_color_combo.bind("<<ComboboxSelected>>", self.on_team_color_changed)
 
         # Robot ID
         ttk.Label(strategy_frame, text="Robot ID:").grid(row=2, column=0, sticky=tk.W, pady=2)
@@ -624,7 +635,8 @@ class StrategyCommandGUI(Node):
             # optional team color handling
             team_color = getattr(self, 'team_color_var', None)
             if team_color and hasattr(request, 'team_color'):
-                request.team_color = self.team_color_var.get()
+                # map string to boolean expected elsewhere (True == Yellow)
+                request.team_color = (self.team_color_var.get() == 'Yellow')
             future = self.strategy_client.call_async(request)
             # no blocking; caller may rely on visual feedback
             self.get_logger().info(f"Campaign sent to robot {robot_id}: ({x},{y})")
@@ -661,6 +673,36 @@ class StrategyCommandGUI(Node):
             # wait 5 seconds or until stopped
             self.vcampaign_stop_event.wait(5.0)
 
+    def on_team_color_changed(self, event=None):
+        """Called when the user changes the team color combobox. Calls the set_team_color service."""
+        # Map selection to bool: Yellow -> True, Blue -> False
+        selection = self.team_color_var.get()
+        is_yellow = selection == 'Yellow'
+
+        # Call service
+        if not self.set_team_color_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().warning('set_team_color service unavailable')
+            return
+
+        try:
+            req = SetBool.Request()
+            req.data = bool(is_yellow)
+            future = self.set_team_color_client.call_async(req)
+
+            def _cb(fut):
+                try:
+                    resp = fut.result()
+                    if resp.success:
+                        self.get_logger().info(f"Team color set to {selection}")
+                    else:
+                        self.get_logger().warning(f"Failed to set team color: {resp.message}")
+                except Exception as e:
+                    self.get_logger().error(f"Error calling set_team_color: {e}")
+
+            future.add_done_callback(_cb)
+        except Exception as e:
+            self.get_logger().error(f"Exception while calling set_team_color: {e}")
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -674,6 +716,10 @@ def main(args=None):
         print(f"Error: {e}")
     finally:
         rclpy.shutdown()
+
+
+    
+    
 
 
 if __name__ == '__main__':

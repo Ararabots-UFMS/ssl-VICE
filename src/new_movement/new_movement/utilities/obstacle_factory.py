@@ -30,7 +30,7 @@ class ObstacleFactory():
             if enemy_id in self.blackboard.enemy_robots:
                 robot = self.blackboard.enemy_robots[enemy_id]
                 state = State(Vector2D(robot.position_x, robot.position_y), Vector2D(robot.velocity_x, robot.velocity_y))
-                obstacles.append(EnemyRobotObstacle(state))
+                obstacles.append(EnemyRobotObstacle(state, radius=190))
         
         for ally_id in request.ally_ids:
             if ally_id in self.blackboard.ally_robots and ally_id != request.id:
