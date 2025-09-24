@@ -6,8 +6,8 @@ from typing import Optional
 import numpy as np
 
 
-DEFAULT_VELOCITY_CONSTRAINST = Vector2D(900, 900)
-DEFAULT_ACCELERATION_CONSTRAINST = Vector2D(1500, 1500)
+DEFAULT_VELOCITY_CONSTRAINST = Vector2D(900, 900) # mm/s
+DEFAULT_ACCELERATION_CONSTRAINST = Vector2D(1500, 1500) # mm/s²
 
 
 class TrajectoryGenerator:
