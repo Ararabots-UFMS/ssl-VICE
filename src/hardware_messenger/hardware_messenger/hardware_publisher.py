@@ -18,10 +18,7 @@ class HardwarePublisher(Node):
             self.get_parameter("baudrate").get_parameter_value().integer_value
         )
 
-        self.robots = {}
-
         self._command = bytearray()
-        self.first_message_sent = False
 
         self.serial_writer = serial.Serial(self.port, self.baudrate, timeout=0.1)
 
@@ -34,9 +31,7 @@ class HardwarePublisher(Node):
         )  # publish to serial at 60Hz
 
     def encode_command(self, robot_id, vx, vy, angular_speed, angle, kick_front):
-        """
-        Encode command in binary format compatible with RobotCommand.decodeCommand()
-        """
+        """ Encode command in binary format compatible with RobotCommand.decodeCommand() """
         # Pack the data into 11 bytes as expected by decodeCommand
         bytes_data = bytearray(11)
         
