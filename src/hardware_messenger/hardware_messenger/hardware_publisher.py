@@ -1,7 +1,6 @@
 from rclpy.node import Node
 import rclpy
 import serial
-import struct
 
 from system_interfaces.msg import TeamCommand
 
@@ -12,7 +11,7 @@ class HardwarePublisher(Node):
 
         # Parameters settings.
         self.declare_parameter("port", "/dev/ttyUSB0")
-        self.declare_parameter("baudrate", 115200)
+        self.declare_parameter("baudrate", 230400)
 
         self.port = self.get_parameter("port").get_parameter_value().string_value
         self.baudrate = (
@@ -31,7 +30,7 @@ class HardwarePublisher(Node):
         )
 
         self.timer = self.create_timer(
-            1 / 60, self.publish_command
+            1 / 120, self.publish_command
         )  # publish to serial at 60Hz
 
     def encode_command(self, robot_id, vx, vy, angular_speed, angle, kick_front):
