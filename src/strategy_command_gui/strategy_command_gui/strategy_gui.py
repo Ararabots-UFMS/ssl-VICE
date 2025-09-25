@@ -6,7 +6,8 @@ from rclpy.client import Client
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
-from system_interfaces.srv import StrategyCommand, ControlParams
+from std_srvs.srv import SetBool
+from system_interfaces.srv import StrategyCommand, ControlParams, UpdateObstacle
 import time
 
 
@@ -17,17 +18,20 @@ class StrategyCommandGUI(Node):
         # Create service clients
         self.strategy_client = self.create_client(StrategyCommand, 'strategy_command')
         self.pid_client = self.create_client(ControlParams, 'update_pid')
-        
+        self.update_obstacles_client = self.create_client(UpdateObstacle, 'update_obstacles')
+        # Client to request team color change on the game watcher
+        self.set_team_color_client = self.create_client(SetBool, 'set_team_color')
+
         # Wait for services to become available
         self.get_logger().info('Waiting for services...')
-        
+
         # Initialize GUI
         self.setup_gui()
-        
+
         # Start ROS2 spinning in a separate thread
         self.ros_thread = threading.Thread(target=self.spin_ros, daemon=True)
         self.ros_thread.start()
-        
+
         # Check service availability periodically
         self.check_service_timer = self.create_timer(1.0, self.check_service_availability)
         
@@ -52,56 +56,81 @@ class StrategyCommandGUI(Node):
         # Strategy tab frame
         strategy_frame = ttk.Frame(notebook, padding="10")
         notebook.add(strategy_frame, text="Strategy Commands")
-        
+
         # Service status
         self.status_label = ttk.Label(strategy_frame, text="Service Status: Checking...", foreground="orange")
         self.status_label.grid(row=0, column=0, columnspan=3, pady=(0, 10))
-        
+
+        # Update Obstacles Service status
+        self.obstacles_status_label = ttk.Label(strategy_frame, text="Obstacles Service Status: Checking...", foreground="orange")
+        self.obstacles_status_label.grid(row=1, column=0, columnspan=3, pady=(0, 10))
+
+        # Team color selector (Yellow / Blue)
+        ttk.Label(strategy_frame, text="Team Color:").grid(row=0, column=3, sticky=tk.W, pady=2)
+        self.team_color_var = tk.StringVar(value="Blue")
+        team_color_combo = ttk.Combobox(strategy_frame, values=["Yellow", "Blue"], width=8, textvariable=self.team_color_var)
+        team_color_combo.current(0)
+        team_color_combo.grid(row=0, column=4, sticky=tk.W, pady=2)
+        team_color_combo.bind("<<ComboboxSelected>>", self.on_team_color_changed)
+
         # Robot ID
-        ttk.Label(strategy_frame, text="Robot ID:").grid(row=1, column=0, sticky=tk.W, pady=2)
+        ttk.Label(strategy_frame, text="Robot ID:").grid(row=2, column=0, sticky=tk.W, pady=2)
         self.robot_id_var = tk.IntVar(value=0)
         robot_id_spinbox = ttk.Spinbox(strategy_frame, from_=0, to=15, width=10, textvariable=self.robot_id_var)
-        robot_id_spinbox.grid(row=1, column=1, sticky=tk.W, pady=2)
-        
+        robot_id_spinbox.grid(row=2, column=1, sticky=tk.W, pady=2)
+
+        # Campaign controls: select robot and start/stop
+        ttk.Label(strategy_frame, text="Campaign Robot ID:").grid(row=2, column=2, sticky=tk.W, pady=2)
+        self.campaign_robot_var = tk.IntVar(value=0)
+        campaign_robot_spinbox = ttk.Spinbox(strategy_frame, from_=0, to=15, width=8, textvariable=self.campaign_robot_var)
+        campaign_robot_spinbox.grid(row=2, column=3, sticky=tk.W, pady=2)
+
+        self.campaign_running = False
+        self.campaign_thread = None
+        self.campaign_stop_event = threading.Event()
+
+        self.campaign_button = ttk.Button(strategy_frame, text="Start Campaign", command=self.toggle_campaign)
+        self.campaign_button.grid(row=2, column=4, padx=8)
+
         # Position X
-        ttk.Label(strategy_frame, text="Position X (mm):").grid(row=2, column=0, sticky=tk.W, pady=2)
+        ttk.Label(strategy_frame, text="Position X (mm):").grid(row=3, column=0, sticky=tk.W, pady=2)
         self.position_x_var = tk.DoubleVar(value=0.0)
         position_x_entry = ttk.Entry(strategy_frame, textvariable=self.position_x_var, width=15)
-        position_x_entry.grid(row=2, column=1, sticky=tk.W, pady=2)
-        
+        position_x_entry.grid(row=3, column=1, sticky=tk.W, pady=2)
+
         # Position Y
-        ttk.Label(strategy_frame, text="Position Y (mm):").grid(row=3, column=0, sticky=tk.W, pady=2)
+        ttk.Label(strategy_frame, text="Position Y (mm):").grid(row=4, column=0, sticky=tk.W, pady=2)
         self.position_y_var = tk.DoubleVar(value=0.0)
         position_y_entry = ttk.Entry(strategy_frame, textvariable=self.position_y_var, width=15)
-        position_y_entry.grid(row=3, column=1, sticky=tk.W, pady=2)
-        
+        position_y_entry.grid(row=4, column=1, sticky=tk.W, pady=2)
+
         # Velocity X
-        ttk.Label(strategy_frame, text="Velocity X (mm/s):").grid(row=4, column=0, sticky=tk.W, pady=2)
+        ttk.Label(strategy_frame, text="Velocity X (mm/s):").grid(row=5, column=0, sticky=tk.W, pady=2)
         self.velocity_x_var = tk.DoubleVar(value=0.0)
         velocity_x_entry = ttk.Entry(strategy_frame, textvariable=self.velocity_x_var, width=15)
-        velocity_x_entry.grid(row=4, column=1, sticky=tk.W, pady=2)
-        
+        velocity_x_entry.grid(row=5, column=1, sticky=tk.W, pady=2)
+
         # Velocity Y
-        ttk.Label(strategy_frame, text="Velocity Y (mm/s):").grid(row=5, column=0, sticky=tk.W, pady=2)
+        ttk.Label(strategy_frame, text="Velocity Y (mm/s):").grid(row=6, column=0, sticky=tk.W, pady=2)
         self.velocity_y_var = tk.DoubleVar(value=0.0)
         velocity_y_entry = ttk.Entry(strategy_frame, textvariable=self.velocity_y_var, width=15)
-        velocity_y_entry.grid(row=5, column=1, sticky=tk.W, pady=2)
-        
+        velocity_y_entry.grid(row=6, column=1, sticky=tk.W, pady=2)
+
         # Buttons frame
         button_frame = ttk.Frame(strategy_frame)
-        button_frame.grid(row=6, column=0, columnspan=3, pady=20)
-        
+        button_frame.grid(row=7, column=0, columnspan=3, pady=20)
+
         # Send Command Button
         self.send_button = ttk.Button(button_frame, text="Send Command", command=self.send_command)
         self.send_button.grid(row=0, column=0, padx=5)
-        
+
         # Clear Button
         clear_button = ttk.Button(button_frame, text="Clear", command=self.clear_fields)
         clear_button.grid(row=0, column=1, padx=5)
         
         # Preset Commands Frame
         preset_frame = ttk.LabelFrame(strategy_frame, text="Preset Positions", padding="10")
-        preset_frame.grid(row=7, column=0, columnspan=3, pady=10, sticky=(tk.W, tk.E))
+        preset_frame.grid(row=8, column=0, columnspan=3, pady=10, sticky=(tk.W, tk.E))
         
         ttk.Button(preset_frame, text="Center", command=lambda: self.set_preset(0, 0, 0, 0)).grid(row=0, column=0, padx=2, pady=2, sticky=tk.W+tk.E)
         ttk.Button(preset_frame, text="Our Goal", command=lambda: self.set_preset(-2250, 0, 0, 0)).grid(row=0, column=1, padx=2, pady=2, sticky=tk.W+tk.E)
@@ -117,9 +146,42 @@ class StrategyCommandGUI(Node):
         for i in range(4):
             preset_frame.columnconfigure(i, weight=1)
         
+        # Obstacle Update Frame
+        obstacle_frame = ttk.LabelFrame(strategy_frame, text="Update Obstacles", padding="10")
+        obstacle_frame.grid(row=9, column=0, columnspan=3, pady=10, sticky=(tk.W, tk.E))
+        
+        # Obstacle checkboxes
+        self.field_border_var = tk.BooleanVar()
+        ttk.Checkbutton(obstacle_frame, text="Field Border", variable=self.field_border_var).grid(row=0, column=0, sticky=tk.W, pady=2)
+        
+        self.penalty_area_var = tk.BooleanVar()
+        ttk.Checkbutton(obstacle_frame, text="Penalty Area", variable=self.penalty_area_var).grid(row=0, column=1, sticky=tk.W, pady=2)
+        
+        self.center_area_var = tk.BooleanVar()
+        ttk.Checkbutton(obstacle_frame, text="Center Area", variable=self.center_area_var).grid(row=0, column=2, sticky=tk.W, pady=2)
+        
+        self.ball_var = tk.BooleanVar()
+        ttk.Checkbutton(obstacle_frame, text="Ball", variable=self.ball_var).grid(row=0, column=3, sticky=tk.W, pady=2)
+        
+        # Enemy IDs
+        ttk.Label(obstacle_frame, text="Enemy IDs (comma-separated):").grid(row=1, column=0, sticky=tk.W, pady=2)
+        self.enemy_ids_var = tk.StringVar()
+        enemy_ids_entry = ttk.Entry(obstacle_frame, textvariable=self.enemy_ids_var, width=20)
+        enemy_ids_entry.grid(row=1, column=1, columnspan=2, sticky=tk.W, pady=2)
+        
+        # Ally IDs
+        ttk.Label(obstacle_frame, text="Ally IDs (comma-separated):").grid(row=2, column=0, sticky=tk.W, pady=2)
+        self.ally_ids_var = tk.StringVar()
+        ally_ids_entry = ttk.Entry(obstacle_frame, textvariable=self.ally_ids_var, width=20)
+        ally_ids_entry.grid(row=2, column=1, columnspan=2, sticky=tk.W, pady=2)
+        
+        # Update Obstacles Button
+        self.update_obstacles_button = ttk.Button(obstacle_frame, text="Update Obstacles", command=self.update_obstacles)
+        self.update_obstacles_button.grid(row=3, column=0, columnspan=4, pady=10)
+        
         # Response display
         response_frame = ttk.LabelFrame(strategy_frame, text="Last Response", padding="5")
-        response_frame.grid(row=8, column=0, columnspan=3, pady=10, sticky=(tk.W, tk.E, tk.N, tk.S))
+        response_frame.grid(row=10, column=0, columnspan=3, pady=10, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         self.response_text = tk.Text(response_frame, height=8, width=70)
         self.response_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -130,12 +192,28 @@ class StrategyCommandGUI(Node):
         
         # Configure grid weights for resizing
         strategy_frame.columnconfigure(2, weight=1)
-        strategy_frame.rowconfigure(8, weight=1)
+        strategy_frame.rowconfigure(10, weight=1)
         response_frame.columnconfigure(0, weight=1)
         response_frame.rowconfigure(0, weight=1)
         
         # Disable send button initially
         self.send_button.configure(state='disabled')
+        
+        # Disable update obstacles button initially
+        self.update_obstacles_button.configure(state='disabled')
+        
+        # Vertical Campaign controls
+        ttk.Label(strategy_frame, text="Vertical Campaign Robot ID:").grid(row=3, column=2, sticky=tk.W, pady=2)
+        self.vcampaign_robot_var = tk.IntVar(value=0)
+        vcampaign_spinbox = ttk.Spinbox(strategy_frame, from_=0, to=15, width=8, textvariable=self.vcampaign_robot_var)
+        vcampaign_spinbox.grid(row=3, column=3, sticky=tk.W, pady=2)
+
+        self.vcampaign_running = False
+        self.vcampaign_thread = None
+        self.vcampaign_stop_event = threading.Event()
+
+        self.vcampaign_button = ttk.Button(strategy_frame, text="Start Vertical Campaign", command=self.toggle_vcampaign)
+        self.vcampaign_button.grid(row=3, column=4, padx=8)
         
     def setup_pid_tab(self, notebook):
         """Setup the PID tuning tab"""
@@ -234,6 +312,14 @@ class StrategyCommandGUI(Node):
         else:
             self.pid_status_label.configure(text="PID Service: Unavailable", foreground="red")
             self.update_pid_button.configure(state='disabled')
+            
+        # Check Update Obstacles service
+        if self.update_obstacles_client.wait_for_service(timeout_sec=0.1):
+            self.obstacles_status_label.configure(text="Obstacles Service: Available", foreground="green")
+            self.update_obstacles_button.configure(state='normal')
+        else:
+            self.obstacles_status_label.configure(text="Obstacles Service: Unavailable", foreground="red")
+            self.update_obstacles_button.configure(state='disabled')
     
     def set_preset(self, x, y, vx, vy):
         """Set preset values for quick testing"""
@@ -302,6 +388,64 @@ class StrategyCommandGUI(Node):
             messagebox.showerror("Error", f"Failed to send command: {e}")
             self.get_logger().error(f'Failed to send strategy command: {e}')
     
+    def update_obstacles(self):
+        """Send update obstacles service request"""
+        if not self.update_obstacles_client.wait_for_service(timeout_sec=1.0):
+            messagebox.showerror("Error", "Update obstacles service is not available")
+            return
+        
+        try:
+            # Create service request
+            request = UpdateObstacle.Request()
+            request.id = self.robot_id_var.get()
+            request.field_border = self.field_border_var.get()
+            request.penalty_area = self.penalty_area_var.get()
+            request.center_area = self.center_area_var.get()
+            request.ball = self.ball_var.get()
+            
+            # Parse enemy IDs
+            enemy_ids_str = self.enemy_ids_var.get().strip()
+            if enemy_ids_str:
+                request.enemy_ids = [int(id.strip()) for id in enemy_ids_str.split(',') if id.strip()]
+            else:
+                request.enemy_ids = []
+            
+            # Parse ally IDs
+            ally_ids_str = self.ally_ids_var.get().strip()
+            if ally_ids_str:
+                request.ally_ids = [int(id.strip()) for id in ally_ids_str.split(',') if id.strip()]
+            else:
+                request.ally_ids = []
+            
+            # Log the request
+            self.get_logger().info(f'Sending update obstacles: ID={request.id}, '
+                                 f'Field Border={request.field_border}, Penalty={request.penalty_area}, '
+                                 f'Center={request.center_area}, Ball={request.ball}, '
+                                 f'Enemy IDs={request.enemy_ids}, Ally IDs={request.ally_ids}')
+            
+            # Send async request
+            future = self.update_obstacles_client.call_async(request)
+            
+            # Add callback to handle response
+            future.add_done_callback(self.handle_obstacles_response)
+            
+            # Update response display with request info
+            self.update_response_display(f"Obstacles Update sent at {time.strftime('%H:%M:%S')}:\n"
+                                       f"Robot ID: {request.id}\n"
+                                       f"Field Border: {request.field_border}\n"
+                                       f"Penalty Area: {request.penalty_area}\n"
+                                       f"Center Area: {request.center_area}\n"
+                                       f"Ball: {request.ball}\n"
+                                       f"Enemy IDs: {request.enemy_ids}\n"
+                                       f"Ally IDs: {request.ally_ids}\n"
+                                       f"Waiting for response...\n")
+            
+        except ValueError as e:
+            messagebox.showerror("Input Error", f"Invalid input values: {e}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to send obstacles update: {e}")
+            self.get_logger().error(f'Failed to send obstacles update: {e}')
+    
     def update_pid(self):
         """Send PID update service request"""
         if not self.pid_client.wait_for_service(timeout_sec=1.0):
@@ -363,6 +507,31 @@ class StrategyCommandGUI(Node):
             self.update_response_display(f"ERROR at {time.strftime('%H:%M:%S')}: {error_msg}\n")
             messagebox.showerror("Service Error", error_msg)
     
+    def handle_obstacles_response(self, future):
+        """Handle obstacles service response"""
+        try:
+            response = future.result()
+            success_text = "SUCCESS" if response.success else "FAILED"
+            
+            self.get_logger().info(f'Update obstacles response: {success_text}')
+            
+            # Update response display
+            response_info = f"Obstacles Response received at {time.strftime('%H:%M:%S')}:\n"
+            response_info += f"Success: {success_text}\n"
+            response_info += "="*40 + "\n"
+            
+            self.update_response_display(response_info)
+            
+            # Show popup for failed commands
+            if not response.success:
+                messagebox.showwarning("Update Failed", "The obstacles update was not successful")
+                
+        except Exception as e:
+            error_msg = f"Obstacles service call failed: {e}"
+            self.get_logger().error(error_msg)
+            self.update_response_display(f"ERROR at {time.strftime('%H:%M:%S')}: {error_msg}\n")
+            messagebox.showerror("Service Error", error_msg)
+    
     def handle_pid_response(self, future):
         """Handle PID service response"""
         try:
@@ -417,6 +586,122 @@ class StrategyCommandGUI(Node):
             self.root.mainloop()
         finally:
             self.get_logger().info('Shutting down Strategy Command GUI')
+    
+    def toggle_campaign(self):
+        """Toggle the alternate-goal campaign on or off"""
+        if not self.campaign_running:
+            # start campaign
+            self.campaign_stop_event.clear()
+            self.campaign_thread = threading.Thread(target=self._campaign_runner, daemon=True)
+            self.campaign_thread.start()
+            self.campaign_running = True
+            self.campaign_button.configure(text="Stop Campaign")
+            self.get_logger().info("Campaign started")
+        else:
+            # stop campaign
+            self.campaign_stop_event.set()
+            self.campaign_running = False
+            self.campaign_button.configure(text="Start Campaign")
+            self.get_logger().info("Campaign stopped")
+
+    def toggle_vcampaign(self):
+        """Toggle the vertical campaign on or off"""
+        if not self.vcampaign_running:
+            # start vertical campaign
+            self.vcampaign_stop_event.clear()
+            self.vcampaign_thread = threading.Thread(target=self._vcampaign_runner, daemon=True)
+            self.vcampaign_thread.start()
+            self.vcampaign_running = True
+            self.vcampaign_button.configure(text="Stop Vertical Campaign")
+            self.get_logger().info("Vertical campaign started")
+        else:
+            # stop vertical campaign
+            self.vcampaign_stop_event.set()
+            self.vcampaign_running = False
+            self.vcampaign_button.configure(text="Start Vertical Campaign")
+            self.get_logger().info("Vertical campaign stopped")
+
+    def _send_strategy(self, robot_id: int, x: float, y: float, vx: float = 0.0, vy: float = 0.0):
+        if not self.strategy_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().warning('Strategy service unavailable when sending campaign command')
+            return False
+        try:
+            request = StrategyCommand.Request()
+            request.id = int(robot_id)
+            request.position_x = float(x)
+            request.position_y = float(y)
+            request.velocity_x = float(vx)
+            request.velocity_y = float(vy)
+            # optional team color handling
+            team_color = getattr(self, 'team_color_var', None)
+            if team_color and hasattr(request, 'team_color'):
+                # map string to boolean expected elsewhere (True == Yellow)
+                request.team_color = (self.team_color_var.get() == 'Yellow')
+            future = self.strategy_client.call_async(request)
+            # no blocking; caller may rely on visual feedback
+            self.get_logger().info(f"Campaign sent to robot {robot_id}: ({x},{y})")
+            return True
+        except Exception as e:
+            self.get_logger().error(f"Failed to send campaign command: {e}")
+            return False
+
+    def _campaign_runner(self):
+        robot_id = int(self.campaign_robot_var.get())
+        our_goal = (-2250, 0)
+        enemy_goal = (2250, 0)
+        target_toggle = False
+        while not self.campaign_stop_event.is_set():
+            if target_toggle:
+                self._send_strategy(robot_id, enemy_goal[0], enemy_goal[1])
+            else:
+                self._send_strategy(robot_id, our_goal[0], our_goal[1])
+            target_toggle = not target_toggle
+            # wait 5 seconds or until stopped
+            self.campaign_stop_event.wait(5.0)
+
+    def _vcampaign_runner(self):
+        robot_id = int(self.vcampaign_robot_var.get())
+        top = (0, 1500)
+        bottom = (0, -1500)
+        target_toggle = False
+        while not self.vcampaign_stop_event.is_set():
+            if target_toggle:
+                self._send_strategy(robot_id, bottom[0], bottom[1])
+            else:
+                self._send_strategy(robot_id, top[0], top[1])
+            target_toggle = not target_toggle
+            # wait 5 seconds or until stopped
+            self.vcampaign_stop_event.wait(5.0)
+
+    def on_team_color_changed(self, event=None):
+        """Called when the user changes the team color combobox. Calls the set_team_color service."""
+        # Map selection to bool: Yellow -> True, Blue -> False
+        selection = self.team_color_var.get()
+        is_yellow = selection == 'Yellow'
+
+        # Call service
+        if not self.set_team_color_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().warning('set_team_color service unavailable')
+            return
+
+        try:
+            req = SetBool.Request()
+            req.data = bool(is_yellow)
+            future = self.set_team_color_client.call_async(req)
+
+            def _cb(fut):
+                try:
+                    resp = fut.result()
+                    if resp.success:
+                        self.get_logger().info(f"Team color set to {selection}")
+                    else:
+                        self.get_logger().warning(f"Failed to set team color: {resp.message}")
+                except Exception as e:
+                    self.get_logger().error(f"Error calling set_team_color: {e}")
+
+            future.add_done_callback(_cb)
+        except Exception as e:
+            self.get_logger().error(f"Exception while calling set_team_color: {e}")
 
 
 def main(args=None):
@@ -431,6 +716,10 @@ def main(args=None):
         print(f"Error: {e}")
     finally:
         rclpy.shutdown()
+
+
+    
+    
 
 
 if __name__ == '__main__':
