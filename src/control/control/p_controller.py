@@ -1,10 +1,12 @@
 import math
 
+
 class PController:
     """
     Um controlador Proporcional simples para orientação angular.
     Ele lida corretamente com a natureza cíclica dos ângulos.
     """
+
     def __init__(self, kp, max_output=None):
         self.kp = kp
         self.max_output = max_output
@@ -18,11 +20,11 @@ class PController:
         """
         # Calcula o menor erro entre os dois ângulos
         error = math.atan2(math.sin(target - current), math.cos(target - current))
-        
+
         output = self.kp * error
-        
+
         # Limita a saída se um valor máximo for especificado
         if self.max_output is not None:
             output = max(min(output, self.max_output), -self.max_output)
-        
+
         return output
