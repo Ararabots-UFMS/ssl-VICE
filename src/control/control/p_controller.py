@@ -1,30 +1,3 @@
-# import math
-
-# class PController:
-
-#     def __init__(self, kp, max_output=None):
-#         self.kp = kp
-#         self.max_output = max_output
-#         # self.target_orientations = {}
-
-
-#     def compute(self, target, current):
-
-#         # Calcula o menor erro entre os dois ângulos
-#         error = math.atan2(math.sin(target - current), math.cos(target - current))
-
-#         # Aplica o ganho proporcional
-#         output = self.kp * error
-
-#         # Limita a saída se um valor máximo for especificado
-#         if self.max_output is not None:
-#             if output > self.max_output:
-#                 output = self.max_output
-#             elif output < -self.max_output:
-#                 output = -self.max_output
-
-#         return output
-
 import math
 
 class PController:
@@ -46,7 +19,6 @@ class PController:
         # Calcula o menor erro entre os dois ângulos
         error = math.atan2(math.sin(target - current), math.cos(target - current))
         
-        # Aplica o ganho proporcional
         output = self.kp * error
         
         # Limita a saída se um valor máximo for especificado
