@@ -3,7 +3,6 @@ import traceback
 import rclpy
 from new_movement.entities.States import State, Vector2D
 from rclpy.node import Node
-from strategy.blackboard import Blackboard
 
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
@@ -12,9 +11,12 @@ from system_interfaces.srv import ControlParams, SetKp, SetOrientation
 
 
 class Controller(Node):
-    def __init__(self):
+    def __init__(self, game_watcher=None):
         super().__init__("controller")
-        self.get_logger().info("Nó Controller inicializado.")
+        self.get_logger().info("Node Controller initialized")
+
+        # Store reference to game_watcher for accessing game state
+        self.game_watcher = game_watcher
 
         self.target_orientations = {}
 
@@ -22,7 +24,7 @@ class Controller(Node):
         self.orientation_controller = PController(kp=2.5, max_output=4.0)
 
         self.subscriber = self.create_subscription(
-            ControlCommand, 'control_command', self.receive_command, 10
+            ControlCommand, "control_command", self.receive_command, 10
         )
         self.publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
 
@@ -36,29 +38,35 @@ class Controller(Node):
             SetKp, "update_kp_angular", self.update_kp_angular_callback
         )
 
-        self.blackboard = Blackboard()
-        
         self.robot_controller = RobotTrajectoryController()
-        
+
         self.latest_command = None
         self.last_time = self.get_clock().now()
         self.timer = self.create_timer(0.01, self.timer_callback)
-        
+
     def receive_command(self, message):
         self.latest_command = message
 
     def timer_callback(self):
         if self.latest_command is None:
             return
-        
+
         current_time = self.get_clock().now()
         dt = (current_time - self.last_time).nanoseconds / 1e9  # Convert to seconds
         self.last_time = current_time
-        
+
         message = self.latest_command
         team_command = TeamCommand()
         team_command.robots = []
-        team_command.is_team_color_yellow = self.blackboard.gui.is_team_color_yellow
+        # Use game_watcher if available, otherwise use default values
+        if self.game_watcher:
+            gui_data = self.game_watcher.get_gui()
+            ally_robots = self.game_watcher.get_ally_robots()
+            team_command.is_team_color_yellow = gui_data.is_team_color_yellow
+        else:
+            ally_robots = {}
+            team_command.is_team_color_yellow = False
+
         commanded_robot_ids = set()
 
         for robot in message.command:
@@ -66,10 +74,10 @@ class Controller(Node):
             commanded_robot_ids.add(robot.id)
 
             try:
-                if robot.id not in self.blackboard.ally_robots:
+                if robot.id not in ally_robots:
                     continue
 
-                current_robot = self.blackboard.ally_robots[robot.id]
+                current_robot = ally_robots[robot.id]
 
                 current_position = Vector2D(
                     current_robot.position_x / 1000.0, current_robot.position_y / 1000.0

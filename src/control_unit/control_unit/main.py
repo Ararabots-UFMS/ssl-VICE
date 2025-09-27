@@ -2,12 +2,8 @@ import rclpy
 from rclpy.executors import MultiThreadedExecutor
 
 from control_unit.game_watcher import GameWatcher
-from vision.vision_node import Vision
 from new_movement.driver import PathDriver
 from control.control import Controller
-from grsim_messenger.grsim_publisher import grSimPublisher
-# from control_unit.coach import Coach
-# from control_unit.command_publisher import CommandPublisher
 
 
 def main():
@@ -15,8 +11,14 @@ def main():
 
     # Reads all the topics and updates the blackboard
     game_watcher = GameWatcher()
-    driver = PathDriver()
-    control = Controller()
+    game_watcher.get_logger().info("GameWatcher iniciado (debug ativo)")
+
+    driver = PathDriver(game_watcher=game_watcher)
+    driver.get_logger().info("PathDriver iniciado com referência ao GameWatcher")
+
+    control = Controller(game_watcher=game_watcher)
+    control.get_logger().info("Controller iniciado com referência ao GameWatcher")
+
     # gui = StrategyCommandGUI()
 
     # #If there is no GUI, the default max number of robots is 3

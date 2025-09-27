@@ -7,16 +7,15 @@ from new_movement.utilities.obstacle_factory import ObstacleFactory
 from system_interfaces.msg import ControlCommand, RobotControlCommand
 from system_interfaces.srv import StrategyCommand, UpdateObstacle
 
-from strategy.blackboard import Blackboard
-
 import rclpy
 from rclpy.node import Node
 
 
 class PathDriver(Node):
-    def __init__(self):
+    def __init__(self, game_watcher=None):
         super().__init__("path_driver")
-        self.blackboard = Blackboard()
+        self.game_watcher = game_watcher
+
         # Publish Control
         self.publisher = self.create_publisher(ControlCommand, "control_command", 10)
         self.control_timer = self.create_timer(0.01, self.publish_control)
@@ -28,7 +27,7 @@ class PathDriver(Node):
         )
 
         # Update Obstacles
-        self.obstacle_factory = ObstacleFactory(self.blackboard)
+        self.obstacle_factory = ObstacleFactory(self.game_watcher)
         self.update_obstacles_service = self.create_service(
             UpdateObstacle, "update_obstacles", self.update_obstacles
         )
@@ -50,12 +49,17 @@ class PathDriver(Node):
         self.driver_init()
 
     def driver_init(self):
-        ally_robots_ids = self.blackboard.ally_robots.keys()
+        if self.game_watcher:
+            ally_robots = self.game_watcher.get_ally_robots()
+            ally_robots_ids = ally_robots.keys()
+        else:
+            ally_robots = {}
+            ally_robots_ids = []
 
         for id in ally_robots_ids:
             # insert new found robot
             if id not in self.robot_data:
-                cur_robot = self.blackboard.ally_robots[id]
+                cur_robot = ally_robots[id]
                 cur_state = State(
                     Vector2D(cur_robot.position_x, cur_robot.position_y),
                     Vector2D(cur_robot.velocity_x, cur_robot.velocity_y),
