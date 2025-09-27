@@ -1,0 +1,9 @@
+uint32 id
+bool field_border
+bool penalty_area 
+bool center_area
+bool ball
+uint32[] enemy_ids
+uint32[] ally_ids
+---
+bool success

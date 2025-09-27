@@ -1,174 +1,225 @@
-import rclpy
-from rclpy.node import Node
-import traceback
-
-from new_movement.entities.Trajectory import Trajectory
 from new_movement.planner import Planner
 from new_movement.entities.States import Vector2D, State
 from new_movement.entities.obstacles import Obstacle
+from new_movement.entities.StaticObstacle import StaticObstacle
+from new_movement.utilities.obstacle_factory import ObstacleFactory
 
 from system_interfaces.msg import ControlCommand, RobotControlCommand
-from system_interfaces.srv import StrategyCommand, UpdateObstacles
+from system_interfaces.srv import StrategyCommand, UpdateObstacle
 
 from strategy.blackboard import Blackboard
 
+import rclpy
+from rclpy.node import Node
+
+
 class PathDriver(Node):
     def __init__(self):
-        super().__init__('path_driver')
-
-        # Módulos principais
+        super().__init__("path_driver")
         self.blackboard = Blackboard()
-        self.planner = Planner(50)
-
-        # Dicionário para guardar dados dos robôs
-        # Estrutura: { id: {'trajectory': Trajectory, 'time_offset': float, 'obstacles': list} }
-        self.robot_data: dict[int, dict] = {}
-
-        # 1. Publisher para o controle (rápido, 100Hz)
-        self.publisher = self.create_publisher(ControlCommand, 'control_command', 10)
+        # Publish Control
+        self.publisher = self.create_publisher(ControlCommand, "control_command", 10)
         self.control_timer = self.create_timer(0.01, self.publish_control)
 
-        # 2. Timer para gerenciar robôs (lento e robusto, 2Hz)
-        self.robot_management_timer = self.create_timer(0.5, self.manage_robots)
+        # Update Target Service
+        self.planner = Planner(50, 100)
+        self.update_target_service = self.create_service(
+            StrategyCommand, "strategy_command", self.update_target
+        )
 
-        # 3. Serviços para receber comandos externos
-        self.update_target_service = self.create_service(StrategyCommand, 'strategy_command', self.update_target)
-        self.update_obstacles_service = self.create_service(UpdateObstacles, 'update_obstacles', self.update_obstacles)
+        # Update Obstacles
+        self.obstacle_factory = ObstacleFactory(self.blackboard)
+        self.update_obstacles_service = self.create_service(
+            UpdateObstacle, "update_obstacles", self.update_obstacles
+        )
 
-    def manage_robots(self):
-        """
-        Adiciona novos robôs e remove os que desapareceram. Roda em uma frequência
-        baixa para ser robusto contra falhas momentâneas da visão.
-        """
-        if not self.blackboard.ally_robots:
-            if self.robot_data:
-                self.get_logger().info("Nenhum robô aliado visível, limpando dados internos.")
-                self.robot_data.clear()
-            return
+        # Obstacles Update Timer
+        self.update_obstacles_timer = self.create_timer(
+            0.5, self.update_obstacles_timer_callback
+        )
 
+        # Online Collision Check
+        self.collision_timer = self.create_timer(0.5, self.check_collision)
+        self.collision_look_ahead = 1.5  # Seconds
+
+        # Robot data dictionary: id -> {trajectory, time_offset, obstacles}
+        self.robot_data: dict[int, dict] = {}
+
+        self.last_time = self.get_clock().now()
+
+        self.driver_init()
+
+    def driver_init(self):
         ally_robots_ids = self.blackboard.ally_robots.keys()
 
-        # Adiciona novos robôs com uma trajetória "ficar parado"
-        for robot_id in ally_robots_ids:
-            if robot_id not in self.robot_data:
-                cur_robot = self.blackboard.ally_robots[robot_id]
-                cur_pos = Vector2D(cur_robot.position_x, cur_robot.position_y)
-                cur_vel = Vector2D(cur_robot.velocity_x, cur_robot.velocity_y)
-                cur_state = State(cur_pos, cur_vel)
+        for id in ally_robots_ids:
+            # insert new found robot
+            if id not in self.robot_data:
+                cur_robot = self.blackboard.ally_robots[id]
+                cur_state = State(
+                    Vector2D(cur_robot.position_x, cur_robot.position_y),
+                    Vector2D(cur_robot.velocity_x, cur_robot.velocity_y),
+                )
 
-                init_trajectory = Trajectory(self.planner.find(cur_state, cur_state, []))
-                
-                self.robot_data[robot_id] = {
-                    'trajectory': init_trajectory,
-                    'time_offset': 0.0,
-                    'obstacles': []
+                init_trajectory = self.planner.find(cur_state, cur_state, [])
+
+                self.robot_data[id] = {
+                    "trajectory": init_trajectory,
+                    "time_offset": 0.0,
+                    "obstacles": [],
+                    "last_obs_request": None,
                 }
-                self.get_logger().info(f"Robô {robot_id} inicializado no PathDriver.")
 
-        # Remove robôs que não são mais rastreados
-        for tracked_id in list(self.robot_data.keys()):
-            if tracked_id not in ally_robots_ids:
-                self.robot_data.pop(tracked_id)
-                self.get_logger().info(f"Robô {tracked_id} removido do PathDriver por inatividade.")
+            # Update obstacles for all ids
+            if self.robot_data[id]["last_obs_request"] is not None:
+                self.robot_data[id]["obstacles"] = (
+                    self.obstacle_factory.create_obstacles(
+                        self.robot_data[id]["last_obs_request"], self.robot_data
+                    )
+                )
+
+        # Removing not longer found robot
+        for traked_id in list(self.robot_data.keys()):
+            if traked_id not in ally_robots_ids:
+                self.robot_data.pop(traked_id)
 
     def publish_control(self):
-        """
-        Publica o estado atual da trajetória para cada robô. Roda em alta frequência.
-        """
-        if not self.robot_data:
-            return
+        current_time = self.get_clock().now()
+        dt = (current_time - self.last_time).nanoseconds / 1e9  # Convert to seconds
+        self.last_time = current_time
 
-        control_command = ControlCommand()
-        control_command_list = []
-        
-        for robot_id, robot_info in self.robot_data.items():
-            robot_control_command = RobotControlCommand()
+        controlCommand = ControlCommand()
+        controlCommandList = []
 
-            robot_state = robot_info['trajectory'].get_state(robot_info['time_offset'])
+        self.driver_init()
+        try:
+            for robot_id, robot_info in self.robot_data.items():
+                robotControlCommand = RobotControlCommand()
 
-            robot_control_command.id = robot_id
-            # Envia os comandos na unidade do planejador (milímetros)
-            robot_control_command.position_x = robot_state.position.x/ 1000.0
-            robot_control_command.position_y = robot_state.position.y/ 1000.0
-            robot_control_command.velocity_x = robot_state.velocity.x/ 1000.0
-            robot_control_command.velocity_y = robot_state.velocity.y/ 1000.0
+                robotState = robot_info["trajectory"].get_state(
+                    robot_info["time_offset"]
+                )
 
-            control_command_list.append(robot_control_command)
+                if robotState is None:
+                    raise Exception("Robots is None")
 
-            # Avança o tempo na trajetória, parando no final
-            if robot_info['time_offset'] < robot_info['trajectory'].get_total_duration():
-                robot_info['time_offset'] += 0.01
+                robotControlCommand.id = robot_id
+                robotControlCommand.position_x = robotState.position.x / 1000  # to m/s
+                robotControlCommand.position_y = robotState.position.y / 1000
+                robotControlCommand.velocity_x = robotState.velocity.x / 1000
+                robotControlCommand.velocity_y = robotState.velocity.y / 1000
 
-        control_command.command = control_command_list
-        self.publisher.publish(control_command)
+                controlCommandList.append(robotControlCommand)
 
-    def replan(self, robot_id: int, new_destination: State):
-        """Função auxiliar para recalcular a trajetória de um robô."""
+                if (
+                    robot_info["time_offset"]
+                    <= robot_info["trajectory"].get_total_duration()
+                ):
+                    robot_info["time_offset"] += dt
+                else:
+                    robot_info["time_offset"] += robot_info[
+                        "trajectory"
+                    ].get_total_duration()
+        except Exception as e:
+            self.get_logger(f"{e}")
+
+        controlCommand.command = controlCommandList
+
+        self.publisher.publish(controlCommand)
+
+    def replan(self, robot_id: int, new_destination: State) -> bool:
         if robot_id not in self.robot_data:
-            self.get_logger().error(f"ERRO CRÍTICO: Tentativa de replanejar para o robô {robot_id}, que não existe.")
-            return
-            
-        cur_state = self.robot_data[robot_id]['trajectory'].get_state(self.robot_data[robot_id]['time_offset'])
-        new_trajectory_points = self.planner.find(cur_state, new_destination, self.robot_data[robot_id]['obstacles'])
-        
-        if new_trajectory_points:
-            self.robot_data[robot_id]['trajectory'] = Trajectory(new_trajectory_points)
-            self.robot_data[robot_id]['time_offset'] = 0.0
-            self.get_logger().info(f"Nova trajetória planejada para o robô {robot_id}.")
-        else:
-            self.get_logger().warn(f"Planejador não conseguiu encontrar uma trajetória para o robô {robot_id}.")
+            return False
+
+        cur_state = self.robot_data[robot_id]["trajectory"].get_state(
+            self.robot_data[robot_id]["time_offset"]
+        )
+        new_trajectory = self.planner.find(
+            cur_state, new_destination, self.robot_data[robot_id]["obstacles"]
+        )
+
+        if new_trajectory.root is None or new_trajectory.get_state(0.0) is None:
+            # TODO if None, then it means no trajectory was found, so need to implement a fallback here
+            return False
+
+        self.robot_data[robot_id]["trajectory"] = new_trajectory
+        self.robot_data[robot_id]["time_offset"] = 0.0  # Reset Time offset
+        self.last_time = self.get_clock().now()
+
+        return True
+
+    def check_collision(self):
+        for id, robot in self.robot_data.items():
+            total_time: float = 0.0
+            time_step = 0.01
+            while total_time <= self.collision_look_ahead:
+                need_replan: bool = False
+                for obs in robot["obstacles"]:
+                    curPosition: Vector2D = (
+                        robot["trajectory"].get_state(total_time + robot["time_offset"])
+                    ).position
+                    if isinstance(obs, StaticObstacle):
+                        if obs.isCollidingAt(curPosition):
+                            need_replan = True
+                            break
+                    else:
+                        if obs.isCollidingAt(curPosition, total_time):
+                            need_replan = True
+                            break
+
+                if need_replan is True:
+                    self.replan(id, robot["trajectory"].get_destination())
+                    self.get_logger().info(f"Replan Activated for {id}")
+                    break
+
+                total_time += time_step
+
+    def update_obstacles(self, request, response):
+        self.driver_init()
+        if request.id not in self.robot_data:
+            response.success = False
+
+        new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(
+            request, self.robot_data
+        )
+
+        self.robot_data[request.id]["obstacles"] = new_obstacles
+        self.robot_data[request.id]["last_obs_request"] = request
+
+        response.success = True
+        return response
+
+    def update_obstacles_timer_callback(self):
+        for robot_id, robot_info in self.robot_data.items():
+            if robot_info["last_obs_request"] is not None:
+                new_obstacles = self.obstacle_factory.create_obstacles(
+                    robot_info["last_obs_request"], self.robot_data
+                )
+                self.robot_data[robot_id]["obstacles"] = new_obstacles
 
     def update_target(self, request, response):
-        """
-        Callback do serviço que recebe o alvo da GUI.
-        Esta versão é robusta e inicializa o robô se for a primeira vez que um comando é dado.
-        """
-        robot_id = request.id
-        
-        # 1. Verifica se o robô existe no Blackboard (dados da visão)
-        if robot_id not in self.blackboard.ally_robots:
-            self.get_logger().warn(f"Comando para robô {robot_id} ignorado: robô não está no Blackboard.")
+        self.driver_init()
+        if request.id not in self.robot_data:
             response.success = False
             return response
 
-        # 2. Se for a primeira vez que recebemos um comando para este robô, inicialize-o!
-        if robot_id not in self.robot_data:
-            self.get_logger().info(f"Primeiro comando para robô {robot_id}. Inicializando no PathDriver...")
-            cur_robot = self.blackboard.ally_robots[robot_id]
-            cur_pos = Vector2D(cur_robot.position_x, cur_robot.position_y)
-            cur_vel = Vector2D(cur_robot.velocity_x, cur_robot.velocity_y)
-            cur_state = State(cur_pos, cur_vel)
-            
-            init_trajectory = Trajectory(self.planner.find(cur_state, cur_state, []))
-            self.robot_data[robot_id] = {
-                'trajectory': init_trajectory,
-                'time_offset': 0.0,
-                'obstacles': []
-            }
+        new_destination: State = State(
+            Vector2D(request.position_x, request.position_y),
+            Vector2D(request.velocity_x, request.velocity_y),
+        )
 
-        # 3. Agora que temos certeza que o robô existe, planejamos a nova rota.
-        new_destination = State(Vector2D(request.position_x, request.position_y), 
-                                Vector2D(request.velocity_x, request.velocity_y))
-        self.replan(robot_id, new_destination)
-        
-        response.success = True
+        status: bool = self.replan(request.id, new_destination)
+
+        response.success = status
         return response
-    
-    def update_obstacles(self, request, response):
-        # Implementar lógica de obstáculos se necessário
-        response.success = True
-        return response
+
 
 def main(args=None):
     rclpy.init(args=args)
     node = PathDriver()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    rclpy.spin(node)
+    rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

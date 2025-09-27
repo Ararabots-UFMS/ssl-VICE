@@ -11,11 +11,15 @@ class EnemyRobotObstacle(Obstacle):
     in the same orientation of the robot velocity
     and length calculated based on the current velocity and lookahead time.
     '''
-    def __init__(self, robotState: State, radius: float = 90):
+    def __init__(self, robotState: State, radius: float = 90, max_lookahead: float = 0.5):
         self.robotState = robotState
         self.radius = radius
+        self.max_lookahead = max_lookahead
 
     def distanceTo(self, curPosition: Vector2D, t: float) -> float:
+        if t > self.max_lookahead:
+            t = self.max_lookahead
+            
         start_point = self._getPos()
         end_point = self._getPredictedPos(t)
 
@@ -87,16 +91,17 @@ class AllyRobotObstacle(Obstacle):
     '''
     Allies Robots are modeled by their trajectory, in a tube shaped manner.
     '''
-    def __init__(self, robotState: State, trajectory: Trajectory, radius: float = 90):
+    def __init__(self, robotState: State, trajectory: Trajectory, time_offset: float = 0.0, radius: float = 90):
         self.robotState = robotState
         self.trajectory = trajectory
+        self.time_offset = time_offset
         self.radius = radius
 
     def distanceTo(self, curPosition: Vector2D, t: float) -> float:
-        return self.trajectory.get_position(t).distance(curPosition) - self.radius
+        return self.trajectory.get_position(self.time_offset + t).distance(curPosition) - self.radius
     
     def isCollidingAt(self, curPosition: Vector2D, t: float) -> bool:
-        if self.distanceTo(curPosition, t) <= 0:
+        if self.distanceTo(curPosition, t) < 0:
             return True
         
         return False

@@ -1,7 +1,7 @@
 from typing import Tuple
 from dataclasses import dataclass
 from new_movement.entities.States import Vector2D
-
+from typing import Tuple
 
 @dataclass
 class MotionPrimitive:

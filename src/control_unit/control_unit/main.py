@@ -15,14 +15,9 @@ def main():
 
     # Reads all the topics and updates the blackboard
     game_watcher = GameWatcher()
-    vision = Vision()
     driver = PathDriver()
     control = Controller()
-    grsim = grSimPublisher()
     # gui = StrategyCommandGUI()
-
-    # Update blackboard for coach creation
-    # rclpy.spin_once(game_watcher, timeout_sec=0.2)
 
     # #If there is no GUI, the default max number of robots is 3
     # if game_watcher.blackboard is None:
@@ -37,21 +32,12 @@ def main():
     #   max_robots for robots
     main_executor = MultiThreadedExecutor(num_threads=(3 + max_robots))
 
-    # # Has strategy for macro plays, has all ally robots
-    # coach = Coach(main_executor, None)
-
-    # command_publisher = CommandPublisher(coach)
-
     main_executor.add_node(game_watcher)
-    main_executor.add_node(vision)
     main_executor.add_node(driver)
     main_executor.add_node(control)
-    main_executor.add_node(grsim)
     # main_executor.add_node(gui)
 
     main_executor.spin()
-
-    # rclpy.spin(game_watcher)
 
     rclpy.shutdown()
 

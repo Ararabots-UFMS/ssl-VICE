@@ -22,7 +22,7 @@ class Controller(Node):
         self.orientation_controller = PController(kp=2.5, max_output=4.0)
 
         self.subscriber = self.create_subscription(
-            ControlCommand, "control_command", self.send_command, 10
+            ControlCommand, 'control_command', self.receive_command, 10
         )
         self.publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
 
@@ -37,8 +37,25 @@ class Controller(Node):
         )
 
         self.blackboard = Blackboard()
+        
+        self.robot_controller = RobotTrajectoryController()
+        
+        self.latest_command = None
+        self.last_time = self.get_clock().now()
+        self.timer = self.create_timer(0.01, self.timer_callback)
+        
+    def receive_command(self, message):
+        self.latest_command = message
 
-    def send_command(self, message):
+    def timer_callback(self):
+        if self.latest_command is None:
+            return
+        
+        current_time = self.get_clock().now()
+        dt = (current_time - self.last_time).nanoseconds / 1e9  # Convert to seconds
+        self.last_time = current_time
+        
+        message = self.latest_command
         team_command = TeamCommand()
         team_command.robots = []
         team_command.is_team_color_yellow = self.blackboard.gui.is_team_color_yellow
@@ -67,7 +84,7 @@ class Controller(Node):
                 target_state = State(target_position, target_velocity)
 
                 velocity_command = self.robot_controller.compute_trajectory_command(
-                    robot.id, target_state, current_state
+                    robot.id, target_state, current_state, dt=dt
                 )
                 robot_command.linear_velocity_x = float(velocity_command.x)
                 robot_command.linear_velocity_y = float(velocity_command.y)
