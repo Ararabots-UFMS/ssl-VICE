@@ -6,21 +6,33 @@ from rclpy.node import Node
 
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
-from system_interfaces.msg import ControlCommand, RobotCommand, TeamCommand
+from system_interfaces.msg import (
+    ControlCommand,
+    RobotCommand,
+    TeamCommand,
+    GameState,
+)
 from system_interfaces.srv import ControlParams, SetKp, SetOrientation
 
 
 class Controller(Node):
-    def __init__(self, game_watcher=None):
+    def __init__(self):
         super().__init__("controller")
         self.get_logger().info("Node Controller initialized")
 
-        # Store reference to game_watcher for accessing game state
-        self.game_watcher = game_watcher
+        # Caches de estado
+        self.gui_data = None
+        self.ally_robots = {}
 
         self.target_orientations = {}
 
         self.robot_controller = RobotTrajectoryController()
+
+        # Subscription para estado agregado
+        self.game_state_sub = self.create_subscription(
+            GameState, "game_state", self.game_state_callback, 10
+        )
+
         self.orientation_controller = PController(kp=2.5, max_output=4.0)
 
         self.subscriber = self.create_subscription(
@@ -47,6 +59,10 @@ class Controller(Node):
     def receive_command(self, message):
         self.latest_command = message
 
+    def game_state_callback(self, msg: GameState):
+        self.gui_data = msg.gui
+        self.ally_robots = {r.id: r for r in msg.ally_robots}
+
     def timer_callback(self):
         if self.latest_command is None:
             return
@@ -58,13 +74,12 @@ class Controller(Node):
         message = self.latest_command
         team_command = TeamCommand()
         team_command.robots = []
-        # Use game_watcher if available, otherwise use default values
-        if self.game_watcher:
-            gui_data = self.game_watcher.get_gui()
-            ally_robots = self.game_watcher.get_ally_robots()
-            team_command.is_team_color_yellow = gui_data.is_team_color_yellow
+
+        ally_robots = self.ally_robots if self.ally_robots else {}
+
+        if self.gui_data:
+            team_command.is_team_color_yellow = self.gui_data.is_team_color_yellow
         else:
-            ally_robots = {}
             team_command.is_team_color_yellow = False
 
         commanded_robot_ids = set()

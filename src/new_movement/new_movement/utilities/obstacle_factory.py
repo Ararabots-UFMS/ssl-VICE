@@ -9,23 +9,25 @@ from new_movement.entities.States import State, Vector2D
 
 
 class ObstacleFactory:
-    def __init__(self, game_watcher=None):
-        self.game_watcher = game_watcher
+    def __init__(self):
+        pass
 
-    def create_obstacles(self, request, robot_data) -> list:
+    def create_obstacles(
+        self,
+        request,
+        robot_data,
+        geometry,
+        balls,
+        enemy_robots,
+        ally_robots,
+    ) -> list:
         obstacles = []
 
-        # Get data from game_watcher if available
-        if self.game_watcher:
-            geometry = self.game_watcher.get_geometry()
-            balls = self.game_watcher.get_balls()
-            enemy_robots = self.game_watcher.get_enemy_robots()
-            ally_robots = self.game_watcher.get_ally_robots()
-        else:
-            geometry = None
-            balls = []
-            enemy_robots = {}
-            ally_robots = {}
+        # Fallbacks caso alguma info não exista ainda
+        geometry = geometry if geometry is not None else None
+        balls = balls if balls is not None else []
+        enemy_robots = enemy_robots if enemy_robots is not None else {}
+        ally_robots = ally_robots if ally_robots is not None else {}
 
         if request.field_border and geometry:
             obstacles.append(FieldBorderObstacle(geometry))

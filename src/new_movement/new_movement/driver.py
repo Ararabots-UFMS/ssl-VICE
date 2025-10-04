@@ -4,7 +4,7 @@ from new_movement.entities.obstacles import Obstacle
 from new_movement.entities.StaticObstacle import StaticObstacle
 from new_movement.utilities.obstacle_factory import ObstacleFactory
 
-from system_interfaces.msg import ControlCommand, RobotControlCommand
+from system_interfaces.msg import ControlCommand, RobotControlCommand, GameState
 from system_interfaces.srv import StrategyCommand, UpdateObstacle
 
 import rclpy
@@ -12,9 +12,13 @@ from rclpy.node import Node
 
 
 class PathDriver(Node):
-    def __init__(self, game_watcher=None):
+    def __init__(self):
         super().__init__("path_driver")
-        self.game_watcher = game_watcher
+
+        self.ally_robots = {}
+        self.enemy_robots = {}
+        self.balls = []
+        self.geometry = None
 
         # Publish Control
         self.publisher = self.create_publisher(ControlCommand, "control_command", 10)
@@ -27,7 +31,7 @@ class PathDriver(Node):
         )
 
         # Update Obstacles
-        self.obstacle_factory = ObstacleFactory(self.game_watcher)
+        self.obstacle_factory = ObstacleFactory()
         self.update_obstacles_service = self.create_service(
             UpdateObstacle, "update_obstacles", self.update_obstacles
         )
@@ -46,15 +50,22 @@ class PathDriver(Node):
 
         self.last_time = self.get_clock().now()
 
+        # Subscription for aggregated game state
+        self.game_state_sub = self.create_subscription(
+            GameState, "game_state", self.game_state_callback, 10
+        )
+
         self.driver_init()
 
+    def game_state_callback(self, msg: GameState):
+        self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.enemy_robots = {r.id: r for r in msg.enemy_robots}
+        self.balls = list(msg.balls)
+        self.geometry = msg.geometry
+
     def driver_init(self):
-        if self.game_watcher:
-            ally_robots = self.game_watcher.get_ally_robots()
-            ally_robots_ids = ally_robots.keys()
-        else:
-            ally_robots = {}
-            ally_robots_ids = []
+        ally_robots = self.ally_robots
+        ally_robots_ids = ally_robots.keys()
 
         for id in ally_robots_ids:
             # insert new found robot
@@ -76,10 +87,13 @@ class PathDriver(Node):
 
             # Update obstacles for all ids
             if self.robot_data[id]["last_obs_request"] is not None:
-                self.robot_data[id]["obstacles"] = (
-                    self.obstacle_factory.create_obstacles(
-                        self.robot_data[id]["last_obs_request"], self.robot_data
-                    )
+                self.robot_data[id]["obstacles"] = self.obstacle_factory.create_obstacles(
+                    self.robot_data[id]["last_obs_request"],
+                    self.robot_data,
+                    self.geometry,
+                    self.balls,
+                    self.enemy_robots,
+                    self.ally_robots,
                 )
 
         # Removing not longer found robot
@@ -184,7 +198,12 @@ class PathDriver(Node):
             response.success = False
 
         new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(
-            request, self.robot_data
+            request,
+            self.robot_data,
+            self.geometry,
+            self.balls,
+            self.enemy_robots,
+            self.ally_robots,
         )
 
         self.robot_data[request.id]["obstacles"] = new_obstacles
@@ -197,7 +216,12 @@ class PathDriver(Node):
         for robot_id, robot_info in self.robot_data.items():
             if robot_info["last_obs_request"] is not None:
                 new_obstacles = self.obstacle_factory.create_obstacles(
-                    robot_info["last_obs_request"], self.robot_data
+                    robot_info["last_obs_request"],
+                    self.robot_data,
+                    self.geometry,
+                    self.balls,
+                    self.enemy_robots,
+                    self.ally_robots,
                 )
                 self.robot_data[robot_id]["obstacles"] = new_obstacles
 

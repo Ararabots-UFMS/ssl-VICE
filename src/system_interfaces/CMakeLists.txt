@@ -27,6 +27,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/GUIRobot.msg"
   "msg/RobotControlCommand.msg"
   "msg/ControlCommand.msg"
+  "msg/GameState.msg"
   "srv/StrategyCommand.srv"
   "srv/ControlParams.srv"
   "srv/UpdateObstacle.srv"

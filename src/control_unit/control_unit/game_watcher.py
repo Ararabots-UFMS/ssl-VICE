@@ -5,6 +5,7 @@ from system_interfaces.msg import (
     RefereeMessage,
     VisionGeometry,
     Balls,
+    GameState,
 )
 from threading import Lock
 
@@ -55,6 +56,9 @@ class GameWatcher(Node):
             SetBool, "set_team_color", self.handle_set_team_color
         )
 
+        # Aggregated game state publisher
+        self.game_state_pub = self.create_publisher(GameState, "game_state", 10)
+
     def update_from_vision(self, message: VisionMessage):
         with self._lock:
             if message is None:
@@ -73,6 +77,7 @@ class GameWatcher(Node):
             self.get_logger().debug(
                 f"[VISION] msgs={self._vision_count} allies={len(self.ally_robots)} enemies={len(self.enemy_robots)} balls={len(self.balls)} team_yellow={self.gui.is_team_color_yellow}"
             )
+        self._publish_state()
 
     def update_from_gamecontroller(self, message: RefereeMessage):
         with self._lock:
@@ -83,6 +88,7 @@ class GameWatcher(Node):
             self.get_logger().debug(
                 f"[REFEREE] msgs={self._referee_count} command={self.referee.command} last={self.referee_last_command.command}"
             )
+        self._publish_state()
 
     def update_from_gui(self, message: GUIMessage):
         with self._lock:
@@ -92,6 +98,7 @@ class GameWatcher(Node):
             self.get_logger().debug(
                 f"[GUI] msgs={self._gui_count} team_yellow={self.gui.is_team_color_yellow} field_left={self.gui.is_field_side_left}"
             )
+        self._publish_state()
 
     def update_from_geometry(self, message: VisionGeometry):
         with self._lock:
@@ -105,6 +112,7 @@ class GameWatcher(Node):
             self.get_logger().debug(
                 f"[GEOMETRY] msgs={self._geometry_count} field_lines={lines}"
             )
+        self._publish_state()
 
     def update_referee_no_command(self, message):
         with self._lock:
@@ -155,6 +163,21 @@ class GameWatcher(Node):
             f"[SNAPSHOT] allies={allies} enemies={enemies} balls={balls} referee={ref_cmd} team={team} vision_msgs={self._vision_count}"
         )
 
+    def _publish_state(self):
+        """Publica o estado agregado em um único tópico."""
+        msg = GameState()
+        with self._lock:
+            msg.ally_robots = list(self.ally_robots.values())
+            msg.enemy_robots = list(self.enemy_robots.values())
+            msg.balls = self.balls
+            msg.gui = self.gui
+            msg.referee = self.referee
+            msg.referee_last_command = self.referee_last_command
+            msg.geometry = self.geometry
+            msg.can_i_start = self.can_i_start
+            msg.can_i_kick = float(self.can_i_kick)
+        self.game_state_pub.publish(msg)
+
     # Getters
     def get_ally_robots(self):
         with self._lock:
@@ -196,7 +219,6 @@ class GameWatcher(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = GameWatcher()
-    node.test()
     rclpy.spin(node)
     rclpy.shutdown()
 
