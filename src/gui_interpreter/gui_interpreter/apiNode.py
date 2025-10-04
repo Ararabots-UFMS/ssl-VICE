@@ -13,6 +13,8 @@ from grsim_messenger.grsim_publisher import grSimPublisher
 from hardware_messenger.hardware_publisher import HardwarePublisher
 
 from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, TrajectoryMessage
+from system_interfaces.srv import ControlParams, SetKp, SetOrientation, StrategyCommand, UpdateObstacle
+from std_srvs.srv import SetBool
 from vision.vision_node import Vision
 from referee.referee_node import RefereeNode
 
@@ -87,9 +89,19 @@ class APINode(Node):
         self.is_team_color_yellow = True
         self.is_play_pressed = False
 
+        # Create service clients for strategy commands
+        self.strategy_client = self.create_client(StrategyCommand, "strategy_command")
+        self.pid_client = self.create_client(ControlParams, "update_pid")
+        self.kp_angular_client = self.create_client(SetKp, "update_kp_angular")
+        self.set_orientation_client = self.create_client(SetOrientation, "set_orientation")
+        self.update_obstacles_client = self.create_client(UpdateObstacle, "update_obstacles")
+        self.set_team_color_client = self.create_client(SetBool, "set_team_color")
+
         self.get_logger().info("API Node started")
 
         self.create_timer(0.5, self.publish_gui_data)
+        # Check strategy services status periodically
+        self.create_timer(2.0, self.check_strategy_services_status)
 
     def handle_connect(self):
         self.get_logger().info("Client connected")
@@ -252,6 +264,299 @@ class APINode(Node):
         self.robots = msg
         self.publish_gui_data()
 
+    # Strategy command handlers
+    def handle_strategy_command(self, data):
+        """Handle strategy command from web GUI"""
+        if not self.strategy_client.wait_for_service(timeout_sec=1.0):
+            gui_socket.emit("strategy_response", {
+                "success": False, 
+                "message": "Strategy command service is not available"
+            })
+            return
+
+        try:
+            request = StrategyCommand.Request()
+            request.id = int(data['robot_id'])
+            request.position_x = float(data['position_x'])
+            request.position_y = float(data['position_y'])
+            request.velocity_x = float(data.get('velocity_x', 0.0))
+            request.velocity_y = float(data.get('velocity_y', 0.0))
+
+            self.get_logger().info(
+                f"Sending strategy command: ID={request.id}, "
+                f"Pos=({request.position_x}, {request.position_y}), "
+                f"Vel=({request.velocity_x}, {request.velocity_y})"
+            )
+
+            future = self.strategy_client.call_async(request)
+            future.add_done_callback(self.handle_strategy_response)
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to send strategy command: {e}")
+            gui_socket.emit("strategy_response", {
+                "success": False,
+                "message": f"Failed to send command: {e}"
+            })
+
+    def handle_strategy_response(self, future):
+        """Handle strategy command response"""
+        try:
+            response = future.result()
+            gui_socket.emit("strategy_response", {
+                "success": response.success,
+                "message": "Command executed successfully" if response.success else "Command failed"
+            })
+        except Exception as e:
+            self.get_logger().error(f"Strategy command failed: {e}")
+            gui_socket.emit("strategy_response", {
+                "success": False,
+                "message": f"Service call failed: {e}"
+            })
+
+    def handle_update_pid(self, data):
+        """Handle PID update from web GUI"""
+        if not self.pid_client.wait_for_service(timeout_sec=1.0):
+            gui_socket.emit("pid_response", {
+                "success": False,
+                "message": "PID service is not available"
+            })
+            return
+
+        try:
+            request = ControlParams.Request()
+            request.id = int(data['robot_id'])
+            request.kp = float(data['kp'])
+            request.ki = float(data['ki'])
+            request.kd = float(data['kd'])
+
+            self.get_logger().info(
+                f"Updating PID for robot {request.id}: "
+                f"Kp={request.kp}, Ki={request.ki}, Kd={request.kd}"
+            )
+
+            future = self.pid_client.call_async(request)
+            future.add_done_callback(self.handle_pid_response)
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to update PID: {e}")
+            gui_socket.emit("pid_response", {
+                "success": False,
+                "message": f"Failed to update PID: {e}"
+            })
+
+    def handle_pid_response(self, future):
+        """Handle PID update response"""
+        try:
+            response = future.result()
+            gui_socket.emit("pid_response", {
+                "success": response.success,
+                "message": "PID updated successfully" if response.success else "PID update failed"
+            })
+        except Exception as e:
+            self.get_logger().error(f"PID update failed: {e}")
+            gui_socket.emit("pid_response", {
+                "success": False,
+                "message": f"PID service call failed: {e}"
+            })
+
+    def handle_update_kp_angular(self, data):
+        """Handle Kp angular update from web GUI"""
+        if not self.kp_angular_client.wait_for_service(timeout_sec=1.0):
+            gui_socket.emit("kp_angular_response", {
+                "success": False,
+                "message": "Kp angular service is not available"
+            })
+            return
+
+        try:
+            request = SetKp.Request()
+            request.kp = float(data['kp'])
+
+            self.get_logger().info(f"Updating Kp angular: {request.kp}")
+
+            future = self.kp_angular_client.call_async(request)
+            future.add_done_callback(self.handle_kp_angular_response)
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to update Kp angular: {e}")
+            gui_socket.emit("kp_angular_response", {
+                "success": False,
+                "message": f"Failed to update Kp angular: {e}"
+            })
+
+    def handle_kp_angular_response(self, future):
+        """Handle Kp angular update response"""
+        try:
+            response = future.result()
+            gui_socket.emit("kp_angular_response", {
+                "success": response.success,
+                "message": "Kp angular updated successfully" if response.success else "Kp angular update failed"
+            })
+        except Exception as e:
+            self.get_logger().error(f"Kp angular update failed: {e}")
+            gui_socket.emit("kp_angular_response", {
+                "success": False,
+                "message": f"Kp angular service call failed: {e}"
+            })
+
+    def handle_set_orientation(self, data):
+        """Handle set orientation from web GUI"""
+        if not self.set_orientation_client.wait_for_service(timeout_sec=1.0):
+            gui_socket.emit("orientation_response", {
+                "success": False,
+                "message": "Set orientation service is not available"
+            })
+            return
+
+        try:
+            request = SetOrientation.Request()
+            request.robot_id = int(data['robot_id'])
+            request.orientation = float(data['orientation'])
+
+            self.get_logger().info(
+                f"Setting orientation for robot {request.robot_id}: {request.orientation} rad"
+            )
+
+            future = self.set_orientation_client.call_async(request)
+            future.add_done_callback(self.handle_orientation_response)
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to set orientation: {e}")
+            gui_socket.emit("orientation_response", {
+                "success": False,
+                "message": f"Failed to set orientation: {e}"
+            })
+
+    def handle_orientation_response(self, future):
+        """Handle set orientation response"""
+        try:
+            response = future.result()
+            gui_socket.emit("orientation_response", {
+                "success": response.success,
+                "message": "Orientation set successfully" if response.success else "Set orientation failed"
+            })
+        except Exception as e:
+            self.get_logger().error(f"Set orientation failed: {e}")
+            gui_socket.emit("orientation_response", {
+                "success": False,
+                "message": f"Set orientation service call failed: {e}"
+            })
+
+    def handle_update_obstacles(self, data):
+        """Handle update obstacles from web GUI"""
+        if not self.update_obstacles_client.wait_for_service(timeout_sec=1.0):
+            gui_socket.emit("obstacles_response", {
+                "success": False,
+                "message": "Update obstacles service is not available"
+            })
+            return
+
+        try:
+            request = UpdateObstacle.Request()
+            request.id = int(data['robot_id'])
+            request.field_border = bool(data.get('field_border', False))
+            request.penalty_area = bool(data.get('penalty_area', False))
+            request.center_area = bool(data.get('center_area', False))
+            request.ball = bool(data.get('ball', False))
+            
+            # Parse enemy and ally IDs
+            enemy_ids = data.get('enemy_ids', [])
+            ally_ids = data.get('ally_ids', [])
+            
+            if isinstance(enemy_ids, str):
+                enemy_ids = [int(x.strip()) for x in enemy_ids.split(',') if x.strip()]
+            request.enemy_ids = enemy_ids
+            
+            if isinstance(ally_ids, str):
+                ally_ids = [int(x.strip()) for x in ally_ids.split(',') if x.strip()]
+            request.ally_ids = ally_ids
+
+            self.get_logger().info(
+                f"Updating obstacles for robot {request.id}: "
+                f"field_border={request.field_border}, penalty_area={request.penalty_area}, "
+                f"center_area={request.center_area}, ball={request.ball}, "
+                f"enemy_ids={request.enemy_ids}, ally_ids={request.ally_ids}"
+            )
+
+            future = self.update_obstacles_client.call_async(request)
+            future.add_done_callback(self.handle_obstacles_response)
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to update obstacles: {e}")
+            gui_socket.emit("obstacles_response", {
+                "success": False,
+                "message": f"Failed to update obstacles: {e}"
+            })
+
+    def handle_obstacles_response(self, future):
+        """Handle update obstacles response"""
+        try:
+            response = future.result()
+            gui_socket.emit("obstacles_response", {
+                "success": response.success,
+                "message": "Obstacles updated successfully" if response.success else "Update obstacles failed"
+            })
+        except Exception as e:
+            self.get_logger().error(f"Update obstacles failed: {e}")
+            gui_socket.emit("obstacles_response", {
+                "success": False,
+                "message": f"Update obstacles service call failed: {e}"
+            })
+
+    def handle_team_color_service(self, data):
+        """Handle team color change service call"""
+        if not self.set_team_color_client.wait_for_service(timeout_sec=1.0):
+            gui_socket.emit("team_color_response", {
+                "success": False,
+                "message": "Set team color service is not available"
+            })
+            return
+
+        try:
+            request = SetBool.Request()
+            request.data = bool(data.get('is_yellow', False))
+
+            self.get_logger().info(f"Setting team color to: {'Yellow' if request.data else 'Blue'}")
+
+            future = self.set_team_color_client.call_async(request)
+            future.add_done_callback(self.handle_team_color_service_response)
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to set team color: {e}")
+            gui_socket.emit("team_color_response", {
+                "success": False,
+                "message": f"Failed to set team color: {e}"
+            })
+
+    def handle_team_color_service_response(self, future):
+        """Handle team color service response"""
+        try:
+            response = future.result()
+            gui_socket.emit("team_color_response", {
+                "success": response.success,
+                "message": "Team color set successfully" if response.success else "Set team color failed"
+            })
+        except Exception as e:
+            self.get_logger().error(f"Set team color failed: {e}")
+            gui_socket.emit("team_color_response", {
+                "success": False,
+                "message": f"Set team color service call failed: {e}"
+            })
+
+    def check_strategy_services_status(self):
+        """Check status of all strategy services and emit to GUI"""
+        services_status = {
+            "strategy": self.strategy_client.wait_for_service(timeout_sec=0.1),
+            "pid": self.pid_client.wait_for_service(timeout_sec=0.1),
+            "kp_angular": self.kp_angular_client.wait_for_service(timeout_sec=0.1),
+            "orientation": self.set_orientation_client.wait_for_service(timeout_sec=0.1),
+            "obstacles": self.update_obstacles_client.wait_for_service(timeout_sec=0.1),
+            "team_color": self.set_team_color_client.wait_for_service(timeout_sec=0.1)
+        }
+        
+        gui_socket.emit("services_status", services_status)
+        return services_status
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -270,6 +575,15 @@ def main(args=None):
     )
     gui_socket.on_event("refereeButton", node.handle_referee_button, namespace="")
     gui_socket.on_event("configSaveButton", node.handle_config_button, namespace="")
+    
+    # Strategy command events
+    gui_socket.on_event("strategyCommand", node.handle_strategy_command, namespace="")
+    gui_socket.on_event("updatePID", node.handle_update_pid, namespace="")
+    gui_socket.on_event("updateKpAngular", node.handle_update_kp_angular, namespace="")
+    gui_socket.on_event("setOrientation", node.handle_set_orientation, namespace="")
+    gui_socket.on_event("updateObstacles", node.handle_update_obstacles, namespace="")
+    gui_socket.on_event("setTeamColorService", node.handle_team_color_service, namespace="")
+    gui_socket.on_event("checkServicesStatus", node.check_strategy_services_status, namespace="")
     try:
         thread = thread_with_exception(gui_socket)
         thread.start()
