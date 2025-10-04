@@ -12,7 +12,7 @@ from utils.converter import todict
 from grsim_messenger.grsim_publisher import grSimPublisher
 from hardware_messenger.hardware_publisher import HardwarePublisher
 
-from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot
+from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, TrajectoryMessage
 from vision.vision_node import Vision
 from referee.referee_node import RefereeNode
 
@@ -71,6 +71,8 @@ class APINode(Node):
         self.vision_running = vision_event
         self.vision_subscriber = None
         self.vision_node = Vision()
+        
+        self.trajectory_subscriber = None
 
         self.communication_running = communication_event
         self.communication_node = grSimPublisher()
@@ -94,6 +96,9 @@ class APINode(Node):
         self.vision_subscriber = self.create_subscription(
             VisionMessage, "visionTopic", self.emit_vision_message, 10
         )
+        self.trajectory_subscriber = self.create_subscription(
+            TrajectoryMessage, "trajectory_topic", self.emit_trajectory_message, 10
+        )
         gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
     
     def emit_vision_message(self, msg: VisionMessage) -> None:
@@ -105,9 +110,37 @@ class APINode(Node):
             "balls":  data["balls"],
         })
 
+    def emit_trajectory_message(self, msg: TrajectoryMessage) -> None:
+        """Trajectory emission to GUI"""
+        trajectories_data = []
+        
+        for robot_trajectory in msg.trajectories:
+            robot_data = {
+                "robot_id": robot_trajectory.robot_id,
+                "total_duration": robot_trajectory.total_duration,
+                "points": []
+            }
+            
+            for point in robot_trajectory.points:
+                point_data = {
+                    "x": point.x,
+                    "y": point.y,
+                    "velocity_x": point.velocity_x,
+                    "velocity_y": point.velocity_y,
+                    "timestamp": point.timestamp
+                }
+                robot_data["points"].append(point_data)
+            
+            trajectories_data.append(robot_data)
+        
+        gui_socket.emit("trajectory_update", {
+            "trajectories": trajectories_data
+        })
+
     def handle_disconnect(self):
         self.get_logger().info("Client disconneted")
         self.vision_subscriber = None
+        self.trajectory_subscriber = None
 
     def handle_field_side(self, is_field_side_right):
         # self.get_logger().info(f"Is team field side left? {is_field_side_left}")

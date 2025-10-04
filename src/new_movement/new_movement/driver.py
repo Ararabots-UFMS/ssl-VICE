@@ -4,7 +4,7 @@ from new_movement.entities.obstacles import Obstacle
 from new_movement.entities.StaticObstacle import StaticObstacle
 from new_movement.utilities.obstacle_factory import ObstacleFactory
 
-from system_interfaces.msg import ControlCommand, RobotControlCommand
+from system_interfaces.msg import ControlCommand, RobotControlCommand, TrajectoryMessage, RobotTrajectory, TrajectoryPoint
 from system_interfaces.srv import StrategyCommand, UpdateObstacle
 
 from strategy.blackboard import Blackboard
@@ -20,6 +20,10 @@ class PathDriver(Node):
         # Publish Control
         self.publisher = self.create_publisher(ControlCommand, "control_command", 10)
         self.control_timer = self.create_timer(0.01, self.publish_control)
+        
+        # Publish Trajectories
+        self.trajectory_publisher = self.create_publisher(TrajectoryMessage, "trajectory_topic", 10)
+        self.trajectory_timer = self.create_timer(0.5, self.publish_trajectories_safe)
 
         # Update Target Service
         self.planner = Planner(50, 100)
@@ -55,20 +59,29 @@ class PathDriver(Node):
         for id in ally_robots_ids:
             # insert new found robot
             if id not in self.robot_data:
-                cur_robot = self.blackboard.ally_robots[id]
-                cur_state = State(
-                    Vector2D(cur_robot.position_x, cur_robot.position_y),
-                    Vector2D(cur_robot.velocity_x, cur_robot.velocity_y),
-                )
+                try:
+                    cur_robot = self.blackboard.ally_robots[id]
+                    cur_state = State(
+                        Vector2D(cur_robot.position_x, cur_robot.position_y),
+                        Vector2D(cur_robot.velocity_x, cur_robot.velocity_y),
+                    )
 
-                init_trajectory = self.planner.find(cur_state, cur_state, [])
+                    init_trajectory = self.planner.find(cur_state, cur_state, [])
 
-                self.robot_data[id] = {
-                    "trajectory": init_trajectory,
-                    "time_offset": 0.0,
-                    "obstacles": [],
-                    "last_obs_request": None,
-                }
+                    self.robot_data[id] = {
+                        "trajectory": init_trajectory,
+                        "time_offset": 0.0,
+                        "obstacles": [],
+                        "last_obs_request": None,
+                    }
+                except Exception as e:
+                    self.get_logger().warn(f"Erro ao inicializar robô {id}: {e}")
+                    self.robot_data[id] = {
+                        "trajectory": None,
+                        "time_offset": 0.0,
+                        "obstacles": [],
+                        "last_obs_request": None,
+                    }
 
             # Update obstacles for all ids
             if self.robot_data[id]["last_obs_request"] is not None:
@@ -94,38 +107,96 @@ class PathDriver(Node):
         self.driver_init()
         try:
             for robot_id, robot_info in self.robot_data.items():
+                trajectory = robot_info.get("trajectory")
+                if trajectory is None:
+                    continue
+                    
                 robotControlCommand = RobotControlCommand()
 
-                robotState = robot_info["trajectory"].get_state(
-                    robot_info["time_offset"]
-                )
+                robotState = trajectory.get_state(robot_info["time_offset"])
 
                 if robotState is None:
-                    raise Exception("Robots is None")
+                    continue
 
-                robotControlCommand.id = robot_id
-                robotControlCommand.position_x = robotState.position.x / 1000  # to m/s
-                robotControlCommand.position_y = robotState.position.y / 1000
-                robotControlCommand.velocity_x = robotState.velocity.x / 1000
-                robotControlCommand.velocity_y = robotState.velocity.y / 1000
+                robotControlCommand.id = int(robot_id)
+                robotControlCommand.position_x = float(robotState.position.x / 1000)  # to m/s
+                robotControlCommand.position_y = float(robotState.position.y / 1000)
+                robotControlCommand.velocity_x = float(robotState.velocity.x / 1000)
+                robotControlCommand.velocity_y = float(robotState.velocity.y / 1000)
 
                 controlCommandList.append(robotControlCommand)
 
-                if (
-                    robot_info["time_offset"]
-                    <= robot_info["trajectory"].get_total_duration()
-                ):
+                total_duration = trajectory.get_total_duration()
+                if total_duration is not None and robot_info["time_offset"] <= total_duration:
                     robot_info["time_offset"] += dt
                 else:
-                    robot_info["time_offset"] += robot_info[
-                        "trajectory"
-                    ].get_total_duration()
+                    robot_info["time_offset"] = total_duration if total_duration is not None else 0.0
         except Exception as e:
-            self.get_logger(f"{e}")
+            self.get_logger().error(f"Erro no publish_control: {e}")
 
         controlCommand.command = controlCommandList
 
         self.publisher.publish(controlCommand)
+
+    def publish_trajectories_safe(self):
+        """error Treatment for publish_trajectories"""
+        try:
+            self.publish_trajectories()
+        except Exception as e:
+            self.get_logger().warn(f"Erro ao publicar trajetórias: {e}")
+
+    def publish_trajectories(self):
+        """Publish the current trajectories for all robots"""
+        trajectory_message = TrajectoryMessage()
+        trajectory_list = []
+
+        self.driver_init()
+        
+        for robot_id, robot_info in self.robot_data.items():
+            trajectory = robot_info.get("trajectory")
+            if trajectory is None:
+                continue
+                
+            try:
+                total_duration = trajectory.get_total_duration()
+                if total_duration is None or total_duration <= 0:
+                    continue
+                    
+                robot_trajectory = RobotTrajectory()
+                robot_trajectory.robot_id = int(robot_id)
+                robot_trajectory.total_duration = float(total_duration)
+                
+                time_step = 0.1
+                max_preview_time = 3.0
+                current_time = robot_info["time_offset"]
+                
+                trajectory_points = []
+                
+                t = 0.0
+                max_time = min(max_preview_time, robot_trajectory.total_duration - current_time)
+                while t <= max_time and max_time > 0:
+                    future_time = current_time + t
+                    if future_time <= robot_trajectory.total_duration:
+                        state = trajectory.get_state(future_time)
+                        if state is not None:
+                            point = TrajectoryPoint()
+                            point.x = float(state.position.x / 1000.0)
+                            point.y = float(state.position.y / 1000.0)
+                            point.velocity_x = float(state.velocity.x / 1000.0)
+                            point.velocity_y = float(state.velocity.y / 1000.0)
+                            point.timestamp = float(t)
+                            trajectory_points.append(point)
+                    t += time_step
+                
+                robot_trajectory.points = trajectory_points
+                trajectory_list.append(robot_trajectory)
+                
+            except Exception as e:
+                self.get_logger().warn(f"Erro ao processar trajetória do robô {robot_id}: {e}")
+                continue
+        
+        trajectory_message.trajectories = trajectory_list
+        self.trajectory_publisher.publish(trajectory_message)
 
     def replan(self, robot_id: int, new_destination: State) -> bool:
         if robot_id not in self.robot_data:
