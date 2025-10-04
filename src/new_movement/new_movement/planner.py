@@ -11,9 +11,10 @@ from random import uniform, randint
 
 
 class CollisionSolver:
-    def __init__(self, trys: int = 50, game_watcher=None):
+    def __init__(self, trys: int = 50, field_length_default: int = 12000, field_width_default: int = 9000):
         self.trys = trys
-        self.game_watcher = game_watcher
+        self._field_length_default = field_length_default
+        self._field_width_default = field_width_default
 
     def is_collision(
         self,
@@ -94,15 +95,9 @@ class CollisionSolver:
         )
 
     def generate_random_point(self) -> Vector2D:
-        """Generates a random point inside game field"""
-        if self.game_watcher:
-            geometry = self.game_watcher.get_geometry()
-            field_length = geometry.field_length
-            field_width = geometry.field_width
-        else:
-            # Default field dimensions if no game_watcher
-            field_length = 12000  # 12m
-            field_width = 9000  # 9m
+        """Generates a random point inside game field (defaults; could be parameterized externally)."""
+        field_length = self._field_length_default
+        field_width = self._field_width_default
 
         return Vector2D(
             uniform(-field_length / 2, field_length / 2),
@@ -204,9 +199,7 @@ class Planner:
     ):
         self.generator = TrajectoryGenerator()
         self.solver = (
-            CollisionSolver()
-            if bypass_trys is None
-            else CollisionSolver(trys=bypass_trys)
+            CollisionSolver() if bypass_trys is None else CollisionSolver(trys=bypass_trys)
         )
         self.optimizer = TrajectoryOptimizer(optimizer_trys)
         self.optimizer_trys = optimizer_trys
