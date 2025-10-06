@@ -12,7 +12,7 @@ from utils.converter import todict
 from grsim_messenger.grsim_publisher import grSimPublisher
 from hardware_messenger.hardware_publisher import HardwarePublisher
 
-from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, TrajectoryMessage
+from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, TrajectoryMessage, RefereeMessage
 from system_interfaces.srv import ControlParams, SetKp, SetOrientation, StrategyCommand, UpdateObstacle
 from std_srvs.srv import SetBool
 from vision.vision_node import Vision
@@ -75,6 +75,7 @@ class APINode(Node):
         self.vision_node = Vision()
         
         self.trajectory_subscriber = None
+        self.referee_subscriber = None
 
         self.communication_running = communication_event
         self.communication_node = grSimPublisher()
@@ -112,6 +113,11 @@ class APINode(Node):
             TrajectoryMessage, "trajectory_topic", self.emit_trajectory_message, 10
         )
         gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
+        # subscribe to referee updates for GUI
+        self.referee_subscriber = self.create_subscription(
+            RefereeMessage, "refereeTopic", self.emit_referee_message, 10
+        )
+        gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
     
     def emit_vision_message(self, msg: VisionMessage) -> None:
         data = todict(msg)
@@ -149,10 +155,26 @@ class APINode(Node):
             "trajectories": trajectories_data
         })
 
+    def emit_referee_message(self, msg: RefereeMessage) -> None:
+        """Forward referee messages to the GUI."""
+        data = todict(msg)
+
+        payload = {
+            "stage": data.get("stage"),
+            "stage_time_left": data.get("stage_time_left"),
+            "command": data.get("command"),
+            "command_counter": data.get("command_counter"),
+            "current_action_time_remaining": data.get("current_action_time_remaining"),
+            "teams": data.get("teams", []),
+        }
+
+        gui_socket.emit("referee_update", payload)
+
     def handle_disconnect(self):
         self.get_logger().info("Client disconneted")
         self.vision_subscriber = None
         self.trajectory_subscriber = None
+        self.referee_subscriber = None
 
     def handle_field_side(self, is_field_side_right):
         # self.get_logger().info(f"Is team field side left? {is_field_side_left}")

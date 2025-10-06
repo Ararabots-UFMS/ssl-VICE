@@ -21,6 +21,10 @@ def generate_launch_description():
             executable='apiNode',
         ),
         Node(
+            package='referee',
+            executable='referee_node',
+        ),
+        Node(
             package='strategy_command_gui',
             executable='strategy_gui',
         ),
