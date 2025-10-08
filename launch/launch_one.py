@@ -25,7 +25,7 @@ def generate_launch_description():
             executable='grsim_publisher_node',
         ),
         Node(
-            package='strategy_command_gui',
-            executable='strategy_gui',
+            package='strategy',
+            executable='strategyNode',
         ),
     ])

@@ -4,7 +4,14 @@ from new_movement.entities.obstacles import Obstacle
 from new_movement.entities.StaticObstacle import StaticObstacle
 from new_movement.utilities.obstacle_factory import ObstacleFactory
 
-from system_interfaces.msg import ControlCommand, RobotControlCommand, GameState, TrajectoryMessage, RobotTrajectory, TrajectoryPoint
+from system_interfaces.msg import (
+    ControlCommand,
+    RobotControlCommand,
+    GameState,
+    TrajectoryMessage,
+    RobotTrajectory,
+    TrajectoryPoint,
+)
 from system_interfaces.srv import StrategyCommand, UpdateObstacle
 
 import rclpy
@@ -23,9 +30,11 @@ class PathDriver(Node):
         # Publish Control
         self.publisher = self.create_publisher(ControlCommand, "control_command", 10)
         self.control_timer = self.create_timer(0.01, self.publish_control)
-        
+
         # Publish Trajectories
-        self.trajectory_publisher = self.create_publisher(TrajectoryMessage, "trajectory_topic", 10)
+        self.trajectory_publisher = self.create_publisher(
+            TrajectoryMessage, "trajectory_topic", 10
+        )
         self.trajectory_timer = self.create_timer(0.5, self.publish_trajectories_safe)
 
         # Update Target Service
@@ -100,13 +109,15 @@ class PathDriver(Node):
 
             # Update obstacles for all ids
             if self.robot_data[id]["last_obs_request"] is not None:
-                self.robot_data[id]["obstacles"] = self.obstacle_factory.create_obstacles(
-                    self.robot_data[id]["last_obs_request"],
-                    self.robot_data,
-                    self.geometry,
-                    self.balls,
-                    self.enemy_robots,
-                    self.ally_robots,
+                self.robot_data[id]["obstacles"] = (
+                    self.obstacle_factory.create_obstacles(
+                        self.robot_data[id]["last_obs_request"],
+                        self.robot_data,
+                        self.geometry,
+                        self.balls,
+                        self.enemy_robots,
+                        self.ally_robots,
+                    )
                 )
 
         # Removing not longer found robot
@@ -128,7 +139,7 @@ class PathDriver(Node):
                 trajectory = robot_info.get("trajectory")
                 if trajectory is None:
                     continue
-                    
+
                 robotControlCommand = RobotControlCommand()
 
                 robotState = trajectory.get_state(robot_info["time_offset"])
@@ -137,7 +148,9 @@ class PathDriver(Node):
                     continue
 
                 robotControlCommand.id = int(robot_id)
-                robotControlCommand.position_x = float(robotState.position.x / 1000)  # to m/s
+                robotControlCommand.position_x = float(
+                    robotState.position.x / 1000
+                )  # to m/s
                 robotControlCommand.position_y = float(robotState.position.y / 1000)
                 robotControlCommand.velocity_x = float(robotState.velocity.x / 1000)
                 robotControlCommand.velocity_y = float(robotState.velocity.y / 1000)
@@ -145,10 +158,15 @@ class PathDriver(Node):
                 controlCommandList.append(robotControlCommand)
 
                 total_duration = trajectory.get_total_duration()
-                if total_duration is not None and robot_info["time_offset"] <= total_duration:
+                if (
+                    total_duration is not None
+                    and robot_info["time_offset"] <= total_duration
+                ):
                     robot_info["time_offset"] += dt
                 else:
-                    robot_info["time_offset"] = total_duration if total_duration is not None else 0.0
+                    robot_info["time_offset"] = (
+                        total_duration if total_duration is not None else 0.0
+                    )
         except Exception as e:
             self.get_logger().error(f"Erro no publish_control: {e}")
 
@@ -169,29 +187,31 @@ class PathDriver(Node):
         trajectory_list = []
 
         self.driver_init()
-        
+
         for robot_id, robot_info in self.robot_data.items():
             trajectory = robot_info.get("trajectory")
             if trajectory is None:
                 continue
-                
+
             try:
                 total_duration = trajectory.get_total_duration()
                 if total_duration is None or total_duration <= 0:
                     continue
-                    
+
                 robot_trajectory = RobotTrajectory()
                 robot_trajectory.robot_id = int(robot_id)
                 robot_trajectory.total_duration = float(total_duration)
-                
+
                 time_step = 0.1
                 max_preview_time = 3.0
                 current_time = robot_info["time_offset"]
-                
+
                 trajectory_points = []
-                
+
                 t = 0.0
-                max_time = min(max_preview_time, robot_trajectory.total_duration - current_time)
+                max_time = min(
+                    max_preview_time, robot_trajectory.total_duration - current_time
+                )
                 while t <= max_time and max_time > 0:
                     future_time = current_time + t
                     if future_time <= robot_trajectory.total_duration:
@@ -205,14 +225,16 @@ class PathDriver(Node):
                             point.timestamp = float(t)
                             trajectory_points.append(point)
                     t += time_step
-                
+
                 robot_trajectory.points = trajectory_points
                 trajectory_list.append(robot_trajectory)
-                
+
             except Exception as e:
-                self.get_logger().warn(f"Erro ao processar trajetória do robô {robot_id}: {e}")
+                self.get_logger().warn(
+                    f"Erro ao processar trajetória do robô {robot_id}: {e}"
+                )
                 continue
-        
+
         trajectory_message.trajectories = trajectory_list
         self.trajectory_publisher.publish(trajectory_message)
 
@@ -266,7 +288,11 @@ class PathDriver(Node):
     def update_obstacles(self, request, response):
         self.driver_init()
         if request.id not in self.robot_data:
+            self.get_logger().warn(
+                f"Update obstacles ignored: robot {request.id} not found"
+            )
             response.success = False
+            return response
 
         new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(
             request,

@@ -1,5 +1,3 @@
-from strategy.blackboard import Blackboard
-
 from abc import abstractmethod
 from enum import Enum
 
@@ -7,10 +5,7 @@ class TaskStatus(Enum):
     SUCCESS = 0
     FAILURE = 1
     RUNNING = 2
-    
-# Action can be a list of behaviour trees if the behaviour tree is in the coach
-# and can be a movement profile and args for trajactory planning
-    
+
 class LeafNode():
     def __init__(self, name):
         self.name = name
@@ -18,9 +13,6 @@ class LeafNode():
     @abstractmethod
     def run(self):
         raise Exception("subclass must override run")
-    
-class TreeNode:
-    pass
 
 class TreeNode:
     def __init__(self, name, children):
@@ -75,7 +67,7 @@ class Selector(TreeNode):
             if status != TaskStatus.FAILURE:
                 return status, action
         return TaskStatus.FAILURE, None
-    
+
 class BaseTree(Selector):
     def __init__(self, name, children):
         super().__init__(name, children)
