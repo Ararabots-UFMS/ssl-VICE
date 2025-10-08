@@ -46,7 +46,7 @@ class FieldBorderObstacle(StaticObstacle):
                 self.bot_right_point,
             ]
         ):
-            # Fallback: usa dimensões gerais do campo para gerar um retângulo aproximado
+            # Fallback: use general field dimensions to generate an approximate rectangle
             fl = getattr(geometry, "field_length", 0) or 0
             fw = getattr(geometry, "field_width", 0) or 0
             if fl > 0 and fw > 0:
