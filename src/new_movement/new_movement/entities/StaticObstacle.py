@@ -52,7 +52,7 @@ class FieldBorderObstacle(StaticObstacle):
             if fl > 0 and fw > 0:
                 half_l = fl / 2.0
                 half_w = fw / 2.0
-                # Aplica padding afastando para dentro
+                # Applies padding by moving inward
                 self.top_left_point = self.top_left_point or Vector2D(-half_l + padding, half_w - padding)
                 self.top_right_point = self.top_right_point or Vector2D(half_l - padding, half_w - padding)
                 self.bot_left_point = self.bot_left_point or Vector2D(-half_l + padding, -half_w + padding)
