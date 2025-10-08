@@ -19,7 +19,6 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "mainNode = control_unit.main:main",
             "gameWatcher = control_unit.game_watcher:main"
         ],
     },

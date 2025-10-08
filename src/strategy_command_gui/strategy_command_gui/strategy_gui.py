@@ -9,7 +9,13 @@ import rclpy
 from rclpy.node import Node
 from std_srvs.srv import SetBool
 
-from system_interfaces.srv import ControlParams, SetKp, SetOrientation, StrategyCommand, UpdateObstacle
+from system_interfaces.srv import (
+    ControlParams,
+    SetKp,
+    SetOrientation,
+    StrategyCommand,
+    UpdateObstacle,
+)
 
 
 class StrategyCommandGUI(Node):
@@ -270,7 +276,9 @@ class StrategyCommandGUI(Node):
         obstacle_frame = ttk.LabelFrame(
             strategy_frame, text="Update Obstacles", padding="10"
         )
-        obstacle_frame.grid(row=12, column=0, columnspan=3, pady=10, sticky=(tk.W, tk.E))
+        obstacle_frame.grid(
+            row=12, column=0, columnspan=3, pady=10, sticky=(tk.W, tk.E)
+        )
 
         # Obstacle checkboxes
         self.field_border_var = tk.BooleanVar()

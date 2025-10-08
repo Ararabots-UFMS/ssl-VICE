@@ -4,10 +4,8 @@ from new_movement.entities.obstacles import Obstacle
 from new_movement.entities.StaticObstacle import StaticObstacle
 from new_movement.utilities.obstacle_factory import ObstacleFactory
 
-from system_interfaces.msg import ControlCommand, RobotControlCommand, TrajectoryMessage, RobotTrajectory, TrajectoryPoint
+from system_interfaces.msg import ControlCommand, RobotControlCommand, GameState, TrajectoryMessage, RobotTrajectory, TrajectoryPoint
 from system_interfaces.srv import StrategyCommand, UpdateObstacle
-
-from strategy.blackboard import Blackboard
 
 import rclpy
 from rclpy.node import Node
@@ -16,7 +14,12 @@ from rclpy.node import Node
 class PathDriver(Node):
     def __init__(self):
         super().__init__("path_driver")
-        self.blackboard = Blackboard()
+
+        self.ally_robots = {}
+        self.enemy_robots = {}
+        self.balls = []
+        self.geometry = None
+
         # Publish Control
         self.publisher = self.create_publisher(ControlCommand, "control_command", 10)
         self.control_timer = self.create_timer(0.01, self.publish_control)
@@ -32,7 +35,7 @@ class PathDriver(Node):
         )
 
         # Update Obstacles
-        self.obstacle_factory = ObstacleFactory(self.blackboard)
+        self.obstacle_factory = ObstacleFactory()
         self.update_obstacles_service = self.create_service(
             UpdateObstacle, "update_obstacles", self.update_obstacles
         )
@@ -51,16 +54,28 @@ class PathDriver(Node):
 
         self.last_time = self.get_clock().now()
 
+        # Subscription for aggregated game state
+        self.game_state_sub = self.create_subscription(
+            GameState, "game_state", self.game_state_callback, 10
+        )
+
         self.driver_init()
 
+    def game_state_callback(self, msg: GameState):
+        self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.enemy_robots = {r.id: r for r in msg.enemy_robots}
+        self.balls = list(msg.balls)
+        self.geometry = msg.geometry
+
     def driver_init(self):
-        ally_robots_ids = self.blackboard.ally_robots.keys()
+        ally_robots = self.ally_robots
+        ally_robots_ids = ally_robots.keys()
 
         for id in ally_robots_ids:
             # insert new found robot
             if id not in self.robot_data:
                 try:
-                    cur_robot = self.blackboard.ally_robots[id]
+                    cur_robot = ally_robots[id]
                     cur_state = State(
                         Vector2D(cur_robot.position_x, cur_robot.position_y),
                         Vector2D(cur_robot.velocity_x, cur_robot.velocity_y),
@@ -85,10 +100,13 @@ class PathDriver(Node):
 
             # Update obstacles for all ids
             if self.robot_data[id]["last_obs_request"] is not None:
-                self.robot_data[id]["obstacles"] = (
-                    self.obstacle_factory.create_obstacles(
-                        self.robot_data[id]["last_obs_request"], self.robot_data
-                    )
+                self.robot_data[id]["obstacles"] = self.obstacle_factory.create_obstacles(
+                    self.robot_data[id]["last_obs_request"],
+                    self.robot_data,
+                    self.geometry,
+                    self.balls,
+                    self.enemy_robots,
+                    self.ally_robots,
                 )
 
         # Removing not longer found robot
@@ -251,7 +269,12 @@ class PathDriver(Node):
             response.success = False
 
         new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(
-            request, self.robot_data
+            request,
+            self.robot_data,
+            self.geometry,
+            self.balls,
+            self.enemy_robots,
+            self.ally_robots,
         )
 
         self.robot_data[request.id]["obstacles"] = new_obstacles
@@ -264,7 +287,12 @@ class PathDriver(Node):
         for robot_id, robot_info in self.robot_data.items():
             if robot_info["last_obs_request"] is not None:
                 new_obstacles = self.obstacle_factory.create_obstacles(
-                    robot_info["last_obs_request"], self.robot_data
+                    robot_info["last_obs_request"],
+                    self.robot_data,
+                    self.geometry,
+                    self.balls,
+                    self.enemy_robots,
+                    self.ally_robots,
                 )
                 self.robot_data[robot_id]["obstacles"] = new_obstacles
 
