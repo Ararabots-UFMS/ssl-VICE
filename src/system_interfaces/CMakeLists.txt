@@ -33,6 +33,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/UpdateObstacle.srv"
   "srv/SetOrientation.srv"
   "srv/SetKp.srv"
+  "srv/GetGameConfig.srv"
 )
 
 if(BUILD_TESTING)

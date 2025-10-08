@@ -11,6 +11,7 @@ from threading import Lock
 
 import rclpy
 from std_srvs.srv import SetBool
+from system_interfaces.srv import GetGameConfig
 
 
 class GameWatcher(Node):
@@ -51,9 +52,12 @@ class GameWatcher(Node):
             VisionGeometry, "geometryTopic", self.update_from_geometry, 10
         )
 
-        # Service to set team color
+        # Services low-frequency
         self.set_team_color_srv = self.create_service(
             SetBool, "set_team_color", self.handle_set_team_color
+        )
+        self.get_game_config_srv = self.create_service(
+            GetGameConfig, "get_game_config", self.handle_get_game_config
         )
 
         # Aggregated game state publisher
@@ -152,12 +156,21 @@ class GameWatcher(Node):
             )
             with self._lock:
                 self.gui.is_team_color_yellow = bool(request.data)
+                self._dirty = True
             response.success = True
             response.message = "Team color updated"
         except Exception as e:
             self.get_logger().error(f"Failed to set team color: {e}")
             response.success = False
             response.message = str(e)
+        return response
+
+    def handle_get_game_config(self, request, response):  # request unused
+        with self._lock:
+            response.is_team_color_yellow = self.gui.is_team_color_yellow
+            response.is_field_side_left = self.gui.is_field_side_left
+            response.is_play_pressed = self.gui.is_play_pressed
+            response.robot_count = self.gui.robot_count
         return response
 
     def _snapshot_log(self):
