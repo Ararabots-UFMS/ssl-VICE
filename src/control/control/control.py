@@ -49,7 +49,6 @@ class Controller(Node):
         self.last_time = self.get_clock().now()
         self.create_timer(0.01, self.timer_callback)  # 100 Hz
 
-    # ------------------------------------------------------------------
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
 
@@ -73,7 +72,6 @@ class Controller(Node):
         future.add_done_callback(done)
         self._config_requested = True
 
-    # ------------------------------------------------------------------
     def timer_callback(self):
         if self.latest_command is None:
             return
