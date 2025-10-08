@@ -168,7 +168,7 @@ class PathDriver(Node):
                         total_duration if total_duration is not None else 0.0
                     )
         except Exception as e:
-            self.get_logger().error(f"Erro no publish_control: {e}")
+            self.get_logger().error(f"Error in publish_control: {e}")
 
         controlCommand.command = controlCommandList
 
