@@ -32,6 +32,10 @@ def generate_launch_description():
             executable='grsim_publisher_node',
         ),
         Node(
+            package='gui_interpreter',
+            executable='apiNode',
+        ),
+        Node(
             package='referee',
             executable='referee_node',
             parameters=[{"forward_port": 10003, "verbose": False}],
