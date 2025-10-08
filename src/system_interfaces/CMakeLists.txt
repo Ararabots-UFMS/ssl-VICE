@@ -27,6 +27,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/GUIRobot.msg"
   "msg/RobotControlCommand.msg"
   "msg/ControlCommand.msg"
+  "msg/GameState.msg"
   "msg/TrajectoryPoint.msg"
   "msg/RobotTrajectory.msg"
   "msg/TrajectoryMessage.msg"
@@ -35,6 +36,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/UpdateObstacle.srv"
   "srv/SetOrientation.srv"
   "srv/SetKp.srv"
+  "srv/GetGameConfig.srv"
 )
 
 if(BUILD_TESTING)

@@ -6,9 +6,6 @@ def generate_launch_description():
         Node(
             package='vision',
             executable='visionNode',
-            remappings=[
-                ('visionTopic', 'blue/visionTopic'),
-            ]
         ),
         Node(
             package='control_unit',
@@ -17,7 +14,6 @@ def generate_launch_description():
                 ('set_orientation', 'blue/set_orientation'),
                 ('control_command', 'blue/control_command'),
                 ('commandTopic', 'blue/commandTopic'),
-                ('visionTopic', 'blue/visionTopic'),
                 ('set_team_color', 'blue/set_team_color'),
                 ('strategy_command', 'blue/strategy_command'),
                 ('update_obstacles', 'blue/update_obstacles'),
@@ -29,7 +25,6 @@ def generate_launch_description():
             executable='grsim_publisher_node',
             remappings=[
                 ('commandTopic', 'blue/commandTopic'),
-                ('visionTopic', 'blue/visionTopic'),
             ]
         ),
         Node(
@@ -46,9 +41,6 @@ def generate_launch_description():
         Node(
             package='vision',
             executable='visionNode',
-            remappings=[
-                ('visionTopic', 'yellow/visionTopic'),
-            ]
         ),
         Node(
             package='control_unit',
@@ -57,7 +49,6 @@ def generate_launch_description():
                 ('set_orientation', 'yellow/set_orientation'),
                 ('control_command', 'yellow/control_command'),
                 ('commandTopic', 'yellow/commandTopic'),
-                ('visionTopic', 'yellow/visionTopic'),
                 ('set_team_color', 'yellow/set_team_color'),
                 ('strategy_command', 'yellow/strategy_command'),
                 ('update_obstacles', 'yellow/update_obstacles'),
@@ -69,7 +60,6 @@ def generate_launch_description():
             executable='grsim_publisher_node',
             remappings=[
                 ('commandTopic', 'yellow/commandTopic'),
-                ('visionTopic', 'yellow/visionTopic'),
             ]
         ),
         Node(

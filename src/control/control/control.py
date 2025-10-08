@@ -1,134 +1,145 @@
-import traceback
-
 import rclpy
-from new_movement.entities.States import State, Vector2D
 from rclpy.node import Node
-from strategy.blackboard import Blackboard
 
+from new_movement.entities.States import State, Vector2D
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
-from system_interfaces.msg import ControlCommand, RobotCommand, TeamCommand
-from system_interfaces.srv import ControlParams, SetKp, SetOrientation
+
+from system_interfaces.msg import ControlCommand, RobotCommand, TeamCommand, GameState
+from system_interfaces.srv import ControlParams, SetKp, SetOrientation, GetGameConfig
 
 
 class Controller(Node):
+    """Simplified controller node.
+
+    Consumes high-frequency GameState and ControlCommand messages, publishes TeamCommand.
+    Fetches low-frequency configuration (team color) once via GetGameConfig service.
+    """
+
     def __init__(self):
         super().__init__("controller")
-        self.get_logger().info("Nó Controller inicializado.")
 
-        self.target_orientations = {}
+        # Caches
+        self.ally_robots = {}
+        self.latest_command = None
 
+        # Low-frequency config
+        self.is_team_color_yellow = False
+        self._config_client = self.create_client(GetGameConfig, "get_game_config")
+        self._config_requested = False
+
+        # Controllers
         self.robot_controller = RobotTrajectoryController()
         self.orientation_controller = PController(kp=2.5, max_output=4.0)
+        self.target_orientations = {}
 
-        self.subscriber = self.create_subscription(
-            ControlCommand, 'control_command', self.receive_command, 10
+        # ROS Interfaces
+        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        self.create_subscription(
+            ControlCommand, "control_command", self.receive_command, 10
         )
         self.publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
-
-        self.update_parameters_service = self.create_service(
-            ControlParams, "update_pid", self.update_parameters
-        )
-        self.set_orientation_service = self.create_service(
+        self.create_service(ControlParams, "update_pid", self.update_parameters)
+        self.create_service(
             SetOrientation, "set_orientation", self.set_orientation_callback
         )
-        self.update_kp_angular_service = self.create_service(
-            SetKp, "update_kp_angular", self.update_kp_angular_callback
-        )
+        self.create_service(SetKp, "update_kp_angular", self.update_kp_angular_callback)
 
-        self.blackboard = Blackboard()
-        
-        self.robot_controller = RobotTrajectoryController()
-        
-        self.latest_command = None
+        # Timing
         self.last_time = self.get_clock().now()
-        self.timer = self.create_timer(0.01, self.timer_callback)
-        
-    def receive_command(self, message):
-        self.latest_command = message
+        self.create_timer(0.01, self.timer_callback)  # 100 Hz
+
+    def game_state_callback(self, msg: GameState):
+        self.ally_robots = {r.id: r for r in msg.ally_robots}
+
+    def receive_command(self, msg: ControlCommand):
+        self.latest_command = msg
+
+    def _request_config_once(self):
+        if self._config_requested:
+            return
+        if not self._config_client.service_is_ready():
+            return
+        future = self._config_client.call_async(GetGameConfig.Request())
+
+        def done(fut):
+            try:
+                resp = fut.result()
+                self.is_team_color_yellow = resp.is_team_color_yellow
+            except Exception:
+                pass
+
+        future.add_done_callback(done)
+        self._config_requested = True
 
     def timer_callback(self):
         if self.latest_command is None:
             return
-        
-        current_time = self.get_clock().now()
-        dt = (current_time - self.last_time).nanoseconds / 1e9  # Convert to seconds
-        self.last_time = current_time
-        
-        message = self.latest_command
-        team_command = TeamCommand()
-        team_command.robots = []
-        team_command.is_team_color_yellow = self.blackboard.gui.is_team_color_yellow
-        commanded_robot_ids = set()
 
-        for robot in message.command:
-            robot_command = RobotCommand(robot_id=robot.id)
-            commanded_robot_ids.add(robot.id)
+        self._request_config_once()
 
-            try:
-                if robot.id not in self.blackboard.ally_robots:
-                    continue
+        now = self.get_clock().now()
+        dt = (now - self.last_time).nanoseconds / 1e9
+        self.last_time = now
 
-                current_robot = self.blackboard.ally_robots[robot.id]
+        team_cmd = TeamCommand()
+        team_cmd.is_team_color_yellow = self.is_team_color_yellow
+        team_cmd.robots = []
 
-                current_position = Vector2D(
-                    current_robot.position_x / 1000.0, current_robot.position_y / 1000.0
+        for desired in self.latest_command.command:
+            rid = desired.id
+            if rid not in self.ally_robots:
+                continue
+
+            cur = self.ally_robots[rid]
+            cur_state = State(
+                Vector2D(cur.position_x / 1000.0, cur.position_y / 1000.0),
+                Vector2D(cur.velocity_x / 1000.0, cur.velocity_y / 1000.0),
+            )
+            tgt_state = State(
+                Vector2D(desired.position_x, desired.position_y),
+                Vector2D(desired.velocity_x, desired.velocity_y),
+            )
+
+            vel_cmd = self.robot_controller.compute_trajectory_command(
+                rid, tgt_state, cur_state, dt
+            )
+
+            out = RobotCommand(robot_id=rid)
+            out.linear_velocity_x = float(vel_cmd.x)
+            out.linear_velocity_y = float(vel_cmd.y)
+            target_orientation = self.target_orientations.get(rid, cur.orientation)
+            out.angular_velocity = float(
+                self.orientation_controller.compute(
+                    target=target_orientation, current=cur.orientation
                 )
-                current_velocity = Vector2D(
-                    current_robot.velocity_x / 1000.0, current_robot.velocity_y / 1000.0
-                )
-                current_state = State(current_position, current_velocity)
+            )
+            out.orientation = cur.orientation
+            out.kick = 0.0
+            team_cmd.robots.append(out)
 
-                target_position = Vector2D(robot.position_x, robot.position_y)
-                target_velocity = Vector2D(robot.velocity_x, robot.velocity_y)
-                target_state = State(target_position, target_velocity)
+        active = {d.id for d in self.latest_command.command}
+        self.robot_controller.cleanup_unused_robots(active)
 
-                velocity_command = self.robot_controller.compute_trajectory_command(
-                    robot.id, target_state, current_state, dt=dt
-                )
-                robot_command.linear_velocity_x = float(velocity_command.x)
-                robot_command.linear_velocity_y = float(velocity_command.y)
+        self.publisher.publish(team_cmd)
 
-                target_orientation = self.target_orientations.get(
-                    robot.id, current_robot.orientation
-                )
+    def update_parameters(self, req, resp):
+        self.robot_controller.update_params(req.kp, req.ki, req.kd)
+        resp.success = True
+        return resp
 
-                angular_velocity = self.orientation_controller.compute(
-                    target=target_orientation, current=current_robot.orientation
-                )
-                robot_command.angular_velocity = float(angular_velocity)
+    def set_orientation_callback(self, req, resp):
+        self.target_orientations[req.robot_id] = req.orientation
+        resp.success = True
+        return resp
 
-                robot_command.orientation = current_robot.orientation
-                robot_command.kick = 0.0
-                team_command.robots.append(robot_command)
-
-            except Exception as e:
-                self.get_logger().error(
-                    f"Erro ao processar o robô {robot.id}: {e}\n{traceback.format_exc()}"
-                )
-
-        self.robot_controller.cleanup_unused_robots(commanded_robot_ids)
-        self.publisher.publish(team_command)
-
-    def update_parameters(self, request, response):
-        self.robot_controller.update_params(request.kp, request.ki, request.kd)
-        response.success = True
-        return response
-
-    def set_orientation_callback(self, request, response):
-        self.target_orientations[request.robot_id] = request.orientation
-        response.success = True
-        return response
-
-    def update_kp_angular_callback(self, request, response):
-        if request.kp >= 0:
-            self.orientation_controller.kp = request.kp
-            self.get_logger().info(f"Kp Angular atualizado para: {request.kp:.2f}")
-            response.success = True
+    def update_kp_angular_callback(self, req, resp):
+        if req.kp >= 0:
+            self.orientation_controller.kp = req.kp
+            resp.success = True
         else:
-            self.get_logger().warn(f"Valor de Kp inválido recebido: {request.kp:.2f}")
-            response.success = False
-        return response
+            resp.success = False
+        return resp
 
 
 def main(args=None):
