@@ -73,15 +73,17 @@ class APINode(Node):
         self.vision_running = vision_event
         self.vision_subscriber = None
         self.vision_node = Vision()
-        
+
         self.trajectory_subscriber = None
-        self.referee_subscriber = None
+        self.referee_subscriber = self.create_subscription(
+            RefereeMessage, "refereeTopic", self.emit_referee_message, 10
+        )
 
         self.communication_running = communication_event
         self.communication_node = grSimPublisher()
 
         self.referee_running = referee_event
-        self.referee_node = RefereeNode()
+        self.referee_node = None
 
         self.robots = []
         self.robot_count = 0
@@ -90,7 +92,6 @@ class APINode(Node):
         self.is_team_color_yellow = True
         self.is_play_pressed = False
 
-        # Create service clients for strategy commands
         self.strategy_client = self.create_client(StrategyCommand, "strategy_command")
         self.pid_client = self.create_client(ControlParams, "update_pid")
         self.kp_angular_client = self.create_client(SetKp, "update_kp_angular")
@@ -101,7 +102,6 @@ class APINode(Node):
         self.get_logger().info("API Node started")
 
         self.create_timer(0.5, self.publish_gui_data)
-        # Check strategy services status periodically
         self.create_timer(2.0, self.check_strategy_services_status)
 
     def handle_connect(self):
@@ -113,10 +113,6 @@ class APINode(Node):
             TrajectoryMessage, "trajectory_topic", self.emit_trajectory_message, 10
         )
         gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-        # subscribe to referee updates for GUI
-        self.referee_subscriber = self.create_subscription(
-            RefereeMessage, "refereeTopic", self.emit_referee_message, 10
-        )
         gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
     
     def emit_vision_message(self, msg: VisionMessage) -> None:
@@ -159,6 +155,13 @@ class APINode(Node):
         """Forward referee messages to the GUI."""
         data = todict(msg)
 
+        try:
+            cmd = data.get("command")
+            counter = data.get("command_counter")
+            self.get_logger().info(f"emit_referee_message: command={cmd} counter={counter}")
+        except Exception:
+            pass
+
         payload = {
             "stage": data.get("stage"),
             "stage_time_left": data.get("stage_time_left"),
@@ -177,7 +180,6 @@ class APINode(Node):
         self.referee_subscriber = None
 
     def handle_field_side(self, is_field_side_right):
-        # self.get_logger().info(f"Is team field side left? {is_field_side_left}")
         is_field_side_right
     
         self.get_logger().info(f"Is team field side left? {is_field_side_right}")
@@ -185,7 +187,6 @@ class APINode(Node):
         self.is_field_side_right = is_field_side_right
 
     def handle_team_color(self, is_team_color_yellow):
-        # self.get_logger().info(f"Is team color blue? {is_team_color_blue}")
 
         self.get_logger().info(f"Is team color blue? {is_team_color_yellow}")
 
@@ -247,7 +248,16 @@ class APINode(Node):
     def handle_referee_button(self):
         if self.referee_running.is_set():
             self.referee_running.clear()
-            self.executor.remove_node(self.referee_node)
+            if self.referee_node is not None:
+                try:
+                    self.executor.remove_node(self.referee_node)
+                except Exception:
+                    pass
+                try:
+                    self.referee_node.destroy_node()
+                except Exception:
+                    pass
+                self.referee_node = None
             gui_socket.emit("refereeOutput", {"line": "Referee node stopped"})
             gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
             self.get_logger().info("Referee node stopped")
@@ -256,6 +266,18 @@ class APINode(Node):
             gui_socket.emit("referee", {"line": "Starting referee node"})
             gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
             self.get_logger().info("Starting referee node")
+            try:
+                import subprocess
+
+                nodes_list = subprocess.check_output(["ros2", "node", "list"], text=True)
+                if "/refereeNode" in nodes_list.splitlines():
+                    self.get_logger().info("External /refereeNode detected; not creating embedded RefereeNode.")
+                    return
+            except Exception:
+                pass
+
+            if self.referee_node is None:
+                self.referee_node = RefereeNode()
             self.executor.add_node(self.referee_node)
 
     def create_message(self) -> GUIMessage:
