@@ -175,7 +175,7 @@ class PathDriver(Node):
         self.publisher.publish(controlCommand)
 
     def publish_trajectories_safe(self):
-        """error Treatment for publish_trajectories"""
+        """error Treatment for publish_trajectories """
         try:
             self.publish_trajectories()
         except Exception as e:
