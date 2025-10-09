@@ -34,6 +34,8 @@ def generate_launch_description():
         Node(
             package='strategy',
             executable='strategyNode',
+        ),
+        Node(
             package='gui_interpreter',
             executable='apiNode',
         ),
