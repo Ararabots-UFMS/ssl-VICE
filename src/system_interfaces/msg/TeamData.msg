@@ -15,3 +15,4 @@ bool ball_placement_failures_reached
 bool bot_substitution_allowed
 uint8 bot_substitutions_left
 uint8 bot_substitution_time_left
+bool on_positive_half

@@ -280,7 +280,7 @@ class PathDriver(Node):
 
                 if need_replan is True:
                     self.replan(id, robot["trajectory"].get_destination())
-                    self.get_logger().info(f"Replan Activated for {id}")
+                    # self.get_logger().info(f"Replan Activated for {id}")
                     break
 
                 total_time += time_step
@@ -288,9 +288,9 @@ class PathDriver(Node):
     def update_obstacles(self, request, response):
         self.driver_init()
         if request.id not in self.robot_data:
-            self.get_logger().warn(
-                f"Update obstacles ignored: robot {request.id} not found"
-            )
+            # self.get_logger().warn(
+            #     f"Update obstacles ignored: robot {request.id} not found"
+            # )
             response.success = False
             return response
 
