@@ -105,10 +105,10 @@ class Strategy(Node):
     def _handle_move_response(self, future, robot_id: int) -> None:
         try:
             resp = future.result()
-            if getattr(resp, "success", False):
-                self.get_logger().debug(f"Robot {robot_id}: move accepted")
-            else:
-                self.get_logger().warn(f"Robot {robot_id}: move rejected")
+            # if getattr(resp, "success", False):
+            #     self.get_logger().debug(f"Robot {robot_id}: move accepted")
+            # else:
+            #     self.get_logger().warn(f"Robot {robot_id}: move rejected")
         except Exception as e:
             self.get_logger().error(f"Move service failed for robot {robot_id}: {e}")
 
@@ -127,10 +127,10 @@ class Strategy(Node):
     def _handle_obstacle_response(self, future, robot_id: int, skill: Skill) -> None:
         try:
             resp = future.result()
-            if getattr(resp, "success", False):
-                self.get_logger().debug(f"Robot {robot_id}: obstacles updated")
-            else:
-                self.get_logger().warn(f"Robot {robot_id}: obstacle update rejected")
+            # if getattr(resp, "success", False):
+            #     self.get_logger().debug(f"Robot {robot_id}: obstacles updated")
+            # else:
+            #     self.get_logger().warn(f"Robot {robot_id}: obstacle update rejected")
         except Exception as e:
             self.get_logger().error(
                 f"Obstacle service failed for robot {robot_id}: {e}"

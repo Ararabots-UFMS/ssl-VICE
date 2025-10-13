@@ -42,5 +42,7 @@ class MessageWrapping:
         team.bot_substitution_intent = team_proto.bot_substitution_intent
         team.bot_substitution_allowed = team_proto.bot_substitution_allowed
         team.bot_substitutions_left = team_proto.bot_substitutions_left
+        blue_on_positive = bool(getattr(self.referee, "blue_team_on_positive_half", False))
+        team.on_positive_half = blue_on_positive if color == BLUE else not blue_on_positive
 
         return team

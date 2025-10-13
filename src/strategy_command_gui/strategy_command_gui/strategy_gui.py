@@ -812,7 +812,7 @@ class StrategyCommandGUI(Node):
             response = future.result()
             success_text = "SUCCESS" if response.success else "FAILED"
 
-            self.get_logger().info(f"Update obstacles response: {success_text}")
+            # self.get_logger().info(f"Update obstacles response: {success_text}")
 
             # Update response display
             response_info = (

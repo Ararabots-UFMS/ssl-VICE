@@ -1,12 +1,11 @@
 import rclpy
+from new_movement.entities.States import State, Vector2D
 from rclpy.node import Node
 
-from new_movement.entities.States import State, Vector2D
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
-
-from system_interfaces.msg import ControlCommand, RobotCommand, TeamCommand, GameState
-from system_interfaces.srv import ControlParams, SetKp, SetOrientation, GetGameConfig
+from system_interfaces.msg import ControlCommand, GameState, RobotCommand, TeamCommand
+from system_interfaces.srv import ControlParams, GetGameConfig, SetKp, SetOrientation
 
 
 class Controller(Node):
@@ -23,10 +22,15 @@ class Controller(Node):
         self.ally_robots = {}
         self.latest_command = None
 
-        # Low-frequency config
+        # Low-frequency config (polled periodically)
         self.is_team_color_yellow = False
+        self.is_field_side_left = False
         self._config_client = self.create_client(GetGameConfig, "get_game_config")
-        self._config_requested = False
+        self._config_call_inflight = False
+        self._last_config = None
+
+        # Poll game config every 0.5s for robustness when values change
+        self.create_timer(0.5, self._poll_game_config)
 
         # Controllers
         self.robot_controller = RobotTrajectoryController()
@@ -55,28 +59,45 @@ class Controller(Node):
     def receive_command(self, msg: ControlCommand):
         self.latest_command = msg
 
-    def _request_config_once(self):
-        if self._config_requested:
+    def _poll_game_config(self):
+        if self._config_call_inflight:
             return
         if not self._config_client.service_is_ready():
             return
+        self._config_call_inflight = True
         future = self._config_client.call_async(GetGameConfig.Request())
 
         def done(fut):
+            self._config_call_inflight = False
             try:
                 resp = fut.result()
-                self.is_team_color_yellow = resp.is_team_color_yellow
-            except Exception:
-                pass
+                # Log only on changes
+                changed = (
+                    self._last_config is None
+                    or self._last_config.is_team_color_yellow
+                    != resp.is_team_color_yellow
+                    or getattr(self._last_config, "is_field_side_left", None)
+                    != getattr(resp, "is_field_side_left", None)
+                )
+                self.is_team_color_yellow = bool(resp.is_team_color_yellow)
+                self.is_field_side_left = bool(
+                    getattr(resp, "is_field_side_left", False)
+                )
+                self._last_config = resp
+                if changed:
+                    self.get_logger().info(
+                        f"GameConfig updated: is_team_color_yellow={self.is_team_color_yellow}, is_field_side_left={self.is_field_side_left}"
+                    )
+            except Exception as e:
+                self.get_logger().error(f"Failed to call get_game_config service: {e}")
 
         future.add_done_callback(done)
-        self._config_requested = True
 
     def timer_callback(self):
         if self.latest_command is None:
             return
 
-        self._request_config_once()
+        # config is polled periodically in _poll_game_config
 
         now = self.get_clock().now()
         dt = (now - self.last_time).nanoseconds / 1e9
