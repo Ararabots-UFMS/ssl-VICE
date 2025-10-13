@@ -19,16 +19,22 @@ class Skill:
         self.target_y: Optional[float] = None
         self.vel_x: float = 0.0
         self.vel_y: float = 0.0
+        self.kick: float = 0.0
         # Orientação
         self.angle: Optional[float] = None
         # Obstáculos
-        self.field_border: Optional[bool] = None
-        self.penalty_area: Optional[bool] = None
-        self.center_area: Optional[bool] = None
-        self.ball: Optional[bool] = None
+        self.field_border: Optional[bool] = False
+        self.penalty_area: Optional[bool] = False
+        self.center_area: Optional[bool] = False
+        self.ball: Optional[bool] = False
         self.enemy_ids: Optional[List[int]] = None
         self.ally_ids: Optional[List[int]] = None
 
+    def activate_kick(self) -> None:
+        self.kick = 1.5
+
+    def deactivate_kick(self) -> None:
+        self.kick = 0.0
 
 class Skills:
     def __init__(self, name: str):
@@ -93,6 +99,5 @@ class Skills:
         s.vel_x = 0.0
         s.vel_y = 0.0
         return s
-
 
 __all__ = ["Skill", "Skills"]

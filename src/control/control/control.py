@@ -5,7 +5,14 @@ from rclpy.node import Node
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
 from system_interfaces.msg import ControlCommand, GameState, RobotCommand, TeamCommand
-from system_interfaces.srv import ControlParams, GetGameConfig, SetKp, SetOrientation
+from system_interfaces.srv import (
+    ControlParams,
+    GetGameConfig,
+    SetKp,
+    SetOrientation,
+    UpdateKick,
+
+)
 
 
 class Controller(Node):
@@ -28,6 +35,8 @@ class Controller(Node):
         self._config_client = self.create_client(GetGameConfig, "get_game_config")
         self._config_call_inflight = False
         self._last_config = None
+        # Kick cache por robô: mantém o último valor até nova atualização
+        self.kick_cache: dict[int, float] = {}
 
         # Poll game config every 0.5s for robustness when values change
         self.create_timer(0.5, self._poll_game_config)
@@ -48,13 +57,12 @@ class Controller(Node):
             SetOrientation, "set_orientation", self.set_orientation_callback
         )
         self.create_service(SetKp, "update_kp_angular", self.update_kp_angular_callback)
+        self.create_service(UpdateKick, "update_kick", self.update_kick_callback)
 
         # Timing
         self.last_time = self.get_clock().now()
         self.create_timer(0.01, self.timer_callback)  # 100 Hz
 
-    def game_state_callback(self, msg: GameState):
-        self.ally_robots = {r.id: r for r in msg.ally_robots}
 
     def receive_command(self, msg: ControlCommand):
         self.latest_command = msg
@@ -136,7 +144,8 @@ class Controller(Node):
                 )
             )
             out.orientation = cur.orientation
-            out.kick = 0.0
+            out.kick = float(self.kick_cache.get(rid, 0.0))
+
             team_cmd.robots.append(out)
 
         active = {d.id for d in self.latest_command.command}
@@ -161,6 +170,18 @@ class Controller(Node):
         else:
             resp.success = False
         return resp
+
+    def update_kick_callback(self, req, resp):
+        robot_id = int(req.id)
+        kick = float(req.kick)
+
+        self.kick_cache[robot_id] = kick
+
+        resp.success = True
+        return resp
+
+    def game_state_callback(self, msg: GameState):
+        self.ally_robots = {r.id: r for r in msg.ally_robots}
 
 
 def main(args=None):
