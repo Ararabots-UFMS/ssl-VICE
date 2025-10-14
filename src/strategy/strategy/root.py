@@ -1,7 +1,7 @@
 from strategy.behaviour import Selector
 
 
-# from strategy.coach.freekick import FreeKick
+from strategy.plays.Freekick import Freekick
 # from strategy.coach.halt import Halt
 # from strategy.coach.kickoff import Kickoff
 # from strategy.coach.penalty import Penalty
@@ -23,7 +23,7 @@ class RootTree(Selector):
 
         #self.add_children([stop, halt, kickoff, freekick, penalty, timeout, running])
 
-        self.add_children([NormalStart("NormalStart")])
+        self.add_children([Freekick("FreeKick"),NormalStart("NormalStart")])
 
     def run(self):
         return super().run()
