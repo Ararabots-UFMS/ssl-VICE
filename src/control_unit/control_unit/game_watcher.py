@@ -33,6 +33,7 @@ class GameWatcher(Node):
         self.can_i_kick = 0.0
         self.is_team_color_yellow = None
         self.is_field_side_left = None
+        self.on_positive_half = None
 
         # Track variability of on_positive_half (sticky-true if it ever toggles)
         self._on_pos_last_value = None
@@ -101,6 +102,7 @@ class GameWatcher(Node):
                 with self._lock:
                     self.is_team_color_yellow = bool(team.color == "yellow")
                     self.is_field_side_left = not bool(team.on_positive_half)
+                    self.on_positive_half = bool(team.on_positive_half)
 
     def update_from_geometry(self, message: VisionGeometry):
         with self._lock:
@@ -127,6 +129,7 @@ class GameWatcher(Node):
         with self._lock:
             response.is_team_color_yellow = bool(self.is_team_color_yellow)
             response.is_field_side_left = bool(self.is_field_side_left)
+            response.on_positive_half = bool(self.on_positive_half)
 
             cmd = str(getattr(getattr(self, "referee", None), "command", "")).upper()
             response.is_play_pressed = cmd == "NORMAL_START" or cmd == "FORCE_START"
