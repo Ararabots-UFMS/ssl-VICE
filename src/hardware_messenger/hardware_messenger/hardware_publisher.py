@@ -1,9 +1,8 @@
 from rclpy.node import Node
 import rclpy
 import serial
-import struct
 
-from system_interfaces.msg import TeamCommand, GUIMessage
+from system_interfaces.msg import TeamCommand
 
 
 class HardwarePublisher(Node):
@@ -12,26 +11,14 @@ class HardwarePublisher(Node):
 
         # Parameters settings.
         self.declare_parameter("port", "/dev/ttyUSB0")
-        self.declare_parameter("baudrate", 1000000)
+        self.declare_parameter("baudrate", 230400)
 
         self.port = self.get_parameter("port").get_parameter_value().string_value
         self.baudrate = (
             self.get_parameter("baudrate").get_parameter_value().integer_value
         )
 
-        # Format string tells struct how to pack the data
-        # B: unsigned char (1 byte)
-        # f: float (4 bytes)
-        name = "B"
-        velocities_format = "fff"
-        kick = "B"
-        self.robot_command_format = name + velocities_format + kick
-
-        self.robots = {}
-
-        self._command = []
-        self.robot_count = 0
-        self.first_message_sent = False
+        self._command = bytearray()
 
         self.serial_writer = serial.Serial(self.port, self.baudrate, timeout=0.1)
 
@@ -39,61 +26,59 @@ class HardwarePublisher(Node):
             TeamCommand, "commandTopic", self.translate_command, 10
         )
 
-        self.guiSubscriber = self.create_subscription(
-            GUIMessage, "guiTopic", self.gui_callback, 10
-        )
-
         self.timer = self.create_timer(
-            1 / 60, self.publish_command
-        )  # publish to serial at 60Hz
+            1 / 120, self.publish_command
+        )  # publish to serial at 120Hz
+
+    def encode_command(self, robot_id, vx, vy, angular_speed, angle, kick_front):
+        """ Encode command in binary format compatible with RobotCommand.decodeCommand() """
+        # Pack the data into 11 bytes as expected by decodeCommand
+        bytes_data = bytearray(11)
+        
+        # Byte 0: (id << 4) | (vx_linear >> 16)
+        bytes_data[0] = (robot_id << 4) | ((vx & 0xF0000) >> 16)
+        
+        # Byte 1, 2: Rest of vx_linear
+        bytes_data[1] = (vx >> 8) & 0xFF
+        bytes_data[2] = vx & 0xFF
+        
+        # Byte 3, 4, 5(high nibble): vy_linear
+        bytes_data[3] = (vy >> 12) & 0xFF
+        bytes_data[4] = (vy >> 4) & 0xFF
+        bytes_data[5] = (vy & 0x0F) << 4
+        
+        # Byte 5(low nibble), 6, 7: angular_speed
+        bytes_data[5] |= (angular_speed >> 16) & 0x0F
+        bytes_data[6] = (angular_speed >> 8) & 0xFF
+        bytes_data[7] = angular_speed & 0xFF
+        
+        # Byte 8, 9, 10(high nibble): angle
+        bytes_data[8] = (angle >> 12) & 0xFF
+        bytes_data[9] = (angle >> 4) & 0xFF
+        bytes_data[10] = (angle & 0x0F) << 4
+        
+        # Byte 10(bit 3): kick_front
+        if kick_front:
+            bytes_data[10] |= 0x08
+        
+        return bytes_data
 
     def publish_command(self):
-        self.get_logger().info(
-            f"first message sent: {self.first_message_sent}, robot count: {self.robot_count}"
-        )
-        if len(self._command) == 0:
-            self.get_logger().info(f"Returning")
-            return
-        elif not self.first_message_sent and self.robot_count != 0:
-            self.get_logger().info(f"Sending robot count {self.robot_count}")
-            self.serial_writer.write(struct.pack("B", *[self.robot_count]))
-            self.first_message_sent = True
-        elif self.first_message_sent and self.robot_count != 0:
-            # while self.serial_writer.in_waiting == 0:
-            #     pass
-            if self.serial_writer.in_waiting != 0:
-                lido = self.serial_writer.read()
-                self.get_logger().info(f"lido: {lido}")
-                if lido == b"R":
-                    self.get_logger().info(f"command: {self._command}")
-                    self.serial_writer.write(
-                        struct.pack(self.format_string, *self._command)
-                    )
-                    self.serial_writer.reset_input_buffer()
-                    self.get_logger().info(f"Sent command")
-
-    def gui_callback(self, message):
-        self.robot_count = message.robot_count
-
-        for robot in message.robots:
-            self.robots[robot.id] = robot
+        if len(self._command) > 0:
+            self.serial_writer.write(self._command)
 
     def translate_command(self, command):
-        self._command = []
-
-        if self.robot_count == 0:
-            return
-
-        self.format_string = "=" + self.robot_command_format * self.robot_count
+        self._command = bytearray()
 
         for robot in command.robots:
-            robot_command = [
-                ord(self.robots[robot.robot_id].name[0]),
-                float(robot.linear_velocity_x),
-                float(robot.linear_velocity_y),
-                float(robot.angular_velocity),
+            robot_command = self.encode_command(
+                robot.robot_id,
+                int(robot.linear_velocity_x * 1000),
+                int(robot.linear_velocity_y * 1000),
+                int(robot.angular_velocity * 1000),
+                0,  # angle
                 int(robot.kick),
-            ]
+            )
 
             self._command.extend(robot_command)
 
