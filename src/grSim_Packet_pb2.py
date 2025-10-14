@@ -20,8 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='',
   syntax='proto2',
   serialized_options=None,
-  create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x12grSim_Packet.proto\x1a\x14grSim_Commands.proto\x1a\x17grSim_Replacement.proto\"Z\n\x0cgrSim_Packet\x12!\n\x08\x63ommands\x18\x01 \x01(\x0b\x32\x0f.grSim_Commands\x12\'\n\x0breplacement\x18\x02 \x01(\x0b\x32\x12.grSim_Replacement'
+  serialized_pb=b'\n\x12grSim_Packet.proto\x1a\x14grSim_Commands.proto\x1a\x17grSim_Replacement.proto"Z\n\x0cgrSim_Packet\x12!\n\x08\x63ommands\x18\x01 \x01(\x0b\x32\x0f.grSim_Commands\x12\'\n\x0breplacement\x18\x02 \x01(\x0b\x32\x12.grSim_Replacement'
   ,
   dependencies=[grSim__Commands__pb2.DESCRIPTOR,grSim__Replacement__pb2.DESCRIPTOR,])
 

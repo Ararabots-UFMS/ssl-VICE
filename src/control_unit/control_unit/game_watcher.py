@@ -1,25 +1,44 @@
-from rclpy.node import Node
-from system_interfaces.msg import VisionMessage, GUIMessage, RefereeMessage, VisionGeometry
-from strategy.blackboard import Blackboard
+from threading import Lock
 
 import rclpy
-from std_srvs.srv import SetBool
+from rclpy.node import Node
+
+from system_interfaces.msg import (
+    Balls,
+    GameState,
+    GUIMessage,
+    RefereeMessage,
+    VisionGeometry,
+    VisionMessage,
+)
+from system_interfaces.srv import GetGameConfig
 
 
 class GameWatcher(Node):
     def __init__(self) -> None:
         super().__init__("game_watcher")
-        self.blackboard = Blackboard()
+
+        # Thread-safe data storage
+        self._lock = Lock()
+
+        # Game state data
+        self.ally_robots = {}
+        self.enemy_robots = {}
+        self.balls = [Balls()]
+        self.gui = GUIMessage()
+        self.referee = RefereeMessage()
+        self.referee_last_command = RefereeMessage()
+        self.can_i_start = False
+        self.geometry = VisionGeometry()
+        self.can_i_kick = 0.0
+        self.is_team_color_yellow = None
+        self.is_field_side_left = None
+
+        # Track variability of on_positive_half (sticky-true if it ever toggles)
+        self._on_pos_last_value = None
+        self._on_pos_has_varied = False
 
         # Subscribers
-        self.vision_subscriber = self.create_subscription(
-            VisionMessage, "visionTopic", self.update_from_vision, 10
-        )
-
-        self.gui_subscriber = self.create_subscription(
-            GUIMessage, "guiTopic", self.update_from_gui, 10
-        )
-
         self.referee_subscriber = self.create_subscription(
             RefereeMessage, "refereeTopic", self.update_from_gamecontroller, 10
         )
@@ -28,36 +47,117 @@ class GameWatcher(Node):
             VisionGeometry, "geometryTopic", self.update_from_geometry, 10
         )
 
-        # Service to set team color (True => yellow, False => blue)
-        self.set_team_color_srv = self.create_service(
-            SetBool, 'set_team_color', self.handle_set_team_color
+        self.vision_subscriber = self.create_subscription(
+            VisionMessage, "visionTopic", self.update_from_vision, 10
         )
 
+        # Services
+        self.get_game_config_srv = self.create_service(
+            GetGameConfig, "get_game_config", self.handle_get_game_config
+        )
+
+        # Aggregated game state publisher
+        self.game_state_pub = self.create_publisher(GameState, "game_state", 10)
+
+        # Dirty flag to track state changes
+        self._dirty = True
+        self._last_publish_seq = 0
+
+        # Fixed publication timer (60 Hz ~ 16.66ms)
+        self._publish_timer = self.create_timer(1.0 / 60.0, self._timer_publish_state)
+
     def update_from_vision(self, message: VisionMessage):
-        self.blackboard.update_from_vision_message(message)
+        with self._lock:
+            # Só roda após sabermos nossa cor pelo referee
+            if self.is_team_color_yellow is None:
+                return
+            if message is None:
+                return
+            if self.is_team_color_yellow:
+                self.ally_robots = {ally.id: ally for ally in message.yellow_robots}
+                self.enemy_robots = {enemy.id: enemy for enemy in message.blue_robots}
+            else:
+                self.ally_robots = {ally.id: ally for ally in message.blue_robots}
+                self.enemy_robots = {enemy.id: enemy for enemy in message.yellow_robots}
+
+            if message.balls:
+                self.balls = message.balls
+
+        self._dirty = True
 
     def update_from_gamecontroller(self, message: RefereeMessage):
-        self.blackboard.update_from_gamecontroller_message(message)
+        with self._lock:
+            try:
+                self.referee = message
+            except Exception:
+                # fallback mínimo
+                try:
+                    self.referee.command = getattr(message, "command", "")
+                except Exception:
+                    pass
 
-    def update_from_gui(self, message: GUIMessage):
-        self.blackboard.update_from_gui_message(message)
+        for team in message.teams:
+            if team.name == "Ararabots":
+                with self._lock:
+                    self.is_team_color_yellow = bool(team.color == "yellow")
+                    self.is_field_side_left = not bool(team.on_positive_half)
 
     def update_from_geometry(self, message: VisionGeometry):
-        self.blackboard.update_from_geometry(message)
+        with self._lock:
+            self.geometry = message
+        self._dirty = True
 
-    def handle_set_team_color(self, request, response):
-        """Service handler for SetBool. Sets blackboard.gui.is_team_color_yellow."""
-        try:
-            # request.data is a bool; True -> yellow
-            self.get_logger().info(f"Setting team color is_team_color_yellow={request.data}")
-            self.blackboard.gui.is_team_color_yellow = bool(request.data)
-            response.success = True
-            response.message = "Team color updated"
-        except Exception as e:
-            self.get_logger().error(f"Failed to set team color: {e}")
-            response.success = False
-            response.message = str(e)
+    def update_referee_no_command(self, message):
+        with self._lock:
+            self.referee.command = message
+
+    def activate_kick(self):
+        with self._lock:
+            self.can_i_kick = 1.0
+            self._dirty = True
+        self.get_logger().debug("[KICK] ativado")
+
+    def deactivate_kick(self):
+        with self._lock:
+            self.can_i_kick = 0.0
+            self._dirty = True
+        self.get_logger().debug("[KICK] desativado")
+
+    def handle_get_game_config(self, request, response):
+        with self._lock:
+            response.is_team_color_yellow = bool(self.is_team_color_yellow)
+            response.is_field_side_left = bool(self.is_field_side_left)
+
+            cmd = str(getattr(getattr(self, "referee", None), "command", "")).upper()
+            response.is_play_pressed = cmd == "NORMAL_START" or cmd == "FORCE_START"
+
+            try:
+                response.robot_count = int(len(self.ally_robots))
+            except Exception:
+                response.robot_count = 3
+
         return response
+
+    def _timer_publish_state(self):
+        if not self._dirty:
+            return
+        self._publish_state()
+        self._dirty = False
+        self._last_publish_seq += 1
+
+    def _publish_state(self):
+        """Monta e publica GameState (uso interno)."""
+        msg = GameState()
+        with self._lock:
+            msg.ally_robots = list(self.ally_robots.values())
+            msg.enemy_robots = list(self.enemy_robots.values())
+            msg.balls = self.balls
+            msg.gui = self.gui
+            msg.referee = self.referee
+            msg.referee_last_command = self.referee_last_command
+            msg.geometry = self.geometry
+        self.game_state_pub.publish(msg)
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -65,5 +165,6 @@ def main(args=None):
     rclpy.spin(node)
     rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

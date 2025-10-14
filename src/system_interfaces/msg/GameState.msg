@@ -1,0 +1,9 @@
+Robots[] ally_robots
+Robots[] enemy_robots
+Balls[] balls
+GUIMessage gui
+RefereeMessage referee
+RefereeMessage referee_last_command
+VisionGeometry geometry
+bool can_i_start
+float32 can_i_kick
