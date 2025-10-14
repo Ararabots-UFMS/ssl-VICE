@@ -30,10 +30,10 @@ class PathDriver(Node):
         self.update_obstacles_service = self.create_service(UpdateObstacle, 'update_obstacles', self.update_obstacles)
 
         # Obstacles Update Timer
-        self.update_obstacles_timer = self.create_timer(0.5, self.update_obstacles_timer_callback)
+        self.update_obstacles_timer = self.create_timer(0.1, self.update_obstacles_timer_callback)
         
         # Online Collision Check
-        self.collision_timer = self.create_timer(0.5, self.check_collision)
+        self.collision_timer = self.create_timer(0.1, self.check_collision)
         self.collision_look_ahead = 1.5 # Seconds
 
         # Robot data dictionary: id -> {trajectory, time_offset, obstacles}

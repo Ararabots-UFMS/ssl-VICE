@@ -74,7 +74,7 @@ class Controller(Node):
                 robot_command.linear_velocity_y = float(velocity_command.y)
                 robot_command.angular_velocity = 0.0  # TODO: Add orientation controller
                 robot_command.orientation = current_robot.orientation
-                robot_command.kick = 0.0
+                robot_command.kick = 1.0
                 
                 team_command.robots.append(robot_command)
                 

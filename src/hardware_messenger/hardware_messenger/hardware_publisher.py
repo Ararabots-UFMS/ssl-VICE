@@ -28,7 +28,7 @@ class HardwarePublisher(Node):
 
         self.timer = self.create_timer(
             1 / 120, self.publish_command
-        )  # publish to serial at 60Hz
+        )  # publish to serial at 120Hz
 
     def encode_command(self, robot_id, vx, vy, angular_speed, angle, kick_front):
         """ Encode command in binary format compatible with RobotCommand.decodeCommand() """

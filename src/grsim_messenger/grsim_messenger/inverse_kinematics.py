@@ -34,4 +34,4 @@ def apply_inverse_kinematics(vx_world, vy_world, theta, robot_orientation):
 
 
 if __name__ == "__main__":
-    print(apply_inverse_kinematics(3.0, 3.0, 0.0, 0.0))
+    print(apply_inverse_kinematics(3.0, 0.0, 0.0, 0.0))
