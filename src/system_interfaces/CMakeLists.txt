@@ -32,6 +32,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RobotTrajectory.msg"
   "msg/TrajectoryMessage.msg"
   "srv/StrategyCommand.srv"
+  "srv/UpdateKick.srv"
   "srv/ControlParams.srv"
   "srv/UpdateObstacle.srv"
   "srv/SetOrientation.srv"

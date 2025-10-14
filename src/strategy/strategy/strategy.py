@@ -3,7 +3,7 @@ from rclpy.node import Node
 
 from strategy.root import RootTree
 from typing import Iterable
-from system_interfaces.srv import StrategyCommand, SetOrientation, UpdateObstacle
+from system_interfaces.srv import StrategyCommand, SetOrientation, UpdateObstacle, UpdateKick
 from strategy.skills.skills import Skill
 
 
@@ -15,6 +15,7 @@ class Strategy(Node):
         self.move_cli = self.create_client(StrategyCommand, "strategy_command")
         self.orientation_cli = self.create_client(SetOrientation, "set_orientation")
         self.obstacle_cli = self.create_client(UpdateObstacle, "update_obstacles")
+        self.kick_cli = self.create_client(UpdateKick, "update_kick")
 
         if wait_for_service:
             while not self.move_cli.wait_for_service(timeout_sec=3.0):
@@ -23,6 +24,8 @@ class Strategy(Node):
                 self.get_logger().info('Aguardando serviço "set_orientation"...')
             while not self.obstacle_cli.wait_for_service(timeout_sec=3.0):
                 self.get_logger().info('Aguardando serviço "update_obstacles"...')
+            while not self.kick_cli.wait_for_service(timeout_sec=3.0):
+                self.get_logger().info('Aguardando serviço "kick_command"...')
 
         self.timer = self.create_timer(0.1, self.run)
 
@@ -40,6 +43,7 @@ class Strategy(Node):
         latest: dict[int, Skill] = {sk.robot_id: sk for sk in skill_list}
 
         for sk in latest.values():
+            self._send_kick(sk)
             if sk.target_x is not None and sk.target_y is not None:
                 self._send_move(sk)
             if sk.angle is not None:
@@ -67,6 +71,13 @@ class Strategy(Node):
         fut = self.move_cli.call_async(req)
         fut.add_done_callback(lambda f, rid=req.id: self._handle_move_response(f, rid))
 
+    def _send_kick(self, skill: Skill) -> None:
+        req = UpdateKick.Request()
+        req.id = int(skill.robot_id)
+        req.kick = float(skill.kick)
+        fut = self.kick_cli.call_async(req)
+        fut.add_done_callback(lambda f, rid=req.id: self._handle_kick_response(f, rid))
+
     def _send_orientation(self, robot_id: int, angle: float) -> None:
         try:
             req = SetOrientation.Request()
@@ -80,21 +91,13 @@ class Strategy(Node):
         )
 
     def _send_obstacles(self, skill: Skill) -> None:
-        try:
-            req = UpdateObstacle.Request()
-        except Exception:
-            return
+
+        req = UpdateObstacle.Request()
         req.id = int(skill.robot_id)
-        req.field_border = (
-            bool(skill.field_border) if skill.field_border is not None else False
-        )
-        req.penalty_area = (
-            bool(skill.penalty_area) if skill.penalty_area is not None else False
-        )
-        req.center_area = (
-            bool(skill.center_area) if skill.center_area is not None else False
-        )
-        req.ball = bool(skill.ball) if skill.ball is not None else False
+        req.field_border = bool(skill.field_border)
+        req.penalty_area = bool(skill.penalty_area)
+        req.center_area = bool(skill.center_area)
+        req.ball = bool(skill.ball)
         req.enemy_ids = list(skill.enemy_ids or [])
         req.ally_ids = list(skill.ally_ids or [])
         fut = self.obstacle_cli.call_async(req)
@@ -102,23 +105,21 @@ class Strategy(Node):
             lambda f, rid=req.id: self._handle_obstacle_response(f, rid, skill)
         )
 
+    def _handle_kick_response(self, future, robot_id: int) -> None:
+        try:
+            future.result()
+        except Exception as e:
+            self.get_logger().error(f"Kick service failed for robot {robot_id}: {e}")
+
     def _handle_move_response(self, future, robot_id: int) -> None:
         try:
-            resp = future.result()
-            # if getattr(resp, "success", False):
-            #     self.get_logger().debug(f"Robot {robot_id}: move accepted")
-            # else:
-            #     self.get_logger().warn(f"Robot {robot_id}: move rejected")
+            future.result()
         except Exception as e:
             self.get_logger().error(f"Move service failed for robot {robot_id}: {e}")
 
     def _handle_orientation_response(self, future, robot_id: int) -> None:
         try:
-            resp = future.result()
-            if getattr(resp, "success", False):
-                self.get_logger().debug(f"Robot {robot_id}: orientation accepted")
-            else:
-                self.get_logger().warn(f"Robot {robot_id}: orientation rejected")
+            future.result()
         except Exception as e:
             self.get_logger().error(
                 f"Orientation service failed for robot {robot_id}: {e}"
@@ -126,11 +127,7 @@ class Strategy(Node):
 
     def _handle_obstacle_response(self, future, robot_id: int, skill: Skill) -> None:
         try:
-            resp = future.result()
-            # if getattr(resp, "success", False):
-            #     self.get_logger().debug(f"Robot {robot_id}: obstacles updated")
-            # else:
-            #     self.get_logger().warn(f"Robot {robot_id}: obstacle update rejected")
+            future.result()
         except Exception as e:
             self.get_logger().error(
                 f"Obstacle service failed for robot {robot_id}: {e}"

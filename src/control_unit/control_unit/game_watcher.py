@@ -156,8 +156,6 @@ class GameWatcher(Node):
             msg.referee = self.referee
             msg.referee_last_command = self.referee_last_command
             msg.geometry = self.geometry
-            msg.can_i_start = self.can_i_start
-            msg.can_i_kick = float(self.can_i_kick)
         self.game_state_pub.publish(msg)
 
 
