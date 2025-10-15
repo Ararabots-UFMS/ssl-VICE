@@ -23,7 +23,7 @@ class HaltAction(LeafNode):
         if not self.ally_robots:
             return TaskStatus.RUNNING, None
         
-        executor = halt(ally_robots)
+        executor = halt(ally_robots = self.ally_robots)
         return (TaskStatus.SUCCESS, None)
     
 class Halt(Sequence):
