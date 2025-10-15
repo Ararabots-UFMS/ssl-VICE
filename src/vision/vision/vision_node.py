@@ -23,16 +23,26 @@ class Vision(Node):
         # Parameters settings.
         self.declare_parameter("ip", "224.5.23.2")
         # Visão real
-        # self.declare_parameter("port", 10006)
+        self.declare_parameter("port", 10006)
         # Grsim
-        self.declare_parameter('port', 10020)
+        # self.declare_parameter('port', 10020)
         self.declare_parameter("verbose", False)
+        # Optional local interface IP to bind/join multicast (e.g., 192.168.0.10). If empty uses INADDR_ANY.
+        self.declare_parameter("interface_ip", "")
+        # Socket read timeout (0 => non-blocking) in seconds.
+        self.declare_parameter("socket_timeout", 0.0)
         self.declare_parameter("num_cams", 4)
         self.declare_parameter("max_frame_skipped", 30)
         # Verbose prints in terminal all received data.
         self.ip = self.get_parameter("ip").get_parameter_value().string_value
         self.port = self.get_parameter("port").get_parameter_value().integer_value
         self.verbose = self.get_parameter("verbose").get_parameter_value().bool_value
+        self.interface_ip = (
+            self.get_parameter("interface_ip").get_parameter_value().string_value
+        )
+        self.socket_timeout = (
+            self.get_parameter("socket_timeout").get_parameter_value().double_value
+        )
         self.num_cams = (
             self.get_parameter("num_cams").get_parameter_value().integer_value
         )
@@ -40,7 +50,12 @@ class Vision(Node):
             self.get_parameter("max_frame_skipped").get_parameter_value().integer_value
         )
 
-        self.client = Client(ip=self.ip, port=self.port)
+        self.client = Client(
+            ip=self.ip,
+            port=self.port,
+            interface_ip=self.interface_ip if self.interface_ip else None,
+            timeout=self.socket_timeout,
+        )
 
         self.get_logger().info(f"Binding client on {self.ip}:{self.port}")
         self.client.connect()
@@ -61,7 +76,10 @@ class Vision(Node):
     def update_tracker(self):
         try:
             # Orientation does not have a proper processing. Using raw orientantion and setting orientation velocity to 0.
-            data: SSL_WrapperPacket = self.client.receive()
+            data = self.client.receive()
+
+            if data is None:
+                return  # no packet available now
 
             self.tracker.update(data)
 
