@@ -1,4 +1,4 @@
-from strategy.strategy.skills.skills import Skills
+from strategy.skills.skills import Skills
 from strategy.behaviour import LeafNode, TaskStatus
 import math
 

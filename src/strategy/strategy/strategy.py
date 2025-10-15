@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 
 from strategy.root import RootTree
 from typing import Iterable
@@ -28,9 +29,10 @@ class Strategy(Node):
                 self.get_logger().info('Aguardando serviço "kick_command"...')
 
         self.timer = self.create_timer(0.1, self.run)
+        self.root = RootTree("RootStrategy", self)
 
     def run(self):
-        status, action = RootTree("RootStrategy").run()
+        status, action = self.root.run()
 
         if action is None:
             return
@@ -137,8 +139,17 @@ class Strategy(Node):
 def main(args=None):
     rclpy.init(args=args)
     strategy_node = Strategy(wait_for_service=True)
-    rclpy.spin(strategy_node)
-    rclpy.shutdown()
+
+    executor = MultiThreadedExecutor()
+    executor.add_node(strategy_node)
+
+    try:
+        executor.spin()
+    finally:
+        executor.shutdown()
+        strategy_node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

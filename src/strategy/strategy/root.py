@@ -11,7 +11,7 @@ from strategy.plays.running import NormalStart
 # from strategy.plays.defense import Defense
 
 class RootTree(Selector):
-    def __init__(self, name):
+    def __init__(self, name, node):
         super().__init__(name, [])
         #kickoff = Kickoff("Kickoff")
         #freekick = FreeKick("FreeKick")
@@ -23,7 +23,7 @@ class RootTree(Selector):
 
         #self.add_children([stop, halt, kickoff, freekick, penalty, timeout, running])
 
-        self.add_children([Freekick("FreeKick"),NormalStart("NormalStart")])
+        self.add_children([Freekick("FreeKick", node),NormalStart("NormalStart", node)])
 
     def run(self):
         return super().run()

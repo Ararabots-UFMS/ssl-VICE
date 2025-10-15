@@ -5,13 +5,13 @@ from strategy.plays.Defense_Freekick import DefenseFreekick
 from system_interfaces.srv import GetGameConfig
 
 class Freekick(Sequence):
-    def __init__(self, name):
+    def __init__(self, name, node):
         super().__init__(name, [])
-        commands = ["PREPARE_FREE_YELLOW", "PREPARE_FREE_BLUE"]
+        commands = ["DIRECT_FREE_YELLOW", "DIRECT_FREE_BLUE"]
 
-        check_freekick = CheckFreekickState("CheckFreekickState")
+        check_freekick = CheckFreekickState("CheckFreekickState", node)
 
-        is_our_freekick = CheckIsOurFreekick("CheckIsOurFreekick", [check_freekick])
+        is_our_freekick = CheckIsOurFreekick("CheckIsOurFreekick", [check_freekick], node)
         action_our_freekick = OurFreekick("OurFreekick")
         
         ours = Sequence("OurFreekick", [is_our_freekick, action_our_freekick])
@@ -26,29 +26,33 @@ class Freekick(Sequence):
         return super().run()
     
 class CheckFreekickState(LeafNode):
-    def __init__(self, name):
+    def __init__(self, name, node):
         super().__init__(name)
-        self.game_state_sub = self.create_subscription(GameState, 'game_state', self.game_state_callback, 10)
+        self.node = node
+        self.referee_command = None
+        self.desired_states = ["DIRECT_FREE_YELLOW", "DIRECT_FREE_BLUE"]
+        self.game_state_sub = self.node.create_subscription(GameState, 'game_state', self.game_state_callback, 10)
 
 
     def game_state_callback(self, msg: GameState):
-        self.referee_command = msg.referee_command
+        self.referee_command = msg.referee_last_command.command
 
     def run(self):
         return (TaskStatus.SUCCESS, None) if self.referee_command in self.desired_states else (TaskStatus.FAILURE, None)
 class CheckIsOurFreekick(Selector):
-    def __init__(self, name, children):
+    def __init__(self, name, children, node):
         super().__init__(name, children)
-        is_team_color_yellow = None
+        self.node = node
+        self.is_team_color_yellow = None
         self.referee_command = None
 
-        self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
+        self.game_config_client = self.node.create_client(GetGameConfig, "get_game_config")
         self._get_color_future = None
-        self._config_timer = self.create_timer(0.5, self._request_color_once)
-        self.create_subscription(GameState, 'game_state', self.game_state_callback, 10)
+        self._config_timer = self.node.create_timer(0.5, self._request_color_once)
+        self.node.create_subscription(GameState, 'game_state', self.game_state_callback, 10)
 
     def game_state_callback(self, msg: GameState):
-        self.referee_command = msg.referee_command
+        self.referee_command = msg.referee_last_command.command
 
     def _request_color_once(self):
         if (
@@ -64,7 +68,7 @@ class CheckIsOurFreekick(Selector):
     def _on_get_color_response(self, future):
         exc = future.exception()
         if exc:
-            self.get_logger().error(f"Service call failed {exc}")
+            self.node.get_logger().error(f"Service call failed {exc}")
         else:
             resp = future.result()
             self.is_team_color_yellow = resp.is_team_color_yellow
