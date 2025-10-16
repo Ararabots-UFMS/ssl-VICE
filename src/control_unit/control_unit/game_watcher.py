@@ -70,8 +70,8 @@ class GameWatcher(Node):
     def update_from_vision(self, message: VisionMessage):
         with self._lock:
             # Só roda após sabermos nossa cor pelo referee
-            if self.is_team_color_yellow is None:
-                return
+            # if self.is_team_color_yellow is None:
+            #     return
             if message is None:
                 return
             if self.is_team_color_yellow:
