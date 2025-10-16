@@ -2,8 +2,6 @@ from new_movement.entities.States import Vector2D
 
 from strategy.skills.skills import Skills
 
-"""Contains all KickOffActions the robot must do (in order or not) during the match"""
-
 
 class CenterGoal:
     GOAL_POSITIVE = Vector2D(2250.0, 0.0)
