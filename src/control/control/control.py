@@ -24,7 +24,10 @@ class Controller(Node):
 
     def __init__(self):
         super().__init__("controller")
-
+        # information about the game state
+        self.referee_command = None  
+        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        
         # Caches
         self.ally_robots = {}
         self.latest_command = None
@@ -47,7 +50,6 @@ class Controller(Node):
         self.target_orientations = {}
 
         # ROS Interfaces
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
         self.create_subscription(
             ControlCommand, "control_command", self.receive_command, 10
         )
@@ -154,6 +156,7 @@ class Controller(Node):
         self.publisher.publish(team_cmd)
 
     def update_parameters(self, req, resp):
+        
         self.robot_controller.update_params(req.kp, req.ki, req.kd)
         resp.success = True
         return resp
@@ -182,7 +185,7 @@ class Controller(Node):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
-
+        self.referee_command = msg.referee.command  
 
 def main(args=None):
     rclpy.init(args=args)
