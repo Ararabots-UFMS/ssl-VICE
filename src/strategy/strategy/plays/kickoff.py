@@ -1,5 +1,4 @@
 from system_interfaces.msg._game_state import GameState
-from strategy.skills.skills import Skills
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
 from system_interfaces.srv import GetGameConfig
 from strategy.tatics.kickoff import OurKickoff
