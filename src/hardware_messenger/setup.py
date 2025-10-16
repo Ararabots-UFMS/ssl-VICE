@@ -20,7 +20,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'hardware = hardware_messenger.hardware_publisher:main',
         ],
     },
 )
