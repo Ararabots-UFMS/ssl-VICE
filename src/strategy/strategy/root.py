@@ -22,7 +22,7 @@ class RootTree(Selector):
 
         #self.add_children([stop, halt, kickoff, freekick, penalty, timeout, running])
 
-        self.add_children([Halt("Halt")])
+        self.add_children([Halt("Halt"), NormalStart("NormalStart")])
 
     def run(self):
         return super().run()
