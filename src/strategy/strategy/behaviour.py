@@ -1,3 +1,4 @@
+from rclpy.node import Node
 from abc import abstractmethod
 from enum import Enum
 
@@ -6,16 +7,18 @@ class TaskStatus(Enum):
     FAILURE = 1
     RUNNING = 2
 
-class LeafNode():
+class LeafNode(Node):
     def __init__(self, name):
+        super().__init__(name)
         self.name = name
 
     @abstractmethod
     def run(self):
         raise Exception("subclass must override run")
 
-class TreeNode:
+class TreeNode(Node):
     def __init__(self, name, children):
+        super().__init__(name)
         self.name = name
         self.children = []
         self.add_children(children)

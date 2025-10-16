@@ -2,4 +2,5 @@
 bool is_team_color_yellow
 bool is_field_side_left
 bool is_play_pressed
+bool on_positive_half
 uint32 robot_count

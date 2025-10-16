@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 
 from strategy.root import RootTree
 from typing import Iterable
@@ -28,9 +29,10 @@ class Strategy(Node):
                 self.get_logger().info('Aguardando serviço "kick_command"...')
 
         self.timer = self.create_timer(0.1, self.run)
+        self.root = RootTree("RootStrategy")
 
     def run(self):
-        status, action = RootTree("RootStrategy").run()
+        status, action = self.root.run()
 
         if action is None:
             return
@@ -137,8 +139,37 @@ class Strategy(Node):
 def main(args=None):
     rclpy.init(args=args)
     strategy_node = Strategy(wait_for_service=True)
-    rclpy.spin(strategy_node)
-    rclpy.shutdown()
+
+    def _traverse_tree(node):
+        nodes = [node]
+        for child in getattr(node, "children", []):
+            nodes.extend(_traverse_tree(child))
+        return nodes
+
+    executor = MultiThreadedExecutor()
+    executor.add_node(strategy_node)
+
+    bt_nodes = _traverse_tree(strategy_node.root)
+    seen = set()
+    unique_bt_nodes = []
+    for n in bt_nodes:
+        if id(n) not in seen:
+            seen.add(id(n))
+            unique_bt_nodes.append(n)
+
+    for n in unique_bt_nodes:
+        executor.add_node(n)
+
+    try:
+        executor.spin()
+    finally:
+        for n in unique_bt_nodes:
+            executor.remove_node(n)
+            n.destroy_node()
+        executor.shutdown()
+        strategy_node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
