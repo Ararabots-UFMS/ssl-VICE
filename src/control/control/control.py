@@ -1,7 +1,7 @@
 import rclpy
 from new_movement.entities.States import State, Vector2D
 from rclpy.node import Node
-
+from strategy.behaviour import TaskStatus
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
 from system_interfaces.msg import ControlCommand, GameState, RobotCommand, TeamCommand
@@ -14,7 +14,21 @@ from system_interfaces.srv import (
 
 )
 
+class CheckState(Node):
+    def __init__(self, desired_states):
+        super().__init__("check_state")
+        self.desired_states = desired_states
+        self.referee_command = None
+        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
 
+    def game_state_callback(self, msg: GameState):
+        self.referee_command = msg.referee.command
+
+    def is_desired_state(self):
+
+        if self.referee_command in self.desired_states:
+            return True
+    
 class Controller(Node):
     """Simplified controller node.
 
@@ -63,7 +77,22 @@ class Controller(Node):
         self.last_time = self.get_clock().now()
         self.create_timer(0.01, self.timer_callback)  # 100 Hz
 
+        #Referee Command
+        self.referee_command = None
+        commands = ['TIMEOUT_BLUE', 'TIMEOUT_YELLOW', 'HALT']
+        self.check_halt = CheckState(commands)
 
+    def halt_velocities(self):
+        if self.latest_command is not None:
+            for cmd in self.latest_command.command:
+                cmd.velocity_x = 0.0
+                cmd.velocity_y = 0.0
+
+    def reset_all_controllers(self):
+        for robot_id in list(self.robot_controller.trajectory_controllers.keys()):
+            self.robot_controller.reset_controller(robot_id)
+
+            
     def receive_command(self, msg: ControlCommand):
         self.latest_command = msg
 
@@ -105,7 +134,17 @@ class Controller(Node):
         if self.latest_command is None:
             return
 
-        # config is polled periodically in _poll_game_config
+        if self.check_halt.is_desired_state():
+            self.robot_controller.update_params(0.0, 0.0, 0.0)
+            self.halt_velocities()  
+            self.reset_all_controllers()  
+        else:
+            self.robot_controller.update_params(
+                self.robot_controller.default_kp,
+                self.robot_controller.default_ki,
+                self.robot_controller.default_kd
+            )
+        
 
         now = self.get_clock().now()
         dt = (now - self.last_time).nanoseconds / 1e9
@@ -164,12 +203,21 @@ class Controller(Node):
         return resp
 
     def update_kp_angular_callback(self, req, resp):
-        if req.kp >= 0:
-            self.orientation_controller.kp = req.kp
+        commands = ['TIMEOUT_BLUE', 'TIMEOUT_YELLOW','HALT']
+
+        if self.referee_command == None:
+            resp.success = False
+
+        if self.referee_command in commands:
+            self.orientation_controller.kp = 0.0 
             resp.success = True
         else:
-            resp.success = False
-        return resp
+            if req.kp >= 0:
+                self.orientation_controller.kp = req.kp
+                resp.success = True
+            else:
+                resp.success = False
+            return resp
 
     def update_kick_callback(self, req, resp):
         robot_id = int(req.id)
