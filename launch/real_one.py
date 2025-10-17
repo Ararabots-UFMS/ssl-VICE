@@ -22,18 +22,22 @@ def generate_launch_description():
                 package="new_movement",
                 executable="driver",
             ),
-            Node(
-                package="strategy",
-                executable="strategyNode",
-            ),
-            Node(
-                package="gui_interpreter",
-                executable="apiNode",
-            ),
+            # Node(
+            #     package="strategy",
+            #     executable="strategyNode",
+            # ),
+            # Node(
+            #     package="gui_interpreter",
+            #     executable="apiNode",
+            # ),
             Node(
                 package="referee",
                 executable="referee_node",
                 parameters=[{"forward_port": 10003, "verbose": False}],
+            ),
+            Node(
+                package="strategy_command_gui",
+                executable="strategy_gui"
             ),
             Node(
                 package="hardware_messenger",

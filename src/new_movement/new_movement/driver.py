@@ -14,6 +14,8 @@ from system_interfaces.msg import (
 )
 from system_interfaces.srv import StrategyCommand, UpdateObstacle
 
+from time import sleep
+
 import rclpy
 from rclpy.node import Node
 
@@ -67,6 +69,8 @@ class PathDriver(Node):
         self.game_state_sub = self.create_subscription(
             GameState, "game_state", self.game_state_callback, 10
         )
+        
+        sleep(1) # Gives time to game watcher update 
 
         self.driver_init()
 
@@ -139,7 +143,7 @@ class PathDriver(Node):
                 trajectory = robot_info.get("trajectory")
                 if trajectory is None:
                     continue
-
+ 
                 robotControlCommand = RobotControlCommand()
 
                 robotState = trajectory.get_state(robot_info["time_offset"])
@@ -148,9 +152,7 @@ class PathDriver(Node):
                     continue
 
                 robotControlCommand.id = int(robot_id)
-                robotControlCommand.position_x = float(
-                    robotState.position.x / 1000
-                )  # to m/s
+                robotControlCommand.position_x = float(robotState.position.x / 1000)
                 robotControlCommand.position_y = float(robotState.position.y / 1000)
                 robotControlCommand.velocity_x = float(robotState.velocity.x / 1000)
                 robotControlCommand.velocity_y = float(robotState.velocity.y / 1000)
