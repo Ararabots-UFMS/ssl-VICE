@@ -108,9 +108,9 @@ class OurFreekickAction(LeafNode):
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurFreekick(ally_robots=self.ally_robots, balls=self.balls, on_positive_half=self.on_positive_half)
+        executor = OurFreekick(ally_robots=self.ally_robots, ball=self.balls[0], on_positive_half=self.on_positive_half)
 
-        return TaskStatus.SUCCESS, executor.execute(ball=self.balls[0], goal_position=executor.goal_position)
+        return TaskStatus.SUCCESS, executor.execute()
 
 class TheirFreekickAction(LeafNode):
     def __init__(self, name):
@@ -147,13 +147,14 @@ class TheirFreekickAction(LeafNode):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.balls = msg.balls
 
     def run(self):
 
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = TheirFreekick(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = TheirFreekick(ally_robots=self.ally_robots, ball=self.balls[0], on_positive_half=self.on_positive_half)
 
         return TaskStatus.SUCCESS, executor.execute()
 
