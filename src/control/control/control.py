@@ -136,6 +136,9 @@ class Controller(Node):
 
         if self.check_halt.is_desired_state():
             self.robot_controller.update_params(0.0, 0.0, 0.0)
+            self.orientation_controller.kp = 0.0
+            for rid in self.ally_robots:
+                self.target_orientations[rid] = self.ally_robots[rid].orientation
             self.halt_velocities()  
             self.reset_all_controllers()  
         else:
@@ -144,6 +147,7 @@ class Controller(Node):
                 self.robot_controller.default_ki,
                 self.robot_controller.default_kd
             )
+            self.orientation_controller.kp = 2.5
         
 
         now = self.get_clock().now()
@@ -176,12 +180,15 @@ class Controller(Node):
             out = RobotCommand(robot_id=rid)
             out.linear_velocity_x = float(vel_cmd.x)
             out.linear_velocity_y = float(vel_cmd.y)
-            target_orientation = self.target_orientations.get(rid, cur.orientation)
-            out.angular_velocity = float(
-                self.orientation_controller.compute(
-                    target=target_orientation, current=cur.orientation
+            if self.check_halt.is_desired_state():
+                out.angular_velocity = 0.0
+            else:
+                target_orientation = self.target_orientations.get(rid, cur.orientation)
+                out.angular_velocity = float(
+                    self.orientation_controller.compute(
+                        target=target_orientation, current=cur.orientation
+                    )
                 )
-            )
             out.orientation = cur.orientation
             out.kick = float(self.kick_cache.get(rid, 0.0))
 
