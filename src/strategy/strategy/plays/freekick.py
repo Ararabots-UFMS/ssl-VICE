@@ -1,7 +1,7 @@
 from system_interfaces.msg._game_state import GameState
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
 from system_interfaces.srv import GetGameConfig
-from strategy.tatics.freekick import OurFreekick
+from strategy.tatics.freekick import OurFreekick, TheirFreekick
 
 
 class CheckState(LeafNode):
@@ -56,6 +56,9 @@ class CheckIfOurFreekick(LeafNode):
 
     def run(self):
 
+        if self.is_team_color_yellow is None:
+            return TaskStatus.RUNNING, None
+
         expected_cmd = "DIRECT_FREE_YELLOW" if self.is_team_color_yellow else "DIRECT_FREE_BLUE"
 
         if self.referee_command == expected_cmd:
@@ -98,15 +101,16 @@ class OurFreekickAction(LeafNode):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.balls = msg.balls
 
     def run(self):
 
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurKickoff(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = OurFreekick(ally_robots=self.ally_robots, balls=self.balls, on_positive_half=self.on_positive_half)
 
-        return TaskStatus.SUCCESS, executor.execute()
+        return TaskStatus.SUCCESS, executor.execute(ball=self.balls[0], goal_position=executor.goal_position)
 
 class TheirFreekickAction(LeafNode):
     def __init__(self, name):
@@ -149,7 +153,7 @@ class TheirFreekickAction(LeafNode):
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurFreekick(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = TheirFreekick(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
 
         return TaskStatus.SUCCESS, executor.execute()
 
@@ -173,7 +177,7 @@ class Freekick(Sequence):
 
         ours_or_theirs = Selector("OursOrTheirsFreeKick", [ours, action_theirs])
 
-        self.add_children([check_kickoff, ours_or_theirs])
+        self.add_children([check_freekick, ours_or_theirs])
 
 
     def run(self):
