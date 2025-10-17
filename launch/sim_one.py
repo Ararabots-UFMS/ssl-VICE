@@ -43,9 +43,5 @@ def generate_launch_description():
             #     package="strategy_command_gui",
             #     executable="strategy_gui"
             # ),
-            # Node(
-            #     package="hardware_messenger",
-            #     executable="hardware"
-            # )
         ]
     )
