@@ -30,10 +30,10 @@ def generate_launch_description():
                 package="strategy",
                 executable="strategyNode",
             ),
-            Node(
-                package="gui_interpreter",
-                executable="apiNode",
-            ),
+            # Node(
+            #     package="gui_interpreter",
+            #     executable="apiNode",
+            # ),
             Node(
                 package="referee",
                 executable="referee_node",
@@ -43,9 +43,5 @@ def generate_launch_description():
             #     package="strategy_command_gui",
             #     executable="strategy_gui"
             # ),
-            # Node(
-            #     package="hardware_messenger",
-            #     executable="hardware"
-            # )
         ]
     )
