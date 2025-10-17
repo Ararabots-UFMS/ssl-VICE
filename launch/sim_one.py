@@ -34,11 +34,11 @@ def generate_launch_description():
             #     package="gui_interpreter",
             #     executable="apiNode",
             # ),
-            # Node(
-            #     package="referee",
-            #     executable="referee_node",
-            #     parameters=[{"forward_port": 10003, "verbose": False}],
-            # ),
+            Node(
+                 package="referee",
+                 executable="referee_node",
+                 parameters=[{"forward_port": 10003, "verbose": False}],
+             ),
             Node(
                 package="strategy_command_gui",
                 executable="strategy_gui"

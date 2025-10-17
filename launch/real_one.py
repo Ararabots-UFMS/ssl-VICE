@@ -8,7 +8,6 @@ def generate_launch_description():
             Node(
                 package="vision",
                 executable="visionNode",
-                parameters=[{"ip": "224.5.23.2", "port": 10006, "verbose": False}],
             ),
             Node(
                 package="control_unit",
