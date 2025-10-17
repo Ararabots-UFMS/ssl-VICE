@@ -1,7 +1,7 @@
 from system_interfaces.msg._game_state import GameState
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
 from system_interfaces.srv import GetGameConfig
-from strategy.tatics.kickoff import OurKickoff
+from strategy.tatics.kickoff import OurKickoff, TheirKickoff
 
 
 class CheckState(LeafNode):
