@@ -22,13 +22,13 @@ def generate_launch_description():
                 executable="driver",
             ),
             Node(
-                package="strategy",
-                executable="strategyNode",
+                 package="strategy",
+                 executable="strategyNode",
             ),
-            Node(
-                package="gui_interpreter",
-                executable="apiNode",
-            ),
+            # Node(
+            #     package="gui_interpreter",
+            #     executable="apiNode",
+            # ),
             Node(
                 package="referee",
                 executable="referee_node",
@@ -36,7 +36,11 @@ def generate_launch_description():
             ),
             Node(
                 package="hardware_messenger",
-                executable="harware"
+                executable="hardware"
+            ),
+            Node(
+                package="strategy_command_gui",
+                executable="strategy_gui",
             )
         ]
     )
