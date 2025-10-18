@@ -9,8 +9,8 @@ import numpy as np
 DEFAULT_VELOCITY_CONSTRAINST = Vector2D(900, 900) # mm/s
 DEFAULT_ACCELERATION_CONSTRAINST = Vector2D(450, 450) # mm/s²
 
-NEAR_ACCELERATION_CONSTRAINST = Vector2D(1300, 1300) # #TODO Hardcoded, needs to get the max_output from control and take a little off
-NEAR_THRESHOLD = 250
+NEAR_ACCELERATION_CONSTRAINST = Vector2D(900, 900) # #TODO Hardcoded, needs to get the max_output from control and take a little off
+NEAR_THRESHOLD = 350
 
 class TrajectoryGenerator:
     def __init__(self, constrainsts: Optional[MoveConstraints] = None):
@@ -25,6 +25,7 @@ class TrajectoryGenerator:
     def generate(self, curState: State, tarState: State) -> TrajectorySegment:
         """Generates a piecewise constant acceleration motion path using the BB_Steer"""
 
+        # Is close enough to accelerate
         if(curState.position.distance(tarState.position) < NEAR_THRESHOLD):
             self.update_constrainsts(MoveConstraints(
                 DEFAULT_VELOCITY_CONSTRAINST, NEAR_ACCELERATION_CONSTRAINST
