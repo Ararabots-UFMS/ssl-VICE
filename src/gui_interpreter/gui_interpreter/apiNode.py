@@ -155,12 +155,12 @@ class APINode(Node):
         """Forward referee messages to the GUI."""
         data = todict(msg)
 
-        try:
-            cmd = data.get("command")
-            counter = data.get("command_counter")
-            self.get_logger().info(f"emit_referee_message: command={cmd} counter={counter}")
-        except Exception:
-            pass
+        # try:
+            # cmd = data.get("command")
+            # counter = data.get("command_counter")
+            # self.get_logger().info(f"emit_referee_message: command={cmd} counter={counter}")
+        # except Exception:
+            # pass
 
         payload = {
             "stage": data.get("stage"),

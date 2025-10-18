@@ -8,7 +8,9 @@ from typing import Optional, List, Union
 class TrajectorySegment:
     """Representa um único segmento contínuo de uma trajetória."""
 
-    def __init__(self, init_pos: Vector2D, init_vel: Vector2D, motion_path: MotionPath) -> None:
+    def __init__(
+        self, init_pos: Vector2D, init_vel: Vector2D, motion_path: MotionPath
+    ) -> None:
         self.init_pos = init_pos
         self.init_vel = init_vel
         self.motion_path = motion_path
@@ -29,18 +31,22 @@ class TrajectorySegment:
         ):
             self.child = child
         else:
-            raise Exception(f"Attempting to add a non continuous trajectory {local_destination.position.distance(child.init_pos)}")        
+            raise Exception(
+                f"Attempting to add a non continuous trajectory {local_destination.position.distance(child.init_pos)}"
+            )
 
     def get_state(self, t: float) -> State:
         """Get the State at a time t in path"""
         if self.get_total_duration() < t:
             return self.get_state(self.get_total_duration())
         if self.get_local_duration() >= t:
-            bb_integrate = integrate_t(self.init_pos + self.init_vel, self.motion_path.motion_path, t)
+            bb_integrate = integrate_t(
+                self.init_pos + self.init_vel, self.motion_path.motion_path, t
+            )
 
             return State(
                 position=Vector2D(bb_integrate[0], bb_integrate[1]),
-                velocity=Vector2D(bb_integrate[2], bb_integrate[3])
+                velocity=Vector2D(bb_integrate[2], bb_integrate[3]),
             )
         else:
             return self.child.get_state(t - self.get_local_duration())
@@ -54,7 +60,12 @@ class TrajectorySegment:
 
     def get_local_destination(self) -> State:
         """Obtém o estado final apenas deste segmento local."""
-        initial_state_tuple = (self.init_pos.x, self.init_pos.y, self.init_vel.x, self.init_vel.y)
+        initial_state_tuple = (
+            self.init_pos.x,
+            self.init_pos.y,
+            self.init_vel.x,
+            self.init_vel.y,
+        )
         bb_integrate = integrate(initial_state_tuple, self.motion_path.motion_path)
         return State(
             position=Vector2D(bb_integrate[0], bb_integrate[1]),
@@ -82,6 +93,7 @@ class TrajectorySegment:
             total_time += self.child.get_total_duration()
         return total_time
 
+
 class Trajectory:
     """Gerencia uma sequência de TrajectorySegments."""
 
@@ -104,7 +116,7 @@ class Trajectory:
         else:
             self.tail.add_child(segment)
             self.tail = segment
-            
+
     def connect(self, new_segment: TrajectorySegment, t: float) -> None:
         """
         Divide a trajetória em um tempo t e conecta um novo segmento,
@@ -112,7 +124,9 @@ class Trajectory:
         """
         total_duration = self.get_total_duration()
         if self.root is None or t > total_duration or t < 0:
-            raise ValueError(f"Tempo de conexão fora dos limites da trajetória. {t, total_duration}")
+            raise ValueError(
+                f"Tempo de conexão fora dos limites da trajetória. {t, total_duration}"
+            )
 
         # REFACTOR (BUG FIX): Lógica de busca de segmento e truncamento corrigida.
         current_segment = self.root
@@ -180,7 +194,9 @@ class Trajectory:
         Deve ser fornecido `time_step` OU `samples_size`.
         """
         if (time_step is not None) == (samples_size is not None):
-            raise ValueError("Defina `time_step` ou `samples_size`, mas não ambos ou nenhum.")
+            raise ValueError(
+                "Defina `time_step` ou `samples_size`, mas não ambos ou nenhum."
+            )
 
         if self.root is None:
             return []
@@ -194,17 +210,25 @@ class Trajectory:
             return [initial_state] if output_states else [initial_state.position]
 
         if samples_size is not None:
-            time_step = total_time / (samples_size - 1) if samples_size > 1 else total_time
+            time_step = (
+                total_time / (samples_size - 1) if samples_size > 1 else total_time
+            )
 
         cur_time = 0.0
         # REFACTOR (BUG FIX): Lógica de loop e amostragem robusta.
         while cur_time < total_time:
-            item = self.get_state(cur_time) if output_states else self.get_position(cur_time)
+            item = (
+                self.get_state(cur_time)
+                if output_states
+                else self.get_position(cur_time)
+            )
             traj_list.append(item)
             cur_time += time_step
 
         # Garante que o ponto final exato seja sempre incluído
         destination_state = self.get_destination()
-        traj_list.append(destination_state if output_states else destination_state.position)
+        traj_list.append(
+            destination_state if output_states else destination_state.position
+        )
 
         return traj_list
