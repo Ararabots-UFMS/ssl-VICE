@@ -136,40 +136,41 @@ class Strategy(Node):
             )
 
 
+def _traverse_tree(node):
+    nodes = [node]
+    for child in getattr(node, "children", []):
+        nodes.extend(_traverse_tree(child))
+    return nodes
+
+
 def main(args=None):
     rclpy.init(args=args)
     strategy_node = Strategy(wait_for_service=True)
-
-    def _traverse_tree(node):
-        nodes = [node]
-        for child in getattr(node, "children", []):
-            nodes.extend(_traverse_tree(child))
-        return nodes
 
     executor = MultiThreadedExecutor()
     executor.add_node(strategy_node)
 
     bt_nodes = _traverse_tree(strategy_node.root)
-    seen = set()
-    unique_bt_nodes = []
     for n in bt_nodes:
-        if id(n) not in seen:
-            seen.add(id(n))
-            unique_bt_nodes.append(n)
-
-    for n in unique_bt_nodes:
-        executor.add_node(n)
+        if isinstance(n, Node):
+            executor.add_node(n)
 
     try:
         executor.spin()
+    except KeyboardInterrupt:
+        pass
     finally:
-        for n in unique_bt_nodes:
-            executor.remove_node(n)
-            n.destroy_node()
-        executor.shutdown()
+        for n in bt_nodes:
+            if isinstance(n, Node):
+                executor.remove_node(n)
+                n.destroy_node()
+
+        executor.remove_node(strategy_node)
         strategy_node.destroy_node()
+        executor.shutdown()
         if rclpy.ok():
             rclpy.shutdown()
+
 
 
 if __name__ == "__main__":

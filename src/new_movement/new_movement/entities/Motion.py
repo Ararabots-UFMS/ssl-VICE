@@ -3,10 +3,11 @@ from dataclasses import dataclass
 from new_movement.entities.States import Vector2D
 from typing import Tuple
 
+
 @dataclass
 class MotionPrimitive:
     acceleration: Vector2D
-    duration: float # seconds
+    duration: float  # seconds
 
     def __getitem__(self, index):
         if index == 0:
@@ -30,11 +31,11 @@ class MotionPath:
         # CODIGO EXTREMAMENTE MACACO
         if t <= 0:
             return MotionPath([]), MotionPath(self.motion_path)
-        
+
         total_time = sum(primitive.duration for primitive in self.motion_path)
         if t >= total_time:
             return MotionPath(self.motion_path), MotionPath([])
-        
+
         elapsed_time = 0.0
         first_path: list[MotionPrimitive] = []
         second_path: list[MotionPrimitive] = []
@@ -45,8 +46,14 @@ class MotionPath:
                 elapsed_time += primitive.duration
             else:
                 remaining_time = t - elapsed_time
-                first_path.append(MotionPrimitive(primitive.acceleration, remaining_time))
-                second_path.append(MotionPrimitive(primitive.acceleration, primitive.duration - remaining_time))
+                first_path.append(
+                    MotionPrimitive(primitive.acceleration, remaining_time)
+                )
+                second_path.append(
+                    MotionPrimitive(
+                        primitive.acceleration, primitive.duration - remaining_time
+                    )
+                )
                 break
 
         elapsed_time = 0.0
@@ -55,8 +62,7 @@ class MotionPath:
                 second_path.append(primitive)
             elapsed_time += primitive.duration
 
-        return MotionPath(first_path), MotionPath(second_path) 
-
+        return MotionPath(first_path), MotionPath(second_path)
 
     def truncate(self, t: float) -> None:
         """
