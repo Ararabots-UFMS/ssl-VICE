@@ -126,7 +126,7 @@ class Atack:
 
         robot_command.field_border = True
         robot_command.ball = True
-        robot_command.ally_ids = list(self.ally_robots.keys())
+        robot_command.ally_ids = [0]
         robot_command.penalty_area = True
         robot_command.deactivate_kick()
 
@@ -156,7 +156,7 @@ class Atack:
 
         robot_command.ball = False
         robot_command.field_border = True
-        robot_command.ally_ids = list(self.ally_robots.keys())
+        robot_command.ally_ids = [0]
         robot_command.penalty_area = True
 
         if self.on_positive_half:
