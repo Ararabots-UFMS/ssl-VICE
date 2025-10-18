@@ -14,7 +14,7 @@ from system_interfaces.srv import (
 
 )
 
-
+    
 class Controller(Node):
     """Simplified controller node.
 
@@ -24,14 +24,13 @@ class Controller(Node):
 
     def __init__(self):
         super().__init__("controller")
-        # information about the game state
-        self.referee_command = None  
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
-        
+
+        self._desired_states = ['TIMEOUT_BLUE', 'TIMEOUT_YELLOW', 'HALT']
+
         # Caches
         self.ally_robots = {}
         self.latest_command = None
-
+        self.is_halt = None
         # Low-frequency config (polled periodically)
         self.is_team_color_yellow = False
         self.is_field_side_left = False
@@ -65,6 +64,9 @@ class Controller(Node):
         self.last_time = self.get_clock().now()
         self.create_timer(0.01, self.timer_callback)  # 100 Hz
 
+        #Referee Command
+        self.referee_command = None
+        
 
     def receive_command(self, msg: ControlCommand):
         self.latest_command = msg
@@ -107,8 +109,6 @@ class Controller(Node):
         if self.latest_command is None:
             return
 
-        # config is polled periodically in _poll_game_config
-
         now = self.get_clock().now()
         dt = (now - self.last_time).nanoseconds / 1e9
         self.last_time = now
@@ -132,19 +132,28 @@ class Controller(Node):
                 Vector2D(desired.velocity_x, desired.velocity_y),
             )
 
-            vel_cmd = self.robot_controller.compute_trajectory_command(
-                rid, tgt_state, cur_state, dt
-            )
+    
+
+            if self.is_halt:
+                vel_cmd = Vector2D(0, 0)
+            else:
+                vel_cmd = self.robot_controller.compute_trajectory_command(
+                    rid, tgt_state, cur_state, dt
+                )
 
             out = RobotCommand(robot_id=rid)
             out.linear_velocity_x = float(vel_cmd.x)
             out.linear_velocity_y = float(vel_cmd.y)
-            target_orientation = self.target_orientations.get(rid, cur.orientation)
-            out.angular_velocity = float(
-                self.orientation_controller.compute(
-                    target=target_orientation, current=cur.orientation
+            if self.is_halt:
+                out.angular_velocity = 0.0
+            else:
+                target_orientation = self.target_orientations.get(rid, cur.orientation)
+                out.angular_velocity = float(
+                    self.orientation_controller.compute(
+                        target=target_orientation, current=cur.orientation
+                    )
                 )
-            )
+                
             out.orientation = cur.orientation
             out.kick = float(self.kick_cache.get(rid, 0.0))
 
@@ -185,9 +194,12 @@ class Controller(Node):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
-        self.referee_command = msg.referee.command  
+        self.referee_command = msg.referee.command
+        self.is_halt = True if self.referee_command in self._desired_states else False
+
 
 def main(args=None):
+    commands = ['TIMEOUT_BLUE', 'TIMEOUT_YELLOW', 'HALT']
     rclpy.init(args=args)
     node = Controller()
     rclpy.spin(node)
