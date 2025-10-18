@@ -1,30 +1,13 @@
 from new_movement.entities.States import Vector2D
-from math import atan2, hypot, radians, pi
+from math import atan2, hypot
 
 from strategy.skills.skills import Skills
+from strategy.tatics.goalkeeper import Goalkeeper
 
 
 class CenterGoal:
     GOAL_POSITIVE = Vector2D(2250.0, 0.0)
     GOAL_NEGATIVE = Vector2D(-2250.0, 0.0)
-
-
-class GoalkeeperKickoff:
-    def __init__(self):
-        self.name = "GoalkeeperKickoff"
-        self.skills_factory = Skills("Movement")
-
-    def execute(self, goal_position: Vector2D, ball, angle: float):
-        robot_command = self.skills_factory.move_with_angle(
-            robot_id=0,
-            target_x=goal_position.x,
-            target_y=max(-400, min(400, ball.position_y)),
-            vel_x=0.0,
-            vel_y=0.0,
-            angle=angle,
-        )
-        robot_command.field_border = True
-        return robot_command
 
 
 class Atack:
@@ -36,7 +19,6 @@ class Atack:
         self.ally_robots = ally_robots
         self.ball = ball
         self.kick_threshold = 1500.0
-
         if self.on_positive_half:
             self.gk_angle = 3.14159
             self.gk_target = self.goal_center.GOAL_POSITIVE
@@ -207,10 +189,11 @@ class Atack:
     def execute(self):
         robots_commands = []
 
+        # comportamento do goleiro: usar a classe Goalkeeper para remover a bola da área caso necessário
         if 0 in self.ally_robots:
-            robots_commands.append(
-                GoalkeeperKickoff().execute(self.gk_target, self.ball, self.gk_angle)
-            )
+            gk_info = self.ally_robots[0]
+            gk = Goalkeeper(gk_info, self.ball, self.on_positive_half)
+            robots_commands.append(gk.execute(self.gk_target, self.ball))
 
         for robot_id_, _ in self.ally_robots.items():
             if robot_id_ == 0:
@@ -246,9 +229,9 @@ class Defense:
         robots_commands = []
 
         if 0 in self.ally_robots:
-            robots_commands.append(
-                GoalkeeperKickoff().execute(self.gk_target, self.ball, self.angle)
-            )
+            gk_info = self.ally_robots[0]
+            gk = Goalkeeper(gk_info, self.ball, self.on_positive_half)
+            robots_commands.append(gk.execute(self.gk_target, self.ball))
 
         for robot_id_, _ in self.ally_robots.items():
             if robot_id_ == 0:
