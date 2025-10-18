@@ -8,17 +8,16 @@ class CenterGoal:
     GOAL_POSITIVE = Vector2D(2250.0, 0.0)
     GOAL_NEGATIVE = Vector2D(-2250.0, 0.0)
 
-
 class GoalkeeperKickoff:
     def __init__(self):
         self.name = "GoalkeeperKickoff"
         self.skills_factory = Skills("Movement")
 
-    def execute(self, goal_position: Vector2D, angle: float):
+    def execute(self, goal_position: Vector2D, ball, angle: float):
         robot_command = self.skills_factory.move_with_angle(
             robot_id=0,
             target_x=goal_position.x,
-            target_y=goal_position.y,
+            target_y=max(-400, min(400, ball.position_y)),
             vel_x=0.0,
             vel_y=0.0,
             angle=angle,
@@ -102,6 +101,7 @@ class Atack:
 
         robot_command.field_border = True
         robot_command.ball = True
+        robot_command.ally_ids = list(self.ally_robots.keys())
         robot_command.penalty_area = True
 
         return robot_command
@@ -149,6 +149,7 @@ class Atack:
 
         robot_command.field_border = True
         robot_command.ball = False
+        robot_command.ally_ids = list(self.ally_robots.keys())
         robot_command.penalty_area = True
 
         robot_can_kick = self._can_kick()
@@ -193,7 +194,7 @@ class Atack:
 
         if 0 in self.ally_robots:
             robots_commands.append(
-                GoalkeeperKickoff().execute(self.gk_target, self.gk_angle)
+                GoalkeeperKickoff().execute(self.gk_target, self.ball, self.gk_angle)
             )
 
         for robot_id_, _ in self.ally_robots.items():
@@ -234,7 +235,7 @@ class Defense:
 
         if 0 in self.ally_robots:
             robots_commands.append(
-                GoalkeeperKickoff().execute(self.gk_target, self.angle)
+                GoalkeeperKickoff().execute(self.gk_target, self.ball, self.angle)
             )
 
         for robot_id_, _ in self.ally_robots.items():
