@@ -89,6 +89,7 @@ class AtackAction(LeafNode):
     def __init__(self, name):
         super().__init__(name)
         self.ally_robots = None
+        self.enemy_robots = None
         self.on_positive_half = None
         self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
         self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
@@ -97,6 +98,7 @@ class AtackAction(LeafNode):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.enemy_robots = {r.id: r for r in msg.enemy_robots}
 
         try:
             self.ball = msg.balls[0]
@@ -136,6 +138,7 @@ class AtackAction(LeafNode):
 
         atacker = Atack(
             ally_robots=self.ally_robots,
+            enemy_robots=self.enemy_robots,
             ball=self.ball,
             on_positive_half=self.on_positive_half,
         )
@@ -147,6 +150,7 @@ class DefenseAction(LeafNode):
     def __init__(self, name):
         super().__init__(name)
         self.ally_robots = None
+        self.enemy_robots = None
         self.on_positive_half = None
         self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
         self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
@@ -155,6 +159,7 @@ class DefenseAction(LeafNode):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.enemy_robots = {r.id: r for r in msg.enemy_robots}
 
         try:
             self.ball = msg.balls[0]
@@ -192,13 +197,14 @@ class DefenseAction(LeafNode):
         ):
             return TaskStatus.RUNNING, None
 
-        defensor = Defense(
+        atacker = Atack(
             ally_robots=self.ally_robots,
+            enemy_robots=self.enemy_robots,
             ball=self.ball,
             on_positive_half=self.on_positive_half,
         )
 
-        return TaskStatus.SUCCESS, defensor.execute()
+        return TaskStatus.SUCCESS, atacker.execute()
 
 
 class NormalStart(Sequence):
