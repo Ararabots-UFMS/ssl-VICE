@@ -43,7 +43,7 @@ class ObstacleFactory:
         if request.ball and balls:
             ball = balls[0]  # getting the first ball, maybe revise that...
             obstacles.append(
-                GenericCircleObstacle(Vector2D(ball.position_x, ball.position_y), 60)
+                GenericCircleObstacle(Vector2D(ball.position_x, ball.position_y), 150)
             )  # Ball radius 50mm + 10mm (safety)
 
         for enemy_id in request.enemy_ids:

@@ -1,12 +1,11 @@
 from strategy.behaviour import Selector
 
 
-# from strategy.coach.freekick import FreeKick
-from strategy.plays.halt import Halt
+# from strategy.coach.freekick import FreeKick  
 # from strategy.coach.kickoff import Kickoff
 # from strategy.coach.penalty import Penalty
 from strategy.plays.freekick import Freekick
-# from strategy.coach.halt import Halt
+from strategy.plays.halt import Halt
 from strategy.plays.kickoff import Kickoff
 # from strategy.coach.penalty import Penalty
 from strategy.plays.stop import Stop
