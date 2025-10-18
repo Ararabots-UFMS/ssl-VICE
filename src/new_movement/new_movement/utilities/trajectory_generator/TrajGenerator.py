@@ -26,9 +26,13 @@ class TrajectoryGenerator:
         """Generates a piecewise constant acceleration motion path using the BB_Steer"""
 
         if(curState.position.distance(tarState.position) < NEAR_THRESHOLD):
-            self.update_constrainsts(DEFAULT_VELOCITY_CONSTRAINST, NEAR_ACCELERATION_CONSTRAINST)
+            self.update_constrainsts(MoveConstraints(
+                DEFAULT_VELOCITY_CONSTRAINST, NEAR_ACCELERATION_CONSTRAINST
+            ))
         else:
-            self.update_constrainsts(DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST)
+            self.update_constrainsts(MoveConstraints(
+                DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST
+            ))
 
         bb_output = bb_steer(
             curState.position + curState.velocity,
