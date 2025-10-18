@@ -62,6 +62,7 @@ class PathDriver(Node):
 
         # Robot data dictionary: id -> {trajectory, time_offset, obstacles}
         self.robot_data: dict[int, dict] = {}
+        self.last_command = {}
 
         self.last_time = self.get_clock().now()
 
@@ -94,7 +95,16 @@ class PathDriver(Node):
                         Vector2D(cur_robot.velocity_x, cur_robot.velocity_y),
                     )
 
-                    init_trajectory = self.planner.find(cur_state, cur_state, [])
+                    # Check if there is a last command for this robot
+                    if id in self.last_command:
+                        last_cmd = self.last_command[id]
+                        target_state = State(
+                            Vector2D(last_cmd.position_x, last_cmd.position_y),
+                            Vector2D(last_cmd.velocity_x, last_cmd.velocity_y),
+                        )
+                        init_trajectory = self.planner.find(cur_state, target_state, [])
+                    else:
+                        init_trajectory = self.planner.find(cur_state, cur_state, [])
 
                     self.robot_data[id] = {
                         "trajectory": init_trajectory,
@@ -329,6 +339,8 @@ class PathDriver(Node):
         if request.id not in self.robot_data:
             response.success = False
             return response
+
+        self.last_command[request.id] = request
 
         new_destination: State = State(
             Vector2D(request.position_x, request.position_y),
