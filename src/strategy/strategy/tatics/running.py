@@ -1,5 +1,5 @@
 from new_movement.entities.States import Vector2D
-from math import atan2, hypot
+from math import atan2, hypot, radians, pi
 
 from strategy.skills.skills import Skills
 
@@ -14,11 +14,11 @@ class GoalkeeperKickoff:
         self.name = "GoalkeeperKickoff"
         self.skills_factory = Skills("Movement")
 
-    def execute(self, goal_position: Vector2D, angle: float):
+    def execute(self, goal_position: Vector2D, ball, angle: float):
         robot_command = self.skills_factory.move_with_angle(
             robot_id=0,
             target_x=goal_position.x,
-            target_y=goal_position.y,
+            target_y=max(-400, min(400, ball.position_y)),
             vel_x=0.0,
             vel_y=0.0,
             angle=angle,
@@ -35,7 +35,7 @@ class Atack:
         self.on_positive_half = on_positive_half
         self.ally_robots = ally_robots
         self.ball = ball
-        self.kick_threshold = 1125.0
+        self.kick_threshold = 1500.0
 
         if self.on_positive_half:
             self.gk_angle = 3.14159
@@ -88,27 +88,15 @@ class Atack:
         angle = atan2(dy, dx)
         return angle
 
-    def _go_to_ball(self, robot_id):
-        angle = self._get_angle_to_ball(robot_id)
-
-        robot_command = self.skills_factory.move_with_angle(
-            robot_id=robot_id,
-            target_x=self.ball.position_x,
-            target_y=self.ball.position_y,
-            vel_x=0.0,
-            vel_y=0.0,
-            angle=angle,
-        )
-
-        robot_command.field_border = True
-        robot_command.ball = True
-        robot_command.penalty_area = True
-
-        return robot_command
-
     def _go_to_goal(self, robot_id):
-        """
-        Go to a point behind the ball (relative to the opponent goal) and push through it.
+        """Dispatcher: decide se o robô deve posicionar atrás da bola (stage)
+        ou avançar para empurrar a bola para o gol.
+
+        - _go_to_ball: vai até atrás da bola e se alinha; trata a bola como
+          obstáculo (robot_command.ball = True) enquanto posiciona.
+        - _do_push: vai para a frente da bola e empurra; permite interação
+          com a bola (robot_command.ball = False) e ativa o kicker quando
+          aplicável.
         """
         bx, by = self.ball.position_x, self.ball.position_y
         gx, gy = self.attack_goal.x, self.attack_goal.y
@@ -116,26 +104,62 @@ class Atack:
         norm = hypot(dx, dy) or 1.0
         ux, uy = dx / norm, dy / norm
 
-        behind_dist = 250.0
+        behind_dist = 70.0
         stage_x = bx - ux * behind_dist
         stage_y = by - uy * behind_dist
 
-        # Choose stage vs push target
         rx = ry = None
         for rid, robot_info in self.ally_robots.items():
             if rid == robot_id:
                 rx, ry = robot_info.position_x, robot_info.position_y
                 break
 
-        target_x, target_y = stage_x, stage_y
-        if rx is not None:
-            dist_to_stage = hypot(rx - stage_x, ry - stage_y)
-            dist_to_ball = hypot(rx - bx, ry - by)
-            if dist_to_stage < 120.0 or dist_to_ball < 180.0:
-                target_x = bx + ux * 220.0
-                target_y = by + uy * 220.0
+        # distância até stage/bola
+        dist_to_stage = hypot(rx - stage_x, ry - stage_y) if rx is not None else float("inf")
+        dist_to_ball = hypot(rx - bx, ry - by) if rx is not None else float("inf")
 
-        # Orient along ball->goal line
+        # Se estiver perto o suficiente do stage ou da bola, faça o push,
+        # caso contrário aproxime-se e alinhe-se atrás da bola.
+        if dist_to_stage < 230.0 or dist_to_ball < 230.0:
+            return self._do_push(robot_id, bx, by, ux, uy, dx, dy)
+        else:
+            return self._go_to_ball(robot_id, stage_x, stage_y, dx, dy)
+
+    def _go_to_ball(self, robot_id, stage_x, stage_y, dx, dy):
+        """
+        Aproxima-se do ponto 'atrás da bola' e alinha-se na direção do gol.
+        Enquanto posiciona, a bola é tratada como obstáculo (ball=False) para
+        evitar comandos de empurrão prematuros.
+        """
+        angle = atan2(dy, dx)
+
+        robot_command = self.skills_factory.move_with_angle(
+            robot_id=robot_id,
+            target_x=stage_x,
+            target_y=stage_y,
+            vel_x=0.0,
+            vel_y=0.0,
+            angle=angle,
+        )
+
+        robot_command.field_border = True
+        robot_command.ball = True
+        robot_command.ally_ids = list(self.ally_robots.keys())
+        robot_command.penalty_area = True
+        robot_command.deactivate_kick()
+
+        return robot_command
+
+    def _do_push(self, robot_id, bx, by, ux, uy, dx, dy):
+        """
+        Avança à frente da bola (na direção do gol) e empurra.
+        Permite interação com a bola (ball=True) e ativa o kicker quando
+        a condição de chute é satisfeita.
+        """
+        push_dist = 220.0
+        target_x = bx + ux * push_dist
+        target_y = by + uy * push_dist
+
         angle = atan2(dy, dx)
 
         robot_command = self.skills_factory.move_with_angle(
@@ -147,42 +171,34 @@ class Atack:
             angle=angle,
         )
 
-        robot_command.field_border = True
+
         robot_command.ball = False
+        robot_command.field_border = True
+        robot_command.ally_ids = list(self.ally_robots.keys())
         robot_command.penalty_area = True
 
-        robot_can_kick = self._can_kick()
+        if self.on_positive_half:
+            for rid, robot_info in self.ally_robots.items():
+                if self.ball.position_x > robot_info.position_x and rid == robot_id:
+                    robot_command.ball = True
+        else:
+            for rid, robot_info in self.ally_robots.items():
+                if self.ball.position_x < robot_info.position_x and rid == robot_id:
+                    robot_command.ball = True
 
-        if robot_can_kick:
+        if self._can_kick():
             robot_command.activate_kick()
         else:
             robot_command.deactivate_kick()
 
         return robot_command
 
-    def _robot_close_to_ball(self, robot_id) -> bool:
-        distance = 200
 
-        ball_pos = Vector2D(self.ball.position_x, self.ball.position_y)
-
-        robot_pos = None
-        for robot_id_, robot_info in self.ally_robots.items():
-            if robot_id_ == robot_id:
-                robot_pos = Vector2D(robot_info.position_x, robot_info.position_y)
-                break
-
-        if robot_pos is not None and robot_pos.distance(ball_pos) < distance:
-            return True
-
-        return False
 
     def _robot_is_stable(self, robot_id) -> bool:
         for robot_id_, robot_info in self.ally_robots.items():
             if robot_id_ == robot_id:
-                if (
-                    abs(robot_info.velocity_x) < 25
-                    and abs(robot_info.velocity_y) < 25
-                ):
+                if abs(robot_info.velocity_x) < 25 and abs(robot_info.velocity_y) < 25:
                     return True
                 break
 
@@ -193,19 +209,16 @@ class Atack:
 
         if 0 in self.ally_robots:
             robots_commands.append(
-                GoalkeeperKickoff().execute(self.gk_target, self.gk_angle)
+                GoalkeeperKickoff().execute(self.gk_target, self.ball, self.gk_angle)
             )
 
         for robot_id_, _ in self.ally_robots.items():
             if robot_id_ == 0:
                 continue
 
-            robot_close_to_ball = self._robot_close_to_ball(robot_id_)
+            command = self._go_to_goal(robot_id=robot_id_)
 
-            if robot_close_to_ball:
-                robots_commands.append(self._go_to_goal(robot_id=robot_id_))
-            else:
-                robots_commands.append(self._go_to_ball(robot_id=robot_id_))
+            robots_commands.append(command)
 
         return robots_commands
 
@@ -234,7 +247,7 @@ class Defense:
 
         if 0 in self.ally_robots:
             robots_commands.append(
-                GoalkeeperKickoff().execute(self.gk_target, self.angle)
+                GoalkeeperKickoff().execute(self.gk_target, self.ball, self.angle)
             )
 
         for robot_id_, _ in self.ally_robots.items():
@@ -259,8 +272,8 @@ class Defense:
                 angle=self.angle,
             )
 
+            robot_command.ball = True
             robot_command.field_border = True
-            robot_command.ball = False
             robot_command.penalty_area = True
 
             robots_commands.append(robot_command)
