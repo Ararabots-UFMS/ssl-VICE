@@ -192,13 +192,13 @@ class DefenseAction(LeafNode):
         ):
             return TaskStatus.RUNNING, None
 
-        defensor = Defense(
+        atacker = Atack(
             ally_robots=self.ally_robots,
             ball=self.ball,
             on_positive_half=self.on_positive_half,
         )
 
-        return TaskStatus.SUCCESS, defensor.execute()
+        return TaskStatus.SUCCESS, atacker.execute()
 
 
 class NormalStart(Sequence):
