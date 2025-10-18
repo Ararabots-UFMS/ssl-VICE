@@ -1,6 +1,7 @@
 from rclpy.node import Node
 import rclpy
 import serial
+import math
 
 from system_interfaces.msg import TeamCommand
 
@@ -29,6 +30,27 @@ class HardwarePublisher(Node):
         self.timer = self.create_timer(
             1 / 120, self.publish_command
         )  # publish to serial at 120Hz
+
+    def _global_to_local_velocity(self, global_vx: float, global_vy: float, orientation: float) -> tuple:
+        """Convert global frame velocities to local (robot frame) velocities.
+        
+        Args:
+            global_vx: Velocity in global X direction (m/s)
+            global_vy: Velocity in global Y direction (m/s)
+            orientation: Robot orientation in radians
+            
+        Returns:
+            Tuple of (local_vx, local_vy) in robot frame
+        """
+        # Rotation matrix: R^T = R(-orientation)
+        cos_theta = math.cos(orientation)
+        sin_theta = math.sin(orientation)
+        
+        # Local velocity = R^T * global_velocity
+        local_vx = global_vx * cos_theta + global_vy * sin_theta
+        local_vy = -global_vx * sin_theta + global_vy * cos_theta
+        
+        return local_vx, local_vy
 
     def encode_command(self, robot_id, vx, vy, angular_speed, angle, kick_front):
         """ Encode command in binary format compatible with RobotCommand.decodeCommand() """
@@ -71,10 +93,17 @@ class HardwarePublisher(Node):
         self._command = bytearray()
 
         for robot in command.robots:
+            # Convert global velocities to local (robot frame) velocities
+            local_vx, local_vy = self._global_to_local_velocity(
+                robot.linear_velocity_x,
+                robot.linear_velocity_y,
+                robot.orientation
+            )
+
             robot_command = self.encode_command(
                 robot.robot_id,
-                int(robot.linear_velocity_x * 1000),
-                int(-robot.linear_velocity_y * 1000),
+                int(-local_vx * 1000),
+                int(-local_vy * 1000),
                 int(-robot.angular_velocity * 1000),
                 int(robot.orientation * 1000),
                 int(robot.kick),

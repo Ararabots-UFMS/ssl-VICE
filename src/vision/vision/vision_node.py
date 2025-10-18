@@ -81,10 +81,10 @@ class Vision(Node):
             if data is None:
                 return  # no packet available now
 
-            self.tracker.update(data)
-
             if data.HasField("geometry"):
                 self.publish_geometry(data.geometry)
+            else:
+                self.tracker.update(data)
 
             if self.verbose:
                 self.get_logger().info(text_format.MessageToString(data))
