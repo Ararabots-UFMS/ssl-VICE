@@ -37,7 +37,7 @@ class PathDriver(Node):
         self.trajectory_publisher = self.create_publisher(
             TrajectoryMessage, "trajectory_topic", 10
         )
-        self.trajectory_timer = self.create_timer(0.5, self.publish_trajectories_safe)
+        self.trajectory_timer = self.create_timer(0.1, self.publish_trajectories_safe)
 
         # Update Target Service
         self.planner = Planner(50, 100)
