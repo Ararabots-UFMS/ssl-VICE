@@ -1,7 +1,7 @@
 import rclpy
 from new_movement.entities.States import State, Vector2D
 from rclpy.node import Node
-
+from strategy.behaviour import TaskStatus
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
 from system_interfaces.msg import ControlCommand, GameState, RobotCommand, TeamCommand
@@ -45,7 +45,7 @@ class Controller(Node):
 
         # Controllers
         self.robot_controller = RobotTrajectoryController()
-        self.orientation_controller = PController(kp=2.5, max_output=4.0)
+        self.orientation_controller = PController(kp=0.5, max_output=1.0)
         self.target_orientations = {}
 
         # ROS Interfaces
@@ -68,6 +68,17 @@ class Controller(Node):
         self.referee_command = None
         
 
+    def halt_velocities(self):
+        if self.latest_command is not None:
+            for cmd in self.latest_command.command:
+                cmd.velocity_x = 0.0
+                cmd.velocity_y = 0.0
+
+    def reset_all_controllers(self):
+        for robot_id in list(self.robot_controller.trajectory_controllers.keys()):
+            self.robot_controller.reset_controller(robot_id)
+
+            
     def receive_command(self, msg: ControlCommand):
         self.latest_command = msg
 
@@ -108,6 +119,22 @@ class Controller(Node):
     def timer_callback(self):
         if self.latest_command is None:
             return
+
+        if self.check_halt.is_desired_state():
+            self.robot_controller.update_params(0.0, 0.0, 0.0)
+            self.orientation_controller.kp = 0.0
+            for rid in self.ally_robots:
+                self.target_orientations[rid] = self.ally_robots[rid].orientation
+            self.halt_velocities()  
+            self.reset_all_controllers()  
+        else:
+            self.robot_controller.update_params(
+                self.robot_controller.default_kp,
+                self.robot_controller.default_ki,
+                self.robot_controller.default_kd
+            )
+            self.orientation_controller.kp = 2.5
+        
 
         now = self.get_clock().now()
         dt = (now - self.last_time).nanoseconds / 1e9
@@ -176,12 +203,21 @@ class Controller(Node):
         return resp
 
     def update_kp_angular_callback(self, req, resp):
-        if req.kp >= 0:
-            self.orientation_controller.kp = req.kp
+        commands = ['TIMEOUT_BLUE', 'TIMEOUT_YELLOW','HALT']
+
+        if self.referee_command == None:
+            resp.success = False
+
+        if self.referee_command in commands:
+            self.orientation_controller.kp = 0.0 
             resp.success = True
         else:
-            resp.success = False
-        return resp
+            if req.kp >= 0:
+                self.orientation_controller.kp = req.kp
+                resp.success = True
+            else:
+                resp.success = False
+            return resp
 
     def update_kick_callback(self, req, resp):
         robot_id = int(req.id)

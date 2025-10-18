@@ -23,7 +23,7 @@ class Vision(Node):
         # Parameters settings.
         self.declare_parameter("ip", "224.5.23.2")
         # Visão real
-        #self.declare_parameter("port", 10006)
+        # self.declare_parameter("port", 10006)
         # Grsim
         self.declare_parameter('port', 10020)
         self.declare_parameter("verbose", False)
@@ -116,8 +116,34 @@ class Vision(Node):
     def publish_vision(self):
         message = wrap_message(self.tracker.objects)
 
+        # Validate message before publishing (catch garbage/overflow)
+        if not self._is_valid_vision_message(message):
+            self.get_logger().warn("Skipping invalid vision message")
+            return
+
         if self.context.ok():
             self.publisher.publish(message)
+
+    def _is_valid_vision_message(self, message: VisionMessage) -> bool:
+        """Check if vision message contains reasonable data"""
+        max_reasonable_pos = 10000.0  # 10m in mm
+        
+        for robot in list(message.yellow_robots) + list(message.blue_robots):
+            if (
+                abs(robot.position_x) > max_reasonable_pos
+                or abs(robot.position_y) > max_reasonable_pos
+            ):
+                self.get_logger().warn(
+                    f"Invalid robot position detected: ({robot.position_x}, {robot.position_y})"
+                )
+                return False
+        
+        for ball in message.balls:
+            if abs(ball.position_x) > max_reasonable_pos or abs(ball.position_y) > max_reasonable_pos:
+                self.get_logger().warn(f"Invalid ball position: ({ball.position_x}, {ball.position_y})")
+                return False
+        
+        return True
 
     def publish_geometry(self, message: SSL_GeometryData):
         message: VisionGeometry = wrap_geo_message(message)

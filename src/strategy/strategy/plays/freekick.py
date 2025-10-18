@@ -1,7 +1,7 @@
 from system_interfaces.msg._game_state import GameState
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
 from system_interfaces.srv import GetGameConfig
-from strategy.tatics.kickoff import OurKickoff, TheirKickoff
+from strategy.tatics.freekick import OurFreekick, TheirFreekick
 
 
 class CheckState(LeafNode):
@@ -18,7 +18,7 @@ class CheckState(LeafNode):
         return (TaskStatus.SUCCESS, None) if self.referee_command in self.desired_states else (TaskStatus.FAILURE, None)
 
 
-class CheckIfOurKickoff(LeafNode):
+class CheckIfOurFreekick(LeafNode):
     def __init__(self, name):
         super().__init__(name)
         self.is_team_color_yellow = None
@@ -56,14 +56,17 @@ class CheckIfOurKickoff(LeafNode):
 
     def run(self):
 
-        expected_cmd = "PREPARE_KICKOFF_YELLOW" if self.is_team_color_yellow else "PREPARE_KICKOFF_BLUE"
+        if self.is_team_color_yellow is None:
+            return TaskStatus.RUNNING, None
+
+        expected_cmd = "DIRECT_FREE_YELLOW" if self.is_team_color_yellow else "DIRECT_FREE_BLUE"
 
         if self.referee_command == expected_cmd:
             return TaskStatus.SUCCESS, None
         return TaskStatus.FAILURE, None
 
 
-class OurKickoffAction(LeafNode):
+class OurFreekickAction(LeafNode):
     def __init__(self, name):
         super().__init__(name)
         self.ally_robots = {}
@@ -98,17 +101,18 @@ class OurKickoffAction(LeafNode):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.balls = msg.balls
 
     def run(self):
 
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurKickoff(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = OurFreekick(ally_robots=self.ally_robots, ball=self.balls[0], on_positive_half=self.on_positive_half)
 
         return TaskStatus.SUCCESS, executor.execute()
 
-class TheirKickoffAction(LeafNode):
+class TheirFreekickAction(LeafNode):
     def __init__(self, name):
         super().__init__(name)
         self.ally_robots = {}
@@ -143,37 +147,38 @@ class TheirKickoffAction(LeafNode):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.balls = msg.balls
 
     def run(self):
 
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurKickoff(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = TheirFreekick(ally_robots=self.ally_robots, ball=self.balls[0], on_positive_half=self.on_positive_half)
 
         return TaskStatus.SUCCESS, executor.execute()
 
 
-class Kickoff(Sequence):
+class Freekick(Sequence):
     def __init__(self, name):
         super().__init__(name, [])
 
         """ List with possible inputs to this state """
 
-        commands = ["PREPARE_KICKOFF_BLUE", "PREPARE_KICKOFF_YELLOW"]
+        commands = ["DIRECT_FREE_BLUE", "DIRECT_FREE_YELLOW"]
 
-        check_kickoff = CheckState("CheckKickoff", commands)
+        check_freekick = CheckState("CheckFreekick", commands)
 
-        is_ours = CheckIfOurKickoff("CheckIfOurKickoff")
-        action_ours = OurKickoffAction("OurKickoffAction")
+        is_ours = CheckIfOurFreekick("CheckIfOurFreekick")
+        action_ours = OurFreekickAction("OurFreekickAction")
 
-        ours = Sequence("OurKickoff", [is_ours, action_ours])
+        ours = Sequence("OurFreekick", [is_ours, action_ours])
 
-        action_theirs = TheirKickoffAction("TheirKickoffAction")
+        action_theirs = TheirFreekickAction("TheirFreekickAction")
 
-        ours_or_theirs = Selector("OursOrTheirsKickoff", [ours, action_theirs])
+        ours_or_theirs = Selector("OursOrTheirsFreeKick", [ours, action_theirs])
 
-        self.add_children([check_kickoff, ours_or_theirs])
+        self.add_children([check_freekick, ours_or_theirs])
 
 
     def run(self):

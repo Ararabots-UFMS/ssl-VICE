@@ -1,41 +1,68 @@
 from strategy.behaviour import LeafNode, TaskStatus
 from strategy.skills.skills import Skills
+from system_interfaces.msg import GameState
 
 class TriangleFormation(LeafNode):
     def __init__(self, name):
         super().__init__(name)
+        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        self.ally_robots = {}
 
-        ## É SÓ UM EXEMPLO DE COMO USAR A CLASSE SKILLS, NÃO FAZ TRIANGULO DE VERDADE
+        self.skills_factory = Skills("Movement")
+        
+    def game_state_callback(self, msg):
+        self.ally_robots = {r.id: r for r in msg.ally_robots}
 
-        skills_factory = Skills("Movement")
+    def execute(self):
 
-        # Robô 0: vai para o centro
-        r0 = skills_factory.move_to(robot_id=0, target_x=0.0, target_y=1000.0, vel_x=0.0, vel_y=0.0)
-        r0.field_border = True
+        robot_0 = self.ally_robots.get(0)
 
-        r1 = skills_factory.move_to(
-            robot_id=1, target_x=0.0, target_y=0.0, vel_x=0.0, vel_y=0.0
-        )
+        if not robot_0:
+            return []
+        
+        target_x = None
 
-        # Complementa a skill existente com chute, sem sobrescrever o objeto
-        r1.activate_kick()
+        limiar_x = 2000
 
-        # Robô 2: vai para o gol adversário evitando área de penalti e orientado para o gol
-        enemy_goal_x = 0.0
-        enemy_goal_y = -1000.0
-        r2 = skills_factory.move_with_angle(
-            robot_id=2,
-            target_x=enemy_goal_x,
-            target_y=enemy_goal_y,
-            angle=0,
+
+        edge = 2250.0
+        step = 500.0
+        
+        if not hasattr(self, "patrol_dir"):
+            self.patrol_dir = 1 if robot_0.position_x < 0 else -1
+
+        
+        if robot_0.position_x >= edge:
+            target_x = -edge
+            self.patrol_dir = -1
+        elif robot_0.position_x <= -edge:
+            target_x = edge
+            self.patrol_dir = 1
+        else:
+        
+            next_x = robot_0.position_x + self.patrol_dir * step
+            if next_x > edge:
+                target_x = edge
+                self.patrol_dir = -1
+            elif next_x < -edge:
+                target_x = -edge
+                self.patrol_dir = 1
+            else:
+                target_x = next_x
+
+        
+        robot_command = self.skills_factory.move_to(
+            robot_id=0,
+            target_x=target_x,
+            target_y=0,
             vel_x=0.0,
-            vel_y=0.0,
+            vel_y=0.0
         )
+        
+        if target_x is None:
+            return None
+        return [robot_command]
 
-        r2.penalty_area = True
-        r2.field_border = True
-
-        self.robots_action = [r0, r1, r2]
 
     def run(self):
-        return TaskStatus.SUCCESS, list(self.robots_action)
+        return TaskStatus.SUCCESS, self.execute()

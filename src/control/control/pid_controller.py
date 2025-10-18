@@ -14,7 +14,7 @@ class PIDController:
         self.integral: float = 0.0
         self.previous_time: Optional[float] = None
 
-        self.integral_limit: float = 0.3  # Anti Windup
+        self.integral_limit: float = 0.03  # Anti Windup
         self.output_limit: float = 0.1  # Max velocity
 
     def update_params(self, kp: float, ki: float, kd: float):

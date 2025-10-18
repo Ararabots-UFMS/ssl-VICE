@@ -73,10 +73,10 @@ class HardwarePublisher(Node):
         for robot in command.robots:
             robot_command = self.encode_command(
                 robot.robot_id,
-                int(robot.linear_velocity_x),
-                int(robot.linear_velocity_y),
-                int(robot.angular_velocity),
-                int(robot.orientation),
+                int(robot.linear_velocity_x * 1000),
+                int(-robot.linear_velocity_y * 1000),
+                int(-robot.angular_velocity * 1000),
+                int(robot.orientation * 1000),
                 int(robot.kick),
             )
 

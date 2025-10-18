@@ -1,5 +1,6 @@
 from strategy.skills.skills import Skills
 from new_movement.entities.States import Vector2D
+from math import cos, sin, pi, atan2
 
 
 class CenterGoal:
@@ -41,13 +42,35 @@ class goAwayFromBall:
             self.angle = 0.0
             self.gk_target = self.goal_center.GOAL_NEGATIVE
 
-    def _get_valid_position(self) -> Vector2D:
-        radius = 600.0  # mm
+    def _generate_positions(self, count: int) -> list[Vector2D]:
+        """
+        Generate 'count' positions around the ball on a safe circle.
+        Uses a base angle pointing away/toward our half to keep robots on the safer side.
+        """
+        # keep >= 500mm from ball. Using a bit more for safety.
+        radius = 600.0
+        bx, by = self.ball.position_x, self.ball.position_y
 
-        if self.on_positive_half:
-            return Vector2D(self.ball.position_x + radius, self.ball.position_y)
+        # Base angle: if we are on positive half (attacking +x), place first point toward +x, else -x
+        base_angle = 0.0 if self.on_positive_half else pi
 
-        return Vector2D(self.ball.position_x - radius, self.ball.position_y)
+        # Evenly spaced around the circle
+        step = (2 * pi) / max(count, 1)
+
+        positions: list[Vector2D] = []
+        for i in range(count):
+            ang = base_angle + i * step
+            x = bx + radius * cos(ang)
+            y = by + radius * sin(ang)
+            positions.append(Vector2D(x, y))
+
+        return positions
+
+    def _get_ball_angle(self, robot_id: int) -> float:
+        robot = self.ally_robots[robot_id]
+        dx = self.ball.position_x - robot.position_x
+        dy = self.ball.position_y - robot.position_y
+        return atan2(dy, dx)
 
     def execute(self):
         robots_commands = []
@@ -59,16 +82,21 @@ class goAwayFromBall:
 
         field_ids = sorted([rid for rid in self.ally_robots.keys() if rid != 0])
 
-        valid_position = self._get_valid_position()
+        targets = self._generate_positions(len(field_ids))
 
         for idx, rid in enumerate(field_ids):
-            robot_command = self.skills_factory.move_to(
+            target = targets[idx]
+
+            angle = self._get_ball_angle(idx)
+
+            robot_command = self.skills_factory.move_with_angle(
                 robot_id=rid,
-                target_x=valid_position.x,
-                target_y=valid_position.y,
+                target_x=target.x,
+                target_y=target.y,
+                angle=angle,
             )
 
-            robot_command.ally_ids = (id for id in field_ids if id != rid)
+            robot_command.ally_ids = [i for i in field_ids if i != rid]
             robot_command.field_border = True
             robot_command.penalty_area = True
             robot_command.ball = True
