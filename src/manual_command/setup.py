@@ -1,5 +1,6 @@
 from setuptools import find_packages, setup
 
+
 package_name = "manual_command"
 
 setup(
@@ -10,7 +11,7 @@ setup(
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
     ],
-    install_requires=["setuptools"],
+    install_requires=["setuptools", "evdev"],
     zip_safe=True,
     maintainer="allan",
     maintainer_email="allan.menchik@hotmail.com",

@@ -91,8 +91,8 @@ class goAwayFromBall:
 
             robot_command = self.skills_factory.move_with_angle(
                 robot_id=rid,
-                target_x=target.x,
-                target_y=target.y,
+                target_x=2000,
+                target_y=1400,
                 angle=angle,
             )
 

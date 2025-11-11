@@ -142,7 +142,7 @@ class Atack:
 
         robot_command.field_border = True
         robot_command.ball = True
-        robot_command.ally_ids = [0]
+        robot_command.ally_ids = [0, 1]
         robot_command.enemy_ids = self._enemy_is_near_ball()
         robot_command.penalty_area = True
         robot_command.deactivate_kick()
@@ -172,7 +172,7 @@ class Atack:
 
         robot_command.ball = False
         robot_command.field_border = True
-        robot_command.ally_ids = [0]
+        robot_command.ally_ids = [0, 1]
         robot_command.enemy_ids = self._enemy_is_near_ball()
         robot_command.penalty_area = True
 
