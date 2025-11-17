@@ -32,8 +32,8 @@ class ManualCommand(Node):
     def __init__(self) -> None:
         super().__init__("manual_command")
 
-        self.declare_parameter("robot_id", 0)
-        self.robot_id = int(self.get_parameter("robot_id").value)
+        self.declare_parameter("robot_id", 1)
+        self.robot_id = 1
         self.command_publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
         self.create_timer(1.0 / 60.0, self.update_and_publish)
 
@@ -44,9 +44,9 @@ class ManualCommand(Node):
         self.vt = 0.0
 
         self.max_velocity = 1.5
-        self.max_angular_velocity = 6.0
-        self.max_acceleration = 3.0
-        self.max_angular_acceleration = 6.0
+        self.max_angular_velocity = 1.5
+        self.max_acceleration = 1
+        self.max_angular_acceleration = 3.0 
 
         self._last_time = time()
         self._last_log_time = time()
@@ -94,7 +94,7 @@ class ManualCommand(Node):
         self._last_requested_angle = None
         self._last_rx_log_time = 0.0
         self._orientation_target = None
-        self.declare_parameter("orientation_kp", 3.0)
+        self.declare_parameter("orientation_kp", 1.0)
         self.declare_parameter("orientation_min_speed", 0.8)
         self.declare_parameter("orientation_max_accel", 20.0)
         self.declare_parameter("orientation_tolerance", 0.03)
@@ -105,8 +105,6 @@ class ManualCommand(Node):
         self._last_orientation_debug_time = 0.0
         self.declare_parameter("right_stick_invert_x", False)
         self.declare_parameter("right_stick_invert_y", False)
-        self._rs_invert_x = bool(self.get_parameter("right_stick_invert_x").value)
-        self._rs_invert_y = bool(self.get_parameter("right_stick_invert_y").value)
         self.declare_parameter("orientation_stick_activate", 0.25)
         self.declare_parameter("orientation_stick_deactivate", 0.10)
         self.declare_parameter("orientation_update_angle_thresh", 0.05)
@@ -133,14 +131,10 @@ class ManualCommand(Node):
 
         jx = -self._axis_pos.get("ry", 0.0)
         jy = -self._axis_pos.get("rx", 0.0)
-        if getattr(self, "_rs_invert_x", False):
-            jx = -jx
-        if getattr(self, "_rs_invert_y", False):
-            jy = -jy
         joy_mag = math.hypot(jx, jy)
         if (now - self._last_rx_log_time) > 0.5 and (abs(jx) > 1e-3 or abs(jy) > 1e-3):
             self._last_rx_log_time = now
-        if joy_mag > 0.5:
+        if joy_mag > 1.0:
             target_angle = math.atan2(jy, jx)
             self._orientation_target = float(target_angle)
             # debug logging removed
@@ -232,7 +226,7 @@ class ManualCommand(Node):
         vy_r = -sin_t * self.vx + cos_t * self.vy
 
         robot_command = RobotCommand()
-        robot_command.robot_id = 0
+        robot_command.robot_id = 1
         robot_command.linear_velocity_x = float(vx_r)
         robot_command.linear_velocity_y = float(vy_r)
         robot_command.angular_velocity = float(self.vt)
