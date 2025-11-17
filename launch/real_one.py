@@ -22,10 +22,10 @@ def generate_launch_description():
                 package="new_movement",
                 executable="driver",
             ),
-            Node(
-                package="strategy",
-                executable="strategyNode",
-            ),
+            # Node(
+            #     package="strategy",
+            #     executable="strategyNode",
+            # ),
             Node(
                 package="gui_interpreter",
                 executable="apiNode",
@@ -38,6 +38,10 @@ def generate_launch_description():
             Node(
                 package="hardware_messenger",
                 executable="hardware"
-            )
+            ),
+             Node(
+                package="strategy_command_gui",
+                executable="strategy_gui",
+            ),
         ]
     )

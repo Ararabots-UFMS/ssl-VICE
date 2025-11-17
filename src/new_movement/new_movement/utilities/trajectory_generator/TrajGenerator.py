@@ -28,7 +28,7 @@ class TrajectoryGenerator:
         # Is close enough to accelerate
         if(curState.position.distance(tarState.position) < NEAR_THRESHOLD):
             self.update_constrainsts(MoveConstraints(
-                DEFAULT_VELOCITY_CONSTRAINST, NEAR_ACCELERATION_CONSTRAINST
+                DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST
             ))
         else:
             self.update_constrainsts(MoveConstraints(

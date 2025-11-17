@@ -7,3 +7,5 @@ numpy
 pytest
 pytest-mock
 pytest-cov
+inputs
+evdev
