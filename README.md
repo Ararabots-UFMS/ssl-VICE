@@ -37,43 +37,50 @@ git clone git@github.com:Ararabots-UFMS/ssl-VICE.git
 git clone git@github.com:RoboCup-SSL/ssl-game-controller.git
 ```
 
-
 ## Execução
 Em seguida, execute dentro da pasta do `ssl-VICE`:
 
 ```bash
-docker-compose up --build
+docker build -t ssl-vice -f Dockerfile .
 ```
-Se não for sua primeira execução rode sem o *--build*
+Isso gera uma imagem chamada "ssl-vice". Essa imagem é como um _sistema operacional empacotado_ com tudo pronto para rodar ROS2.
+
+Após isso, execute:
+
+``` bash
+./scripts/vice
+```
+Em seguida:
+```bash
+echo 'export PATH="$PWD/scripts:$PATH"' >> ~/.bashrc
+
+```
+PWD é o caminho do seu diretório atual.
+
+Após isso, você conseguirá executar os comandos:
+
+``` bash
+vice build
+```
+Para compilar o ROS2 com colcon dentro do container.
+
+``` bash
+vice attach
+```
+Para abrir um terminal dentro do container.
+
+``` bash
+vice launch
+```
+Mostra os launch files e roda o que você escolher
 
 ```bash
-docker-compose up
+vice topics
 ```
-
-Após isso, dois serviços serão criados:
-- `ssl-vice`
-- `ssl-gui`
-
-A interface gráfica (GUI) estará disponível em: [http://localhost:5173](http://localhost:5173)
+Lista os tópicos e permite executar cada um deles
 
 
-Até agora temos o `ssl-VICE` e o `ssl-GUI` rodando.
----
-Para escutar tópicos específicos do ROS2:
 
-Entre no container `ssl-vice`:
-
-```bash
-docker exec -it ssl-vice bash
-source /root/ssl-VICE/install/setup.bash
-```
-
-E para listar e escutar tópicos, use:
-
-```bash
-ros2 topic list          # lista todos os tópicos disponíveis
-ros2 topic echo /refereeTopic  # escuta um tópico de exemplo
-```
 
 Agora vamos rodar as aplicações externas
 ---
