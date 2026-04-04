@@ -35,6 +35,8 @@ if [[ "$(docker ps -q -f name=^${CONTAINER_NAME}$)" == "" ]]; then
     echo ":: Starting new container '$CONTAINER_NAME'..."
     docker run -d --name $CONTAINER_NAME \
         --network host \
+        --privileged \
+        --device=/dev/input \
         -v "$PROJECT_ROOT":/root/ssl-VICE \
         $IMAGE_NAME tail -f /dev/null
 else
@@ -49,7 +51,7 @@ if [[ "$1" == "build" ]]; then
 
 elif [[ "$1" == "attach" ]]; then
     echo ":: Opening interactive bash shell..."
-    docker exec -it $CONTAINER_NAME bash
+    docker exec -it $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && exec bash"
     echo "✔ DONE"
 
 elif [[ "$1" == "launch" ]]; then
