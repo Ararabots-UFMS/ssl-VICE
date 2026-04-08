@@ -1,0 +1,4 @@
+bool border_area
+bool center_area
+---
+bool success
