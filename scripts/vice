@@ -49,7 +49,10 @@ if [[ "$1" == "build" ]]; then
 
 elif [[ "$1" == "attach" ]]; then
     echo ":: Opening interactive bash shell..."
-    docker exec -it $CONTAINER_NAME bash
+    docker exec -it $CONTAINER_NAME bash -c \
+        "source /opt/ros/humble/setup.bash && \
+         [ -f /root/ssl-VICE/install/local_setup.bash ] && source /root/ssl-VICE/install/local_setup.bash; \
+         exec bash"
     echo "✔ DONE"
 
 elif [[ "$1" == "launch" ]]; then
