@@ -1,6 +1,5 @@
 flask
 flask-socketio
-ruckig
 pyserial
 protobuf
 numpy
