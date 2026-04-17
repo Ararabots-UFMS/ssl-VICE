@@ -1,4 +1,3 @@
-
 <div align="center">
 <a href="https://quackfy.vercel.app/">
 <img height="100" src="https://ararabots-ufms.github.io/img/arara_no_bg.png" alt="Arara">
@@ -12,14 +11,13 @@
 
 ## Configuração de Ambiente
 
-<!-- Para aprender como instalar os programas e pacotes necessários, confira o [README dos Requisitos](./requirements/README.MD) -->
-
 **Importante:** Além do repositório `ssl-VICE`, é necessário clonar os repositórios `ssl-gui` e `ssl-game-controller` na **mesma pasta** para que o sistema funcione corretamente.
 
 Então é recomendado criar uma pasta "ararabots" e dentro clonar os respectivos repositórios de desenvolvimento
 Se for clonado repositórios posteriores clonar dentro da pasta.
 
 Com HTTP:
+
 ```bash
 mkdir ararabots
 cd ararabots
@@ -29,6 +27,7 @@ git clone https://github.com/RoboCup-SSL/ssl-game-controller.git # com HTTP
 ```
 
 Com SSH:
+
 ```bash
 mkdir ararabots
 cd ararabots
@@ -37,28 +36,53 @@ git clone git@github.com:Ararabots-UFMS/ssl-VICE.git
 git clone git@github.com:RoboCup-SSL/ssl-game-controller.git
 ```
 
-
 ## Execução
-Em seguida, execute dentro da pasta do `ssl-VICE`:
+
+### Usando o Vice CLI (recomendado para desenvolvimento)
+
+Adicione o diretório `scripts/` ao seu PATH:
+
+```bash
+echo 'export PATH="<caminho-para-ssl-VICE>/scripts:$PATH"' >> ~/.bashrc
+```
+
+Comandos disponíveis:
+
+| Comando       | Descrição                                      |
+| ------------- | ---------------------------------------------- |
+| `vice build`  | Compila o workspace ROS2                       |
+| `vice launch` | Seleciona e executa um launch file             |
+| `vice reload` | Recompila e relança o último launch file usado |
+| `vice attach` | Abre um shell interativo no container          |
+| `vice topics` | Lista e escuta tópicos ROS2                    |
+
+Fluxo de desenvolvimento:
+
+1. Edite o código no host (o repositório é montado no container via volume).
+2. `Ctrl+C` no terminal do `vice launch` para encerrar os nodes.
+3. `vice reload` para recompilar e relançar automaticamente.
+
+### Usando Docker Compose
 
 ```bash
 docker-compose up --build
 ```
-Se não for sua primeira execução rode sem o *--build*
+
+Se não for sua primeira execução rode sem o _--build_
 
 ```bash
 docker-compose up
 ```
 
 Após isso, dois serviços serão criados:
+
 - `ssl-vice`
 - `ssl-gui`
 
 A interface gráfica (GUI) estará disponível em: [http://localhost:5173](http://localhost:5173)
 
+## Até agora temos o `ssl-VICE` e o `ssl-GUI` rodando.
 
-Até agora temos o `ssl-VICE` e o `ssl-GUI` rodando.
----
 Para escutar tópicos específicos do ROS2:
 
 Entre no container `ssl-vice`:
@@ -68,30 +92,30 @@ docker exec -it ssl-vice bash
 source /root/ssl-VICE/install/setup.bash
 ```
 
-E para listar e escutar tópicos, use:
+Ou use o Vice CLI:
 
 ```bash
-ros2 topic list          # lista todos os tópicos disponíveis
-ros2 topic echo /refereeTopic  # escuta um tópico de exemplo
+vice topics
 ```
 
-Agora vamos rodar as aplicações externas
----
+## Agora vamos rodar as aplicações externas
+
 Para rodar o `ssl-game-controller`.
+
 ```bash
 cd ssl-game-controller
 ```
 
 Dentro da pasta do `ssl-game-controller`:
+
 ```bash
 docker compose up --build ssl-game-controller
 ```
 
-
-Agora vamos instalar o `grSim` e o `ssl-vision-client`
----
+## Agora vamos instalar o `grSim` e o `ssl-vision-client`
 
 Com HTTP:
+
 ```bash
 cd ararabots
 git clone https://github.com/RoboCup-SSL/grSim.git
@@ -99,6 +123,7 @@ git clone https://github.com/RoboCup-SSL/ssl-vision.git
 ```
 
 Com SSH:
+
 ```bash
 cd ararabots
 git clone git@github.com:RoboCup-SSL/grSim.git
@@ -111,20 +136,12 @@ Agora entre na pasta do `grSim` e siga as instruções de instalação por lá.
 
 Faça a mesma coisa com o `ssl-vision`.
 
---- 
-## Extras:
+**Usuários de Arch Linux:** Consulte o guia [Configuração no Arch Linux](docs/archlinux-setup.md) para instruções específicas, incluindo instalação do grSim via AUR e correções para Wayland.
 
-### Análise de Código com Ruff no VSCode
-- Ruff é uma ferramenta rápida e eficiente para linting (análise de estilo) e formatação de código Python.
-- Este projeto já inclui um arquivo ruff.toml com as configurações necessárias.
+---
 
-### Como usar o Ruff no VSCode
-- Instale a extensão oficial do Ruff:
-    - “Ruff” na aba de extensões do VSCode e instale a extensão de Charles Marsh.
+## Extras
 
-### Correção automática:
-Use o atalho padrão (Ctrl + Shift + P) e selecione "Ruff: Format Document" para formatar um arquivo inteiro.
+- [Configuração do VS Code](docs/vscode-setup.md) — Dev Container, IntelliSense para ROS2, Ruff com auto-format ao salvar
+- [Configuração no Arch Linux](docs/archlinux-setup.md) — grSim via AUR, correções para Wayland
 
-**Linting em tempo real:** 
-- O VSCode irá sublinhar automaticamente os trechos que não seguem os padrões definidos.
-- Passe o mouse sobre os avisos para ver sugestões ou explicações.
