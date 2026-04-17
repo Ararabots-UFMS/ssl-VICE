@@ -3,7 +3,6 @@
 .vscode/
 .venv/
 
-.devcontainer/
 build/
 install/
 log/
