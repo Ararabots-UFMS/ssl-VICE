@@ -48,13 +48,19 @@ echo 'export PATH="<caminho-para-ssl-VICE>/scripts:$PATH"' >> ~/.bashrc
 
 Comandos disponíveis:
 
-| Comando       | Descrição                                      |
-| ------------- | ---------------------------------------------- |
-| `vice build`  | Compila o workspace ROS2                       |
-| `vice launch` | Seleciona e executa um launch file             |
-| `vice reload` | Recompila e relança o último launch file usado |
-| `vice attach` | Abre um shell interativo no container          |
-| `vice topics` | Lista e escuta tópicos ROS2                    |
+| Comando                | Descrição                                      |
+| ---------------------- | ---------------------------------------------- |
+| `vice build`           | Compila o workspace ROS2                       |
+| `vice launch`          | Seleciona e executa um launch file             |
+| `vice reload`          | Recompila e relança o último launch file usado |
+| `vice run <pkg> <node>`| Executa um node individual (menu interativo se sem args) |
+| `vice attach`          | Abre um shell interativo no container          |
+| `vice topics`          | Lista e escuta tópicos ROS2                    |
+| `vice start`           | Inicia o container                             |
+| `vice stop`            | Para o container                               |
+| `vice restart`         | Reinicia o container                           |
+| `vice destroy`         | Remove o container e a imagem completamente    |
+| `vice clean`           | Remove build/, install/, log/                  |
 
 Fluxo de desenvolvimento:
 

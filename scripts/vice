@@ -12,7 +12,6 @@ DOCKERFILE_PATH="$PROJECT_ROOT/Dockerfile"
 LAST_LAUNCH_FILE="$PROJECT_ROOT/.vice_last_launch"
 
 # --- Run a command inside the container with ROS + overlay sourced ---
-# Usage: ros_exec [-it] "<command>"
 ros_exec() {
     local flags=""
     if [[ "$1" == "-it" ]]; then flags="-it"; shift; fi
@@ -22,109 +21,212 @@ ros_exec() {
          $*"
 }
 
-# --- Tip ---
-if [[ ":$PATH:" != *":$PWD/scripts:"* && ":$PATH:" != *":$PWD/scripts/:"* ]]; then
-    echo "!! Add '$PWD/scripts' to your PATH to use 'vice' globally:"
-    echo " $ echo 'export PATH=\"$PWD/scripts:\$PATH\"' >> ~/.bashrc"
-fi
-
-# --- Build image if not exists ---
-if [[ "$(docker images -q $IMAGE_NAME 2> /dev/null)" == "" ]]; then
-    echo ":: Docker image '$IMAGE_NAME' not found. Building..."
-    docker build -t $IMAGE_NAME -f "$DOCKERFILE_PATH" "$PROJECT_ROOT"
-else
-    echo "✔  Docker image '$IMAGE_NAME' already exists."
-fi
-
-# --- Start container if not running ---
-if [[ "$(docker ps -q -f name=^${CONTAINER_NAME}$)" == "" ]]; then
-    if [[ "$(docker ps -aq -f name=^${CONTAINER_NAME}$)" != "" ]]; then
-        echo ":: Removing old stopped container '$CONTAINER_NAME'..."
-        docker rm $CONTAINER_NAME > /dev/null
+# --- Ensure image and container are ready ---
+ensure_container() {
+    if [[ ":$PATH:" != *":$PWD/scripts:"* && ":$PATH:" != *":$PWD/scripts/:"* ]]; then
+        echo "!! Add '$PWD/scripts' to your PATH to use 'vice' globally:"
+        echo " $ echo 'export PATH=\"$PWD/scripts:\$PATH\"' >> ~/.bashrc"
     fi
 
-    echo ":: Starting new container '$CONTAINER_NAME'..."
-    docker run -d --name $CONTAINER_NAME \
-        --network host \
-        -v "$PROJECT_ROOT":/root/ssl-VICE \
-        $IMAGE_NAME tail -f /dev/null
-else
-    echo "✔ Container '$CONTAINER_NAME' already running."
-fi
+    if [[ "$(docker images -q $IMAGE_NAME 2> /dev/null)" == "" ]]; then
+        echo ":: Docker image '$IMAGE_NAME' not found. Building..."
+        docker build -t $IMAGE_NAME -f "$DOCKERFILE_PATH" "$PROJECT_ROOT"
+    else
+        echo "✔  Docker image '$IMAGE_NAME' already exists."
+    fi
+
+    if [[ "$(docker ps -q -f name=^${CONTAINER_NAME}$)" == "" ]]; then
+        if [[ "$(docker ps -aq -f name=^${CONTAINER_NAME}$)" != "" ]]; then
+            echo ":: Removing old stopped container '$CONTAINER_NAME'..."
+            docker rm $CONTAINER_NAME > /dev/null
+        fi
+
+        echo ":: Starting new container '$CONTAINER_NAME'..."
+        docker run -d --name $CONTAINER_NAME \
+            --network host \
+            -v "$PROJECT_ROOT":/root/ssl-VICE \
+            $IMAGE_NAME tail -f /dev/null
+    else
+        echo "✔ Container '$CONTAINER_NAME' already running."
+    fi
+}
 
 # --- Parse command ---
-if [[ "$1" == "build" ]]; then
-    echo ":: Building ROS2 workspace..."
-    ros_exec "cd /root/ssl-VICE && colcon build"
-    echo "✔ DONE"
+case "$1" in
+    build)
+        ensure_container
+        echo ":: Building ROS2 workspace..."
+        ros_exec "cd /root/ssl-VICE && colcon build"
+        echo "✔ DONE"
+        ;;
 
-elif [[ "$1" == "attach" ]]; then
-    echo ":: Opening interactive bash shell..."
-    ros_exec -it "exec bash"
-    echo "✔ DONE"
+    attach)
+        ensure_container
+        echo ":: Opening interactive bash shell..."
+        ros_exec -it "exec bash"
+        echo "✔ DONE"
+        ;;
 
-elif [[ "$1" == "launch" ]]; then
-    LAUNCH_DIR="$PROJECT_ROOT/launch"
-    mapfile -t LAUNCH_FILES < <(find "$LAUNCH_DIR" -maxdepth 1 -type f -name "*.py" -printf "%f\n" | sort)
+    launch)
+        ensure_container
+        LAUNCH_DIR="$PROJECT_ROOT/launch"
+        mapfile -t LAUNCH_FILES < <(find "$LAUNCH_DIR" -maxdepth 1 -type f -name "*.py" -printf "%f\n" | sort)
 
-    if [[ ${#LAUNCH_FILES[@]} -eq 0 ]]; then
-        echo "X No launch files found in $LAUNCH_DIR"
-        exit 1
-    fi
-
-    echo ":: Available launch files:"
-    select LAUNCH_FILE in "${LAUNCH_FILES[@]}"; do
-        if [[ -n "$LAUNCH_FILE" ]]; then
-            echo "$LAUNCH_FILE" > "$LAST_LAUNCH_FILE"
-            echo ":: Launching $LAUNCH_FILE..."
-            ros_exec -it "ros2 launch launch/$LAUNCH_FILE"
-            break
-        else
-            echo "X Invalid choice. Try again."
+        if [[ ${#LAUNCH_FILES[@]} -eq 0 ]]; then
+            echo "X No launch files found in $LAUNCH_DIR"
+            exit 1
         fi
-    done
-    echo "✔ DONE"
 
-elif [[ "$1" == "reload" ]]; then
-    echo ":: Rebuilding workspace..."
-    ros_exec "cd /root/ssl-VICE && colcon build"
-    if [[ ! -f "$LAST_LAUNCH_FILE" ]]; then
-        echo ":: No previous launch found. Falling back to 'vice launch'..."
-        exec "$0" launch
-    fi
-    LAUNCH_FILE="$(cat "$LAST_LAUNCH_FILE")"
-    echo ":: Relaunching $LAUNCH_FILE..."
-    ros_exec -it "ros2 launch launch/$LAUNCH_FILE"
-    echo "✔ DONE"
+        echo ":: Available launch files:"
+        select LAUNCH_FILE in "${LAUNCH_FILES[@]}"; do
+            if [[ -n "$LAUNCH_FILE" ]]; then
+                echo "$LAUNCH_FILE" > "$LAST_LAUNCH_FILE"
+                echo ":: Launching $LAUNCH_FILE..."
+                ros_exec -it "ros2 launch launch/$LAUNCH_FILE"
+                break
+            else
+                echo "X Invalid choice. Try again."
+            fi
+        done
+        echo "✔ DONE"
+        ;;
 
-elif [[ "$1" == "topics" ]]; then
-    echo ":: Fetching active ROS 2 topics from container '$CONTAINER_NAME'..."
-
-    mapfile -t TOPICS < <(ros_exec "ros2 topic list" 2>/dev/null)
-
-    if [[ ${#TOPICS[@]} -eq 0 ]]; then
-        echo "X No topics found. Make sure ROS2 nodes are running inside the container."
-        exit 1
-    fi
-
-    echo ":: Available ROS2 topics:"
-    select TOPIC in "${TOPICS[@]}"; do
-        if [[ -n "$TOPIC" ]]; then
-            echo ":: Listening to topic: $TOPIC"
-            echo ":: Press Ctrl+C to stop."
-            ros_exec -it "ros2 topic echo $TOPIC"
-            break
-        else
-            echo "X Invalid selection, try again."
+    reload)
+        ensure_container
+        echo ":: Rebuilding workspace..."
+        ros_exec "cd /root/ssl-VICE && colcon build"
+        if [[ ! -f "$LAST_LAUNCH_FILE" ]]; then
+            echo ":: No previous launch found. Falling back to 'vice launch'..."
+            exec "$0" launch
         fi
-    done
+        LAUNCH_FILE="$(cat "$LAST_LAUNCH_FILE")"
+        echo ":: Relaunching $LAUNCH_FILE..."
+        ros_exec -it "ros2 launch launch/$LAUNCH_FILE"
+        echo "✔ DONE"
+        ;;
 
-else
-    echo "Usage:"
-    echo "  vice build                 # Build workspace"
-    echo "  vice topics                # Echo topics"
-    echo "  vice attach                # Open interactive shell"
-    echo "  vice launch                # Runs launch files"
-    echo "  vice reload                # Rebuild + relaunch last launch file"
-fi
+    run)
+        ensure_container
+        if [[ -n "$2" && -n "$3" ]]; then
+            echo ":: Running $3 from $2..."
+            ros_exec -it "ros2 run $2 $3"
+            echo "✔ DONE"
+        else
+            echo ":: Available packages:"
+            mapfile -t PACKAGES < <(ls -d "$PROJECT_ROOT"/src/*/ 2>/dev/null | xargs -I{} basename {} | sort)
 
+            if [[ ${#PACKAGES[@]} -eq 0 ]]; then
+                echo "X No packages found. Run 'vice build' first."
+                exit 1
+            fi
+
+            select PKG in "${PACKAGES[@]}"; do
+                if [[ -n "$PKG" ]]; then
+                    echo ":: Executables in $PKG:"
+                    mapfile -t EXECUTABLES < <(ros_exec "ros2 pkg executables $PKG" 2>/dev/null | awk '{print $2}')
+
+                    if [[ ${#EXECUTABLES[@]} -eq 0 ]]; then
+                        echo "X No executables found in $PKG."
+                        exit 1
+                    fi
+
+                    select EXEC in "${EXECUTABLES[@]}"; do
+                        if [[ -n "$EXEC" ]]; then
+                            echo ":: Running $EXEC from $PKG..."
+                            ros_exec -it "ros2 run $PKG $EXEC"
+                            echo "✔ DONE"
+                            break
+                        else
+                            echo "X Invalid choice. Try again."
+                        fi
+                    done
+                    break
+                else
+                    echo "X Invalid choice. Try again."
+                fi
+            done
+        fi
+        ;;
+
+    topics)
+        ensure_container
+        echo ":: Fetching active ROS 2 topics from container '$CONTAINER_NAME'..."
+
+        mapfile -t TOPICS < <(ros_exec "ros2 topic list" 2>/dev/null)
+
+        if [[ ${#TOPICS[@]} -eq 0 ]]; then
+            echo "X No topics found. Make sure ROS2 nodes are running inside the container."
+            exit 1
+        fi
+
+        echo ":: Available ROS2 topics:"
+        select TOPIC in "${TOPICS[@]}"; do
+            if [[ -n "$TOPIC" ]]; then
+                echo ":: Listening to topic: $TOPIC"
+                echo ":: Press Ctrl+C to stop."
+                ros_exec -it "ros2 topic echo $TOPIC"
+                break
+            else
+                echo "X Invalid selection, try again."
+            fi
+        done
+        ;;
+
+    stop)
+        if [[ "$(docker ps -q -f name=^${CONTAINER_NAME}$)" != "" ]]; then
+            echo ":: Stopping container '$CONTAINER_NAME'..."
+            docker stop $CONTAINER_NAME > /dev/null
+            echo "✔ Container stopped."
+        else
+            echo "✔ Container '$CONTAINER_NAME' is not running."
+        fi
+        ;;
+
+    start)
+        ensure_container
+        echo "✔ Container '$CONTAINER_NAME' is running."
+        ;;
+
+    restart)
+        echo ":: Restarting container '$CONTAINER_NAME'..."
+        docker restart $CONTAINER_NAME 2>/dev/null || true
+        echo "✔ Container restarted."
+        ;;
+
+    destroy)
+        echo ":: Destroying container and image..."
+        docker stop $CONTAINER_NAME 2>/dev/null || true
+        docker rm $CONTAINER_NAME 2>/dev/null || true
+        docker rmi $IMAGE_NAME 2>/dev/null || true
+        echo "✔ Container and image removed. Next 'vice' command will rebuild from scratch."
+        ;;
+
+    clean)
+        if [[ "$(docker ps -aq -f name=^${CONTAINER_NAME}$)" == "" ]]; then
+            echo "X Container '$CONTAINER_NAME' does not exist. Run 'vice start' first."
+            exit 1
+        fi
+        echo ":: Cleaning build artifacts (build/, install/, log/)..."
+        docker exec $CONTAINER_NAME rm -rf /root/ssl-VICE/build /root/ssl-VICE/install /root/ssl-VICE/log
+        echo "✔ Clean complete. Run 'vice build' to rebuild."
+        ;;
+
+    *)
+        echo "Usage: vice <command>"
+        echo ""
+        echo "Development:"
+        echo "  build              Build the ROS2 workspace"
+        echo "  launch             Select and run a launch file"
+        echo "  reload             Rebuild + relaunch last launch file"
+        echo "  run <pkg> <node>   Run a single node"
+        echo "  attach             Open interactive shell in the container"
+        echo "  topics             List and echo ROS2 topics"
+        echo ""
+        echo "Container management:"
+        echo "  start              Start the container"
+        echo "  stop               Stop the container"
+        echo "  restart            Restart the container"
+        echo "  destroy            Remove container and image completely"
+        echo "  clean              Delete build/, install/, log/"
+        ;;
+esac
