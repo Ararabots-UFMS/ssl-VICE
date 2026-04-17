@@ -71,13 +71,13 @@ Fluxo de desenvolvimento:
 ### Usando Docker Compose
 
 ```bash
-docker-compose up --build
+docker build -t ssl-vice -f Dockerfile .
 ```
 
 Se não for sua primeira execução rode sem o _--build_
 
 ```bash
-docker-compose up
+vice topics
 ```
 
 Após isso, dois serviços serão criados:

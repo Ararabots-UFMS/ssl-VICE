@@ -44,6 +44,8 @@ ensure_container() {
         echo ":: Starting new container '$CONTAINER_NAME'..."
         docker run -d --name $CONTAINER_NAME \
             --network host \
+            --privileged \
+            --device=/dev/input \
             -v "$PROJECT_ROOT":/root/ssl-VICE \
             $IMAGE_NAME tail -f /dev/null
     else
