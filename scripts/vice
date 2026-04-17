@@ -68,7 +68,7 @@ elif [[ "$1" == "launch" ]]; then
     select LAUNCH_FILE in "${LAUNCH_FILES[@]}"; do
         if [[ -n "$LAUNCH_FILE" ]]; then
             echo ":: Launching $LAUNCH_FILE..."
-            docker exec $CONTAINER_NAME bash -c \
+            docker exec -it $CONTAINER_NAME bash -c \
                 "source /opt/ros/humble/setup.bash && \
                  source /root/ssl-VICE/install/local_setup.bash && \
                  ros2 launch launch/$LAUNCH_FILE"
@@ -109,6 +109,6 @@ else
     echo "  vice build                 # Build workspace"
     echo "  vice topics                # Echo topics"
     echo "  vice attach                # Open interactive shell"
-    echo "  vice launch		       # Runs launch files"
+    echo "  vice launch                # Runs launch files"
 fi
 
