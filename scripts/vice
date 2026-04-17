@@ -9,6 +9,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 IMAGE_NAME="ssl-vice"
 CONTAINER_NAME="vice"
 DOCKERFILE_PATH="$PROJECT_ROOT/Dockerfile"
+LAST_LAUNCH_FILE="$PROJECT_ROOT/.vice_last_launch"
 
 # --- Tip ---
 if [[ ":$PATH:" != *":$PWD/scripts:"* && ":$PATH:" != *":$PWD/scripts/:"* ]]; then
@@ -67,6 +68,7 @@ elif [[ "$1" == "launch" ]]; then
     echo ":: Available launch files:"
     select LAUNCH_FILE in "${LAUNCH_FILES[@]}"; do
         if [[ -n "$LAUNCH_FILE" ]]; then
+            echo "$LAUNCH_FILE" > "$LAST_LAUNCH_FILE"
             echo ":: Launching $LAUNCH_FILE..."
             docker exec -it $CONTAINER_NAME bash -c \
                 "source /opt/ros/humble/setup.bash && \
@@ -77,6 +79,21 @@ elif [[ "$1" == "launch" ]]; then
             echo "X Invalid choice. Try again."
         fi
     done
+    echo "✔ DONE"
+
+elif [[ "$1" == "reload" ]]; then
+    echo ":: Rebuilding workspace..."
+    docker exec $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && cd /root/ssl-VICE && colcon build"
+    if [[ ! -f "$LAST_LAUNCH_FILE" ]]; then
+        echo ":: No previous launch found. Falling back to 'vice launch'..."
+        exec "$0" launch
+    fi
+    LAUNCH_FILE="$(cat "$LAST_LAUNCH_FILE")"
+    echo ":: Relaunching $LAUNCH_FILE..."
+    docker exec -it $CONTAINER_NAME bash -c \
+        "source /opt/ros/humble/setup.bash && \
+         source /root/ssl-VICE/install/local_setup.bash && \
+         ros2 launch launch/$LAUNCH_FILE"
     echo "✔ DONE"
 
 elif [[ "$1" == "topics" ]]; then
@@ -110,5 +127,6 @@ else
     echo "  vice topics                # Echo topics"
     echo "  vice attach                # Open interactive shell"
     echo "  vice launch                # Runs launch files"
+    echo "  vice reload                # Rebuild + relaunch last launch file"
 fi
 
