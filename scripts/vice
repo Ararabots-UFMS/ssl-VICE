@@ -11,12 +11,22 @@ CONTAINER_NAME="vice"
 DOCKERFILE_PATH="$PROJECT_ROOT/Dockerfile"
 LAST_LAUNCH_FILE="$PROJECT_ROOT/.vice_last_launch"
 
+# --- Run a command inside the container with ROS + overlay sourced ---
+# Usage: ros_exec [-it] "<command>"
+ros_exec() {
+    local flags=""
+    if [[ "$1" == "-it" ]]; then flags="-it"; shift; fi
+    docker exec $flags $CONTAINER_NAME bash -c \
+        "source /opt/ros/humble/setup.bash && \
+         [ -f /root/ssl-VICE/install/local_setup.bash ] && source /root/ssl-VICE/install/local_setup.bash; \
+         $*"
+}
+
 # --- Tip ---
 if [[ ":$PATH:" != *":$PWD/scripts:"* && ":$PATH:" != *":$PWD/scripts/:"* ]]; then
     echo "!! Add '$PWD/scripts' to your PATH to use 'vice' globally:"
     echo " $ echo 'export PATH=\"$PWD/scripts:\$PATH\"' >> ~/.bashrc"
 fi
-
 
 # --- Build image if not exists ---
 if [[ "$(docker images -q $IMAGE_NAME 2> /dev/null)" == "" ]]; then
@@ -45,21 +55,18 @@ fi
 # --- Parse command ---
 if [[ "$1" == "build" ]]; then
     echo ":: Building ROS2 workspace..."
-    docker exec $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && cd /root/ssl-VICE && colcon build"
+    ros_exec "cd /root/ssl-VICE && colcon build"
     echo "✔ DONE"
 
 elif [[ "$1" == "attach" ]]; then
     echo ":: Opening interactive bash shell..."
-    docker exec -it $CONTAINER_NAME bash -c \
-        "source /opt/ros/humble/setup.bash && \
-         [ -f /root/ssl-VICE/install/local_setup.bash ] && source /root/ssl-VICE/install/local_setup.bash; \
-         exec bash"
+    ros_exec -it "exec bash"
     echo "✔ DONE"
 
 elif [[ "$1" == "launch" ]]; then
     LAUNCH_DIR="$PROJECT_ROOT/launch"
     mapfile -t LAUNCH_FILES < <(find "$LAUNCH_DIR" -maxdepth 1 -type f -name "*.py" -printf "%f\n" | sort)
-    
+
     if [[ ${#LAUNCH_FILES[@]} -eq 0 ]]; then
         echo "X No launch files found in $LAUNCH_DIR"
         exit 1
@@ -70,10 +77,7 @@ elif [[ "$1" == "launch" ]]; then
         if [[ -n "$LAUNCH_FILE" ]]; then
             echo "$LAUNCH_FILE" > "$LAST_LAUNCH_FILE"
             echo ":: Launching $LAUNCH_FILE..."
-            docker exec -it $CONTAINER_NAME bash -c \
-                "source /opt/ros/humble/setup.bash && \
-                 source /root/ssl-VICE/install/local_setup.bash && \
-                 ros2 launch launch/$LAUNCH_FILE"
+            ros_exec -it "ros2 launch launch/$LAUNCH_FILE"
             break
         else
             echo "X Invalid choice. Try again."
@@ -83,25 +87,20 @@ elif [[ "$1" == "launch" ]]; then
 
 elif [[ "$1" == "reload" ]]; then
     echo ":: Rebuilding workspace..."
-    docker exec $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && cd /root/ssl-VICE && colcon build"
+    ros_exec "cd /root/ssl-VICE && colcon build"
     if [[ ! -f "$LAST_LAUNCH_FILE" ]]; then
         echo ":: No previous launch found. Falling back to 'vice launch'..."
         exec "$0" launch
     fi
     LAUNCH_FILE="$(cat "$LAST_LAUNCH_FILE")"
     echo ":: Relaunching $LAUNCH_FILE..."
-    docker exec -it $CONTAINER_NAME bash -c \
-        "source /opt/ros/humble/setup.bash && \
-         source /root/ssl-VICE/install/local_setup.bash && \
-         ros2 launch launch/$LAUNCH_FILE"
+    ros_exec -it "ros2 launch launch/$LAUNCH_FILE"
     echo "✔ DONE"
 
 elif [[ "$1" == "topics" ]]; then
     echo ":: Fetching active ROS 2 topics from container '$CONTAINER_NAME'..."
-    
-    # Get list of topics from inside container
-    mapfile -t TOPICS < <(docker exec $CONTAINER_NAME bash -c \
-        "source /opt/ros/humble/setup.bash && ros2 topic list" 2>/dev/null)
+
+    mapfile -t TOPICS < <(ros_exec "ros2 topic list" 2>/dev/null)
 
     if [[ ${#TOPICS[@]} -eq 0 ]]; then
         echo "X No topics found. Make sure ROS2 nodes are running inside the container."
@@ -113,8 +112,7 @@ elif [[ "$1" == "topics" ]]; then
         if [[ -n "$TOPIC" ]]; then
             echo ":: Listening to topic: $TOPIC"
             echo ":: Press Ctrl+C to stop."
-            docker exec -it $CONTAINER_NAME bash -c \
-                "source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && ros2 topic echo $TOPIC"
+            ros_exec -it "ros2 topic echo $TOPIC"
             break
         else
             echo "X Invalid selection, try again."
