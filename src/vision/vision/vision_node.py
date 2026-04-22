@@ -106,12 +106,13 @@ class Vision(Node):
         u_a: Optional[float] = None,
         acceleration_sd_2d: Optional[float] = None,
         acceleration_sd_1d: Optional[float] = None,
+        friction: Optional[float] = None,
     ):
         
         for object_ in self.tracker.objects:
-            object_.KF.set_param(x_sd, y_sd, u_x, u_y, acceleration_sd_2d)
+            object_.KF.set_param(x_sd, y_sd, u_x, u_y, acceleration_sd_2d, friction)
             if not object_.id.is_ball:
-                object_.orientation_KF.set_param(a_sd, u_a, acceleration_sd_1d)
+                object_.orientation_KF.set_param(a_sd, u_a, acceleration_sd_1d, friction)
 
     def publish_vision(self):
         message = wrap_message(self.tracker.objects)

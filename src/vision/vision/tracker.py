@@ -1,4 +1,4 @@
-from vision.kalman_filter import KalmanFilterClass2D, KalmanFilterClass1D
+from .kalman_filter import ExtendedKalmanFilterClass2D, ExtendedKalmanFilterClass1D
 from system_interfaces.msg import VisionMessage
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 
@@ -35,11 +35,11 @@ class Object(object):
         self.prediction = np.asarray(detections)
         self.id = Id
         self.confidence = confidence
-        self.KF = KalmanFilterClass2D()
+        self.KF = ExtendedKalmanFilterClass2D()
         self.skip_count = 0
         # Orientation buffer, orientation needs proper processing.
         self.orientation = orientation
-        self.orientation_KF = KalmanFilterClass1D()
+        self.orientation_KF = ExtendedKalmanFilterClass1D()
 
 class ObjectTracker(object):
     '''
