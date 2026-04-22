@@ -79,7 +79,12 @@ class Vision(Node):
             max_frame_skipped=self.get_parameter("max_frame_skipped").get_parameter_value().integer_value,
         )
 
-    def update_tracker(self):
+    def update_tracker(self) -> None:
+        """Update object tracker with new vision data.
+
+        Receives data from vision client and updates the object tracker.
+        Handles geometry updates separately. Logs warnings on errors.
+        """
         try:
             # Orientation does not have a proper processing. Using raw orientantion and setting orientation velocity to 0.
             data = self.client.receive()
@@ -119,7 +124,12 @@ class Vision(Node):
             if not object_.id.is_ball:
                 object_.orientation_KF.set_param(a_sd, u_a, acceleration_sd_1d)
 
-    def publish_vision(self):
+    def publish_vision(self) -> None:
+        """Publish current vision tracking data to ROS topic.
+
+        Wraps tracked objects into a VisionMessage and validates before publishing.
+        Only publishes if the message contains valid data.
+        """
         message = wrap_message(self.tracker.objects)
 
         # Validate message before publishing (catch garbage/overflow)
@@ -131,7 +141,17 @@ class Vision(Node):
             self.publisher.publish(message)
 
     def _is_valid_vision_message(self, message: VisionMessage) -> bool:
-        """Check if vision message contains reasonable data"""
+        """Validate if vision message contains reasonable data.
+
+        Checks if robot and ball positions are within expected field bounds.
+        Returns False and logs warning if invalid data detected.
+
+        Args:
+            message: Vision message to validate
+
+        Returns:
+            True if message is valid, False otherwise
+        """
         for robot in list(message.yellow_robots) + list(message.blue_robots):
             if (
                 abs(robot.position_x) > self.config.MAX_REASONABLE_POS
@@ -149,7 +169,12 @@ class Vision(Node):
 
         return True
 
-    def publish_geometry(self, message: SSL_GeometryData):
+    def publish_geometry(self, message: SSL_GeometryData) -> None:
+        """Publish field geometry information to ROS topic.
+
+        Args:
+            message: SSL geometry data from vision system
+        """
         message: VisionGeometry = wrap_geo_message(message)
 
         if self.context.ok():
