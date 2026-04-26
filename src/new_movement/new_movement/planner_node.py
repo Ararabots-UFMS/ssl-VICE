@@ -15,6 +15,7 @@ from movement_interfaces.msg import (
 from system_interfaces.msg import GameState
 
 from typing import Dict, Optional
+from time import time
 
 
 class PlannerNode(Node):
@@ -30,6 +31,7 @@ class PlannerNode(Node):
         self.cur_overhead_points: Dict[int, TrajectoryPointMsg] = {}
         self.game_state: Optional[GameState] = None
         self.last_planned_trajectories: Dict[int, Trajectory] = {}
+        self.active_futures: Dict[int, any] = {} # Track running tasks per robot
         
         # Tools
         self.planner = Planner()
@@ -69,26 +71,37 @@ class PlannerNode(Node):
         if self.cur_targets is None or self.game_state is None:
             return
 
-        robots_to_plan = []
+        active_robot_ids = {t.robot_id for t in self.cur_targets.targets}
+
         for target in self.cur_targets.targets:
-            robots_to_plan.append(target)
+            rid = target.robot_id
+            
+            # THROTTLING: If a task is already running for this robot, skip this cycle
+            if rid in self.active_futures and not self.active_futures[rid].done():
+                continue
 
-        # Run planning in parallel
-        futures = []
-        for target in robots_to_plan:
-            futures.append(self.par_executor.submit(self.plan_for_robot, target))
+            future = self.par_executor.submit(self.plan_for_robot, target)
+            self.active_futures[rid] = future
+            future.add_done_callback(self.make_publish_callback(rid))
 
-        # Collect and publish results
-        for future in futures:
+    def make_publish_callback(self, robot_id):
+        def callback(future):
             try:
+                # Discard if robot is no longer an active target
+                if self.cur_targets:
+                    current_ids = {t.robot_id for t in self.cur_targets.targets}
+                    if robot_id not in current_ids:
+                        return
+
                 result = future.result()
                 if result:
-                    robot_id, trajectory = result
+                    _, trajectory = result
                     self.last_planned_trajectories[robot_id] = trajectory
                     msg = trajectory.to_msg(robot_id)
                     self.trajectory_pub.publish(msg)
             except Exception as e:
-                self.get_logger().error(f"Planning failed: {e}")
+                self.get_logger().error(f"Planning failed for robot {robot_id}: {e}")
+        return callback
 
     def plan_for_robot(self, target):
         robot_id = target.robot_id
@@ -136,13 +149,12 @@ def main(args=None):
     rclpy.init(args=args)
     node = PlannerNode()
     
-    # Use multi-threaded executor to handle concurrent callbacks
     from rclpy.executors import MultiThreadedExecutor
-    executor = MultiThreadedExecutor()
-    executor.add_node(node)
+    ros_executor = MultiThreadedExecutor()
+    ros_executor.add_node(node)
     
     try:
-        executor.spin()
+        ros_executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
