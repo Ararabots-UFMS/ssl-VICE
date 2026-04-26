@@ -11,7 +11,8 @@
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
-
+  <test_depend>movement_interfaces</test_depend>
+  
   <exec_depend>movement_interfaces</exec_depend>
 
   <export>

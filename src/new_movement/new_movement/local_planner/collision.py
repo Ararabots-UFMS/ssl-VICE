@@ -23,7 +23,7 @@ class CollisionEngine:
         times = np.arange(0, duration + time_step, time_step)
         
         # 2. Get positions for all time steps
-        positions = np.array([[trajectory.get_position(t).x, trajectory.get_position(t).y] for t in times])
+        positions = np.array([[trajectory.get_state(t).position.x, trajectory.get_state(t).position.y] for t in times])
 
         for obs in obstacles:
             if isinstance(obs, StaticObstacle):
