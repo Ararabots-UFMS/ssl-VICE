@@ -2,11 +2,20 @@ from dataclasses import dataclass
 from math import dist, sqrt
 from typing import Optional
 
+from movement_interfaces.msg import Vector2D as Vector2DMsg
+
 
 @dataclass
 class Vector2D:
     x: float
     y: float
+
+    def to_msg(self) -> Vector2DMsg:
+        return Vector2DMsg(x=float(self.x), y=float(self.y))
+
+    @classmethod
+    def from_msg(cls, msg: Vector2DMsg) -> "Vector2D":
+        return cls(x=msg.x, y=msg.y)
 
     def distance(self, other) -> float:
         if not isinstance(other, Vector2D):

@@ -1,13 +1,29 @@
-from typing import Tuple
+from typing import Tuple, List
 from dataclasses import dataclass
 from new_movement.entities.States import Vector2D
-from typing import Tuple
+
+from movement_interfaces.msg import (
+    MotionPrimitive as MotionPrimitiveMsg,
+    MotionPath as MotionPathMsg,
+)
 
 
 @dataclass
 class MotionPrimitive:
     acceleration: Vector2D
     duration: float  # seconds
+
+    def to_msg(self) -> MotionPrimitiveMsg:
+        return MotionPrimitiveMsg(
+            acceleration=self.acceleration.to_msg(), duration=float(self.duration)
+        )
+
+    @classmethod
+    def from_msg(cls, msg: MotionPrimitiveMsg) -> "MotionPrimitive":
+        return cls(
+            acceleration=Vector2D.from_msg(msg.acceleration),
+            duration=float(msg.duration),
+        )
 
     def __getitem__(self, index):
         if index == 0:
@@ -22,7 +38,18 @@ class MotionPrimitive:
 class MotionPath:
     """Piecewise constant acceleration motion path"""
 
-    motion_path: list[MotionPrimitive]
+    motion_path: List[MotionPrimitive]
+
+    def to_msg(self) -> MotionPathMsg:
+        msg = MotionPathMsg()
+        msg.primitives = [p.to_msg() for p in self.motion_path]
+        return msg
+
+    @classmethod
+    def from_msg(cls, msg: MotionPathMsg) -> "MotionPath":
+        return cls(
+            motion_path=[MotionPrimitive.from_msg(p) for p in msg.primitives]
+        )
 
     def split(self, t: float) -> Tuple[list[MotionPrimitive], list[MotionPrimitive]]:
         """

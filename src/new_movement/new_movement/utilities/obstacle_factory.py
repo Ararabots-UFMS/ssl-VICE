@@ -6,6 +6,8 @@ from new_movement.entities.StaticObstacle import (
 )
 from new_movement.entities.DynamicObstacles import AllyRobotObstacle, EnemyRobotObstacle
 from new_movement.entities.States import State, Vector2D
+from typing import Dict, List, Optional
+from new_movement.entities.Trajectory import Trajectory
 
 
 class ObstacleFactory:
@@ -14,65 +16,85 @@ class ObstacleFactory:
 
     def create_obstacles(
         self,
-        request,
-        robot_data,
+        robot_id: int,
+        config,  # PlanningOptions or similar msg/obj with booleans
         geometry,
         balls,
         enemy_robots,
         ally_robots,
+        ally_trajectories: Optional[Dict[int, Trajectory]] = None,
     ) -> list:
         obstacles = []
+        ally_trajectories = ally_trajectories or {}
 
-        try:
-
-            # Fallbacks caso alguma info não exista ainda
-            geometry = geometry if geometry is not None else None
-            balls = balls if balls is not None else []
-            enemy_robots = enemy_robots if enemy_robots is not None else {}
-            ally_robots = ally_robots if ally_robots is not None else {}
-
-            if request.field_border and geometry:
+        # 1. Field Border (Always on if geometry exists)
+        if geometry:
+            try:
                 obstacles.append(FieldBorderObstacle(geometry))
+            except Exception:
+                pass
 
-            if request.penalty_area and geometry:
+        # 2. Toggleable Penalty Area
+        if getattr(config, 'avoid_penalty_area', True) and geometry:
+            try:
                 obstacles.append(PenaltyAreaObstacle(geometry, FieldSide.RIGHT))
                 obstacles.append(PenaltyAreaObstacle(geometry, FieldSide.LEFT))
+            except Exception:
+                pass
 
-            if request.center_area:
-                # Center Radius hardcoded
+        # 3. Toggleable Center Area
+        if getattr(config, 'avoid_center_area', False):
+            try:
                 obstacles.append(GenericCircleObstacle(Vector2D(0, 0), 500))
+            except Exception:
+                pass
 
-            if request.ball and balls:
-                ball = balls[0]  # getting the first ball, maybe revise that...
+        # 4. Ball (Usually always on)
+        if getattr(config, 'avoid_ball', True) and balls:
+            try:
+                ball = balls[0]
                 obstacles.append(
                     GenericCircleObstacle(Vector2D(ball.position_x, ball.position_y), 60)
-                )  # Ball radius 50mm + 10mm (safety)
+                )
+            except Exception:
+                pass
 
-            for enemy_id in request.enemy_ids:
-                if enemy_id in enemy_robots:
-                    robot = enemy_robots[enemy_id]
-                    state = State(
-                        Vector2D(robot.position_x, robot.position_y),
-                        Vector2D(robot.velocity_x, robot.velocity_y),
-                    )
-                    obstacles.append(EnemyRobotObstacle(state, radius=190))
+        # 5. Enemy Robots (Always on)
+        for enemy in enemy_robots.values():
+            try:
+                state = State(
+                    Vector2D(enemy.position_x, enemy.position_y),
+                    Vector2D(enemy.velocity_x, enemy.velocity_y),
+                )
+                # radius = 90 (robot) + 100 (safety) = 190
+                obstacles.append(EnemyRobotObstacle(state, radius=190))
+            except Exception:
+                pass
 
-            for ally_id in request.ally_ids:
-                if ally_id in ally_robots and ally_id != request.id:
-                    robot = ally_robots[ally_id]
-                    state = State(
-                        Vector2D(robot.position_x, robot.position_y),
-                        Vector2D(robot.velocity_x, robot.velocity_y),
-                    )
+        # 6. Ally Robots (With Trajectory Support)
+        for a_id, ally in ally_robots.items():
+            if a_id == robot_id:
+                continue  # Self-exclusion
+
+            try:
+                state = State(
+                    Vector2D(ally.position_x, ally.position_y),
+                    Vector2D(ally.velocity_x, ally.velocity_y),
+                )
+                
+                if a_id in ally_trajectories and ally_trajectories[a_id] is not None:
+                    # Use Trajectory-aware obstacle
                     obstacles.append(
                         AllyRobotObstacle(
                             state,
-                            robot_data[ally_id]["trajectory"],
-                            time_offset=robot_data[ally_id]["time_offset"],
-                            radius=190,
+                            ally_trajectories[a_id],
+                            radius=190
                         )
                     )
+                else:
+                    # Fallback to simple prediction tube
+                    obstacles.append(EnemyRobotObstacle(state, radius=190))
+            except Exception:
+                pass
 
-            return obstacles
-        except:
-            return []
+        return obstacles
