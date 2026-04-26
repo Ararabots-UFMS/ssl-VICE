@@ -3,7 +3,7 @@ from random import uniform, randint
 from new_movement.entities.Trajectory import Trajectory, TrajectorySegment
 from new_movement.entities.obstacles import Obstacle
 from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
-from new_movement.utilities.collision_engine import CollisionEngine
+from .collision import CollisionEngine
 
 class TrajectoryOptimizer:
     def __init__(self, trys: int = 50, early_stop: int = 20):
@@ -51,7 +51,6 @@ class TrajectoryOptimizer:
 
             optimized_segment = generator.generate(firstState, secondState)
 
-            # Use CollisionEngine instead of passing CollisionSolver
             if not CollisionEngine.is_collision(optimized_segment, obstacles):
                 curSegment = trajectory.root
                 curTime = second_time
