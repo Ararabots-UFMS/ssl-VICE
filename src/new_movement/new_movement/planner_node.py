@@ -32,9 +32,9 @@ class PlannerNode(Node):
         self.last_planned_trajectories: Dict[int, Trajectory] = {}
         
         # Tools
-        self.planner = Planner(bypass_trys=50)
+        self.planner = Planner()
         self.factory = ObstacleFactory()
-        self.executor = ThreadPoolExecutor(max_workers=self.get_parameter('max_threads').value)
+        self.par_executor = ThreadPoolExecutor(max_workers=self.get_parameter('max_threads').value)
         
         # ROS Communication
         cb_group = ReentrantCallbackGroup()
@@ -76,7 +76,7 @@ class PlannerNode(Node):
         # Run planning in parallel
         futures = []
         for target in robots_to_plan:
-            futures.append(self.executor.submit(self.plan_for_robot, target))
+            futures.append(self.par_executor.submit(self.plan_for_robot, target))
 
         # Collect and publish results
         for future in futures:
