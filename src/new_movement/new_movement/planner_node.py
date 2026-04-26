@@ -30,7 +30,6 @@ class PlannerNode(Node):
         self.cur_targets: Optional[TargetArray] = None
         self.cur_overhead_points: Dict[int, TrajectoryPointMsg] = {}
         self.game_state: Optional[GameState] = None
-        self.last_planned_trajectories: Dict[int, Trajectory] = {}
         self.active_futures: Dict[int, any] = {} # Track running tasks per robot
         
         # Tools
@@ -71,8 +70,6 @@ class PlannerNode(Node):
         if self.cur_targets is None or self.game_state is None:
             return
 
-        active_robot_ids = {t.robot_id for t in self.cur_targets.targets}
-
         for target in self.cur_targets.targets:
             rid = target.robot_id
             
@@ -96,7 +93,6 @@ class PlannerNode(Node):
                 result = future.result()
                 if result:
                     _, trajectory = result
-                    self.last_planned_trajectories[robot_id] = trajectory
                     msg = trajectory.to_msg(robot_id)
                     self.trajectory_pub.publish(msg)
             except Exception as e:
@@ -132,7 +128,7 @@ class PlannerNode(Node):
             balls=self.game_state.balls if self.game_state else [],
             enemy_robots=self.game_state.enemy_robots if self.game_state else [],
             ally_robots=self.game_state.ally_robots if self.game_state else [],
-            ally_trajectories=self.last_planned_trajectories
+            ally_info=self.cur_overhead_points
         )
 
         # Solve

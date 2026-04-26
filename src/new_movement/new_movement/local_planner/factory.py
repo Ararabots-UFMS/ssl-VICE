@@ -22,10 +22,10 @@ class ObstacleFactory:
         balls,
         enemy_robots,
         ally_robots,
-        ally_trajectories: Optional[Dict[int, Trajectory]] = None,
+        ally_info: Optional[Dict[int, any]] = None, # Dict[int, TrajectoryPointMsg]
     ) -> list:
         obstacles = []
-        ally_trajectories = ally_trajectories or {}
+        ally_info = ally_info or {}
 
         # 1. Field Border (Always on if geometry exists)
         if geometry:
@@ -85,17 +85,23 @@ class ObstacleFactory:
                     Vector2D(ally.velocity_x, ally.velocity_y),
                 )
                 
-                if a_id in ally_trajectories and ally_trajectories[a_id] is not None:
-                    # Use Trajectory-aware obstacle
-                    obstacles.append(
-                        AllyRobotObstacle(
-                            state,
-                            ally_trajectories[a_id],
-                            radius=190
+                if a_id in ally_info:
+                    info = ally_info[a_id]
+                    # Check if the overhead point contains a valid trajectory
+                    if hasattr(info, 'trajectory') and len(info.trajectory.segments) > 0:
+                        obstacles.append(
+                            AllyRobotObstacle(
+                                state,
+                                Trajectory.from_msg(info.trajectory),
+                                time_offset=info.timestamp,
+                                radius=190
+                            )
                         )
-                    )
+                    else:
+                        # Fallback to simple prediction tube
+                        obstacles.append(EnemyRobotObstacle(state, radius=190))
                 else:
-                    # Fallback to simple prediction tube
+                    # Fallback if no tracker info available
                     obstacles.append(EnemyRobotObstacle(state, radius=190))
             except Exception:
                 pass
