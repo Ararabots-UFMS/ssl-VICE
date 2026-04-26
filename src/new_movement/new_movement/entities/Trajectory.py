@@ -4,6 +4,11 @@ from new_movement.entities.States import State, Vector2D
 from new_movement.entities.Motion import MotionPath
 from typing import Optional, List, Union
 
+from movement_interfaces.msg import (
+    Trajectory as TrajectoryMsg,
+    TrajectorySegment as TrajectorySegmentMsg,
+)
+
 
 class TrajectorySegment:
     """Representa um único segmento contínuo de uma trajetória."""
@@ -15,6 +20,21 @@ class TrajectorySegment:
         self.init_vel = init_vel
         self.motion_path = motion_path
         self.child: Optional[TrajectorySegment] = None
+
+    def to_msg(self) -> TrajectorySegmentMsg:
+        msg = TrajectorySegmentMsg()
+        msg.init_pos = self.init_pos.to_msg()
+        msg.init_vel = self.init_vel.to_msg()
+        msg.motion_path = self.motion_path.to_msg()
+        return msg
+
+    @classmethod
+    def from_msg(cls, msg: TrajectorySegmentMsg) -> "TrajectorySegment":
+        return cls(
+            init_pos=Vector2D.from_msg(msg.init_pos),
+            init_vel=Vector2D.from_msg(msg.init_vel),
+            motion_path=MotionPath.from_msg(msg.motion_path),
+        )
 
     @property
     def initial_state(self) -> State:
@@ -107,6 +127,24 @@ class Trajectory:
             while node.child:
                 node = node.child
             self.tail = node
+
+    def to_msg(self, robot_id: int) -> TrajectoryMsg:
+        msg = TrajectoryMsg()
+        msg.robot_id = int(robot_id)
+
+        current_segment = self.root
+        while current_segment:
+            msg.segments.append(current_segment.to_msg())
+            current_segment = current_segment.child
+
+        return msg
+
+    @classmethod
+    def from_msg(cls, msg: TrajectoryMsg) -> "Trajectory":
+        trajectory = cls()
+        for seg_msg in msg.segments:
+            trajectory.append(TrajectorySegment.from_msg(seg_msg))
+        return trajectory
 
     def append(self, segment: TrajectorySegment) -> None:
         """Anexa um TrajectorySegment ao final da trajetória."""
