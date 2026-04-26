@@ -1,0 +1,4 @@
+bool avoid_penalty_area
+bool avoid_center_area
+bool avoid_ball
+float32 aggressiveness
