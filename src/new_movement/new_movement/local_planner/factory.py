@@ -35,7 +35,9 @@ class ObstacleFactory:
                 pass
 
         # 2. Toggleable Penalty Area
-        if getattr(config, 'avoid_penalty_area', True) and geometry:
+        planning_opts = getattr(config, 'planning_options', config)
+        
+        if getattr(planning_opts, 'avoid_penalty_area', True) and geometry:
             try:
                 obstacles.append(PenaltyAreaObstacle(geometry, FieldSide.RIGHT))
                 obstacles.append(PenaltyAreaObstacle(geometry, FieldSide.LEFT))
@@ -43,14 +45,14 @@ class ObstacleFactory:
                 pass
 
         # 3. Toggleable Center Area
-        if getattr(config, 'avoid_center_area', False):
+        if getattr(planning_opts, 'avoid_center_area', False):
             try:
                 obstacles.append(GenericCircleObstacle(Vector2D(0, 0), 500))
             except Exception:
                 pass
 
         # 4. Ball (Usually always on)
-        if getattr(config, 'avoid_ball', True) and balls:
+        if getattr(planning_opts, 'avoid_ball', True) and balls:
             try:
                 ball = balls[0]
                 obstacles.append(
@@ -60,7 +62,7 @@ class ObstacleFactory:
                 pass
 
         # 5. Enemy Robots (Always on)
-        for enemy in enemy_robots.values():
+        for enemy in enemy_robots:
             try:
                 state = State(
                     Vector2D(enemy.position_x, enemy.position_y),
@@ -72,7 +74,8 @@ class ObstacleFactory:
                 pass
 
         # 6. Ally Robots (With Trajectory Support)
-        for a_id, ally in ally_robots.items():
+        for ally in ally_robots:
+            a_id = ally.id
             if a_id == robot_id:
                 continue  # Self-exclusion
 

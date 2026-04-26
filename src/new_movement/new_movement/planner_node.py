@@ -5,8 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from new_movement.entities.States import State, Vector2D
 from new_movement.entities.Trajectory import Trajectory
-from new_movement.planner import Planner
-from new_movement.utilities.obstacle_factory import ObstacleFactory
+from new_movement.local_planner import Planner, ObstacleFactory
 
 from movement_interfaces.msg import (
     TargetArray,
@@ -42,12 +41,14 @@ class PlannerNode(Node):
         
         # Subscribers
         self.target_sub = self.create_subscription(
-            TargetArray, 'target_topic', self.target_callback, 10, callback_group=cb_group)
+            TargetArray, 'movement_manager/targets', self.target_callback, 10, callback_group=cb_group)
         self.overhead_sub = self.create_subscription(
-            TrajectoryPointMsg, 'overhead_topic', self.overhead_callback, 10, callback_group=cb_group)
+            TrajectoryPointMsg, 'movement_tracker/overhead', self.overhead_callback, 10, callback_group=cb_group)
+        self.game_state_sub = self.create_subscription(
+            GameState, 'game_state', self.game_state_callback, 10, callback_group=cb_group)
             
         # Publisher
-        self.trajectory_pub = self.create_publisher(TrajectoryMsg, 'planner_topic', 10)
+        self.trajectory_pub = self.create_publisher(TrajectoryMsg, 'planner/trajectories', 10)
         
         # Timer
         freq = self.get_parameter('planner_freq').value
@@ -92,15 +93,13 @@ class PlannerNode(Node):
     def plan_for_robot(self, target):
         robot_id = target.robot_id
         
-        # Determine Initial State
-        # Prioritize overhead (future) state from tracker to prevent jitter
-        # TODO prevent use of overhead points too old, like 100ms or something
+        # Determine Initial State (Converting meters to mm)
         if robot_id in self.cur_overhead_points:
             init_pos = self.cur_overhead_points[robot_id].pos
             init_vel = self.cur_overhead_points[robot_id].vel
         else:
-            init_pos = target.inital_pos
-            init_vel = target.inital_vel
+            init_pos = target.initial_pos
+            init_vel = target.initial_vel
 
         initial_state = State(
             Vector2D(init_pos.x, init_pos.y),
@@ -113,14 +112,13 @@ class PlannerNode(Node):
         )
 
         # Generate Obstacles
-        # Using game_state for geometry, and assuming target carries the toggles
         obstacles = self.factory.create_obstacles(
             robot_id=robot_id,
-            config=target,  # Assuming MovementCommand/Target has avoid_penalty_area etc.
+            config=target,
             geometry=self.game_state.geometry if self.game_state else None,
             balls=self.game_state.balls if self.game_state else [],
-            enemy_robots={r.robot_id: r for r in self.game_state.blue_robots} if self.game_state else {}, # Simplified
-            ally_robots={r.robot_id: r for r in self.game_state.yellow_robots} if self.game_state else {}, # Simplified
+            enemy_robots=self.game_state.enemy_robots if self.game_state else [],
+            ally_robots=self.game_state.ally_robots if self.game_state else [],
             ally_trajectories=self.last_planned_trajectories
         )
 
