@@ -9,7 +9,7 @@ def generate_launch_description():
         ),
         Node(
             package='control_unit',
-            executable='mainNode',
+            executable='gameWatcher',
         ),
         Node(
             package='grsim_messenger',

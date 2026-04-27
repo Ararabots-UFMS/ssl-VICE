@@ -3,6 +3,8 @@ from threading import Lock
 import rclpy
 from rclpy.node import Node
 
+from std_srvs.srv import SetBool
+
 from system_interfaces.msg import (
     Balls,
     GameState,
@@ -55,6 +57,9 @@ class GameWatcher(Node):
         # Services
         self.get_game_config_srv = self.create_service(
             GetGameConfig, "get_game_config", self.handle_get_game_config
+        )
+        self.set_team_color_srv = self.create_service(
+            SetBool, "set_team_color", self.handle_set_team_color
         )
 
         # Aggregated game state publisher
@@ -139,6 +144,16 @@ class GameWatcher(Node):
             except Exception:
                 response.robot_count = 3
 
+        return response
+
+    def handle_set_team_color(self, request, response):
+        with self._lock:
+            self.is_team_color_yellow = bool(request.data)
+            self._dirty = True
+        color = "Yellow" if request.data else "Blue"
+        self.get_logger().info(f"Team color manually set to {color}")
+        response.success = True
+        response.message = f"Team color set to {color}"
         return response
 
     def _timer_publish_state(self):

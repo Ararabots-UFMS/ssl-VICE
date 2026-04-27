@@ -4,6 +4,8 @@ set -e
 # --- Locate project root (one directory above this script) ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+HOST_DISPLAY="${DISPLAY:-}"
+HOST_XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
 
 # --- Config ---
 IMAGE_NAME="ssl-vice"
@@ -46,6 +48,10 @@ ensure_container() {
             --network host \
             --privileged \
             --device=/dev/input \
+            -e DISPLAY="$HOST_DISPLAY" \
+            -e XAUTHORITY=/tmp/.Xauthority \
+            -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+            -v "$HOST_XAUTHORITY":/tmp/.Xauthority:ro \
             -v "$PROJECT_ROOT":/root/ssl-VICE \
             $IMAGE_NAME tail -f /dev/null
     else

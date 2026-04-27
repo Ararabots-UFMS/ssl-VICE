@@ -12,6 +12,8 @@ from system_interfaces.msg import (
     RobotTrajectory,
     TrajectoryPoint,
 )
+from std_srvs.srv import Trigger
+
 from system_interfaces.srv import StrategyCommand, UpdateObstacle
 
 from time import sleep
@@ -49,6 +51,11 @@ class PathDriver(Node):
         self.obstacle_factory = ObstacleFactory()
         self.update_obstacles_service = self.create_service(
             UpdateObstacle, "update_obstacles", self.update_obstacles
+        )
+
+        # Reset all commands (called on team color change)
+        self.reset_commands_service = self.create_service(
+            Trigger, "reset_commands", self.reset_commands
         )
 
         # Obstacles Update Timer
@@ -147,7 +154,6 @@ class PathDriver(Node):
         controlCommand = ControlCommand()
         controlCommandList = []
 
-        self.driver_init()
         try:
             for robot_id, robot_info in self.robot_data.items():
                 trajectory = robot_info.get("trajectory")
@@ -197,8 +203,6 @@ class PathDriver(Node):
         """Publish the current trajectories for all robots"""
         trajectory_message = TrajectoryMessage()
         trajectory_list = []
-
-        self.driver_init()
 
         for robot_id, robot_info in self.robot_data.items():
             trajectory = robot_info.get("trajectory")
@@ -333,6 +337,14 @@ class PathDriver(Node):
                     self.ally_robots,
                 )
                 self.robot_data[robot_id]["obstacles"] = new_obstacles
+
+    def reset_commands(self, request, response):
+        self.robot_data.clear()
+        self.last_command.clear()
+        self.get_logger().info("All commands and trajectories reset")
+        response.success = True
+        response.message = "Commands reset"
+        return response
 
     def update_target(self, request, response):
         self.driver_init()
