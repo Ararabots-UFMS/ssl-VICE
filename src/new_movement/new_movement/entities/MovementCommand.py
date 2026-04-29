@@ -1,13 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
-
-try:
-    from movement_interfaces.msg import Vector2D as Vector2DMsg
-except ImportError:
-    class Vector2DMsg:
-        def __init__(self):
-            self.x = 0.0
-            self.y = 0.0
+from movement_interfaces.msg import Vector2D as Vector2DMsg
 
 
 @dataclass

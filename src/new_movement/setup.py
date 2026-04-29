@@ -22,6 +22,7 @@ setup(
         "console_scripts": [
             'driver = new_movement.driver:main',
             'planner = new_movement.planner_node:main',
+            'movement_manager = new_movement.movement_manager:main',
         ],
     },
 )

@@ -1,102 +1,11 @@
-try:
-    from movement_interfaces.msg import MovementCommandArray, TargetArray, Target
-    from movement_interfaces.srv import SetStaticObstacles, SetGoalKeeper
-    from system_interfaces.msg import VisionMessage
-    from system_interfaces.srv import GetGameConfig
-except ImportError:
-    class MovementCommandArray:
-        def __init__(self):
-            self.commands = []
+from movement_interfaces.msg import MovementCommandArray, TargetArray, Target
+from movement_interfaces.srv import SetStaticObstacles, SetGoalKeeper
+from system_interfaces.msg import VisionMessage
+from system_interfaces.srv import GetGameConfig
 
-
-    class _Point:
-        def __init__(self):
-            self.x = 0.0
-            self.y = 0.0
-
-
-    class _PlanningOptions:
-        def __init__(self):
-            self.avoid_penalty_area = False
-            self.avoid_center_circle = False
-
-
-    class Target:
-        def __init__(self):
-            self.robot_id = 0
-            self.initial_pos = _Point()
-            self.initial_vel = _Point()
-            self.target_pos = _Point()
-            self.planning_options = _PlanningOptions()
-
-
-    class TargetArray:
-        def __init__(self):
-            self.targets = []
-
-
-    class SetStaticObstacles:
-        class Request:
-            pass
-
-
-    class SetGoalKeeper:
-        class Request:
-            pass
-
-
-    class GetGameConfig:
-        class Request:
-            pass
-
-
-    class VisionMessage:
-        def __init__(self):
-            self.yellow_robots = []
-            self.blue_robots = []
-
-try:
-    import rclpy
-    from rclpy.node import Node
-    from rclpy.executors import MultiThreadedExecutor
-except ImportError:
-    class Node:
-        def __init__(self, name):
-            self._name = name
-
-        def get_logger(self):
-            class _Logger:
-                def info(self, *args, **kwargs):
-                    pass
-
-                def error(self, *args, **kwargs):
-                    pass
-
-                def warn(self, *args, **kwargs):
-                    pass
-
-            return _Logger()
-
-
-    class MultiThreadedExecutor:
-        def add_node(self, node):
-            pass
-
-        def spin(self):
-            pass
-
-
-    class _RclpyStub:
-        @staticmethod
-        def init(args=None):
-            pass
-
-        @staticmethod
-        def shutdown():
-            pass
-
-
-    rclpy = _RclpyStub()
+import rclpy
+from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 
 class MovementManager(Node):
     def __init__(self):

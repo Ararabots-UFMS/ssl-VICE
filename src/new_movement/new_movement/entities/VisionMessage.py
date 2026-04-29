@@ -1,15 +1,5 @@
 from dataclasses import dataclass, field
-
-try:
-    from system_interfaces.msg import VisionMessage as VisionMessageMsg, Robots
-except ImportError:
-    class VisionMessageMsg:
-        def __init__(self):
-            self.yellow_robots = []
-            self.blue_robots = []
-
-    class Robots:
-        pass
+from system_interfaces.msg import VisionMessage as VisionMessageMsg, Robots
 
 @dataclass
 class VisionMessage:
