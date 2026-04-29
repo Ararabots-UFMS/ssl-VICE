@@ -174,5 +174,7 @@ def main(args=None):
         movement_manager.destroy_node()
         rclpy.shutdown()
 
+if __name__ == '__main__':
+    main()
 
 
