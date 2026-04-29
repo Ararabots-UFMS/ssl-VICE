@@ -146,7 +146,7 @@ class MovementManager(Node):
             target.initial_vel.x = robot.velocity_x
             target.initial_vel.y = robot.velocity_y
             target.planning_options.avoid_penalty_area = self._static_obstacles['border_area']
-            target.planning_options.avoid_center_circle = self._static_obstacles['center_circle']
+            target.planning_options.avoid_center_area = self._static_obstacles['center_circle']
             target.target_pos = cmd.target_pos
 
             if robot.id == self._goal_keeper_id:

@@ -1,20 +1,15 @@
 import pytest
-import numpy as np
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from movement_interfaces.msg import Vector2D as Vector2DMsg
 
 from new_movement.movement_manager import MovementManager
 
-from new_movement.entities.GoalKeeper import GoalKeeper
-from new_movement.entities.ObstaclesManager import ObstaclesManager
-from new_movement.entities.TeamColor import TeamColor
-from new_movement.entities.VisionMessage import VisionMessage
-from new_movement.entities.MovementCommand import MovementCommand
 
-
-class SimpleVector:
-    def __init__(self, x: float = 0.0, y: float = 0.0):
-        self.x = x
-        self.y = y
+def _make_vector(x: float, y: float):
+    vec = Vector2DMsg()
+    vec.x = float(x)
+    vec.y = float(y)
+    return vec
 
 class FakeFuture:
     def __init__(self, response):
@@ -41,7 +36,7 @@ def test_robot():
 def test_command():
     cmd = MagicMock()
     cmd.robot_id = 1
-    cmd.target_pos = SimpleVector(300.0, 200.0)
+    cmd.target_pos = _make_vector(300.0, 200.0)
 
     return cmd
 
@@ -256,7 +251,7 @@ def test_robot2():
 
 @pytest.fixture
 def test_command():
-    tp = SimpleVector(100.0, 200.0)
+    tp = _make_vector(100.0, 200.0)
     cmd = MagicMock()
     cmd.robot_id = 1
     cmd.target_pos = tp
@@ -264,7 +259,7 @@ def test_command():
 
 @pytest.fixture
 def test_command2():
-    tp = SimpleVector(300.0, 400.0)
+    tp = _make_vector(300.0, 400.0)
     cmd = MagicMock()
     cmd.robot_id = 2
     cmd.target_pos = tp
@@ -290,7 +285,7 @@ def test_target_array_maps_fields(manager, test_robot, test_robot2, test_command
     assert target1.target_pos.x == test_command2.target_pos.x
     assert target1.target_pos.y == test_command2.target_pos.y
     assert target1.planning_options.avoid_penalty_area is True
-    assert target1.planning_options.avoid_center_circle is False
+    assert target1.planning_options.avoid_center_area is False
 
     target2 = target_array_msg.targets[1]
     assert target2.robot_id == 1
@@ -301,7 +296,7 @@ def test_target_array_maps_fields(manager, test_robot, test_robot2, test_command
     assert target2.target_pos.x == test_command.target_pos.x
     assert target2.target_pos.y == test_command.target_pos.y
     assert target2.planning_options.avoid_penalty_area is True
-    assert target2.planning_options.avoid_center_circle is False
+    assert target2.planning_options.avoid_center_area is False
 
 def test_target_array_goal_keeper_last(manager, test_robot, test_robot2, test_command, test_command2):
     manager._movement_commands = [test_command, test_command2]
