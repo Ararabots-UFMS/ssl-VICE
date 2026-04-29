@@ -20,7 +20,7 @@ class MovementManager(Node):
         self.GoalKeeper_srv = self.create_client(SetGoalKeeper, 'SetGoalKeeper')
         self.TeamColor_srv = self.create_client(GetGameConfig, 'get_game_config')
 
-        self._target_array_pub = self.create_publisher(TargetArray, 'TargetArrayTopic', 10)
+        self._target_array_pub = self.create_publisher(TargetArray, 'movement_manager/targets', 10)
 
         self.__game_config_inflight = False
         self._static_obstacles_inflight = False
