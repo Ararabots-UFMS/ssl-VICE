@@ -198,9 +198,6 @@ class ExtendedKalmanFilterClass2D(object):
         if friction is not None:
             self.friction = friction
 
-import numpy as np
-from typing import Optional
-
 class KalmanFilterClass1D(object):
     '''
     Kalman filter for 1D (Angle and Angular velocity).
