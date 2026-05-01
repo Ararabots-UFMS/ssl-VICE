@@ -60,7 +60,7 @@ class Vision(Node):
             VisionGeometry, "geometryTopic", 10
         )
 
-        self.tracker = ObjectTracker(max_frame_skipped=self.max_frame_skipped)
+        self.tracker = ObjectTracker(max_time_undetected=self.max_time_undetected)
 
         # TODO: Find the optimal timer.
         # Timer fast to process vision packets.
