@@ -32,7 +32,7 @@ class Vision(Node):
         # Socket read timeout (0 => non-blocking) in seconds.
         self.declare_parameter("socket_timeout", 0.0)
         self.declare_parameter("num_cams", 4)
-        self.declare_parameter("max_frame_skipped", 30)
+        self.declare_parameter("max_time_undetected", 0.5)
         # Verbose prints in terminal all received data.
         self.ip = self.get_parameter("ip").get_parameter_value().string_value
         self.port = self.get_parameter("port").get_parameter_value().integer_value
@@ -46,8 +46,8 @@ class Vision(Node):
         self.num_cams = (
             self.get_parameter("num_cams").get_parameter_value().integer_value
         )
-        self.max_frame_skipped = (
-            self.get_parameter("max_frame_skipped").get_parameter_value().integer_value
+        self.max_time_undetected = (
+            self.get_parameter("max_time_undetected").get_parameter_value().double_value
         )
 
         self.client = Client(
@@ -67,7 +67,7 @@ class Vision(Node):
             VisionGeometry, "geometryTopic", 10
         )
 
-        self.tracker = ObjectTracker(max_frame_skipped=self.max_frame_skipped)
+        self.tracker = ObjectTracker(max_time_undetected=self.max_time_undetected)
 
         # TODO: Find the optimal timer.
         self.unify_timer = self.create_timer(0.016, self.publish_vision)

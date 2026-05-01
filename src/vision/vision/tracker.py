@@ -2,6 +2,7 @@ from .kalman_filter import KalmanFilterClass2D, KalmanFilterClass1D
 from system_interfaces.msg import VisionMessage
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 
+import time
 import numpy as np
 from typing import Optional, List
 
@@ -36,24 +37,20 @@ class Object(object):
         self.id = Id
         self.confidence = confidence
         self.KF = KalmanFilterClass2D()
-        self.skip_count = 0
-        # Orientation buffer, orientation needs proper processing.
+        self.last_seen = time.time()
         self.orientation = orientation
         self.orientation_KF = KalmanFilterClass1D()
 
     def update(self, x: float, y: float, confidence: float, orientation: Optional[float] = None):
-        # Atualiza posição
         self.prediction = self.KF.update([[x], [y]])
-        # Atualiza orientação se não for bola
         if not self.id.is_ball and orientation is not None:
             self.orientation = self.orientation_KF.update(orientation)
         self.confidence = confidence
-        self.skip_count = 0
+        self.last_seen = time.time()
 
-    def predict(self, dt: float):
-        # Predição de posição
+    def predict(self):
+        dt = time.time() - self.last_seen
         self.KF.predict(dt)
-        # Predição de orientação se não for bola
         if not self.id.is_ball:
             self.orientation_KF.predict(dt)
 
@@ -74,21 +71,18 @@ class ObjectTracker(object):
     - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
     
     '''
-    def __init__(self, max_frame_skipped: int):
-        
-        self.max_frame_skipped = max_frame_skipped
+    def __init__(self, max_time_undetected: float):
+        self.max_time_undetected = max_time_undetected
         self.objects = {}
         self.last_time_stamp = 0
-        
-    def delete_undetected_objects(self, recieved_objects_id: List[ID]) -> None:
+
+    def delete_undetected_objects(self, received_objects_id: List[ID]) -> None:
+        now = time.time()
         for id, obj in list(self.objects.items()):
-            if id not in recieved_objects_id:
-                obj.skip_count += 1
+            if id not in received_objects_id:
                 obj.confidence = 0
-                if obj.skip_count > self.max_frame_skipped:
+                if now - obj.last_seen > self.max_time_undetected:
                     del self.objects[id]
-            else:
-                obj.skip_count = 0
 
     def read_object_from_message(self, object_, is_ball, is_blue=None) -> ID:
         if is_ball:
@@ -99,47 +93,33 @@ class ObjectTracker(object):
             orientation = object_.orientation
 
         if id in self.objects:
-            self.objects[id].prediction = self.objects[id].KF.update([[object_.x], [object_.y]])
-            if not id.is_ball:
-                self.objects[id].orientation = self.objects[id].orientation_KF.update(orientation)
-            self.objects[id].confidence = object_.confidence
-            self.objects[id].skip_count = 0
+            self.objects[id].update(object_.x, object_.y, object_.confidence, orientation)
         else:
             self.objects[id] = Object([[object_.x], [object_.y]], id, object_.confidence, orientation)
 
         return id
-    
-    def predict(self) -> None:
-        for obj in self.objects.values():
-            obj.predict(self.dt)
-    
-    def update(self, message: SSL_WrapperPacket) -> VisionMessage:
-        '''
-        Updates the position and velocity of objects based on the detections.
-        '''
-        # TODO Implement a Hungarian algorithm to give the balls an id?
-        recieved_objects_id, time_stamp = [], message.detection.t_capture
-        
-        self.dt = time_stamp - self.last_time_stamp
-        self.last_time_stamp = time_stamp
 
-        if message.detection.robots_yellow:
-            for yellow_robot in message.detection.robots_yellow:
-                robot_id = self.read_object_from_message(yellow_robot, is_ball = False, is_blue = False)
-                recieved_objects_id.append(robot_id)
-        
-        if message.detection.robots_blue:
-            for blue_robot in message.detection.robots_blue:
-                robot_id = self.read_object_from_message(blue_robot, is_ball = False, is_blue = True)
-                recieved_objects_id.append(robot_id)
-        
-        # Balls don't have ids, so we track only one ball.
-        # Currently, we choose the ball with the highest confidence.
+    def predict_undetected(self, received_objects_id: List[ID]) -> None:
+        for id, obj in self.objects.items():
+            if id not in received_objects_id:
+                obj.predict()
+
+    def update(self, message: SSL_WrapperPacket) -> None:
+        received_objects_id = []
+        self.last_time_stamp = message.detection.t_capture
+
+        for yellow_robot in message.detection.robots_yellow:
+            robot_id = self.read_object_from_message(yellow_robot, is_ball=False, is_blue=False)
+            received_objects_id.append(robot_id)
+
+        for blue_robot in message.detection.robots_blue:
+            robot_id = self.read_object_from_message(blue_robot, is_ball=False, is_blue=True)
+            received_objects_id.append(robot_id)
+
         if message.detection.balls:
             best_ball = max(message.detection.balls, key=lambda b: b.confidence)
             ball_id = self.read_object_from_message(best_ball, is_ball=True)
-            recieved_objects_id.append(ball_id)
-                
-        self.delete_undetected_objects(recieved_objects_id)
+            received_objects_id.append(ball_id)
 
-        self.predict()
+        self.predict_undetected(received_objects_id)
+        self.delete_undetected_objects(received_objects_id)
