@@ -20,36 +20,29 @@ class Vision(Node):
     def __init__(self):
         super().__init__("visionNode")
 
-        # Parameters settings.
-        self.declare_parameter("ip", "224.5.23.2")
-        # Visão real
-        self.declare_parameter("port", 10006)
-        # Grsim
-        # self.declare_parameter('port', 10020)
-        self.declare_parameter("verbose", False)
-        # Optional local interface IP to bind/join multicast (e.g., 192.168.0.10). If empty uses INADDR_ANY.
-        self.declare_parameter("interface_ip", "")
-        # Socket read timeout (0 => non-blocking) in seconds.
-        self.declare_parameter("socket_timeout", 0.0)
-        self.declare_parameter("num_cams", 4)
-        self.declare_parameter("max_frame_skipped", 30)
-        # Verbose prints in terminal all received data.
-        self.ip = self.get_parameter("ip").get_parameter_value().string_value
-        self.port = self.get_parameter("port").get_parameter_value().integer_value
-        self.verbose = self.get_parameter("verbose").get_parameter_value().bool_value
-        self.interface_ip = (
-            self.get_parameter("interface_ip").get_parameter_value().string_value
-        )
-        self.socket_timeout = (
-            self.get_parameter("socket_timeout").get_parameter_value().double_value
-        )
-        self.num_cams = (
-            self.get_parameter("num_cams").get_parameter_value().integer_value
-        )
-        self.max_frame_skipped = (
-            self.get_parameter("max_frame_skipped").get_parameter_value().integer_value
-        )
+        # Declaration of parameters with default values.
+        default_params = {
+            "ip": "224.5.23.2",
+            "port": 10006,
+            "verbose": False,
+            "interface_ip": "",
+            "socket_timeout": 0.0,
+            "num_cams": 4,
+            "max_frame_skipped": 30,
+        }
 
+        for name, default in default_params.items():
+            self.declare_parameter(name, default)
+
+        # Retrieve already typed parameters.
+        self.ip = self.get_parameter("ip").value
+        self.port = self.get_parameter("port").value
+        self.verbose = self.get_parameter("verbose").value
+        self.interface_ip = self.get_parameter("interface_ip").value
+        self.socket_timeout = self.get_parameter("socket_timeout").value
+        self.num_cams = self.get_parameter("num_cams").value
+        self.max_frame_skipped = self.get_parameter("max_frame_skipped").value
+        
         self.client = Client(
             ip=self.ip,
             port=self.port,
@@ -70,12 +63,14 @@ class Vision(Node):
         self.tracker = ObjectTracker(max_frame_skipped=self.max_frame_skipped)
 
         # TODO: Find the optimal timer.
-        self.unify_timer = self.create_timer(0.016, self.publish_vision)
+        # Timer fast to process vision packets.
+        self.publish_timer = self.create_timer(0.016, self.publish_vision)
+        # Timer slow to publisher messages ROS.
         self.tracker_timer = self.create_timer(0.001, self.update_tracker)
 
     def update_tracker(self):
         try:
-            # Orientation does not have a proper processing. Using raw orientantion and setting orientation velocity to 0.
+            # Receive data from ssl-vision. If data geometry, publish in message. If data detection, update tracker and publish in message.
             data = self.client.receive()
 
             if data is None:
@@ -109,7 +104,7 @@ class Vision(Node):
         friction: Optional[float] = None,
     ):
         
-        for object_ in self.tracker.objects:
+        for object_ in self.tracker.objects.values():
             object_.KF.set_param(x_sd, y_sd, u_x, u_y, acceleration_sd_2d, friction)
             if not object_.id.is_ball:
                 object_.orientation_KF.set_param(a_sd, u_a, acceleration_sd_1d, friction)
