@@ -1,7 +1,6 @@
 from .kalman_filter import KalmanFilterClass2D, KalmanFilterClass1D
 from system_interfaces.msg import VisionMessage
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
-
 import time
 import numpy as np
 from typing import Optional, List
