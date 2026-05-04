@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from movement_interfaces.msg import Vector2D as Vector2DMsg
 
 from new_movement.movement_manager import MovementManager
@@ -12,14 +12,23 @@ def _make_vector(x: float, y: float):
     return vec
 
 class FakeFuture:
-    def __init__(self, response):
+    def __init__(self, response, exception=None):
         self._response = response
+        self._exception = exception
+
+    def done(self):
+        return True
+
+    def exception(self):
+        return self._exception
+
+    def result(self):
+        if self._exception:
+            raise self._exception
+        return self._response
 
     def add_done_callback(self, callback):
         callback(self)
-
-    def result(self):
-        return self._response
 
 @pytest.fixture
 def test_robot():
@@ -56,10 +65,6 @@ def movement_manager():
     mgr.GoalKeeper_srv = MagicMock()
     mgr.TeamColor_srv = MagicMock()
 
-    mgr._MovementManager__game_config_inflight = False
-    mgr._static_obstacles_inflight = False
-    mgr._goal_keeper_inflight = False
-
     mgr._movement_commands = None
     mgr.yellow_robots = None
     mgr.blue_robots = None
@@ -94,9 +99,9 @@ def goal_keeper_response():
 
 @pytest.fixture
 def configured_service_future(manager, game_config_response, static_obstacles_response, goal_keeper_response):
-    manager.TeamColor_srv.service_is_ready.return_value = True
-    manager.StaticObstacles_srv.service_is_ready.return_value = True
-    manager.GoalKeeper_srv.service_is_ready.return_value = True
+    manager.TeamColor_srv.wait_for_service.return_value = True
+    manager.StaticObstacles_srv.wait_for_service.return_value = True
+    manager.GoalKeeper_srv.wait_for_service.return_value = True
 
     manager.TeamColor_srv.call_async.return_value = FakeFuture(game_config_response)
     manager.StaticObstacles_srv.call_async.return_value = FakeFuture(static_obstacles_response)
@@ -105,50 +110,35 @@ def configured_service_future(manager, game_config_response, static_obstacles_re
     return manager
 
 def test_poll_game_config(configured_service_future):
-    mgr = configured_service_future
-    mgr._poll_game_config()
-    assert mgr._team_color_yellow is True
+    with patch('rclpy.spin_until_future_complete'):
+        mgr = configured_service_future
+        mgr._poll_game_config()
+        assert mgr._team_color_yellow is True
 
 def test_poll_static_obstacles(configured_service_future):
-    mgr = configured_service_future
-    mgr._poll_static_obstacles()
-    assert mgr._static_obstacles == {'center_circle': False}
+    with patch('rclpy.spin_until_future_complete'):
+        mgr = configured_service_future
+        mgr._poll_static_obstacles()
+        assert mgr._static_obstacles == {'center_circle': False}
 
 def test_poll_goal_keeper(configured_service_future):
-    mgr = configured_service_future
-    mgr._poll_goal_keeper()
-    assert mgr._goal_keeper_id == 1
+    with patch('rclpy.spin_until_future_complete'):
+        mgr = configured_service_future
+        mgr._poll_goal_keeper()
+        assert mgr._goal_keeper_id == 1
 
 def test_poll_game_config_skip(manager):
-    manager.TeamColor_srv.service_is_ready.return_value = False
-    manager._poll_game_config()
-    manager.TeamColor_srv.call_async.assert_not_called()
-
-def test_poll_game_config_inflight(manager):
-    manager.TeamColor_srv.service_is_ready.return_value = True
-    manager._MovementManager__game_config_inflight = True
+    manager.TeamColor_srv.wait_for_service.return_value = False
     manager._poll_game_config()
     manager.TeamColor_srv.call_async.assert_not_called()
 
 def test_poll_static_obstacles_skip(manager):
-    manager.StaticObstacles_srv.service_is_ready.return_value = False
-    manager._poll_static_obstacles()
-    manager.StaticObstacles_srv.call_async.assert_not_called()
-
-def test_poll_static_obstacles_inflight(manager):
-    manager.StaticObstacles_srv.service_is_ready.return_value = True
-    manager._static_obstacles_inflight = True
+    manager.StaticObstacles_srv.wait_for_service.return_value = False
     manager._poll_static_obstacles()
     manager.StaticObstacles_srv.call_async.assert_not_called()
 
 def test_poll_goal_keeper_skip(manager):
-    manager.GoalKeeper_srv.service_is_ready.return_value = False
-    manager._poll_goal_keeper()
-    manager.GoalKeeper_srv.call_async.assert_not_called()
-
-def test_poll_goal_keeper_inflight(manager):
-    manager.GoalKeeper_srv.service_is_ready.return_value = True
-    manager._goal_keeper_inflight = True
+    manager.GoalKeeper_srv.wait_for_service.return_value = False
     manager._poll_goal_keeper()
     manager.GoalKeeper_srv.call_async.assert_not_called()
 

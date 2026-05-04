@@ -22,10 +22,6 @@ class MovementManager(Node):
 
         self._target_array_pub = self.create_publisher(TargetArray, 'movement_manager/targets', 10)
 
-        self.__game_config_inflight = False
-        self._static_obstacles_inflight = False
-        self._goal_keeper_inflight = False
-
         self._movement_commands = None
         self.yellow_robots = None
         self.blue_robots = None
@@ -34,9 +30,9 @@ class MovementManager(Node):
         self._static_obstacles = None
         self._goal_keeper_id = None
 
-        self.create_timer(0.5, self._poll_game_config)
-        self.create_timer(0.5, self._poll_static_obstacles)
-        self.create_timer(0.5, self._poll_goal_keeper)
+        self.create_timer(0.1, self._poll_game_config)
+        self.create_timer(0.1, self._poll_static_obstacles)
+        self.create_timer(0.1, self._poll_goal_keeper)
 
 
     def movement_command_callback(self, msg):
@@ -48,58 +44,35 @@ class MovementManager(Node):
         self.blue_robots = msg.blue_robots
         self.try_publish_targets()
 
+    def _call_service_sync(self, client, request):
+        future = client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+
+        if not future.done():
+            return None
+        if future.exception() is not None:
+            return None
+        return future.result()
+
     def _poll_game_config(self):
-        if self.__game_config_inflight:
+        if not self.TeamColor_srv.wait_for_service(timeout_sec=1.0):
             return
-        if not self.TeamColor_srv.service_is_ready():
-            return
-        self.__game_config_inflight = True
-        future = self.TeamColor_srv.call_async(GetGameConfig.Request())
-        def done(fut):
-            self.__game_config_inflight = False
-            try:
-                resp = fut.result()
-                self._team_color_yellow = bool(resp.is_team_color_yellow)
-                self.get_logger().info(f"GameConfig updated: is_team_color_yellow={self._team_color_yellow}")
-            except Exception as e:
-                self.get_logger().error(f"Failed to call get_game_config service: {e}")
-        future.add_done_callback(done)
+        resp = self._call_service_sync(self.TeamColor_srv, GetGameConfig.Request())
+        self._team_color_yellow = resp.is_team_color_yellow
 
     def _poll_static_obstacles(self):
-        if self._static_obstacles_inflight:
+        if not self.StaticObstacles_srv.wait_for_service(timeout_sec=1.0):
             return
-        if not self.StaticObstacles_srv.service_is_ready():
-            return
-        self._static_obstacles_inflight = True
-        future = self.StaticObstacles_srv.call_async(SetStaticObstacles.Request())
-        def done(fut):
-            self._static_obstacles_inflight = False
-            try:
-                resp = fut.result()
-                self._static_obstacles = {
-                    'center_circle': bool(resp.center_circle)
-                }
-                self.get_logger().info(f"Static obstacles updated: {self._static_obstacles}")
-            except Exception as e:
-                self.get_logger().error(f"Failed to call SetStaticObstacles service: {e}")
-        future.add_done_callback(done)
+        resp = self._call_service_sync(self.StaticObstacles_srv, SetStaticObstacles.Request())
+        self._static_obstacles = {
+            'center_circle': resp.center_circle,
+        }
 
     def _poll_goal_keeper(self):
-        if self._goal_keeper_inflight:
+        if not self.GoalKeeper_srv.wait_for_service(timeout_sec=1.0):
             return
-        if not self.GoalKeeper_srv.service_is_ready():
-            return
-        self._goal_keeper_inflight = True
-        future = self.GoalKeeper_srv.call_async(SetGoalKeeper.Request())
-        def done(fut):
-            self._goal_keeper_inflight = False
-            try:
-                resp = fut.result()
-                self._goal_keeper_id = resp.robot_id
-                self.get_logger().info(f"Goal keeper updated: robot_id={self._goal_keeper_id}")
-            except Exception as e:
-                self.get_logger().error(f"Failed to call SetGoalKeeper service: {e}")
-        future.add_done_callback(done)
+        resp = self._call_service_sync(self.GoalKeeper_srv, SetGoalKeeper.Request())
+        self._goal_keeper_id = resp.robot_id
 
     def try_publish_targets(self):
         if self._movement_commands is None:
