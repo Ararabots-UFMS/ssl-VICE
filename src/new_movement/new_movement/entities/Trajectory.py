@@ -1,5 +1,5 @@
-from new_movement.utilities.BB_steer import integrate_control_2d as integrate
-from new_movement.utilities.BB_steer import integrate_control_2d_at_time as integrate_t
+from new_movement.utilities.trap_steer import integrate_control_2d as integrate
+from new_movement.utilities.trap_steer import integrate_control_2d_at_time as integrate_t
 from new_movement.entities.States import State, Vector2D
 from new_movement.entities.Motion import MotionPath
 from typing import Optional, List, Union
@@ -60,13 +60,13 @@ class TrajectorySegment:
         if self.get_total_duration() < t:
             return self.get_state(self.get_total_duration())
         if self.get_local_duration() >= t:
-            bb_integrate = integrate_t(
+            integrated_state = integrate_t(
                 self.init_pos + self.init_vel, self.motion_path.motion_path, t
             )
 
             return State(
-                position=Vector2D(bb_integrate[0], bb_integrate[1]),
-                velocity=Vector2D(bb_integrate[2], bb_integrate[3]),
+                position=Vector2D(integrated_state[0], integrated_state[1]),
+                velocity=Vector2D(integrated_state[2], integrated_state[3]),
             )
         else:
             return self.child.get_state(t - self.get_local_duration())
@@ -86,10 +86,10 @@ class TrajectorySegment:
             self.init_vel.x,
             self.init_vel.y,
         )
-        bb_integrate = integrate(initial_state_tuple, self.motion_path.motion_path)
+        integrated_state = integrate(initial_state_tuple, self.motion_path.motion_path)
         return State(
-            position=Vector2D(bb_integrate[0], bb_integrate[1]),
-            velocity=Vector2D(bb_integrate[2], bb_integrate[3]),
+            position=Vector2D(integrated_state[0], integrated_state[1]),
+            velocity=Vector2D(integrated_state[2], integrated_state[3]),
         )
 
     def get_acceleration(self, t: float) -> Optional[Vector2D]:
