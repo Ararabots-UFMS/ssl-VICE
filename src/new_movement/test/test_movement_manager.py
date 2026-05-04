@@ -83,7 +83,6 @@ def game_config_response():
 @pytest.fixture
 def static_obstacles_response():
     resp = MagicMock()
-    resp.border_area = True
     resp.center_circle = False
     return resp
 
@@ -113,7 +112,7 @@ def test_poll_game_config(configured_service_future):
 def test_poll_static_obstacles(configured_service_future):
     mgr = configured_service_future
     mgr._poll_static_obstacles()
-    assert mgr._static_obstacles == {'border_area': True, 'center_circle': False}
+    assert mgr._static_obstacles == {'center_circle': False}
 
 def test_poll_goal_keeper(configured_service_future):
     mgr = configured_service_future
@@ -176,7 +175,7 @@ def test_vision_message_callback_trigger(manager, test_robot):
 def test_try_publish_targets_no_commands(manager):
     manager._team_color_yellow = True
     manager.yellow_robots = []
-    manager._static_obstacles = {'border_area': True, 'center_circle': False}
+    manager._static_obstacles = {'center_circle': False}
     manager._goal_keeper_id = 1
 
     manager.try_publish_targets()
@@ -185,7 +184,7 @@ def test_try_publish_targets_no_commands(manager):
 def test_try_publish_targets_no_team_color(manager):
     manager._movement_commands = []
     manager.yellow_robots = []
-    manager._static_obstacles = {'border_area': True, 'center_circle': False}
+    manager._static_obstacles = {'center_circle': False}
     manager._goal_keeper_id = 1
 
     manager.try_publish_targets()
@@ -195,7 +194,7 @@ def test_try_publish_targets_no_robots_team(manager):
     manager._movement_commands = None
     manager._team_color_yellow = True
     manager.yellow_robots = []
-    manager._static_obstacles = {'border_area': True, 'center_circle': False}
+    manager._static_obstacles = {'center_circle': False}
     manager._goal_keeper_id = 1
 
     manager.try_publish_targets()
@@ -214,7 +213,7 @@ def test_try_publish_targets_no_goal_keeper(manager):
     manager._movement_commands = []
     manager._team_color_yellow = True
     manager.yellow_robots = []
-    manager._static_obstacles = {'border_area': True, 'center_circle': False}
+    manager._static_obstacles = {'center_circle': False}
 
     manager.try_publish_targets()
     manager._target_array_pub.publish.assert_not_called()
@@ -223,14 +222,14 @@ def test_try_publish_targets_success(manager, test_command, test_robot):
     manager._movement_commands = [test_command]
     manager._team_color_yellow = True
     manager.yellow_robots = [test_robot]
-    manager._static_obstacles = {'border_area': True, 'center_circle': False}
+    manager._static_obstacles = {'center_circle': False}
     manager._goal_keeper_id = 1
 
     manager.try_publish_targets()
     manager._target_array_pub.publish.assert_called_once()
 
 @pytest.fixture
-def test_robot():
+def test_robot1():
     r = MagicMock()
     r.id = 1
     r.position_x = 10.0
@@ -250,7 +249,7 @@ def test_robot2():
     return r
 
 @pytest.fixture
-def test_command():
+def test_command1():
     tp = _make_vector(100.0, 200.0)
     cmd = MagicMock()
     cmd.robot_id = 1
@@ -265,11 +264,11 @@ def test_command2():
     cmd.target_pos = tp
     return cmd
 
-def test_target_array_maps_fields(manager, test_robot, test_robot2, test_command, test_command2):
-    manager._movement_commands = [test_command, test_command2]
+def test_target_array_maps_fields(manager, test_robot1, test_robot2, test_command1, test_command2):
+    manager._movement_commands = [test_command1, test_command2]
     manager._team_color_yellow = True
-    manager.yellow_robots = [test_robot, test_robot2]
-    manager._static_obstacles = {'border_area': True, 'center_circle': False}
+    manager.yellow_robots = [test_robot1, test_robot2]
+    manager._static_obstacles = {'center_circle': False}
     manager._goal_keeper_id = 1
 
     target_array_msg = manager.Target_Array()
@@ -277,32 +276,32 @@ def test_target_array_maps_fields(manager, test_robot, test_robot2, test_command
     assert len(target_array_msg.targets) == 2
 
     target1 = target_array_msg.targets[0]
-    assert target1.robot_id == 2
-    assert target1.initial_pos.x == test_robot2.position_x
-    assert target1.initial_pos.y == test_robot2.position_y
-    assert target1.initial_vel.x == test_robot2.velocity_x
-    assert target1.initial_vel.y == test_robot2.velocity_y
-    assert target1.target_pos.x == test_command2.target_pos.x
-    assert target1.target_pos.y == test_command2.target_pos.y
-    assert target1.planning_options.avoid_penalty_area is True
+    assert target1.robot_id == 1
+    assert target1.initial_pos.x == test_robot1.position_x
+    assert target1.initial_pos.y == test_robot1.position_y
+    assert target1.initial_vel.x == test_robot1.velocity_x
+    assert target1.initial_vel.y == test_robot1.velocity_y
+    assert target1.target_pos.x == test_command1.target_pos.x
+    assert target1.target_pos.y == test_command1.target_pos.y
+    assert target1.planning_options.avoid_penalty_area is False
     assert target1.planning_options.avoid_center_area is False
 
     target2 = target_array_msg.targets[1]
-    assert target2.robot_id == 1
-    assert target2.initial_pos.x == test_robot.position_x
-    assert target2.initial_pos.y == test_robot.position_y
-    assert target2.initial_vel.x == test_robot.velocity_x
-    assert target2.initial_vel.y == test_robot.velocity_y
-    assert target2.target_pos.x == test_command.target_pos.x
-    assert target2.target_pos.y == test_command.target_pos.y
+    assert target2.robot_id == 2
+    assert target2.initial_pos.x == test_robot2.position_x
+    assert target2.initial_pos.y == test_robot2.position_y
+    assert target2.initial_vel.x == test_robot2.velocity_x
+    assert target2.initial_vel.y == test_robot2.velocity_y
+    assert target2.target_pos.x == test_command2.target_pos.x
+    assert target2.target_pos.y == test_command2.target_pos.y
     assert target2.planning_options.avoid_penalty_area is True
     assert target2.planning_options.avoid_center_area is False
 
-def test_target_array_goal_keeper_last(manager, test_robot, test_robot2, test_command, test_command2):
-    manager._movement_commands = [test_command, test_command2]
+def test_target_array_goal_keeper_last(manager, test_robot1, test_robot2, test_command1, test_command2):
+    manager._movement_commands = [test_command1, test_command2]
     manager._team_color_yellow = True
-    manager.yellow_robots = [test_robot, test_robot2]
-    manager._static_obstacles = {'border_area': True, 'center_circle': False}
+    manager.yellow_robots = [test_robot1, test_robot2]
+    manager._static_obstacles = {'center_circle': False}
     manager._goal_keeper_id = 2
 
     target_array_msg = manager.Target_Array()

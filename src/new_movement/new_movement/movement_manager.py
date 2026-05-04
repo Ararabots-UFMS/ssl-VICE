@@ -77,7 +77,6 @@ class MovementManager(Node):
             try:
                 resp = fut.result()
                 self._static_obstacles = {
-                    'border_area': bool(resp.border_area),
                     'center_circle': bool(resp.center_circle)
                 }
                 self.get_logger().info(f"Static obstacles updated: {self._static_obstacles}")
@@ -130,7 +129,6 @@ class MovementManager(Node):
         cmd_by_id = {cmd.robot_id: cmd for cmd in self._movement_commands}
 
         normal_targets = []
-        goalkeeper_target = None
 
         msg = TargetArray()
 
@@ -145,17 +143,15 @@ class MovementManager(Node):
             target.initial_pos.y = robot.position_y
             target.initial_vel.x = robot.velocity_x
             target.initial_vel.y = robot.velocity_y
-            target.planning_options.avoid_penalty_area = self._static_obstacles['border_area']
             target.planning_options.avoid_center_area = self._static_obstacles['center_circle']
             target.target_pos = cmd.target_pos
 
             if robot.id == self._goal_keeper_id:
-                goalkeeper_target = target
+                target.planning_options.avoid_penalty_area = False
             else:
-                normal_targets.append(target)
+                target.planning_options.avoid_penalty_area = True
 
-        if goalkeeper_target is not None:
-            normal_targets.append(goalkeeper_target)
+            normal_targets.append(target)
 
         msg.targets = normal_targets
 
