@@ -1,4 +1,8 @@
+import math
+from rclpy.logging import get_logger
 from vision.tracker import ObjectTracker, Object, ID
+
+logger = get_logger("wrap_message")
 
 from system_interfaces.msg import (
     VisionMessage,
@@ -11,49 +15,65 @@ from system_interfaces.msg import (
 )
 
 from vision.proto.messages_robocup_ssl_geometry_pb2 import SSL_GeometryData
-
 from typing import List
 
+def _is_valid_value(x: float, max_value: float = 10000.0) -> bool:
+    #Verifica se o valor é numérico e dentro de limites razoáveis
+    return not math.isnan(x) and not math.isinf(x) and abs(x) <= max_value
 
 def wrap_message(objects: List[Object]) -> VisionMessage:
     message = VisionMessage()
+    balls_added = 0
+    robots_added = 0
+    discarded = 0
 
     for object_ in objects:
         if object_.id.is_ball:
             ball_msg = Balls()
 
-            ball_msg.id = object_.id.id
+            # Validação antes de incluir bola
+            if _is_valid_value(object_.KF.x[0][0]) and _is_valid_value(object_.KF.x[1][0]):
+                ball_msg.id = object_.id.id
 
-            # Kalman filter x attribute is a vector [x position, y position, x velocity, y velocity]
-            ball_msg.position_x = float(object_.KF.x[0][0])
-            ball_msg.position_y = float(object_.KF.x[1][0])
+                # Kalman filter x attribute is a vector [x position, y position, x velocity, y velocity]
+                ball_msg.position_x = float(object_.KF.x[0][0])
+                ball_msg.position_y = float(object_.KF.x[1][0])
+                ball_msg.velocity_x = float(object_.KF.x[2][0])
+                ball_msg.velocity_y = float(object_.KF.x[3][0])
 
-            ball_msg.velocity_x = float(object_.KF.x[2][0])
-            ball_msg.velocity_y = float(object_.KF.x[3][0])
+                message.balls.append(ball_msg)
 
-            message.balls.append(ball_msg)
+                balls_added += 1
+            else:
+                discarded += 1
+                # Mostra que o objeto foi descartado e seus valores.
+                logger.warn(f"Objeto {object_.id.id} descartado: x={object_.KF.x[0][0]}, y={object_.KF.x[1][0]}")
 
         else:
-            robot_msg = Robots()
+            
+            # Validação antes de incluir robo
+            if _is_valid_value(object_.KF.x[0][0]) and _is_valid_value(object_.KF.x[1][0]):
+                robot_msg = Robots()
+                robot_msg.id = object_.id.id
 
-            robot_msg.id = object_.id.id
+                robot_msg.position_x = float(object_.KF.x[0][0])
+                robot_msg.position_y = float(object_.KF.x[1][0])
+                robot_msg.velocity_x = float(object_.KF.x[2][0])
+                robot_msg.velocity_y = float(object_.KF.x[3][0])
+                robot_msg.orientation = float(object_.orientation_KF.x[0][0])
+                robot_msg.velocity_orientation = float(object_.orientation_KF.x[1][0])
 
-            robot_msg.position_x = float(object_.KF.x[0][0])
-            robot_msg.position_y = float(object_.KF.x[1][0])
-
-            robot_msg.velocity_x = float(object_.KF.x[2][0])
-            robot_msg.velocity_y = float(object_.KF.x[3][0])
-
-            robot_msg.orientation = float(object_.orientation_KF.x[0][0])
-            robot_msg.velocity_orientation = float(object_.orientation_KF.x[1][0])
-
-            if object_.id.is_blue:
-                message.blue_robots.append(robot_msg)
+                if object_.id.is_blue:
+                    message.blue_robots.append(robot_msg)
+                else:
+                    message.yellow_robots.append(robot_msg)
+                
+                robots_added += 1
             else:
-                message.yellow_robots.append(robot_msg)
-
+                discarded += 1
+                # Mostra que o objeto foi descartado e seus valores.
+                logger.info("Geometria processada: x={:.2f}, y={:.2f}".format(object_.KF.x[0][0], object_.KF.x[1][0]))
     return message
-
 
 def wrap_geo_message(message: SSL_GeometryData):
     wraped_msg = VisionGeometry()
