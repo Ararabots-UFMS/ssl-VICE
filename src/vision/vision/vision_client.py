@@ -68,7 +68,7 @@ class Client:
     def receive(self):
         """Try to receive and decode one SSL_WrapperPacket. """
 
-        # Insure socket is connected
+        # Ensure socket is connected
         if self.sock is None:
             raise RuntimeError("Client socket not connected. Call connect() first.")
         try:
