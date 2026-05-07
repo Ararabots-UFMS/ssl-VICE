@@ -7,6 +7,8 @@ from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 
 logger = get_logger("vision_client")
 
+MAX_PACKET_SIZE = 4096  # SSL-Vision packets are safely under this size
+
 class Client:
     def __init__(self, ip: str, port: int, interface_ip: Optional[str] = None, timeout: float = 0.0):
         """UDP multicast client for ssl-vision.
@@ -73,7 +75,7 @@ class Client:
             raise RuntimeError("Client socket not connected. Call connect() first.")
         try:
             # Max packet size for SSL-Vision is safely under 4096 bytes; allocate a bit more than old 2048.
-            data, _ = self.sock.recvfrom(4096)
+            data, _ = self.sock.recvfrom(MAX_PACKET_SIZE)
         except (BlockingIOError, socket.timeout):
             return None
         except OSError as e:

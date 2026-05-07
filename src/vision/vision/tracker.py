@@ -1,4 +1,4 @@
-from .kalman_filter import KalmanFilterClass2D, KalmanFilterClass1D
+from .kalman_filter import ExtendedKalmanFilterClass2D, ExtendedKalmanFilterClass1D
 from system_interfaces.msg import VisionMessage
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 import time
@@ -35,15 +35,15 @@ class Object(object):
         self.prediction = np.asarray(detections)
         self.id = Id
         self.confidence = confidence
-        self.KF = KalmanFilterClass2D()
+        self.KF = ExtendedKalmanFilterClass2D()
         self.last_seen = time.time()
         self.orientation = orientation
-        self.orientation_KF = KalmanFilterClass1D()
+        self.orientation_KF = ExtendedKalmanFilterClass1D()
 
     def update(self, x: float, y: float, confidence: float, orientation: Optional[float] = None):
         self.prediction = self.KF.update([[x], [y]])
         if not self.id.is_ball and orientation is not None:
-            self.orientation = self.orientation_KF.update(orientation)
+            self.orientation = self.orientation_KF.update(np.matrix([[orientation]]))
         self.confidence = confidence
         self.last_seen = time.time()
 

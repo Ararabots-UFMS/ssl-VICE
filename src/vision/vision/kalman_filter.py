@@ -124,10 +124,11 @@ class ExtendedKalmanFilterClass2D(object):
     def _transition_function(self, x, dt):
         # Non-linear transition: constant acceleration with friction
         x_new = np.zeros_like(x)
-        x_new[0] = x[0] + x[2] * dt + 0.5 * self.u[0] * dt**2  # x
-        x_new[1] = x[1] + x[3] * dt + 0.5 * self.u[1] * dt**2  # y
-        x_new[2] = x[2] * np.exp(-self.friction * dt) + self.u[0] * dt  # vx with decay
-        x_new[3] = x[3] * np.exp(-self.friction * dt) + self.u[1] * dt  # vy with decay
+        x_new[0] = x[0] + x[2] * dt + 0.5 * self.u[0] * dt**2  # posição x
+        x_new[1] = x[1] + x[3] * dt + 0.5 * self.u[1] * dt**2  # posição y
+        # Velocity with exponential decay due to friction
+        x_new[2] = x[2] * np.exp(-self.friction * dt) + self.u[0] * dt
+        x_new[3] = x[3] * np.exp(-self.friction * dt) + self.u[1] * dt
         return x_new
     
     def _jacobian_F(self, x, dt):

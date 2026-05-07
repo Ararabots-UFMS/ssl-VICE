@@ -8,7 +8,6 @@ import rclpy
 from rclpy.node import Node
 
 from google.protobuf import text_format
-from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 from vision.proto.messages_robocup_ssl_geometry_pb2 import SSL_GeometryData
 
 from system_interfaces.msg import VisionMessage, VisionGeometry
@@ -29,6 +28,8 @@ class Vision(Node):
             "socket_timeout": 0.0,
             "num_cams": 4,
             "max_frame_skipped": 30,
+            "frequency_timer_publish": 1000.0,  #0,001Hz - possível troca para 30.0 (0,0333Hz) pois pode diminuir o consumo de CPU, e o tracker já faz uma boa predição, então não tem tanta necessidade de publicar tão rápido.
+            "frequency_tracker_update": 60.0,   #0,016Hz
         }
 
         for name, default in default_params.items():
@@ -42,6 +43,8 @@ class Vision(Node):
         self.socket_timeout = self.get_parameter("socket_timeout").value
         self.num_cams = self.get_parameter("num_cams").value
         self.max_frame_skipped = self.get_parameter("max_frame_skipped").value
+        self.frequency_timer_publish = self.get_parameter("frequency_timer_publish").value
+        self.frequency_tracker_update = self.get_parameter("frequency_tracker_update").value
         
         self.client = Client(
             ip=self.ip,
@@ -49,7 +52,6 @@ class Vision(Node):
             interface_ip=self.interface_ip if self.interface_ip else None,
             timeout=self.socket_timeout,
         )
-
         self.get_logger().info(f"Binding client on {self.ip}:{self.port}")
         self.client.connect()
 
@@ -60,13 +62,13 @@ class Vision(Node):
             VisionGeometry, "geometryTopic", 10
         )
 
-        self.tracker = ObjectTracker(max_time_undetected=self.max_time_undetected)
+        self.tracker = ObjectTracker(max_time_undetected=self.max_time_skipped)
 
         # TODO: Find the optimal timer.
-        # Timer fast to process vision packets.
-        self.publish_timer = self.create_timer(0.016, self.publish_vision)
         # Timer slow to publisher messages ROS.
-        self.tracker_timer = self.create_timer(0.001, self.update_tracker)
+        self.publish_timer = self.create_timer(1.0/self.frequency_timer_publish, self.publish_vision)
+        # Timer fast to process vision packets.
+        self.tracker_timer = self.create_timer(1.0/self.frequency_tracker_update, self.update_tracker)
 
     def update_tracker(self):
         try:
@@ -114,10 +116,10 @@ class Vision(Node):
 
         # Validate message before publishing (catch garbage/overflow)
         if not self._is_valid_vision_message(message):
-            self.get_logger().warn("Skipping invalid vision message")
+            self.get_logger().warning("Skipping invalid vision message")
             return
 
-        if self.context.ok():
+        if rclpy.ok():
             self.publisher.publish(message)
 
     def _is_valid_vision_message(self, message: VisionMessage) -> bool:
@@ -129,14 +131,14 @@ class Vision(Node):
                 abs(robot.position_x) > max_reasonable_pos
                 or abs(robot.position_y) > max_reasonable_pos
             ):
-                self.get_logger().warn(
+                self.get_logger().warning(
                     f"Invalid robot position detected: ({robot.position_x}, {robot.position_y})"
                 )
                 return False
         
         for ball in message.balls:
             if abs(ball.position_x) > max_reasonable_pos or abs(ball.position_y) > max_reasonable_pos:
-                self.get_logger().warn(f"Invalid ball position: ({ball.position_x}, {ball.position_y})")
+                self.get_logger().warning(f"Invalid ball position: ({ball.position_x}, {ball.position_y})")
                 return False
         
         return True
@@ -144,7 +146,7 @@ class Vision(Node):
     def publish_geometry(self, message: SSL_GeometryData):
         message: VisionGeometry = wrap_geo_message(message)
 
-        if self.context.ok():
+        if rclpy.ok():
             self.geometry_publisher.publish(message)
 
 
