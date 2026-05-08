@@ -9,3 +9,6 @@ install/
 log/
 
 teste.*
+
+scripts/tracker_benchmark_publisher.py
+scripts/publish_trajectory.py
