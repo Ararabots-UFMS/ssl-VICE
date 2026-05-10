@@ -1,0 +1,34 @@
+#!/bin/sh
+# commit-msg hook: validate Conventional Commits and lengths
+MSG_FILE="$1"
+
+if [ -z "$MSG_FILE" ]; then
+  echo "No commit message file supplied." >&2
+  exit 1
+fi
+
+FIRST_LINE=$(sed -n '1p' "$MSG_FILE" | tr -d '\r')
+
+REGEX='^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)(\([a-zA-Z0-9 _-]+\))?: .+'
+
+if ! printf '%s\n' "$FIRST_LINE" | grep -Eq "$REGEX"; then
+  echo "ERROR: Commit message must follow Conventional Commits: type(scope?): Subject" >&2
+  echo "Allowed types: feat, fix, chore, docs, style, refactor, perf, test, build, ci, revert" >&2
+  echo "Example: feat(parser): add support for X" >&2
+  exit 1
+fi
+
+SUBJ_LEN=$(printf '%s' "$FIRST_LINE" | wc -c | tr -d ' ')
+if [ "$SUBJ_LEN" -gt 50 ]; then
+  echo "ERROR: Subject longer than 50 characters ($SUBJ_LEN). Shorten it." >&2
+  exit 1
+fi
+
+# Check body lines (after first) are <= 72 chars
+if tail -n +2 "$MSG_FILE" | awk 'length($0) > 72 { print "ERROR: body line too long ->", $0; exit 1 }'; then
+  :
+else
+  exit 1
+fi
+
+exit 0
