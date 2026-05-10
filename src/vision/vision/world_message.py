@@ -23,9 +23,6 @@ def _is_valid_value(x: float, max_value: float = 10000.0) -> bool:
 
 def wrap_message(objects: Dict[ID, Object]) -> VisionMessage:
     message = VisionMessage()
-    balls_added = 0
-    robots_added = 0
-    discarded = 0
 
     for object_ in objects.values():
         if object_.id.is_ball:
@@ -37,9 +34,7 @@ def wrap_message(objects: Dict[ID, Object]) -> VisionMessage:
                 ball_msg.velocity_x = float(object_.KF.x[2][0])
                 ball_msg.velocity_y = float(object_.KF.x[3][0])
                 message.balls.append(ball_msg)
-                balls_added += 1
             else:
-                discarded += 1
                 logger.warning(f"Bola descartada: x={object_.KF.x[0][0]}, y={object_.KF.x[1][0]}")
         else:
             if _is_valid_value(object_.KF.x[0][0]) and _is_valid_value(object_.KF.x[1][0]):
@@ -55,12 +50,9 @@ def wrap_message(objects: Dict[ID, Object]) -> VisionMessage:
                     message.blue_robots.append(robot_msg)
                 else:
                     message.yellow_robots.append(robot_msg)
-                robots_added += 1
             else:
-                discarded += 1
                 logger.warning("Robô descartado: x={:.2f}, y={:.2f}".format(object_.KF.x[0][0], object_.KF.x[1][0]))
 
-    logger.info(f"wrap_message: {balls_added} bolas, {robots_added} robôs, {discarded} descartados")
     return message
 
 def wrap_geo_message(message: SSL_GeometryData):
