@@ -1,9 +1,0 @@
-type(scope?): Short description (max ~50 chars)
-
-Longer description of the change, if needed. Wrap at ~72 characters.
-
-References: Fixes #123, Related: #456
-
-Examples:
-- feat(parser): add ability to parse new token
-- fix: handle zero-velocity overlap (Fixes #342)
