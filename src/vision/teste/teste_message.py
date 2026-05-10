@@ -18,17 +18,20 @@ def make_obj(x, y, is_ball=False, is_blue=False):
 def test_invalid_values_are_discarded():
     # Simula objetos com valores absurdos
     objects = {
-        "robot1": type("Obj", (), {"position_x": float("nan"), "position_y": 100})(),
-        "ball1": type("Obj", (), {"position_x": 999999, "position_y": 999999})(),
+        "robot1": make_obj(float("nan"), 100.0, is_ball=False),
+        "ball1": make_obj(999999.0, 999999.0, is_ball=True),
     }
     msg = wrap_message(objects)
+    # Nenhum objeto inválido deve ser adicionado
+    assert len(msg.yellow_robots) == 0
     assert len(msg.balls) == 0
 
 def test_valid_values_are_added():
     objects = {
-        "robot1": type("Obj", (), {"position_x": 100, "position_y": 200, "id": type("ID", (), {"is_ball": False})()})(),
-        "ball1": type("Obj", (), {"position_x": 50, "position_y": 60, "id": type("ID", (), {"is_ball": True})()})(),
+        "robot1": make_obj(100.0, 200.0, is_ball=False, is_blue=False),
+        "ball1": make_obj(50.0, 60.0, is_ball=True),
     }
     msg = wrap_message(objects)
     assert len(msg.yellow_robots) == 1
     assert len(msg.balls) == 1
+    
