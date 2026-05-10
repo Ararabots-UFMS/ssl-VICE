@@ -1,0 +1,30 @@
+// .devcontainer/devcontainer.json
+{
+  "name": "ssl-VICE",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "ssl-vice",
+  "workspaceFolder": "/root/ssl-VICE",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff"
+      ],
+      "settings": {
+        "python.analysis.extraPaths": [
+          "/opt/ros/humble/lib/python3.10/dist-packages",
+          "/root/ssl-VICE/install/system_interfaces/local/lib/python3.10/dist-packages"
+        ],
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
+          }
+        }
+      }
+    }
+  }
+}

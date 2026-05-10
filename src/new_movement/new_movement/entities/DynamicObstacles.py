@@ -1,7 +1,7 @@
-from new_movement.entities.obstacles import Obstacle, ObstaclePriority
+from new_movement.entities.obstacles import Obstacle
 from new_movement.entities.States import Vector2D, State
 from new_movement.entities.Trajectory import Trajectory
-
+import numpy as np
 
 # TODO maybe give preference in adapt destination to give a new destination
 # close to the initial position instead of the closest of the target position...
@@ -41,6 +41,27 @@ class EnemyRobotObstacle(Obstacle):
 
         return False
 
+    def batch_collides(self, positions: np.ndarray, times: np.ndarray) -> bool:
+        start = np.array([self.robotState.position.x, self.robotState.position.y])
+        vel   = np.array([self.robotState.velocity.x, self.robotState.velocity.y])
+
+        ts   = np.minimum(times, self.max_lookahead)
+        ends = start + vel * ts[:, np.newaxis]          # (N, 2)
+
+        AB = ends - start                               # (N, 2)
+        AP = positions - start                          # (N, 2)
+
+        ab2       = np.einsum("ij,ij->i", AB, AB)
+        ap_dot_ab = np.einsum("ij,ij->i", AP, AB)
+
+        t_param = np.where(ab2 > 0, ap_dot_ab / ab2, 0.0)
+        t_param = np.clip(t_param, 0.0, 1.0)
+
+        closest  = start + t_param[:, np.newaxis] * AB
+        dists_sq = np.einsum("ij,ij->i", positions - closest, positions - closest)
+        
+        return bool(np.any(dists_sq < self.radius ** 2))
+
     def adaptDestination(self, tarPosition: Vector2D, t: float) -> Vector2D:
         start_point = self._getPos()
         end_point = self._getPredictedPos(t)
@@ -66,9 +87,6 @@ class EnemyRobotObstacle(Obstacle):
 
     def updateState(self, robotState: State) -> None:
         self.robotState = robotState
-
-    def getPriority(self) -> ObstaclePriority:
-        return ObstaclePriority.HIGH
 
     def velocity(self) -> Vector2D:
         return self.robotState.velocity
@@ -129,6 +147,17 @@ class AllyRobotObstacle(Obstacle):
 
         return False
 
+    def batch_collides(self, positions: np.ndarray, times: np.ndarray) -> bool:
+        r2 = self.radius ** 2
+        for i, t in enumerate(times):
+            p = self.trajectory.get_position(self.time_offset + float(t))
+            dx = positions[i, 0] - p.x
+            dy = positions[i, 1] - p.y
+            if dx * dx + dy * dy < r2:
+                return True
+        
+        return False
+
     def adaptDestination(self, tarPosition: Vector2D, t: float) -> Vector2D:
         if not self.isCollidingAt(tarPosition, t):
             return tarPosition
@@ -150,9 +179,6 @@ class AllyRobotObstacle(Obstacle):
 
     def updateTrajectory(self, trajectory: Trajectory) -> None:
         self.trajectory = trajectory
-
-    def getPriority(self) -> ObstaclePriority:
-        return ObstaclePriority.MEDIUM
 
     def velocity(self) -> Vector2D:
         return self.robotState.velocity
