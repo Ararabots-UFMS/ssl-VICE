@@ -28,7 +28,7 @@ class Vision(Node):
             "socket_timeout": 0.0,
             "num_cams": 4,
             "max_frame_skipped": 30,
-            "frequency_timer_publish": 1000.0,  #0,001Hz - possível troca para 30.0 (0,0333Hz) pois pode diminuir o consumo de CPU, e o tracker já faz uma boa predição, então não tem tanta necessidade de publicar tão rápido.
+            "frequency_timer_publish": 1000,  #0,001Hz - possível troca para 30.0 (0,0333Hz) pois pode diminuir o consumo de CPU, e o tracker já faz uma boa predição, então não tem tanta necessidade de publicar tão rápido.
             "frequency_tracker_update": 60.0,   #0,016Hz
         }
 
