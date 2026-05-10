@@ -27,9 +27,9 @@ class Vision(Node):
             "interface_ip": "",
             "socket_timeout": 0.0,
             "num_cams": 4,
-            "max_frame_skipped": 30,
-            "frequency_timer_publish": 1000.0,  #0,001Hz - possível troca para 30.0 (0,0333Hz) pois pode diminuir o consumo de CPU, e o tracker já faz uma boa predição, então não tem tanta necessidade de publicar tão rápido.
-            "frequency_tracker_update": 60.0,   #0,016Hz
+            "max_time_undetected": 0.5,
+            "frequency_timer_publish": 60.0,
+            "frequency_tracker_update": 1000.0,
         }
 
         for name, default in default_params.items():
@@ -42,7 +42,7 @@ class Vision(Node):
         self.interface_ip = self.get_parameter("interface_ip").value
         self.socket_timeout = self.get_parameter("socket_timeout").value
         self.num_cams = self.get_parameter("num_cams").value
-        self.max_frame_skipped = self.get_parameter("max_frame_skipped").value
+        self.max_time_undetected = self.get_parameter("max_time_undetected").value
         self.frequency_timer_publish = self.get_parameter("frequency_timer_publish").value
         self.frequency_tracker_update = self.get_parameter("frequency_tracker_update").value
         
@@ -62,7 +62,7 @@ class Vision(Node):
             VisionGeometry, "geometryTopic", 10
         )
 
-        self.tracker = ObjectTracker(max_time_undetected=self.max_time_skipped)
+        self.tracker = ObjectTracker(max_time_undetected=self.max_time_undetected)
 
         # TODO: Find the optimal timer.
         # Timer slow to publisher messages ROS.
@@ -71,27 +71,18 @@ class Vision(Node):
         self.tracker_timer = self.create_timer(1.0/self.frequency_tracker_update, self.update_tracker)
 
     def update_tracker(self):
-        try:
-            # Receive data from ssl-vision. If data geometry, publish in message. If data detection, update tracker and publish in message.
-            data = self.client.receive()
+        data = self.client.receive()
 
-            if data is None:
-                return  # no packet available now
+        if data is None:
+            return
 
-            if data.HasField("geometry"):
-                self.publish_geometry(data.geometry)
-            else:
-                self.tracker.update(data)
+        if data.HasField("geometry"):
+            self.publish_geometry(data.geometry)
+        else:
+            self.tracker.update(data)
 
-            if self.verbose:
-                self.get_logger().info(text_format.MessageToString(data))
-
-        except KeyboardInterrupt:
-            self.get_logger().info(
-                "Process finished successfully by user, terminating now..."
-            )
-        except Exception as exception:
-            self.get_logger().warning(f"An unexpected error occurred: {exception}")
+        if self.verbose:
+            self.get_logger().info(text_format.MessageToString(data))
 
     def set_filter_param(
         self,
