@@ -15,13 +15,13 @@ from .sampler import InformedSampler
 @dataclass
 class SolverConfig:
     """Configuration for planning algorithms."""
-    max_iterations: int = 50
+    max_iterations: int = 10
     field_length: float = 12000.0
     field_width: float = 9000.0
     max_velocity: float = 3000.0  # mm/s
     safety_buffer: float = 190.0   # mm
     continuity_threshold: float = 1e-3
-    collision_time_step: float = 0.02
+    collision_time_step: float = 0.2
 
 class Planner:
     """High-level Orchestrator for Robot Planning."""
