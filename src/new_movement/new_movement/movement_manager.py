@@ -5,7 +5,6 @@ from system_interfaces.srv import GetGameConfig
 
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
 
 class MovementManager(Node):
     def __init__(self):
@@ -13,12 +12,12 @@ class MovementManager(Node):
 
         self.get_logger().info('MovementManager node has been started.')
 
-        self.MovementCommandArray_sub = self.create_subscription(MovementCommandArray, 'MovementCommandTopic', self.movement_command_callback, 10)
-        self.VisionMessage_sub = self.create_subscription(VisionMessage, 'VisionTopic', self.vision_message_callback, 10)
+        self._movement_command_sub = self.create_subscription(MovementCommandArray, 'MovementCommandTopic', self.movement_command_callback, 10)
+        self._vision_message_sub = self.create_subscription(VisionMessage, 'VisionTopic', self.vision_message_callback, 10)
 
-        self.StaticObstacles_srv = self.create_client(SetStaticObstacles, 'SetStaticObstacles')
-        self.GoalKeeper_srv = self.create_client(SetGoalKeeper, 'SetGoalKeeper')
-        self.TeamColor_srv = self.create_client(GetGameConfig, 'get_game_config')
+        self._static_obstacles_srv= self.create_service(SetStaticObstacles, 'SetStaticObstacles', self._set_static_obstacles)
+        self._goal_keeper_srv = self.create_service(SetGoalKeeper, 'SetGoalKeeper', self._set_goal_keeper)
+        self._team_color_cli = self.create_client(GetGameConfig, 'get_game_config')
 
         self._target_array_pub = self.create_publisher(TargetArray, 'movement_manager/targets', 10)
 
@@ -31,8 +30,6 @@ class MovementManager(Node):
         self._goal_keeper_id = None
 
         self.create_timer(0.1, self._poll_game_config)
-        self.create_timer(0.1, self._poll_static_obstacles)
-        self.create_timer(0.1, self._poll_goal_keeper)
 
 
     def movement_command_callback(self, msg):
@@ -44,56 +41,50 @@ class MovementManager(Node):
         self.blue_robots = msg.blue_robots
         self.try_publish_targets()
 
-    def _call_service_sync(self, client, request):
-        future = client.call_async(request)
-        rclpy.spin_until_future_complete(self, future)
-
-        if not future.done():
-            return None
-        if future.exception() is not None:
-            return None
-        return future.result()
-
     def _poll_game_config(self):
-        if not self.TeamColor_srv.wait_for_service(timeout_sec=1.0):
+        if not self._team_color_cli.wait_for_service(timeout_sec=1.0):
             return
-        resp = self._call_service_sync(self.TeamColor_srv, GetGameConfig.Request())
-        self._team_color_yellow = resp.is_team_color_yellow
+        future = self._team_color_cli.call_async(GetGameConfig.Request())
+        future.add_done_callback(self._on_game_config_response)
 
-    def _poll_static_obstacles(self):
-        if not self.StaticObstacles_srv.wait_for_service(timeout_sec=1.0):
-            return
-        resp = self._call_service_sync(self.StaticObstacles_srv, SetStaticObstacles.Request())
+    def _on_game_config_response(self, future):
+        try:
+            resp = future.result()
+            self._team_color_yellow = bool(resp.is_team_color_yellow)
+        except Exception as e:
+            self.get_logger().error(f'Failed to call get_game_config: {e}')
+
+    def _set_static_obstacles(self, request, response):
         self._static_obstacles = {
-            'center_circle': resp.center_circle,
+            'border_area':bool(request.border_area),
+            'center_circle':bool(request.center_circle)
         }
+        return response
 
-    def _poll_goal_keeper(self):
-        if not self.GoalKeeper_srv.wait_for_service(timeout_sec=1.0):
-            return
-        resp = self._call_service_sync(self.GoalKeeper_srv, SetGoalKeeper.Request())
-        self._goal_keeper_id = resp.robot_id
+    def _set_goal_keeper(self, request, response):
+        self._goal_keeper_id = int(request.robot_id)
+        return response
+
+    def _robots_ready(self):
+        if self._team_color_yellow is None:
+            return False
+        robots = self.yellow_robots if self._team_color_yellow else self.blue_robots
+        return robots is not None
+
+    def _ready_to_publish(self):
+        return all([
+            self._movement_commands is not None,
+            self._static_obstacles is not None,
+            self._goal_keeper_id is not None,
+            self._robots_ready(),
+        ])
 
     def try_publish_targets(self):
-        if self._movement_commands is None:
+        if not self._ready_to_publish():
             return
-        if self._team_color_yellow is None:
-            return
-        if self._team_color_yellow:
-            if self.yellow_robots is None:
-                return
-        else:
-            if self.blue_robots is None:
-                return
-        if self._static_obstacles is None:
-            return
-        if self._goal_keeper_id is None:
-            return
+        self._target_array_pub.publish(self._build_target_array())
 
-        target_array = self.Target_Array()
-        self._target_array_pub.publish(target_array)
-
-    def Target_Array(self):
+    def _build_target_array(self):
         if self._team_color_yellow:
             robots = self.yellow_robots
         else:
@@ -133,15 +124,10 @@ class MovementManager(Node):
 def main(args=None):
     rclpy.init(args=args)
     movement_manager = MovementManager()
-    executor = MultiThreadedExecutor()
-    executor.add_node(movement_manager)
     try:
-        executor.spin()
+        rclpy.spin(movement_manager)
     except KeyboardInterrupt:
         pass
     finally:
         movement_manager.destroy_node()
         rclpy.shutdown()
-
-if __name__ == '__main__':
-    main()
