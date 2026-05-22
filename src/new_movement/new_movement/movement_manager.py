@@ -1,7 +1,6 @@
 from movement_interfaces.msg import MovementCommandArray, TargetArray, Target
 from movement_interfaces.srv import SetStaticObstacles, SetGoalKeeper
-from system_interfaces.msg import VisionMessage
-from system_interfaces.srv import GetGameConfig
+from system_interfaces.msg import GameState
 
 import rclpy
 from rclpy.node import Node
@@ -13,46 +12,25 @@ class MovementManager(Node):
         self.get_logger().info('MovementManager node has been started.')
 
         self._movement_command_sub = self.create_subscription(MovementCommandArray, 'MovementCommandTopic', self.movement_command_callback, 10)
-        self._vision_message_sub = self.create_subscription(VisionMessage, 'VisionTopic', self.vision_message_callback, 10)
-
+        self._game_state_sub = self.create_subscription(GameState, 'game_state', self.game_state_callback, 10)
         self._static_obstacles_srv= self.create_service(SetStaticObstacles, 'SetStaticObstacles', self._set_static_obstacles)
         self._goal_keeper_srv = self.create_service(SetGoalKeeper, 'SetGoalKeeper', self._set_goal_keeper)
-        self._team_color_cli = self.create_client(GetGameConfig, 'get_game_config')
 
         self._target_array_pub = self.create_publisher(TargetArray, 'movement_manager/targets', 10)
 
         self._movement_commands = None
-        self.yellow_robots = None
-        self.blue_robots = None
 
-        self._team_color_yellow = None
+        self._robots = None
         self._static_obstacles = None
         self._goal_keeper_id = None
-
-        self.create_timer(0.1, self._poll_game_config)
-
 
     def movement_command_callback(self, msg):
         self._movement_commands = msg.commands
         self.try_publish_targets()
 
-    def vision_message_callback(self, msg):
-        self.yellow_robots = msg.yellow_robots
-        self.blue_robots = msg.blue_robots
+    def game_state_callback(self, msg):
+        self._robots = msg.ally_robots
         self.try_publish_targets()
-
-    def _poll_game_config(self):
-        if not self._team_color_cli.wait_for_service(timeout_sec=1.0):
-            return
-        future = self._team_color_cli.call_async(GetGameConfig.Request())
-        future.add_done_callback(self._on_game_config_response)
-
-    def _on_game_config_response(self, future):
-        try:
-            resp = future.result()
-            self._team_color_yellow = bool(resp.is_team_color_yellow)
-        except Exception as e:
-            self.get_logger().error(f'Failed to call get_game_config: {e}')
 
     def _set_static_obstacles(self, request, response):
         self._static_obstacles = {
@@ -66,10 +44,7 @@ class MovementManager(Node):
         return response
 
     def _robots_ready(self):
-        if self._team_color_yellow is None:
-            return False
-        robots = self.yellow_robots if self._team_color_yellow else self.blue_robots
-        return robots is not None
+        return self._robots is not None
 
     def _ready_to_publish(self):
         return all([
@@ -85,10 +60,7 @@ class MovementManager(Node):
         self._target_array_pub.publish(self._build_target_array())
 
     def _build_target_array(self):
-        if self._team_color_yellow:
-            robots = self.yellow_robots
-        else:
-            robots = self.blue_robots
+        robots = self._robots
 
         cmd_by_id = {cmd.robot_id: cmd for cmd in self._movement_commands}
 
