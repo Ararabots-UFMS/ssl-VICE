@@ -85,13 +85,6 @@ class OptimizerNode(Node):
             self.active_futures[robot_id] = future
             future.add_done_callback(self.make_publish_callback(robot_id))
 
-    def get_duration_from_msg(self,trajectory_msg: TrajectoryMsg) -> float:
-        total = 0.0
-        for segment in trajectory_msg.segments:
-            for primitive in segment.motion_path.primitives:
-                total += primitive.duration
-        return total
-
     def get_remaining_time(self, robot_id: int) -> Optional[float]:
         if robot_id not in self.active_durations:
             return 0.0
@@ -100,7 +93,8 @@ class OptimizerNode(Node):
         return max(remaining, 0.0)
 
     def optimize_for_robot(self, robot_id: int, trajectory_msg: TrajectoryMsg) -> TrajectoryMsg:
-        new_duration = self.get_duration_from_msg(trajectory_msg)
+        trajectory = Trajectory.from_msg(trajectory_msg)
+        new_duration = trajectory.get_total_duration()
         remaining_current = self.get_remaining_time(robot_id)
 
         if remaining_current <= new_duration:
@@ -126,7 +120,6 @@ class OptimizerNode(Node):
             ally_info=self.cur_overhead_points
         )
 
-        trajectory = Trajectory.from_msg(trajectory_msg)
         optimized =  self.optimizer.optimize(trajectory, self.generator, obstacles)
 
         if not optimized or not optimized.root:
