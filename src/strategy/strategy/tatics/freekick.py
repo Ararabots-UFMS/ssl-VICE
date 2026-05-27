@@ -2,6 +2,8 @@ from new_movement.entities.States import Vector2D
 from system_interfaces.msg._game_state import GameState
 from strategy.skills.skills import Skills
 from math import atan2, hypot
+import time
+from enum import Enum
 
 class CenterGoal:
     GOAL_POSITIVE = Vector2D(2250.0, 0.0)
@@ -35,6 +37,10 @@ class OurFreekick:
         self.ball = ball
         self.kick_threshold = 1125.0
 
+        self.max_execution_time = 10.0
+        self.start_time = time.time()
+        self.execution_timed_out = False
+
         if self.on_positive_half:
             self.gk_angle = 3.14159
             self.gk_target = self.goal_center.GOAL_POSITIVE
@@ -43,6 +49,17 @@ class OurFreekick:
             self.gk_angle = 0.0
             self.gk_target = self.goal_center.GOAL_NEGATIVE
             self.attack_goal = self.goal_center.GOAL_POSITIVE
+
+    def _check_timeout(self) -> bool:
+        if self.execution_timed_out:
+            return True
+
+        elapsed_time = time.time() - self.start_time
+        if elapsed_time > self.max_execution_time:
+            self.execution_timed_out = True
+            return True
+
+        return False        
 
     def _can_kick(self):
         if self.on_positive_half and self.ball.position_x < -self.kick_threshold:
@@ -187,6 +204,9 @@ class OurFreekick:
         return False
 
     def execute(self):
+        if self._check_timeout():
+            return []
+         
         robots_commands = []
 
         if 0 in self.ally_robots:
@@ -215,6 +235,10 @@ class TheirFreekick:
         self.on_positive_half = on_positive_half
         self.ally_robots = ally_robots
         self.ball = ball
+        
+        self.max_execution_time = 10.0
+        self.start_time = time.time()
+        self.execution_timed_out = False
 
         if self.on_positive_half:
             self.angle = 3.14159
@@ -226,7 +250,20 @@ class TheirFreekick:
     def _go_to_ball(self) -> Vector2D:
         pass
 
+    def _check_timeout(self) -> bool:
+        if self.execution_timed_out:
+            return True
+
+        elapsed_time = time.time() - self.start_time
+        if elapsed_time > self.max_execution_time:
+            self.execution_timed_out = True
+            return True
+
+        return False 
+
     def execute(self):
+        if self._check_timeout():
+            return []
         robots_commands = []
 
         if 0 in self.ally_robots:
