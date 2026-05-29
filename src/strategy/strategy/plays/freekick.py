@@ -2,7 +2,7 @@ from system_interfaces.msg._game_state import GameState
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
 from system_interfaces.srv import GetGameConfig
 from strategy.tatics.freekick import OurFreekick, TheirFreekick
-
+import time
 
 class CheckState(LeafNode):
     def __init__(self, name, _desired_states):
@@ -108,9 +108,28 @@ class OurFreekickAction(LeafNode):
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurFreekick(ally_robots=self.ally_robots, ball=self.balls[0], on_positive_half=self.on_positive_half)
+        parent = self.get_parent() if hasattr(self, 'get_parent') else getattr(self, '_parent', None)
+        last_kicker_id = parent.last_kicker_id if parent else None
+        last_kick_time = parent.last_kick_time if parent else None
+        
+        executor = OurFreekick(
+            ally_robots=self.ally_robots, 
+            ball=self.balls[0], 
+            on_positive_half=self.on_positive_half,
+            last_kicker_id=last_kicker_id,
+            last_kick_time=last_kick_time
+        )
 
-        return TaskStatus.SUCCESS, executor.execute()
+        status, commands = executor.execute()
+        
+        if parent and commands:
+            for cmd in commands:
+                if hasattr(cmd, 'kick') and cmd.kick > 0.0:
+                    parent.last_kicker_id = cmd.robot_id
+                    parent.last_kick_time = time.time()
+                    break
+        
+        return TaskStatus.SUCCESS, commands
 
 class TheirFreekickAction(LeafNode):
     def __init__(self, name):
@@ -154,14 +173,36 @@ class TheirFreekickAction(LeafNode):
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = TheirFreekick(ally_robots=self.ally_robots, ball=self.balls[0], on_positive_half=self.on_positive_half)
+        parent = self.get_parent() if hasattr(self, 'get_parent') else getattr(self, '_parent', None)
+        last_kicker_id = parent.last_kicker_id if parent else None
+        last_kick_time = parent.last_kick_time if parent else None
+        
+        executor = TheirFreekick(
+            ally_robots=self.ally_robots, 
+            ball=self.balls[0], 
+            on_positive_half=self.on_positive_half,
+            last_kicker_id=last_kicker_id,
+            last_kick_time=last_kick_time
+        )
 
-        return TaskStatus.SUCCESS, executor.execute()
+        status, commands = executor.execute()
+        
+        if parent and commands:
+            for cmd in commands:
+                if hasattr(cmd, 'kick') and cmd.kick > 0.0:
+                    parent.last_kicker_id = cmd.robot_id
+                    parent.last_kick_time = time.time()
+                    break
+        
+        return TaskStatus.SUCCESS, commands
 
 
 class Freekick(Sequence):
     def __init__(self, name):
         super().__init__(name, [])
+        
+        self.last_kicker_id = None
+        self.last_kick_time = None
 
         """ List with possible inputs to this state """
 
