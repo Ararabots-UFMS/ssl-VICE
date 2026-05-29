@@ -1,7 +1,8 @@
 from system_interfaces.msg._game_state import GameState
+
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
+from strategy.tatics.kickoff import OurKickoff
 from system_interfaces.srv import GetGameConfig
-from strategy.tatics.kickoff import OurKickoff, TheirKickoff
 
 
 class CheckState(LeafNode):
@@ -15,7 +16,11 @@ class CheckState(LeafNode):
         self.referee_command = msg.referee.command
 
     def run(self):
-        return (TaskStatus.SUCCESS, None) if self.referee_command in self.desired_states else (TaskStatus.FAILURE, None)
+        return (
+            (TaskStatus.SUCCESS, None)
+            if self.referee_command in self.desired_states
+            else (TaskStatus.FAILURE, None)
+        )
 
 
 class CheckIfOurKickoff(LeafNode):
@@ -56,7 +61,11 @@ class CheckIfOurKickoff(LeafNode):
 
     def run(self):
 
-        expected_cmd = "PREPARE_KICKOFF_YELLOW" if self.is_team_color_yellow else "PREPARE_KICKOFF_BLUE"
+        expected_cmd = (
+            "PREPARE_KICKOFF_YELLOW"
+            if self.is_team_color_yellow
+            else "PREPARE_KICKOFF_BLUE"
+        )
 
         if self.referee_command == expected_cmd:
             return TaskStatus.SUCCESS, None
@@ -104,9 +113,12 @@ class OurKickoffAction(LeafNode):
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurKickoff(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = OurKickoff(
+            ally_robots=self.ally_robots, on_positive_half=self.on_positive_half
+        )
 
         return TaskStatus.SUCCESS, executor.execute()
+
 
 class TheirKickoffAction(LeafNode):
     def __init__(self, name):
@@ -149,7 +161,9 @@ class TheirKickoffAction(LeafNode):
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurKickoff(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = OurKickoff(
+            ally_robots=self.ally_robots, on_positive_half=self.on_positive_half
+        )
 
         return TaskStatus.SUCCESS, executor.execute()
 
@@ -174,7 +188,6 @@ class Kickoff(Sequence):
         ours_or_theirs = Selector("OursOrTheirsKickoff", [ours, action_theirs])
 
         self.add_children([check_kickoff, ours_or_theirs])
-
 
     def run(self):
         """Access the second element in tuple"""

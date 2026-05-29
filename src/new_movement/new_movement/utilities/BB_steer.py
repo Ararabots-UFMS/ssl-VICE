@@ -34,8 +34,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-from math import sqrt, fabs
 import random
+from math import fabs, sqrt
 
 time_epsilon = 0.0000001
 float_epsilon = 1.0e-200
@@ -65,7 +65,9 @@ def time_optimal_steer(xinit, xgoal, umin=0, umax=0):
     imax = 0
     for i in range(n):
         cvec.append(
-            bang_bang_optimal(xinit[i], xinit[n + i], xgoal[i], xgoal[n + i], umin[i], umax[i])
+            bang_bang_optimal(
+                xinit[i], xinit[n + i], xgoal[i], xgoal[n + i], umin[i], umax[i]
+            )
         )
         tvec.append(control_time(cvec[i]))
 
@@ -82,7 +84,13 @@ def time_optimal_steer(xinit, xgoal, umin=0, umax=0):
             )
             if c == []:
                 c = bang_bang_hard_stop_wait(
-                    xinit[i], xinit[n + i], xgoal[i], xgoal[n + i], tmax, umin[i], umax[i]
+                    xinit[i],
+                    xinit[n + i],
+                    xgoal[i],
+                    xgoal[n + i],
+                    tmax,
+                    umin[i],
+                    umax[i],
                 )
                 # print("Bang failure",i)
             if c == []:
@@ -116,9 +124,13 @@ def time_optimal_steer_2d(xinit, xgoal, umin=(-1, -1), umax=(1, 1)):
 
     if fabs(t1 - t2) > time_epsilon:
         if t1 < t2:
-            c1 = bang_bang_scaled(xinit[0], xinit[2], xgoal[0], xgoal[2], t2, umin[0], umax[0])
+            c1 = bang_bang_scaled(
+                xinit[0], xinit[2], xgoal[0], xgoal[2], t2, umin[0], umax[0]
+            )
             if c1 == []:
-                c1 = bang_bang_hard_stop(xinit[0], xinit[2], xgoal[0], xgoal[2], umin[0], umax[0])
+                c1 = bang_bang_hard_stop(
+                    xinit[0], xinit[2], xgoal[0], xgoal[2], umin[0], umax[0]
+                )
                 tt1 = control_time(c1)
                 if tt1 > t2:
                     c2 = bang_bang_scaled(
@@ -131,20 +143,36 @@ def time_optimal_steer_2d(xinit, xgoal, umin=(-1, -1), umax=(1, 1)):
                         tt2 = control_time(c2)
                         if tt2 < tt1:
                             c2 = bang_bang_hard_stop_wait(
-                                xinit[1], xinit[3], xgoal[1], xgoal[3], tt1, umin[1], umax[1]
+                                xinit[1],
+                                xinit[3],
+                                xgoal[1],
+                                xgoal[3],
+                                tt1,
+                                umin[1],
+                                umax[1],
                             )
                         else:
                             c1 = bang_bang_hard_stop_wait(
-                                xinit[0], xinit[2], xgoal[0], xgoal[2], tt2, umin[0], umax[0]
+                                xinit[0],
+                                xinit[2],
+                                xgoal[0],
+                                xgoal[2],
+                                tt2,
+                                umin[0],
+                                umax[0],
                             )
                 else:  # tt1 <= t2
                     c1 = bang_bang_hard_stop_wait(
                         xinit[0], xinit[2], xgoal[0], xgoal[2], t2, umin[0], umax[0]
                     )
         else:
-            c2 = bang_bang_scaled(xinit[1], xinit[3], xgoal[1], xgoal[3], t1, umin[1], umax[1])
+            c2 = bang_bang_scaled(
+                xinit[1], xinit[3], xgoal[1], xgoal[3], t1, umin[1], umax[1]
+            )
             if c2 == []:
-                c2 = bang_bang_hard_stop(xinit[1], xinit[3], xgoal[1], xgoal[3], umin[1], umax[1])
+                c2 = bang_bang_hard_stop(
+                    xinit[1], xinit[3], xgoal[1], xgoal[3], umin[1], umax[1]
+                )
                 tt2 = control_time(c2)
                 if tt2 > t1:
                     c1 = bang_bang_scaled(
@@ -157,11 +185,23 @@ def time_optimal_steer_2d(xinit, xgoal, umin=(-1, -1), umax=(1, 1)):
                         tt1 = control_time(c1)
                         if tt1 < tt2:
                             c1 = bang_bang_hard_stop_wait(
-                                xinit[0], xinit[2], xgoal[0], xgoal[2], tt2, umin[0], umax[0]
+                                xinit[0],
+                                xinit[2],
+                                xgoal[0],
+                                xgoal[2],
+                                tt2,
+                                umin[0],
+                                umax[0],
                             )
                         else:
                             c2 = bang_bang_hard_stop_wait(
-                                xinit[1], xinit[3], xgoal[1], xgoal[3], tt1, umin[1], umax[1]
+                                xinit[1],
+                                xinit[3],
+                                xgoal[1],
+                                xgoal[3],
+                                tt1,
+                                umin[1],
+                                umax[1],
                             )
                 else:  # tt2 <= t1
                     c2 = bang_bang_hard_stop_wait(
@@ -426,7 +466,10 @@ def test_bang_bang_optimal():
         c = []
         for j in range(random.randint(1, 10)):
             c.append(
-                [[random.random() * 2.0 - 1.0, random.random() * 2.0 - 1.0], random.random() * 5.0]
+                [
+                    [random.random() * 2.0 - 1.0, random.random() * 2.0 - 1.0],
+                    random.random() * 5.0,
+                ]
             )
         ttc = control_time(c)
         xgoal = (10.0, 10.0, 0.0, 0.0)  # Estado Final ( px, py, vx, vy )
@@ -434,8 +477,6 @@ def test_bang_bang_optimal():
         ttcopt = control_time(copt)
         print(copt)
         break
-        if ttcopt > ttc:
-            print("Bad optimization", ttc, ttcopt)
 
 
 # Returns empty control if it fails

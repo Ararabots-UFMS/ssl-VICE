@@ -15,6 +15,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 SHELL ["/bin/bash", "-c"]
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 
+COPY . /root/ssl-VICE
+
+RUN chmod +x /root/ssl-VICE/entrypoint.sh
+
 WORKDIR /root/ssl-VICE
 CMD ["bash"]
 

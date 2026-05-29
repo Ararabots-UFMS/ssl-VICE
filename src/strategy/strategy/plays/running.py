@@ -1,8 +1,9 @@
 from new_movement.entities.States import Vector2D
-from strategy.behaviour import Selector, Sequence, LeafNode, TaskStatus
 from system_interfaces.msg._game_state import GameState
+
+from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
+from strategy.tatics.running import Atack
 from system_interfaces.srv import GetGameConfig
-from strategy.tatics.running import Atack, Defense
 
 
 class CheckState(LeafNode):

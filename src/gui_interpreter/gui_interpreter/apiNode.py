@@ -7,7 +7,7 @@ import threading
 from threading import Thread
 import ctypes
 
-from utils.converter import todict
+from converter import todict
 
 from grsim_messenger.grsim_publisher import grSimPublisher
 from hardware_messenger.hardware_publisher import HardwarePublisher

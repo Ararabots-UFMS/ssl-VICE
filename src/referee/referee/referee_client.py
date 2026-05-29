@@ -1,7 +1,5 @@
 import socket
 import struct
-import signal
-import time
 
 
 class Client:
