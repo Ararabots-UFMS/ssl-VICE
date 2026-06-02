@@ -18,10 +18,10 @@ def generate_launch_description():
                 package="control",
                 executable="controller",
             ),
-            # Node(
-            #     package="new_movement",
-            #     executable="driver",
-            # ),
+            Node(
+                package="new_movement",
+                executable="planner",
+            ),
             Node(
                 package="grsim_messenger",
                 executable="grsim_publisher_node",
@@ -43,13 +43,13 @@ def generate_launch_description():
             #      package="strategy_command_gui",
             #      executable="strategy_gui"
             # ),
-            Node(
-                package="manual_command",
-                executable="manual_node",
-            ),
-            Node(
-                 package="hardware_messenger",
-                 executable="hardware"
-            )
+            #Node(
+            #    package="manual_command",
+            #    executable="manual_node",
+            #),
+            #Node(
+            #     package="hardware_messenger",
+            #     executable="hardware"
+            #)
         ]
     )

@@ -1,4 +1,4 @@
-from new_movement.utilities.BB_steer import time_optimal_steer_2d as bb_steer
+from new_movement.utilities.trap_steer import time_optimal_steer_2d as trap_steer
 from new_movement.entities.States import State, Vector2D, MoveConstraints
 from new_movement.entities.Motion import MotionPath, MotionPrimitive
 from new_movement.entities.Trajectory import TrajectorySegment
@@ -23,7 +23,7 @@ class TrajectoryGenerator:
             )
 
     def generate(self, curState: State, tarState: State) -> TrajectorySegment:
-        """Generates a piecewise constant acceleration motion path using the BB_Steer"""
+        """Generates a piecewise constant acceleration motion path using the Trapezoidal Steer"""
 
         # Is close enough to accelerate
         if(curState.position.distance(tarState.position) < NEAR_THRESHOLD):
@@ -35,16 +35,18 @@ class TrajectoryGenerator:
                 DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST
             ))
 
-        bb_output = bb_steer(
+        trap_output = trap_steer(
             curState.position + curState.velocity,
             tarState.position + tarState.velocity,
             umin=self.constrainsts.min_acceleration,
             umax=self.constrainsts.max_acceleration,
+            vmin=self.constrainsts.min_velocity,
+            vmax=self.constrainsts.max_velocity,
         )
 
-        # bb_output is a list of piecewise constant acceleration, is other words, ((ax, ay), d) where d is the duration.
+        # trap_output is a list of piecewise constant acceleration, is other words, ((ax, ay), d) where d is the duration.
         motion_path = MotionPath(
-            [MotionPrimitive(Vector2D(out[0][0], out[0][1]), out[1]) for out in bb_output]
+            [MotionPrimitive(Vector2D(out[0][0], out[0][1]), out[1]) for out in trap_output]
         )
 
         return TrajectorySegment(curState.position, curState.velocity, motion_path)

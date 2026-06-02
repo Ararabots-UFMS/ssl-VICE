@@ -53,7 +53,7 @@ class Vector2D:
         return Vector2D(-self.x, -self.y)
 
     # Not returning the sum of vector mathematically, overloading the add operator to
-    # format the vectors to be inputed in the BB steer.
+    # format the vectors to be inputed in the trapezoidal steer.
     def __add__(self, other) -> list:
         return [self.x, self.y, other.x, other.y]
 

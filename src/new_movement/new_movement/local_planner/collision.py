@@ -3,6 +3,7 @@ from typing import List
 from new_movement.entities.Trajectory import TrajectorySegment
 from new_movement.entities.obstacles import Obstacle
 from new_movement.entities.StaticObstacle import StaticObstacle
+from new_movement.entities.States import Vector2D
 
 class CollisionEngine:
     @staticmethod
@@ -23,19 +24,11 @@ class CollisionEngine:
         times = np.arange(0, duration + time_step, time_step)
         
         # 2. Get positions for all time steps
-        positions = np.array([[trajectory.get_state(t).position.x, trajectory.get_state(t).position.y] for t in times])
+        positions = CollisionEngine._sample_positions(trajectory, times) 
 
-        for obs in obstacles:
-            if isinstance(obs, StaticObstacle):
-                for pos_vec in positions:
-                    from new_movement.entities.States import Vector2D
-                    if obs.isCollidingAt(Vector2D(pos_vec[0], pos_vec[1])):
-                        return True
-            else:
-                # Dynamic Obstacles (Robots)
-                for i, t in enumerate(times):
-                    from new_movement.entities.States import Vector2D
-                    if obs.isCollidingAt(Vector2D(positions[i, 0], positions[i, 1]), t):
-                        return True
-                
-        return False
+        return any(obs.batch_collides(positions, times) for obs in obstacles)
+
+    @staticmethod
+    def _sample_positions(trajectory, times):
+        states = [trajectory.get_state(t) for t in times]
+        return np.array([[s.position.x, s.position.y] for s in states])

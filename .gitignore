@@ -3,12 +3,10 @@
 .vscode/
 .venv/
 
-.devcontainer/
 build/
 install/
 log/
 
 teste.*
 
-scripts/tracker_benchmark_publisher.py
-scripts/publish_trajectory.py
+.vice_last_launch
