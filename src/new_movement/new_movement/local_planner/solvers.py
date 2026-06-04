@@ -6,7 +6,6 @@ from new_movement.entities.States import State, Vector2D
 from new_movement.entities.obstacles import Obstacle
 from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
 
-# Relative imports
 from .collision import CollisionEngine
 from .sampler import InformedSampler
 

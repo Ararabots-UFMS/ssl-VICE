@@ -7,7 +7,6 @@ from new_movement.entities.obstacles import Obstacle
 from new_movement.entities.StaticObstacle import StaticObstacle
 from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
 
-# Relative imports
 from .collision import CollisionEngine
 from .solvers import BypassSolver, PlanningStatus
 from .sampler import InformedSampler
