@@ -23,6 +23,14 @@ def generate_launch_description():
                 executable="planner",
             ),
             Node(
+                package="new_movement",
+                executable="manager",
+            ),
+            Node(
+                package="new_movement",
+                executable="tracker",
+            ),
+            Node(
                 package="grsim_messenger",
                 executable="grsim_publisher_node",
             ),

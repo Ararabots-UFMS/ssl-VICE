@@ -11,7 +11,7 @@ class MovementManager(Node):
 
         self.get_logger().info('MovementManager node has been started.')
 
-        self._movement_command_sub = self.create_subscription(MovementCommandArray, 'MovementCommandTopic', self.movement_command_callback, 10)
+        self._movement_command_sub = self.create_subscription(MovementCommandArray, 'movement_manager/commands', self.movement_command_callback, 10)
         self._game_state_sub = self.create_subscription(GameState, 'game_state', self.game_state_callback, 10)
         self._static_obstacles_srv= self.create_service(SetStaticObstacles, 'SetStaticObstacles', self._set_static_obstacles)
         self._goal_keeper_srv = self.create_service(SetGoalKeeper, 'SetGoalKeeper', self._set_goal_keeper)
@@ -35,7 +35,7 @@ class MovementManager(Node):
     def _set_static_obstacles(self, request, response):
         self._static_obstacles = {
             'border_area':bool(request.border_area),
-            'center_circle':bool(request.center_circle)
+            'center_area':bool(request.center_area)
         }
         return response
 
@@ -79,7 +79,7 @@ class MovementManager(Node):
             target.initial_pos.y = robot.position_y
             target.initial_vel.x = robot.velocity_x
             target.initial_vel.y = robot.velocity_y
-            target.planning_options.avoid_center_area = self._static_obstacles['center_circle']
+            target.planning_options.avoid_center_area = self._static_obstacles['center_area']
             target.target_pos = cmd.target_pos
 
             if robot.id == self._goal_keeper_id:
