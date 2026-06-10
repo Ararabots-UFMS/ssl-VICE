@@ -28,7 +28,7 @@ class GoalkeeperKickoff:
         return robot_command
 
 class OurFreekick:
-    def __init__(self, ally_robots, ball, on_positive_half, last_kicker_id=None, last_kick_time=None):
+    def __init__(self, ally_robots, ball, on_positive_half, last_kicker_id=None):
         self.name = "OurAtack"
         self.skills_factory = Skills("Movement")
         self.goal_center = CenterGoal()
@@ -38,8 +38,6 @@ class OurFreekick:
         self.kick_threshold = 1125.0
         
         self.last_kicker_id = last_kicker_id
-        self.last_kick_time = last_kick_time
-        self.double_touch_cooldown = 0.3  # 300ms minimum between kicks from same robot
 
         self.max_execution_time = 10.0
         self.start_time = time.time()
@@ -65,21 +63,20 @@ class OurFreekick:
 
         return False
     
+    def _is_ball_position_valid(self):
+        x, y = self.ball.position_x, self.ball.position_y
+        if abs(x) > 2250 - 200 or abs(y) > 1500 - 200:
+            return False
+        if abs(x) > 2250 - 1000 and abs(y) < 750:
+            return False
+        return True
+
     def _check_double_touch(self, robot_id) -> bool:
 
         if self.last_kicker_id is None:
             return True
         
         if robot_id != self.last_kicker_id:
-            return True
-        
-
-        if self.last_kick_time is None:
-            return True
-        
-        elapsed_time = time.time() - self.last_kick_time
-        
-        if elapsed_time > self.double_touch_cooldown:
             return True
         
         return False
@@ -230,6 +227,8 @@ class OurFreekick:
     def execute(self):
         if self._check_timeout():
             return []
+        if not self._is_ball_position_valid():
+            return []
          
         robots_commands = []
 
@@ -252,7 +251,7 @@ class OurFreekick:
         return robots_commands
 
 class TheirFreekick:
-    def __init__(self, ally_robots, ball, on_positive_half, last_kicker_id=None, last_kick_time=None):
+    def __init__(self, ally_robots, ball, on_positive_half, last_kicker_id=None):
         self.name = "OurDefense"
         self.skills_factory = Skills("Movement")
         self.goal_center = CenterGoal()
@@ -261,8 +260,6 @@ class TheirFreekick:
         self.ball = ball
         
         self.last_kicker_id = last_kicker_id
-        self.last_kick_time = last_kick_time
-        self.double_touch_cooldown = 0.3 
         
         self.max_execution_time = 10.0
         self.start_time = time.time()
@@ -296,14 +293,6 @@ class TheirFreekick:
         if robot_id != self.last_kicker_id:
             return True
         
-        if self.last_kick_time is None:
-            return True
-        
-        elapsed_time = time.time() - self.last_kick_time
-        
-        if elapsed_time > self.double_touch_cooldown:
-            return True
-        
         return False
 
     def execute(self):
@@ -328,6 +317,16 @@ class TheirFreekick:
             )
             defend_x = (ball_pos.x + goal_pos.x) / 2.0
             defend_y = (ball_pos.y + goal_pos.y) / 2.0
+
+            dx = defend_x - ball_pos.x
+            dy = defend_y - ball_pos.y
+            distance = hypot(dx, dy)
+            if distance < 500.0: 
+                if distance == 0: distance = 1
+                scale = 500.0 / distance
+                defend_x = ball_pos.x + dx * scale
+                defend_y = ball_pos.y + dy * scale
+
 
             robot_command = self.skills_factory.move_with_angle(
                 robot_id=robot_id_,

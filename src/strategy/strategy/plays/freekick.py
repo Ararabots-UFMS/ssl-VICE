@@ -4,6 +4,7 @@ from system_interfaces.srv import GetGameConfig
 from strategy.tatics.freekick import OurFreekick, TheirFreekick
 import time
 
+
 class CheckState(LeafNode):
     def __init__(self, name, _desired_states):
         super().__init__(name)
