@@ -17,6 +17,7 @@ def build_overhead_point(
     trajectory: Trajectory,
     time_offset: float,
     lookahead_time: float,
+    now_sec: float,
 ) -> Optional[TrajectoryPointMsg]:
     if trajectory is None or trajectory_msg is None:
         return None
@@ -38,6 +39,7 @@ def build_overhead_point(
     point.pos = state.position.to_msg()
     point.vel = state.velocity.to_msg()
     point.timestamp = float(sample_time)
+    point.wall_stamp = now_sec + (sample_time - time_offset)
     point.trajectory = trajectory_msg
     return point
 
@@ -93,24 +95,11 @@ class TrackerNode(Node):
         freq = float(self.get_parameter("tracker_freq").value)
         self.timer = self.create_timer(1.0 / freq, self.timer_callback)
 
-        self.get_logger().info(
-            "TrackerNode online: in=%s overhead=%s control_ref=%s lookahead=%.3fs freq=%.1fHz"
-            % (
-                self.get_parameter("trajectory_topic").value,
-                self.get_parameter("overhead_topic").value,
-                self.get_parameter("control_reference_topic").value,
-                float(self.get_parameter("lookahead_time").value),
-                freq,
-            )
-        )
+        self.get_logger().info("TrackerNode online at freq=%.1fHz" % freq)
 
     def trajectory_callback(self, msg: TrajectoryMsg):
         if not msg.segments:
-            self.get_logger().debug(
-                "Ignoring empty trajectory for robot %s" % msg.robot_id
-            )
             return
-
         try:
             trajectory = Trajectory.from_msg(msg)
         except Exception as exc:
@@ -119,19 +108,22 @@ class TrackerNode(Node):
             )
             return
 
-        self.robot_data[int(msg.robot_id)] = {
-            "trajectory": trajectory,
-            "trajectory_msg": copy.deepcopy(msg),
-            "time_offset": 0.0,
-        }
+        rid = int(msg.robot_id)
+        if rid not in self.robot_data:
+            self.robot_data[rid] = {}
 
-        self.get_logger().debug(
-            "Trajectory updated for robot %s (segments=%d, duration=%.3fs)"
-            % (msg.robot_id, len(msg.segments), trajectory.get_total_duration())
-        )
+        data = self.robot_data[rid]
+        pending = data.get("pending")
+        if pending is None or msg.handoff_stamp >= pending["handoff_stamp"]:
+            data["pending"] = {
+                "trajectory": trajectory,
+                "trajectory_msg": copy.deepcopy(msg),
+                "handoff_stamp": msg.handoff_stamp,
+            }
 
     def timer_callback(self):
         now = self.get_clock().now()
+        now_sec = now.nanoseconds / 1e9
         dt = (now - self.last_time).nanoseconds / 1e9
         if dt <= 0:
             return
@@ -140,43 +132,72 @@ class TrackerNode(Node):
         lookahead = float(self.get_parameter("lookahead_time").value)
         for robot_id, data in self.robot_data.items():
             trajectory = data.get("trajectory")
-            if trajectory is None:
-                continue
+            if trajectory is not None:
+                total_duration = trajectory.get_total_duration()
+                if total_duration > 0:
+                    time_offset = float(data.get("time_offset", 0.0))
 
-            total_duration = trajectory.get_total_duration()
-            if total_duration <= 0:
-                continue
+                    current_state = trajectory.get_state(time_offset)
+                    control_ref = build_control_reference_point(
+                        robot_id,
+                        data.get("trajectory_msg"),
+                        current_state,
+                        time_offset,
+                    )
+                    if control_ref is not None:
+                        self.control_reference_pub.publish(control_ref)
 
-            time_offset = float(data.get("time_offset", 0.0))
+                    if time_offset < total_duration:
+                        overhead_point = build_overhead_point(
+                            robot_id,
+                            data.get("trajectory_msg"),
+                            trajectory,
+                            time_offset,
+                            lookahead,
+                            now_sec,
+                        )
+                        if overhead_point is not None:
+                            self.overhead_pub.publish(overhead_point)
 
-            current_state = trajectory.get_state(time_offset)
-            control_ref = build_control_reference_point(
-                robot_id,
-                data.get("trajectory_msg"),
-                current_state,
-                time_offset,
-            )
-            if control_ref is not None:
-                self.control_reference_pub.publish(control_ref)
+                    if time_offset < total_duration:
+                        time_offset = min(time_offset + dt, total_duration)
+                    else:
+                        time_offset = total_duration
+                    data["time_offset"] = time_offset
 
-            overhead_point = build_overhead_point(
-                robot_id,
-                data.get("trajectory_msg"),
-                trajectory,
-                time_offset,
-                lookahead,
-            )
-            if overhead_point is not None:
-                self.overhead_pub.publish(overhead_point)
+            # Handle pending trajectory handoff
+            pending = data.get("pending")
+            if pending is not None:
+                handoff_stamp = pending["handoff_stamp"]
+                now_sec = now.nanoseconds / 1e9
+                dt_late = now_sec - handoff_stamp
 
-            if time_offset < total_duration:
-                time_offset = min(time_offset + dt, total_duration)
-            else:
-                time_offset = total_duration
-            data["time_offset"] = time_offset
+                if handoff_stamp == 0.0:
+                    new_offset = 0.0
+                elif dt_late >= 0:
+                    new_offset = dt_late
+                else:
+                    # Not time yet
+                    continue
 
-
-
+                pending_traj = pending["trajectory"]
+                if new_offset < pending_traj.get_total_duration():
+                    data["trajectory"] = pending_traj
+                    data["trajectory_msg"] = pending["trajectory_msg"]
+                    data["time_offset"] = new_offset
+                    
+                    if handoff_stamp != 0.0 and dt_late > lookahead * 0.5:
+                        self.get_logger().warn(
+                            f"Late handoff for robot {robot_id}: {dt_late:.3f}s "
+                            f"(lookahead was {lookahead:.3f}s)"
+                        )
+                else:
+                    if pending_traj.get_total_duration() > 1e-3:
+                        self.get_logger().warn(
+                            f"Discarding fully-elapsed pending trajectory for robot {robot_id} "
+                            f"(late by {dt_late:.3f}s, duration was {pending_traj.get_total_duration():.3f}s)"
+                        )
+                data["pending"] = None
 
 def main(args=None):
     rclpy.init(args=args)

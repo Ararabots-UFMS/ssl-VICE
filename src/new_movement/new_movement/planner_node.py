@@ -25,6 +25,7 @@ class PlannerNode(Node):
         # Parameters
         self.declare_parameter('planner_freq', 50.0)
         self.declare_parameter('max_threads', 8)
+        self.declare_parameter('overhead_max_age', 0.5)
         
         # State
         self.cur_targets: Optional[TargetArray] = None
@@ -92,8 +93,9 @@ class PlannerNode(Node):
 
                 result = future.result()
                 if result:
-                    _, trajectory = result
+                    _, trajectory, handoff_stamp = result
                     msg = trajectory.to_msg(robot_id)
+                    msg.handoff_stamp = handoff_stamp
                     self.trajectory_pub.publish(msg)
             except Exception as e:
                 self.get_logger().error(f"Planning failed for robot {robot_id}: {e}")
@@ -102,10 +104,19 @@ class PlannerNode(Node):
     def plan_for_robot(self, target):
         robot_id = target.robot_id
         
-        # Determine Initial State (Converting meters to mm)
+        handoff_stamp = 0.0
         if robot_id in self.cur_overhead_points:
-            init_pos = self.cur_overhead_points[robot_id].pos
-            init_vel = self.cur_overhead_points[robot_id].vel
+            overhead_point = self.cur_overhead_points[robot_id]
+            age = (self.get_clock().now().nanoseconds / 1e9) - overhead_point.wall_stamp
+            if age <= self.get_parameter('overhead_max_age').value:
+                init_pos = overhead_point.pos
+                init_vel = overhead_point.vel
+                handoff_stamp = overhead_point.wall_stamp
+            else:
+                # Overhead point is stale — fall back to current state
+                init_pos = target.initial_pos
+                init_vel = target.initial_vel
+                handoff_stamp = 0.0
         else:
             init_pos = target.initial_pos
             init_vel = target.initial_vel
@@ -135,7 +146,7 @@ class PlannerNode(Node):
         try:
             trajectory = self.planner.find(initial_state, target_state, obstacles)
             if trajectory and trajectory.root:
-                return robot_id, trajectory
+                return robot_id, trajectory, handoff_stamp
         except Exception as e:
             self.get_logger().warn(f"Solver error for robot {robot_id}: {e}")
             

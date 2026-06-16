@@ -1,10 +1,11 @@
 import rclpy
+from movement_interfaces.msg import TrajectoryPoint as TrajectoryPointMsg
 from new_movement.entities.States import State, Vector2D
 from rclpy.node import Node
 
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
-from system_interfaces.msg import ControlCommand, GameState, RobotCommand, TeamCommand
+from system_interfaces.msg import GameState, RobotCommand, TeamCommand
 from system_interfaces.srv import (
     ControlParams,
     GetGameConfig,
@@ -31,7 +32,7 @@ class Controller(Node):
 
         # Caches
         self.ally_robots = {}
-        self.latest_command = None
+        self.control_references = {}
         self.is_halt = None
         # Low-frequency config (polled periodically)
         self.is_team_color_yellow = False
@@ -52,7 +53,10 @@ class Controller(Node):
 
         # ROS Interfaces
         self.create_subscription(
-            ControlCommand, "control_command", self.receive_command, 10
+            TrajectoryPointMsg,
+            "movement_tracker/control_reference",
+            self.receive_control_reference,
+            10,
         )
         self.publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
         self.create_service(ControlParams, "update_pid", self.update_parameters)
@@ -66,8 +70,8 @@ class Controller(Node):
         self.last_time = self.get_clock().now()
         self.create_timer(0.01, self.timer_callback)  # 100 Hz
 
-    def receive_command(self, msg: ControlCommand):
-        self.latest_command = msg
+    def receive_control_reference(self, msg: TrajectoryPointMsg):
+        self.control_references[msg.robot_id] = msg
 
     def _poll_game_config(self):
         if self._config_call_inflight:
@@ -104,7 +108,7 @@ class Controller(Node):
         future.add_done_callback(done)
 
     def timer_callback(self):
-        if self.latest_command is None:
+        if not self.control_references:
             return
 
         # config is polled periodically in _poll_game_config
@@ -117,8 +121,7 @@ class Controller(Node):
         team_cmd.is_team_color_yellow = self.is_team_color_yellow
         team_cmd.robots = []
 
-        for desired in self.latest_command.command:
-            rid = desired.id
+        for rid, ref in self.control_references.items():
             if rid not in self.ally_robots:
                 continue
 
@@ -128,8 +131,8 @@ class Controller(Node):
                 Vector2D(cur.velocity_x / 1000.0, cur.velocity_y / 1000.0),
             )
             tgt_state = State(
-                Vector2D(desired.position_x, desired.position_y),
-                Vector2D(desired.velocity_x, desired.velocity_y),
+                Vector2D(ref.pos.x / 1000.0, ref.pos.y / 1000.0),
+                Vector2D(ref.vel.x / 1000.0, ref.vel.y / 1000.0),
             )
 
             vel_cmd = self.robot_controller.compute_trajectory_command(
@@ -156,7 +159,7 @@ class Controller(Node):
 
             team_cmd.robots.append(out)
 
-        active = {d.id for d in self.latest_command.command}
+        active = set(self.control_references.keys())
         self.robot_controller.cleanup_unused_robots(active)
 
         self.publisher.publish(team_cmd)
