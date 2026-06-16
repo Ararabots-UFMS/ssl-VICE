@@ -37,10 +37,12 @@ class MovementManager(Node):
             'border_area':bool(request.border_area),
             'center_area':bool(request.center_area)
         }
+        response.success = True
         return response
 
     def _set_goal_keeper(self, request, response):
         self._goal_keeper_id = int(request.robot_id)
+        response.success = True
         return response
 
     def _robots_ready(self):
