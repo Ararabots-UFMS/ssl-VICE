@@ -68,7 +68,7 @@ class Controller(Node):
 
         # Timing
         self.last_time = self.get_clock().now()
-        self.create_timer(0.01, self.timer_callback)  # 100 Hz
+        self.create_timer(0.02, self.timer_callback)
 
     def receive_control_reference(self, msg: TrajectoryPointMsg):
         self.control_references[msg.robot_id] = msg

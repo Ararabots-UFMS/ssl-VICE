@@ -10,31 +10,13 @@ DEFAULT_VELOCITY_CONSTRAINST = Vector2D(900, 900) # mm/s
 DEFAULT_ACCELERATION_CONSTRAINST = Vector2D(450, 450) # mm/s²
 
 NEAR_ACCELERATION_CONSTRAINST = Vector2D(900, 900) # #TODO Hardcoded, needs to get the max_output from control and take a little off
-NEAR_THRESHOLD = 350
 
 class TrajectoryGenerator:
     def __init__(self, constrainsts: Optional[MoveConstraints] = None):
-        # If constrainsts are not specified, set to default constrainst
-        if constrainsts is not None:
-            self.constrainsts = constrainsts
-        else:
-            self.constrainsts = MoveConstraints(
-                DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST
-            )
+        self.constrainsts = constrainsts or MoveConstraints(DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST)
 
     def generate(self, curState: State, tarState: State) -> TrajectorySegment:
         """Generates a piecewise constant acceleration motion path using the Trapezoidal Steer"""
-
-        # Is close enough to accelerate
-        if(curState.position.distance(tarState.position) < NEAR_THRESHOLD):
-            self.update_constrainsts(MoveConstraints(
-                DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST
-            ))
-        else:
-            self.update_constrainsts(MoveConstraints(
-                DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST
-            ))
-
         trap_output = trap_steer(
             curState.position + curState.velocity,
             tarState.position + tarState.velocity,

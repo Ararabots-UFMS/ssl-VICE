@@ -37,6 +37,7 @@ class BypassSolver(BaseSolver):
         generator: TrajectoryGenerator
     ) -> Optional[Trajectory]:
         """Iteratively attempts to find a via-point that clears all obstacles."""
+        found_trajectories = []
         for _ in range(self.max_iterations):
             via_state = State(
                 self.sampler.sample_near_axis(start.position, goal.position),
@@ -48,8 +49,13 @@ class BypassSolver(BaseSolver):
 
             if self._is_safe(segment_1, obstacles) and self._is_safe(segment_2, obstacles):
                 segment_1.add_child(segment_2)
-                return Trajectory(segment_1)
-        return None
+                found_trajectories.append(Trajectory(segment_1))
+
+        if not found_trajectories:
+            return None
+        
+        fastest_trajectory = min(found_trajectories, key=lambda t: t.get_total_duration())
+        return fastest_trajectory
 
     def _is_safe(self, segment: TrajectorySegment, obstacles: List[Obstacle]) -> bool:
         return not CollisionEngine.is_collision(

@@ -68,8 +68,8 @@ class ObstacleFactory:
                     Vector2D(enemy.position_x, enemy.position_y),
                     Vector2D(enemy.velocity_x, enemy.velocity_y),
                 )
-                # radius = 90 (robot) + 100 (safety) = 190
-                obstacles.append(EnemyRobotObstacle(state, radius=190))
+                # radius = 90 (enemy robot) + 90 (own robot) + 20 (safety) = 200
+                obstacles.append(EnemyRobotObstacle(state, radius=200))
             except Exception:
                 pass
 
@@ -99,10 +99,10 @@ class ObstacleFactory:
                         )
                     else:
                         # Fallback to simple prediction tube
-                        obstacles.append(EnemyRobotObstacle(state, radius=190))
+                        obstacles.append(EnemyRobotObstacle(state, radius=200))
                 else:
                     # Fallback if no tracker info available
-                    obstacles.append(EnemyRobotObstacle(state, radius=190))
+                    obstacles.append(EnemyRobotObstacle(state, radius=200))
             except Exception:
                 pass
 

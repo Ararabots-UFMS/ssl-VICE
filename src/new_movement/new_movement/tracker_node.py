@@ -122,22 +122,33 @@ class TrackerNode(Node):
                 "handoff_stamp": msg.handoff_stamp,
             }
             return
-        
-        if msg.handoff_stamp >= pending["handoff_stamp"]:
-            if abs(pending["trajectory"].get_destination().position.distance(trajectory.get_destination().position)) < 1e-3:
-                if pending["trajectory"].get_total_duration() - trajectory.get_total_duration() > self.improvement_threshold:
-                    data["pending"] = {
-                        "trajectory": trajectory,
-                        "trajectory_msg": copy.deepcopy(msg),
-                        "handoff_stamp": msg.handoff_stamp,
-                    }
-            else:
-                data["pending"] = {
-                    "trajectory": trajectory,
-                    "trajectory_msg": copy.deepcopy(msg),
-                    "handoff_stamp": msg.handoff_stamp,
-                }
+        if msg.handoff_stamp < pending["handoff_stamp"]:
+            return  # strictly older handoff — discard
 
+        dist_goal = trajectory.get_destination().position.distance(pending["trajectory"].get_destination().position)
+        goal_changed = dist_goal > 10  # mm
+
+        if goal_changed:
+            data["pending"] = {
+                "trajectory": trajectory,
+                "trajectory_msg": copy.deepcopy(msg),
+                "handoff_stamp": msg.handoff_stamp,
+            }
+            return
+
+        # Same goal: compare estimated arrival times
+        pending_arrival = pending["handoff_stamp"] + pending["trajectory"].get_total_duration()
+        new_arrival     = msg.handoff_stamp + trajectory.get_total_duration()
+        improvement     = pending_arrival - new_arrival
+
+        threshold = float(self.get_parameter("improvement_threshold").value)
+
+        if pending_arrival > 0 and (improvement / pending_arrival) >= threshold:
+            data["pending"] = {
+                "trajectory": trajectory,
+                "trajectory_msg": copy.deepcopy(msg),
+                "handoff_stamp": msg.handoff_stamp,
+            }
 
     def timer_callback(self):
         now = self.get_clock().now()

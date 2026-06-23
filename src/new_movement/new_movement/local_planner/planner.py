@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from new_movement.entities.Trajectory import Trajectory
-from new_movement.entities.States import State, Vector2D
+from new_movement.entities.States import State, Vector2D, MoveConstraints
 from new_movement.entities.obstacles import Obstacle
 from new_movement.entities.StaticObstacle import StaticObstacle
 from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
@@ -17,8 +17,8 @@ class SolverConfig:
     max_iterations: int = 10
     field_length: float = 12000.0
     field_width: float = 9000.0
-    max_velocity: float = 3000.0  # mm/s
-    safety_buffer: float = 190.0   # mm
+    max_velocity: Vector2D = Vector2D(2500.0, -2500.0)  # mm/s
+    max_acceleration: Vector2D = Vector2D(2000.0, -2000.0) # mm/s
     continuity_threshold: float = 1e-3
     collision_time_step: float = 0.2
 
@@ -27,13 +27,13 @@ class Planner:
 
     def __init__(self, config: Optional[SolverConfig] = None):
         self.config = config or SolverConfig()
-        self.generator = TrajectoryGenerator()
+        self.generator = TrajectoryGenerator(MoveConstraints(self.config.max_velocity, self.config.max_acceleration))
         
         # Initialize Sampler and Solver
         self.sampler = InformedSampler(
             field_length=self.config.field_length,
             field_width=self.config.field_width,
-            max_velocity=self.config.max_velocity
+            max_velocity=self.config.max_velocity.x
         )
         self.solver = BypassSolver(
             max_iterations=self.config.max_iterations,
@@ -47,6 +47,7 @@ class Planner:
         """Primary entry point for calculating a trajectory."""
         start, goal, safety_trajectory = self._handle_static_collisions(start, goal, obstacles)
         
+
         # 1. Try direct path
         direct_seg = self.generator.generate(start, goal)
         if not CollisionEngine.is_collision(direct_seg, obstacles, self.config.collision_time_step):
