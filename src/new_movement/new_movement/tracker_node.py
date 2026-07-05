@@ -74,6 +74,7 @@ class TrackerNode(Node):
         self.declare_parameter(
             "control_reference_topic", "movement_tracker/control_reference"
         )
+        self.declare_parameter('change_radius', 10)
 
         self.robot_data: Dict[int, Dict[str, object]] = {}
         self.last_time = self.get_clock().now()
@@ -126,7 +127,7 @@ class TrackerNode(Node):
             return  # strictly older handoff — discard
 
         dist_goal = trajectory.get_destination().position.distance(pending["trajectory"].get_destination().position)
-        goal_changed = dist_goal > 10  # mm
+        goal_changed = dist_goal > float(self.get_parameter('change_radius').value)  # mm
 
         if goal_changed:
             data["pending"] = {
@@ -137,8 +138,8 @@ class TrackerNode(Node):
             return
 
         # Same goal: compare estimated arrival times
-        pending_arrival = pending["handoff_stamp"] + pending["trajectory"].get_total_duration()
-        new_arrival     = msg.handoff_stamp + trajectory.get_total_duration()
+        pending_arrival = pending["trajectory"].get_total_duration() - (msg.handoff_stamp - pending["handoff_stamp"])
+        new_arrival     = trajectory.get_total_duration()
         improvement     = pending_arrival - new_arrival
 
         threshold = float(self.get_parameter("improvement_threshold").value)
