@@ -25,6 +25,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TrajectoryPoint.msg"
   "msg/TrajectorySegment.msg"
   "msg/Vector2D.msg"
+  "msg/GUITrajectories.msg"
   "srv/MovementCommandService.srv"
   "srv/SetGoalKeeper.srv"
   "srv/SetStaticObstacles.srv"

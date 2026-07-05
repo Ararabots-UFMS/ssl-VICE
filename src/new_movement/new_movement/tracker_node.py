@@ -6,6 +6,7 @@ from rclpy.node import Node
 
 from movement_interfaces.msg import Trajectory as TrajectoryMsg
 from movement_interfaces.msg import TrajectoryPoint as TrajectoryPointMsg
+from movement_interfaces.msg import GUITrajectories
 
 from new_movement.entities.Trajectory import Trajectory
 from new_movement.entities.States import State
@@ -66,11 +67,8 @@ class TrackerNode(Node):
     def __init__(self):
         super().__init__("movement_tracker")
 
-        self.declare_parameter("tracker_freq", 100.0)
         self.declare_parameter("lookahead_time", 0.2)
         self.declare_parameter("improvement_threshold", 0.1)
-        self.declare_parameter("trajectory_topic", "planner/trajectories")
-        self.declare_parameter("overhead_topic", "movement_tracker/overhead")
         self.declare_parameter(
             "control_reference_topic", "movement_tracker/control_reference"
         )
@@ -78,26 +76,17 @@ class TrackerNode(Node):
 
         self.robot_data: Dict[int, Dict[str, object]] = {}
         self.last_time = self.get_clock().now()
-        self.improvement_threshold = self.get_parameter('improvement_threshold').value
-        self.traj_sub = self.create_subscription(
-            TrajectoryMsg,
-            self.get_parameter("trajectory_topic").value,
-            self.trajectory_callback,
-            10,
-        )
-        self.overhead_pub = self.create_publisher(
-            TrajectoryPointMsg, self.get_parameter("overhead_topic").value, 10
-        )
-        self.control_reference_pub = self.create_publisher(
-            TrajectoryPointMsg,
-            self.get_parameter("control_reference_topic").value,
-            10,
-        )
 
-        freq = float(self.get_parameter("tracker_freq").value)
-        self.timer = self.create_timer(1.0 / freq, self.timer_callback)
+        self.traj_sub = self.create_subscription(TrajectoryMsg, "planner/trajectories", self.trajectory_callback, 10)
+        
+        self.overhead_pub = self.create_publisher(TrajectoryPointMsg, "movement_tracker/overhead", 10)
+        self.control_reference_pub = self.create_publisher(TrajectoryPointMsg, "movement_tracker/control_reference", 10)
+        self.gui_trajectories_pub = self.create_publisher(GUITrajectories, "gui/trajectories", 10)
 
-        self.get_logger().info("TrackerNode online at freq=%.1fHz" % freq)
+        self.timer = self.create_timer(0.01, self.timer_callback)
+        self.gui_timer = self.create_timer(0.1, self._update_gui_trajectories)
+
+        self.get_logger().info("TrackerNode ONLINE")
 
     def trajectory_callback(self, msg: TrajectoryMsg):
         if not msg.segments:
@@ -243,6 +232,28 @@ class TrackerNode(Node):
                 )
         data["pending"] = None
 
+
+    def _update_gui_trajectories(self):
+        msg = GUITrajectories()
+        current_trajectories = []
+        pending_trajectories = []
+        time_offsets = []
+
+        for robot_id, data in self.robot_data.items():
+            current_trajectories.append(data["trajectory_msg"])
+            if data["pending"]:
+                pending_trajectories.append(data["pending"]["trajectory_msg"])
+            else:
+                pending_trajectories.append(TrajectoryMsg())
+            time_offsets.append(data["time_offset"])
+        
+        msg.current_trajectories = current_trajectories
+        msg.pending_trajectories = pending_trajectories
+        msg.time_offsets = time_offsets
+
+        self.gui_trajectories_pub.publish(msg)
+
+        return None
 
 def main(args=None):
     rclpy.init(args=args)
