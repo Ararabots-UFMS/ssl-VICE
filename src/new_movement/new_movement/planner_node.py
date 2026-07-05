@@ -26,6 +26,7 @@ class PlannerNode(Node):
         self.declare_parameter('planner_freq', 50.0)
         self.declare_parameter('max_threads', 8)
         self.declare_parameter('overhead_max_age', 0.5)
+        self.declare_parameter('accept_radius', 10)
         
         # State
         self.cur_targets: Optional[TargetArray] = None
@@ -104,32 +105,35 @@ class PlannerNode(Node):
     def plan_for_robot(self, target):
         robot_id = target.robot_id
         
+        # from vision
+        init_pos = Vector2D(target.initial_pos.x, target.initial_pos.y)
+        init_vel = Vector2D(target.initial_vel.x, target.initial_vel.y)
         handoff_stamp = 0.0
+
         if robot_id in self.cur_overhead_points:
             overhead_point = self.cur_overhead_points[robot_id]
             age = (self.get_clock().now().nanoseconds / 1e9) - overhead_point.wall_stamp
             if age <= self.get_parameter('overhead_max_age').value:
-                init_pos = overhead_point.pos
-                init_vel = overhead_point.vel
+                # Fresh overhead point — plan from predicted future state
+                initial_state = State(
+                    Vector2D(overhead_point.pos.x, overhead_point.pos.y),
+                    Vector2D(overhead_point.vel.x, overhead_point.vel.y)
+                )
                 handoff_stamp = overhead_point.wall_stamp
             else:
-                # Overhead point is stale — fall back to current state
-                init_pos = target.initial_pos
-                init_vel = target.initial_vel
-                handoff_stamp = 0.0
+                # Stale overhead — check if robot is already at the goal
+                goal_pos = Vector2D(target.target_pos.x, target.target_pos.y)
+                if goal_pos.distance(init_pos) < float(self.get_parameter('accept_radius').value):
+                    return None  # already there, nothing to plan
+                # Far enough to be worth replanning from vision state
+                initial_state = State(init_pos, init_vel)
         else:
-            init_pos = target.initial_pos
-            init_vel = target.initial_vel
+            initial_state = State(init_pos, init_vel)
 
-        initial_state = State(
-            Vector2D(init_pos.x, init_pos.y),
-            Vector2D(init_vel.x, init_vel.y)
-        )
-            
         target_state = State(
             Vector2D(target.target_pos.x, target.target_pos.y),
             Vector2D(target.target_vel.x, target.target_vel.y)
-        )
+            )
 
         # Generate Obstacles
         obstacles = self.factory.create_obstacles(
