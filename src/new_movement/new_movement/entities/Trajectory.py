@@ -225,10 +225,12 @@ class Trajectory:
         self,
         time_step: Optional[float] = None,
         samples_size: Optional[int] = None,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
         output_states: bool = False,
     ) -> Union[List[Vector2D], List[State]]:
         """
-        Retorna uma lista de posições ou estados amostrados da trajetória.
+        Retorna uma lista de posições ou estados amostrados da trajetória dentro de um intervalo de tempo.
         Deve ser fornecido `time_step` OU `samples_size`.
         """
         if (time_step is not None) == (samples_size is not None):
@@ -239,22 +241,33 @@ class Trajectory:
         if self.root is None:
             return []
 
+        # Define os tempos de início e fim padrões se não forem fornecidos
+        total_duration = self.get_total_duration()
+        t_start = start_time if start_time is not None else 0.0
+        t_end = end_time if end_time is not None else total_duration
+
+        # Garante que os tempos informados estejam dentro dos limites e ordens lógicas
+        t_start = max(0.0, min(t_start, total_duration))
+        t_end = max(t_start, min(t_end, total_duration))
+        
+        interval_duration = t_end - t_start
         traj_list = []
-        total_time = self.get_total_duration()
 
-        if total_time == 0:
-            # Se a trajetória tem duração zero, retorna apenas o estado inicial
-            initial_state = self.get_state(0)
-            return [initial_state] if output_states else [initial_state.position]
+        # Caso onde o intervalo de amostragem é zero (mesmo ponto no tempo)
+        if interval_duration == 0:
+            state = self.get_state(t_start)
+            return [state] if output_states else [state.position]
 
+        # Calcula o time_step baseado na quantidade de amostras desejadas para o intervalo
         if samples_size is not None:
             time_step = (
-                total_time / (samples_size - 1) if samples_size > 1 else total_time
+                interval_duration / (samples_size - 1) if samples_size > 1 else interval_duration
             )
 
-        cur_time = 0.0
-        # REFACTOR (BUG FIX): Lógica de loop e amostragem robusta.
-        while cur_time < total_time:
+        # Varre a trajetória a partir do t_start usando o time_step
+        cur_time = t_start
+        # Usamos uma pequena tolerância para evitar problemas de precisão de ponto flutuante no loop
+        while cur_time < t_end - 1e-9:
             item = (
                 self.get_state(cur_time)
                 if output_states
@@ -263,10 +276,10 @@ class Trajectory:
             traj_list.append(item)
             cur_time += time_step
 
-        # Garante que o ponto final exato seja sempre incluído
-        destination_state = self.get_destination()
+        # Garante que o ponto final exato do intervalo seja sempre incluído
+        end_state = self.get_state(t_end)
         traj_list.append(
-            destination_state if output_states else destination_state.position
+            end_state if output_states else end_state.position
         )
 
         return traj_list

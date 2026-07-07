@@ -232,7 +232,6 @@ class TrackerNode(Node):
                 )
         data["pending"] = None
 
-
     def _update_gui_trajectories(self):
         msg = GUITrajectories()
         current_trajectories = []
@@ -240,20 +239,21 @@ class TrackerNode(Node):
         time_offsets = []
 
         for robot_id, data in self.robot_data.items():
-            current_trajectories.append(data["trajectory_msg"])
-            if data["pending"]:
-                pending_trajectories.append(data["pending"]["trajectory_msg"])
-            else:
-                pending_trajectories.append(TrajectoryMsg())
-            time_offsets.append(data["time_offset"])
-        
+            traj_msg = data.get("trajectory_msg")
+            if not traj_msg or not traj_msg.segments:
+                continue  # robot exists in dict but no trajectory activated yet
+
+            current_trajectories.append(traj_msg)
+            pending = data.get("pending")
+            pending_trajectories.append(
+                pending["trajectory_msg"] if pending else TrajectoryMsg()
+            )
+            time_offsets.append(data.get("time_offset", 0.0))
+
         msg.current_trajectories = current_trajectories
         msg.pending_trajectories = pending_trajectories
         msg.time_offsets = time_offsets
-
         self.gui_trajectories_pub.publish(msg)
-
-        return None
 
 def main(args=None):
     rclpy.init(args=args)
