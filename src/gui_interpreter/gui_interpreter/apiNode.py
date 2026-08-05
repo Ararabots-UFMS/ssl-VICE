@@ -140,7 +140,7 @@ class APINode(Node):
             current_points = []
             if time_offset < total_duration:
                 states = cur_trajectory.to_list(
-                    time_step=0.1,
+                    time_step=0.2,
                     start_time=time_offset,
                     end_time=total_duration,
                     output_states=True,
@@ -164,7 +164,7 @@ class APINode(Node):
                 pending_duration = pending_trajectory.get_total_duration()
                 if pending_duration > 1e-3:
                     states = pending_trajectory.to_list(
-                        time_step=0.1,
+                        time_step=0.2,
                         start_time=0.0,
                         end_time=pending_duration,
                         output_states=True,
@@ -634,21 +634,21 @@ class APINode(Node):
     def check_strategy_services_status(self):
         """Check status of all strategy services and emit to GUI"""
         services_status = {
-            "strategy": self.strategy_client.wait_for_service(timeout_sec=0.1),
-            "pid": self.pid_client.wait_for_service(timeout_sec=0.1),
-            "kp_angular": self.kp_angular_client.wait_for_service(timeout_sec=0.1),
-            "orientation": self.set_orientation_client.wait_for_service(timeout_sec=0.1),
-            "obstacles": self.update_obstacles_client.wait_for_service(timeout_sec=0.1),
-            "team_color": self.set_team_color_client.wait_for_service(timeout_sec=0.1)
+            "strategy": self.strategy_client.service_is_ready(),
+            "pid": self.pid_client.service_is_ready(),
+            "kp_angular": self.kp_angular_client.service_is_ready(),
+            "orientation": self.set_orientation_client.service_is_ready(),
+            "obstacles": self.update_obstacles_client.service_is_ready(),
+            "team_color": self.set_team_color_client.service_is_ready()
         }
-        
+
         gui_socket.emit("services_status", services_status)
         return services_status
 
 
 def main(args=None):
     rclpy.init(args=args)
-    executor = MultiThreadedExecutor(num_threads=2)
+    executor = MultiThreadedExecutor(num_threads=4)
     node = APINode(
         "api_node", executor, vision_running, communication_running, referee_running
     )
