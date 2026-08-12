@@ -9,12 +9,15 @@ class CheckState(LeafNode):
         super().__init__(name)
         self.desired_states = _desired_states
         self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        self.create_subscription(
+            GameState, "game_state", self.game_state_callback, 10)
 
     def game_state_callback(self, msg: GameState):
         self.referee_command = msg.referee.command
 
     def run(self):
+        if self.referee_command is None:
+            return TaskStatus.RUNNING, None
         return (TaskStatus.SUCCESS, None) if self.referee_command in self.desired_states else (TaskStatus.FAILURE, None)
 
 
@@ -23,8 +26,10 @@ class CheckIfOurKickoff(LeafNode):
         super().__init__(name)
         self.is_team_color_yellow = None
         self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
-        self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
+        self.create_subscription(
+            GameState, "game_state", self.game_state_callback, 10)
+        self.game_config_client = self.create_client(
+            GetGameConfig, "get_game_config")
         self._get_color_future = None
         self._config_timer = self.create_timer(0.5, self._request_color_once)
 
@@ -68,8 +73,10 @@ class OurKickoffAction(LeafNode):
         super().__init__(name)
         self.ally_robots = {}
         self.on_positive_half = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
-        self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
+        self.create_subscription(
+            GameState, "game_state", self.game_state_callback, 10)
+        self.game_config_client = self.create_client(
+            GetGameConfig, "get_game_config")
         self._get_color_future = None
         self._config_timer = self.create_timer(0.5, self._request_color_once)
 
@@ -104,17 +111,21 @@ class OurKickoffAction(LeafNode):
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurKickoff(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = OurKickoff(ally_robots=self.ally_robots,
+                              on_positive_half=self.on_positive_half)
 
         return TaskStatus.SUCCESS, executor.execute()
+
 
 class TheirKickoffAction(LeafNode):
     def __init__(self, name):
         super().__init__(name)
         self.ally_robots = {}
         self.on_positive_half = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
-        self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
+        self.create_subscription(
+            GameState, "game_state", self.game_state_callback, 10)
+        self.game_config_client = self.create_client(
+            GetGameConfig, "get_game_config")
         self._get_color_future = None
         self._config_timer = self.create_timer(0.5, self._request_color_once)
 
@@ -149,7 +160,8 @@ class TheirKickoffAction(LeafNode):
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurKickoff(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = TheirKickoffAction(
+            ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
 
         return TaskStatus.SUCCESS, executor.execute()
 
@@ -174,7 +186,6 @@ class Kickoff(Sequence):
         ours_or_theirs = Selector("OursOrTheirsKickoff", [ours, action_theirs])
 
         self.add_children([check_kickoff, ours_or_theirs])
-
 
     def run(self):
         """Access the second element in tuple"""
