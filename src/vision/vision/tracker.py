@@ -121,8 +121,21 @@ class ObjectTracker(object):
         '''
         # TODO Implement a Hungarian algorithm to give the balls an id?
         recieved_objects_id, time_stamp = [], message.detection.t_capture
-        
+
         self.dt = time_stamp - self.last_time_stamp
+
+        # DESCOMENTE AS 4 LINHAS ABAIXO (e comente a de cima) AO RODAR TESTES.
+        #
+        # Sem isso, o primeiro dt vira o proprio t_capture - segundos desde que o
+        # grSim subiu, ja medimos 100s - e esse valor gigante estoura a
+        # covariancia do Kalman: o filtro passa a ignorar as medicoes e as
+        # posicoes publicadas ficam congeladas ou se arrastando. Depois de um
+        # teleporte, o rastreador leva dezenas de segundos para convergir.
+        #
+        # dt = time_stamp - self.last_time_stamp
+        # if self.last_time_stamp == 0 or dt <= 0 or dt > 1.0:
+        #     dt = 1.0 / 60.0
+        # self.dt = dt
         self.last_time_stamp = time_stamp
 
         if message.detection.robots_yellow:

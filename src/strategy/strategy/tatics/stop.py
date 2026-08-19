@@ -67,7 +67,11 @@ class goAwayFromBall:
         return positions
 
     def _get_ball_angle(self, robot_id: int) -> float:
-        robot = self.ally_robots[robot_id]
+        # .get() em vez de indexacao direta: se o robo nao estiver em campo,
+        # devolvemos 0.0 em vez de derrubar o node inteiro com KeyError.
+        robot = self.ally_robots.get(robot_id)
+        if robot is None:
+            return 0.0
         dx = self.ball.position_x - robot.position_x
         dy = self.ball.position_y - robot.position_y
         return atan2(dy, dx)
@@ -87,7 +91,13 @@ class goAwayFromBall:
         for idx, rid in enumerate(field_ids):
             target = targets[idx]
 
-            angle = self._get_ball_angle(idx)
+            # 'rid', nao 'idx'.
+            #
+            # Passava o indice do enumerate (0, 1, 2...) no lugar do id do robo.
+            # Com o robo 0 ausente virava ally_robots[0] -> KeyError, e o
+            # strategyNode MORRIA - nenhuma jogada rodava, nem o freekick. Com o
+            # robo 0 presente nao quebrava, mas calculava o angulo do robo errado.
+            angle = self._get_ball_angle(rid)
 
             robot_command = self.skills_factory.move_with_angle(
                 robot_id=rid,

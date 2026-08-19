@@ -31,6 +31,12 @@ class Strategy(Node):
         self.timer = self.create_timer(0.1, self.run)
         self.root = RootTree("RootStrategy")
 
+        # Ultimo alvo enviado por robo, para nao repedir a mesma coisa.
+        self._ultimo_alvo: dict[int, tuple] = {}
+        self._ultimo_envio: dict[int, float] = {}
+        # Ultimo conjunto de obstaculos enviado por robo. Ver _obstaculos_mudaram.
+        self._ultimos_obstaculos: dict[int, tuple] = {}
+
     def run(self):
         status, action = self.root.run()
 
@@ -47,7 +53,8 @@ class Strategy(Node):
         for sk in latest.values():
             self._send_kick(sk)
             if sk.target_x is not None and sk.target_y is not None:
-                self._send_move(sk)
+                if self._alvo_mudou(sk):
+                    self._send_move(sk)
             if sk.angle is not None:
                 self._send_orientation(sk.robot_id, sk.angle)
             if any(
@@ -60,8 +67,89 @@ class Strategy(Node):
                     sk.enemy_ids,
                     sk.ally_ids,
                 ]
-            ):
+            ) and self._obstaculos_mudaram(sk):
                 self._send_obstacles(sk)
+
+    # Quanto o alvo precisa andar para valer um novo pedido de replanejamento.
+    # Abaixo disso e ruido de visao, nao intencao nova.
+    LIMIAR_ALVO_MM = 30.0
+
+    # Mesmo com o alvo parado, reenviamos de tempos em tempos.
+    #
+    # POR QUE: filtrar SO por distancia congelava o robo. Com a bola parada o
+    # alvo nao muda, entao apos o primeiro envio nada mais era mandado; a
+    # trajetoria terminava onde terminasse e o robo ficava ali. No freekick ele
+    # parava a 180 mm da bola - com o chute armado - e nunca encostava, porque o
+    # grSim so dispara o chutador em contato real (robot.cpp:160).
+    #
+    # Reenviar a cada 1,5 s faz o driver replanejar a partir do estado atual e o
+    # robo continuar avancando, sem voltar ao problema original de replanejar
+    # 10x por segundo (que zerava o time_offset e o fazia se arrastar).
+    INTERVALO_REENVIO_S = 1.5
+
+    def _obstaculos_mudaram(self, skill: Skill) -> bool:
+        """Este robo precisa mesmo de um novo 'update_obstacles'?
+
+        POR QUE ISTO EXISTE - medicao
+        -----------------------------
+        Antes mandavamos o conjunto de obstaculos a cada ciclo, para cada robo.
+        Com 4 robos sao 40 chamadas por segundo, e cada uma faz o driver
+        RECONSTRUIR todos os obstaculos (obstacle_factory.create_obstacles).
+        Medimos o efeito: /control_command caiu de 20-40 Hz com um robo para
+        3,2 Hz com quatro, e cada robo andou 300 mm em 25 segundos - a jogada
+        inteira parou de acontecer.
+
+        O conjunto de obstaculos muda pouco: as flags sao fixas na jogada e as
+        listas de vizinhos so mudam quando alguem entra ou sai do raio. Enviar
+        so na mudanca tira quase toda essa carga do driver.
+        """
+        rid = int(skill.robot_id)
+        atual = (
+            bool(skill.field_border), bool(skill.penalty_area),
+            bool(skill.center_area), bool(skill.ball),
+            tuple(sorted(skill.enemy_ids or [])),
+            tuple(sorted(skill.ally_ids or [])),
+        )
+        if self._ultimos_obstaculos.get(rid) == atual:
+            return False
+        self._ultimos_obstaculos[rid] = atual
+        return True
+
+    def _alvo_mudou(self, skill: Skill) -> bool:
+        """O alvo deste robo mudou o bastante para pedir replanejamento?
+
+        POR QUE ISSO EXISTE
+        -------------------
+        driver.py:269 zera o time_offset a cada replan - ou seja, TODA chamada a
+        'strategy_command' reinicia a trajetoria do zero. Como este node roda a
+        10 Hz e reenviava o alvo em todo ciclo, o robo executava eternamente so
+        os primeiros 100 ms de uma trajetoria: nunca acelerava e se arrastava a
+        poucos milimetros por segundo.
+
+        E o alvo mudava em todo ciclo mesmo com a bola parada, porque a visao tem
+        ruido de ~1 mm e as taticas calculam a posicao a partir dela.
+
+        Com o filtro, um alvo estatico e enviado UMA vez; a trajetoria roda
+        inteira e o robo chega. Tambem alivia bastante a carga de servicos, que
+        vinha estourando o tempo de resposta do driver
+        ("failed to send response (timeout)").
+        """
+        import time as _t
+
+        rid = int(skill.robot_id)
+        alvo = (float(skill.target_x), float(skill.target_y))
+        agora = _t.time()
+        anterior = self._ultimo_alvo.get(rid)
+        if anterior is not None:
+            dx = alvo[0] - anterior[0]
+            dy = alvo[1] - anterior[1]
+            perto = (dx * dx + dy * dy) ** 0.5 < self.LIMIAR_ALVO_MM
+            recente = (agora - self._ultimo_envio.get(rid, 0.0)) < self.INTERVALO_REENVIO_S
+            if perto and recente:
+                return False
+        self._ultimo_alvo[rid] = alvo
+        self._ultimo_envio[rid] = agora
+        return True
 
     def _send_move(self, skill: Skill) -> None:
         req = StrategyCommand.Request()
