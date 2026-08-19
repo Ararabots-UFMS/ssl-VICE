@@ -45,7 +45,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RAIZ="$SCRIPT_DIR/Arara_Bots"
+RAIZ="$SCRIPT_DIR"
 VICE="$RAIZ/ssl-VICE"
 PY="$SCRIPT_DIR/ararabots.py"
 
