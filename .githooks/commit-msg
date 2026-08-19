@@ -25,10 +25,7 @@ if [ "$SUBJ_LEN" -gt 50 ]; then
 fi
 
 # Check body lines (after first) are <= 72 chars
-if tail -n +2 "$MSG_FILE" | awk 'length($0) > 72 { print "ERROR: body line too long ->", $0; exit 1 }'; then
-  :
-else
-  exit 1
-fi
-
-exit 0
+tail -n +2 "$MSG_FILE" | awk 'length($0) > 72 { 
+    print "ERROR: body line too long ->", $0; 
+    exit 1 
+}' || exit 1

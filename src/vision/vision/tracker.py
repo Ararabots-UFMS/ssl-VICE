@@ -31,14 +31,15 @@ class Object(object):
     Tracked object class, mainly robots, but ball also.
     '''
 
-    def __init__(self, detections, Id: ID, confidence: float, orientation: Optional[float] = None):
+    def __init__(self, detections, Id: ID, confidence: float, orientation: Optional[float] = None,  friction: float = 0.01):
         self.prediction = np.asarray(detections)
         self.id = Id
         self.confidence = confidence
-        self.KF = ExtendedKalmanFilterClass2D()
+        self.KF = ExtendedKalmanFilterClass2D(friction=self.friction)
         self.last_seen = time.time()
+        self.last_prediction = self.last_seen
         self.orientation = orientation
-        self.orientation_KF = ExtendedKalmanFilterClass1D()
+        self.orientation_KF = ExtendedKalmanFilterClass1D(friction=self.friction)
 
     def update(self, x: float, y: float, confidence: float, orientation: Optional[float] = None):
         self.prediction = self.KF.update([[x], [y]])
@@ -46,13 +47,18 @@ class Object(object):
             self.orientation = self.orientation_KF.update(np.matrix([[orientation]]))
         self.confidence = confidence
         self.last_seen = time.time()
+        self.last_prediction = self.last_seen
 
     def predict(self):
-        dt = time.time() - self.last_seen
+        now = time.time()
+        dt = now - self.last_prediction
+        if dt <= 0:
+            return
         self.KF.predict(dt)
         if not self.id.is_ball:
             self.orientation_KF.predict(dt)
-
+        self.last_prediction = now
+            
 class ObjectTracker(object):
     '''
     Object tracker class. It handles the position and velocity of all the objects being detected.
@@ -70,10 +76,10 @@ class ObjectTracker(object):
     - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
     
     '''
-    def __init__(self, max_time_undetected: float):
+    def __init__(self, max_time_undetected: float, friction: float = 0.01):
         self.max_time_undetected = max_time_undetected
+        self.friction = friction
         self.objects = {}
-        self.last_time_stamp = 0
 
     def delete_undetected_objects(self, received_objects_id: List[ID]) -> None:
         now = time.time()
@@ -94,18 +100,15 @@ class ObjectTracker(object):
         if id in self.objects:
             self.objects[id].update(object_.x, object_.y, object_.confidence, orientation)
         else:
-            self.objects[id] = Object([[object_.x], [object_.y]], id, object_.confidence, orientation)
+            self.objects[id] = Object([[object_.x], [object_.y]], id, object_.confidence, orientation=orientation, friction=self.friction)
 
         return id
 
-    def predict_undetected(self, received_objects_id: List[ID]) -> None:
-        for id, obj in self.objects.items():
-            if id not in received_objects_id:
-                obj.predict()
-
     def update(self, message: SSL_WrapperPacket) -> None:
         received_objects_id = []
-        self.last_time_stamp = message.detection.t_capture
+
+        for obj in self.objects.values():
+            obj.predict()
 
         for yellow_robot in message.detection.robots_yellow:
             robot_id = self.read_object_from_message(yellow_robot, is_ball=False, is_blue=False)
@@ -120,5 +123,4 @@ class ObjectTracker(object):
             ball_id = self.read_object_from_message(best_ball, is_ball=True)
             received_objects_id.append(ball_id)
 
-        self.predict_undetected(received_objects_id)
         self.delete_undetected_objects(received_objects_id)

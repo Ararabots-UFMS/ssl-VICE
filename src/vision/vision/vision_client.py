@@ -5,8 +5,6 @@ from rclpy.logging import get_logger
 
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 
-logger = get_logger("vision_client")
-
 MAX_PACKET_SIZE = 4096  # SSL-Vision packets are safely under this size
 
 class Client:
@@ -23,6 +21,8 @@ class Client:
         self.interface_ip = interface_ip or ""
         self.timeout = timeout
         self.sock: Optional[socket.socket] = None
+        self.logger = logger
+
 
     def connect(self):
         # Create UDP socket for multicast reception
@@ -87,7 +87,7 @@ class Client:
         try:
             packet.ParseFromString(data)
         except Exception as e:
-            # If the packet is invalid , it is discarted.
+            # If the packet is invalid, it is discarted.
             logger.debug(f"Invalid packet: {e}")
             return None
         return packet

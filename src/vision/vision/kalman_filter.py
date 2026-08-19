@@ -224,23 +224,24 @@ class KalmanFilterClass1D(object):
         """Wraps an angle to the [-pi, pi] range."""
         return (angle + np.pi) % (2 * np.pi) - np.pi
 
-    def predict(self, dt: float):
-        # Control input matrix
-        self.B = np.matrix([[(dt**2)/2], [dt]]) 
-        # State transition matrix
-        self.A = np.matrix([[1, dt], [0, 1]])
-        # Process Covariance matrix
-        self.Q = np.matrix([[(dt**4)/4, (dt**3)/2],
-                            [(dt**3)/2, dt**2]]) * self.sd_acceleration**2
-
-        # Predict the next state
-        self.x = np.dot(self.A, self.x) + np.dot(self.B, self.u)
+    def predict(self, dt):
+        # Process noise covariance
+        self.Q = np.matrix([[(dt**4)/4, 0, (dt**3)/2, 0],
+                            [0, (dt**4)/4, 0, (dt**3)/2],
+                            [(dt**3)/2, 0, dt**2, 0],
+                            [0, (dt**3)/2, 0, dt**2]]) * self.sd_acceleration ** 2
         
-        # Wrap the predicted angle to the [-pi, pi] range
-        self.x[0, 0] = self._wrap_angle(self.x[0, 0])
+        # Cache prior state so the EKF linearization uses the pre-transition state
+        prior_x = self.x.copy()
 
-        # Update the state covariance matrix
-        self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
+        # Predict covariance using the Jacobian evaluated at the prior state
+        F = self._jacobian_F(prior_x, dt)
+
+        # Predict state
+        self.x = self._transition_function(prior_x, dt)
+        
+        # Predict covariance
+        self.P = F @ self.P @ F.T + self.Q
 
         return self.x
 
@@ -324,14 +325,20 @@ class ExtendedKalmanFilterClass1D(object):
         self.Q = np.matrix([[(dt**4)/4, (dt**3)/2],
                             [(dt**3)/2, dt**2]]) * self.sd_acceleration**2
 
+        # Cache prior state
+        prior_x = self.x.copy()
+
+        # Jacobian evaluated at prior state
+        F = self._jacobian_F(prior_x, dt)
+
         # Predict state
-        self.x = self._transition_function(self.x, dt)
-        
+        self.x = self._transition_function(prior_x, dt)
+
         # Predict covariance
-        F = self._jacobian_F(self.x, dt)
         self.P = F @ self.P @ F.T + self.Q
 
         return self.x
+
 
     def update(self, z: np.matrix):
         # Measurement function (linear)

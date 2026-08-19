@@ -30,6 +30,7 @@ class Vision(Node):
             "max_time_undetected": 0.5,
             "frequency_timer_publish": 60.0,
             "frequency_tracker_update": 1000.0,
+            "friction": 0.01,
         }
 
         for name, default in default_params.items():
@@ -45,12 +46,14 @@ class Vision(Node):
         self.max_time_undetected = self.get_parameter("max_time_undetected").value
         self.frequency_timer_publish = self.get_parameter("frequency_timer_publish").value
         self.frequency_tracker_update = self.get_parameter("frequency_tracker_update").value
+        self.friction = self.get_parameter("friction").value
         
         self.client = Client(
             ip=self.ip,
             port=self.port,
             interface_ip=self.interface_ip if self.interface_ip else None,
             timeout=self.socket_timeout,
+            logger=self.get_logger(),
         )
         self.get_logger().info(f"Binding client on {self.ip}:{self.port}")
         self.client.connect()
@@ -71,18 +74,28 @@ class Vision(Node):
         self.tracker_timer = self.create_timer(1.0/self.frequency_tracker_update, self.update_tracker)
 
     def update_tracker(self):
-        data = self.client.receive()
 
-        if data is None:
-            return
+        try:
+            data = self.client.receive()
 
-        if data.HasField("geometry"):
-            self.publish_geometry(data.geometry)
-        else:
-            self.tracker.update(data)
+            if data is None:
+                return
 
-        if self.verbose:
-            self.get_logger().info(text_format.MessageToString(data))
+            if data.HasField("geometry"):
+                self.publish_geometry(data.geometry)
+            else:
+                self.tracker.update(data)
+
+            if self.verbose:
+                self.get_logger().info(text_format.MessageToString(data))
+
+        except KeyboardInterrupt:
+            self.get_logger().info("KeyboardInterrupt received, shutting down...")
+            raise
+
+        except Exception as exception:
+            self.get_logger().warning(f"Error receiving data: {exception}")
+
 
     def set_filter_param(
         self,
@@ -103,7 +116,7 @@ class Vision(Node):
                 object_.orientation_KF.set_param(a_sd, u_a, acceleration_sd_1d, friction)
 
     def publish_vision(self):
-        message = wrap_message(self.tracker.objects)
+        message = wrap_message(self.tracker.objects, self.get_logger())
 
         # Validate message before publishing (catch garbage/overflow)
         if not self._is_valid_vision_message(message):

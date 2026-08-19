@@ -2,8 +2,6 @@ import math
 from rclpy.logging import get_logger
 from vision.tracker import ObjectTracker, Object, ID
 
-logger = get_logger("wrap_message")
-
 from system_interfaces.msg import (
     VisionMessage,
     VisionGeometry,
@@ -21,13 +19,13 @@ def _is_valid_value(x: float, max_value: float = 10000.0) -> bool:
     #Verifica se o valor é numérico e dentro de limites razoáveis
     return not math.isnan(x) and not math.isinf(x) and abs(x) <= max_value
 
-def wrap_message(objects: Dict[ID, Object]) -> VisionMessage:
+def wrap_message(objects: Dict[ID, Object], logger) -> VisionMessage:
     message = VisionMessage()
 
     for object_ in objects.values():
         if object_.id.is_ball:
             ball_msg = Balls()
-            if _is_valid_value(object_.KF.x[0][0]) and _is_valid_value(object_.KF.x[1][0]):
+            if _is_valid_value(float(object_.KF.x[0][0])) and _is_valid_value(float(object_.KF.x[1][0])):
                 ball_msg.id = object_.id.id
                 ball_msg.position_x = float(object_.KF.x[0][0])
                 ball_msg.position_y = float(object_.KF.x[1][0])
@@ -35,9 +33,11 @@ def wrap_message(objects: Dict[ID, Object]) -> VisionMessage:
                 ball_msg.velocity_y = float(object_.KF.x[3][0])
                 message.balls.append(ball_msg)
             else:
-                logger.warning(f"Bola descartada: x={object_.KF.x[0][0]}, y={object_.KF.x[1][0]}")
+                logger.warning(
+                    f"Bola descartada: x={float(object_.KF.x[0][0]):.2f}, y={float(object_.KF.x[1][0]):.2f}"
+                )
         else:
-            if _is_valid_value(object_.KF.x[0][0]) and _is_valid_value(object_.KF.x[1][0]):
+            if _is_valid_value(float(object_.KF.x[0][0])) and _is_valid_value(float(object_.KF.x[1][0])):
                 robot_msg = Robots()
                 robot_msg.id = object_.id.id
                 robot_msg.position_x = float(object_.KF.x[0][0])
@@ -51,8 +51,9 @@ def wrap_message(objects: Dict[ID, Object]) -> VisionMessage:
                 else:
                     message.yellow_robots.append(robot_msg)
             else:
-                logger.warning("Robô descartado: x={:.2f}, y={:.2f}".format(object_.KF.x[0][0], object_.KF.x[1][0]))
-
+                logger.warning(
+                    f"Robô descartado: x={float(object_.KF.x[0][0]):.2f}, y={float(object_.KF.x[1][0]):.2f}"
+                )
     return message
 
 def wrap_geo_message(message: SSL_GeometryData):
