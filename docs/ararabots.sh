@@ -94,6 +94,25 @@ ros_d()   { docker exec -d vice bash -c "source /opt/ros/humble/setup.bash && so
 ros_run() { docker exec vice bash -c "source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
+# Espera ATIVA: repete o teste ate passar, ou desiste no teto.
+#
+# Toda espera fixa deste script foi trocada por uma destas. Os numeros antigos
+# (sleep 12, sleep 8, sleep 6...) tinham sido escolhidos para o pior caso e eram
+# pagos inteiros em toda execucao, mesmo quando o node ficava pronto em um
+# segundo. Aqui o teto continua existindo - so nao e mais o custo padrao.
+esperar_por() {          # esperar_por <teto_s> <descricao> <comando...>
+    local teto="$1" desc="$2"; shift 2
+    local ini=$SECONDS
+    while [ $((SECONDS - ini)) -lt "$teto" ]; do
+        if "$@" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 0.3
+    done
+    echo "      ! tempo esgotado esperando: $desc (${teto}s)"
+    return 1
+}
+
 
 # ============================================================================
 cmd_limpar() {
@@ -153,7 +172,7 @@ cmd_grsim() {
     setsid env QT_QPA_PLATFORM=xcb DISPLAY="${DISPLAY:-:0}" \
         "$BIN" "${ARGS[@]}" >/tmp/grsim.log 2>&1 < /dev/null &
 
-    sleep 8
+    esperar_por 25 "grSim subir" pgrep -x grSim
     if pgrep -x grSim >/dev/null; then
         echo "grSim iniciado (modo: $MODO)."
         if [ "$MODO" = "janela" ]; then
@@ -288,7 +307,7 @@ cmd_preparar() {
         -address :8081 \
         -publishAddress 224.5.23.1:10003 \
         -visionAddress 224.5.23.2:10020 >/dev/null 2>&1
-    sleep 5
+    esperar_por 25 "arbitro responder na 8081" curl -sf -o /dev/null http://localhost:8081/
     if curl -sf -o /dev/null http://localhost:8081/; then
         ok "UI em http://localhost:8081 (publica em 224.5.23.1:10003)"
     else
@@ -346,7 +365,9 @@ cmd_preparar() {
     cmd_limpar >/dev/null 2>&1 || true
     if ! vivo "launch/sim_one.py"; then
         ros_d "ros2 launch /root/ssl-VICE/launch/sim_one.py > /tmp/sim.log 2>&1"
-        sleep 12
+        # o gameWatcher e quem publica /game_state; sem ele a estrategia fica
+        # pendurada no get_game_config e a arvore nunca comanda.
+        esperar_por 40 "sim_one subir" vivo "control_unit/gameWatcher"
     fi
     vivo "launch/sim_one.py" && ok "no ar" || falha "não subiu (docker exec vice cat /tmp/sim.log)"
     echo "      (o node 'hardware' morre por falta de /dev/ttyUSB0 - isso é normal em simulação)"
@@ -355,9 +376,16 @@ cmd_preparar() {
     passo 6 "Removendo o manual_command"
     # Em laco: o launch pode demorar a criar o processo, e enquanto ele viver estara
     # publicando em /commandTopic a 60 Hz, movendo os robos por conta propria.
-    for _ in $(seq 1 8); do
-        docker exec vice pkill -f "manual_command/manual_node" 2>/dev/null || true
-        sleep 1
+    ausencias=0
+    for _ in $(seq 1 40); do
+        if docker exec vice pgrep -f "manual_command/manual_node" >/dev/null 2>&1; then
+            docker exec vice pkill -f "manual_command/manual_node" 2>/dev/null || true
+            ausencias=0
+        else
+            ausencias=$((ausencias + 1))
+            [ "$ausencias" -ge 6 ] && break
+        fi
+        sleep 0.25
     done
     ok "fora de cena (ele disputaria /commandTopic com o controlador)"
 
@@ -365,7 +393,7 @@ cmd_preparar() {
     passo 7 "new_movement/driver"
     if ! vivo "new_movement/driver"; then
         ros_d "ros2 run new_movement driver > /tmp/driver.log 2>&1"
-        sleep 8
+        esperar_por 30 "driver subir" vivo "new_movement/driver"
     fi
     vivo "new_movement/driver" && ok "no ar (fornece strategy_command e update_obstacles)" \
                                || falha "não subiu (docker exec vice cat /tmp/driver.log)"
@@ -374,7 +402,7 @@ cmd_preparar() {
     passo 8 "referee_node"
     if ! vivo "referee/referee_node"; then
         ros_d "ros2 run referee referee_node > /tmp/ref.log 2>&1"
-        sleep 6
+        esperar_por 25 "referee_node subir" vivo "referee/referee_node"
     fi
     vivo "referee/referee_node" && ok "escutando 224.5.23.1:10003" \
                                 || falha "não subiu (docker exec vice cat /tmp/ref.log)"
@@ -390,9 +418,9 @@ cmd_preparar() {
         # arvore devolve acao None e NENHUM comando e gerado. O sintoma e mudo: os
         # robos simplesmente nao se mexem.
         docker exec vice pkill -f "strategy/strategyNode" 2>/dev/null || true
-        sleep 2
+        esperar_por 10 "strategyNode antigo morrer" bash -c '! docker exec vice pgrep -f "strategy/strategyNode" >/dev/null 2>&1'
         ros_d "ros2 run strategy strategyNode > /tmp/strategy.log 2>&1"
-        sleep 12
+        esperar_por 30 "strategyNode subir" vivo "strategy/strategyNode"
         vivo "strategy/strategyNode" && ok "no ar" \
                                      || falha "não subiu (docker exec vice cat /tmp/strategy.log)"
     else
@@ -466,18 +494,41 @@ cmd_cenario() {
     ros_d "ros2 launch /root/ssl-VICE/launch/sim_one.py > /tmp/sim.log 2>&1"
 
     # ---------------------------------------------------------------- 4
-    for _ in $(seq 1 14); do
-        docker exec vice pkill -f "manual_command/manual_node" 2>/dev/null || true
-        sleep 1
+    # ESPERA ATIVA, nao tempo fixo.
+    #
+    # Isto era 'mate o manual_command 14 vezes, uma por segundo' seguido de
+    # 'sleep 7', 'sleep 5' e 'sleep 8' - 34 segundos escolhidos para o pior
+    # caso, pagos INTEIROS em toda execucao, mesmo quando tudo ficava pronto em
+    # dois segundos. Numa validacao de 42 execucoes isso e meia hora de relogio.
+    #
+    # O manual_command continua sendo morto em laco porque o launch pode demorar
+    # a cria-lo, e enquanto ele viver publica em /commandTopic a 60 Hz e move os
+    # robos sozinho (medimos 2 m de deriva antes de o teste comecar). Mas agora
+    # o laco PARA assim que ele fica ausente por tempo suficiente.
+    local ausencias=0
+    for _ in $(seq 1 40); do
+        if docker exec vice pgrep -f "manual_command/manual_node" >/dev/null 2>&1; then
+            docker exec vice pkill -f "manual_command/manual_node" 2>/dev/null || true
+            ausencias=0
+        else
+            ausencias=$((ausencias + 1))
+            [ "$ausencias" -ge 6 ] && break
+        fi
+        sleep 0.25
     done
 
-    ros_d "ros2 run new_movement driver > /tmp/driver.log 2>&1";  sleep 7
-    ros_d "ros2 run referee referee_node > /tmp/ref.log 2>&1";    sleep 5
-    ros_d "ros2 run strategy strategyNode > /tmp/strategy.log 2>&1"; sleep 8
+    # Os tres sobem JUNTOS: nenhum depende do outro para iniciar (a estrategia
+    # espera os servicos por conta propria, no seu wait_for_service).
+    ros_d "ros2 run new_movement driver > /tmp/driver.log 2>&1"
+    ros_d "ros2 run referee referee_node > /tmp/ref.log 2>&1"
+    ros_d "ros2 run strategy strategyNode > /tmp/strategy.log 2>&1"
 
     # ---------------------------------------------------------------- 5
-    if ! ros_run "python3 /tmp/ararabots.py esperar 60"; then
-        echo "   !! a estrategia nao comandou em 60s - o resultado NAO vale"
+    # Uma unica chamada confere servicos, arbitro e estrategia comandando.
+    # Ver 'pronto tudo': cada docker exec com rclpy custa ~4 s so para subir,
+    # entao fazer uma chamada por elo desperdicaria o que estamos economizando.
+    if ! ros_run "python3 /tmp/ararabots.py pronto tudo 70"; then
+        echo "   !! a cadeia nao ficou pronta - o resultado NAO vale"
         return 2
     fi
     return 0

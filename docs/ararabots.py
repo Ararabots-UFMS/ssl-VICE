@@ -8,6 +8,7 @@ Normalmente voce nao chama este arquivo direto: quem chama e o ararabots.sh.
     python3 ararabots.py posicionar <cenario>   monta o cenario no grSim
     python3 ararabots.py rodar <cenario> [s]    dispara a falta e grava
     python3 ararabots.py cadeia                 diagnostico dos topicos ROS
+    python3 ararabots.py pronto <elo> [s]       espera um elo ficar pronto
     python3 ararabots.py esperar [s]            espera a estrategia comandar
     python3 ararabots.py resumo [rotulo]        resume a dispersao das execucoes
     python3 ararabots.py atrito [v1 v2 ...]     mede o alcance da bola
@@ -510,6 +511,8 @@ def _criar_gravador():
             self.bola = None
             self.amarelos = {}
             self.gol = None          # "nosso", "contra" ou None
+            # velocidade de cada aliado, usada por esperar_assentar
+            self.velocidades = {}
             self.t0 = time.time()
             self.create_subscription(VisionMessage, "visionTopic", self._visao, 10)
             self.create_subscription(TeamCommand, "commandTopic", self._comando, 10)
@@ -526,6 +529,10 @@ def _criar_gravador():
                         self.gol = "contra"
             self.amarelos = {r.id: (r.position_x, r.position_y)
                              for r in msg.yellow_robots}
+            self.velocidades = {
+                r.id: math.hypot(r.velocity_x, r.velocity_y)
+                for r in msg.blue_robots
+            }
             if not self.gravando:
                 return
             self.amostras.append(
@@ -566,6 +573,46 @@ def _girar(no, segundos):
     fim = time.time() + segundos
     while time.time() < fim:
         rclpy.spin_once(no, timeout_sec=0.05)
+
+
+def esperar_assentar(no, limite=8.0, vel_max=25.0):
+    """Espera os robos PARAREM, em vez de dormir um tempo fixo.
+
+    POR QUE ESPERA ATIVA
+    --------------------
+    Isto era 'durma 8 segundos'. O numero foi escolhido com folga, para o pior
+    caso - e o pior caso e raro. Na maioria das execucoes os robos ja estao
+    parados em 1 ou 2 segundos, e os 6 restantes eram desperdicio puro,
+    multiplicado por cada repeticao de cada cenario.
+
+    O QUE ESTA ESPERANDO DE VERDADE
+    -------------------------------
+    O driver cria a trajetoria de um robo uma vez e dali em diante replaneja a
+    partir do setpoint do plano anterior, nunca da posicao medida. Depois de um
+    teleporte ele ficaria planejando a partir de uma origem fantasma. Sob HALT,
+    a tatica manda cada robo para a PROPRIA posicao lida da visao: quando essas
+    trajetorias terminam, a ancora do driver volta a coincidir com a realidade.
+
+    Terminaram quando os robos param de se mexer. E isso que medimos aqui, em
+    vez de cronometrar. O limite continua existindo como teto de seguranca.
+    """
+    import rclpy
+    fim = time.time() + limite
+    quietos_desde = None
+    while time.time() < fim:
+        rclpy.spin_once(no, timeout_sec=0.05)
+        vels = getattr(no, "velocidades", None)
+        if not vels:
+            continue
+        if max(vels.values()) < vel_max:
+            # exige estabilidade por 3 decimos: uma leitura isolada de zero
+            # acontece a toa quando um quadro de visao se repete.
+            quietos_desde = quietos_desde or time.time()
+            if time.time() - quietos_desde > 0.3:
+                return time.time() - (fim - limite)
+        else:
+            quietos_desde = None
+    return limite
 
 
 def conferir_teleporte(no, alvo, tolerancia=200.0, limite=45.0):
@@ -636,10 +683,10 @@ def rodar(nome, duracao=12.0):
             #
             #  E o mesmo que acontece numa partida de verdade: sempre ha HALT
             #  antes de uma falta.
-            print(f"   assentando sob HALT por {ESPERA_HALT:.0f}s "
-                  "(driver reancora as trajetorias)...")
+            print("   assentando sob HALT (driver reancora as trajetorias)...")
             enviar_comando_arbitro("HALT")
-            _girar(no, ESPERA_HALT)
+            gasto = esperar_assentar(no, limite=ESPERA_HALT)
+            print(f"   assentado em {gasto:.1f}s (teto era {ESPERA_HALT:.0f}s)")
 
         if not ok:
             visto = (
@@ -668,8 +715,11 @@ def rodar(nome, duracao=12.0):
         print(f"   bola confirmada em ({no.bola[0]:.0f}, {no.bola[1]:.0f})")
 
         # Um freekick so vale a partir do STOP.
+        # STOP: espera o comando CHEGAR na visao do time, em vez de contar 2s.
+        # O que importa nao e o tempo, e a estrategia ja estar vendo o STOP
+        # quando o DIRECT for enviado logo em seguida.
         enviar_comando_arbitro("STOP")
-        _girar(no, 2.0)
+        esperar_assentar(no, limite=2.0)
 
         tipo, cor = cen["comando"]
         print(f"   comando do arbitro: {tipo} {cor}")
@@ -1054,6 +1104,106 @@ def _ferramenta_atrito():
     rclpy.shutdown()
 
 
+def _ferramenta_pronto():
+    """Espera um elo da cadeia ficar PRONTO de verdade, e sai assim que estiver.
+
+    Substitui os 'sleep 7' / 'sleep 5' / 'sleep 8' do shell. Aqueles numeros
+    foram escolhidos para o pior caso; na maioria das execucoes o node responde
+    em menos de um segundo, e o resto era espera jogada fora - multiplicada por
+    cada repeticao de cada cenario.
+
+    A espera acontece TODA aqui dentro, num unico 'docker exec'. Fazer o laco no
+    shell custaria um exec por tentativa, e o custo do proprio exec passaria a
+    dominar o tempo que estamos tentando economizar.
+
+        pronto servicos [s]   os servicos que a estrategia precisa existirem
+        pronto arbitro  [s]   /refereeTopic entregando mensagem
+        pronto visao    [s]   /game_state com robos e geometria
+        pronto tudo     [s]   os tres acima + a estrategia ja comandando
+    """
+    alvo = sys.argv[2] if len(sys.argv) > 2 else "servicos"
+    limite = float(sys.argv[3]) if len(sys.argv) > 3 else 30.0
+
+    rclpy.init()
+    no = Node("pronto")
+    t0 = time.time()
+    achou = False
+    try:
+        if alvo == "servicos":
+            # Sem estes tres a estrategia fica presa esperando o driver, e o
+            # sintoma e mudo: nenhum comando e gerado, os robos nao se mexem.
+            precisa = {"/strategy_command", "/update_obstacles", "/set_orientation"}
+            while time.time() - t0 < limite:
+                nomes = {n for n, _ in no.get_service_names_and_types()}
+                if precisa.issubset(nomes):
+                    achou = True
+                    break
+                time.sleep(0.2)
+
+        elif alvo == "arbitro":
+            estado = {"ok": False}
+            no.create_subscription(RefereeMessage, "refereeTopic",
+                                   lambda _m: estado.__setitem__("ok", True), 10)
+            while time.time() - t0 < limite and not estado["ok"]:
+                rclpy.spin_once(no, timeout_sec=0.1)
+            achou = estado["ok"]
+
+        elif alvo == "visao":
+            estado = {"ok": False}
+
+            def cb(m):
+                if m.ally_robots and getattr(m.geometry, "field_length", 0):
+                    estado["ok"] = True
+
+            no.create_subscription(GameState, "game_state", cb, 10)
+            while time.time() - t0 < limite and not estado["ok"]:
+                rclpy.spin_once(no, timeout_sec=0.1)
+            achou = estado["ok"]
+        elif alvo == "tudo":
+            # TODAS as checagens num processo so.
+            #
+            # Cada 'docker exec' com rclpy custa ~4 s so para subir. Fazendo uma
+            # chamada por elo, esse custo passaria a dominar justamente o tempo
+            # que estamos tentando economizar. Aqui pagamos uma vez.
+            precisa = {"/strategy_command", "/update_obstacles", "/set_orientation"}
+            estado = {"arbitro": False, "comandos": 0}
+            no.create_subscription(RefereeMessage, "refereeTopic",
+                                   lambda _m: estado.__setitem__("arbitro", True), 10)
+            no.create_subscription(
+                ControlCommand, "control_command",
+                lambda m: estado.__setitem__("comandos", estado["comandos"] + 1) if m.command else None, 10)
+            servicos = False
+            while time.time() - t0 < limite:
+                rclpy.spin_once(no, timeout_sec=0.05)
+                if not servicos:
+                    servicos = precisa.issubset(
+                        {n for n, _ in no.get_service_names_and_types()})
+                # a estrategia precisa COMANDAR, nao so existir: a arvore leva
+                # dezenas de segundos para resolver a cor do time, e gravar
+                # antes disso mede o nada.
+                if servicos and estado["arbitro"] and estado["comandos"] >= 5:
+                    achou = True
+                    break
+            if not achou:
+                print("   ! faltou: %s%s%s" % (
+                    "" if servicos else "servicos ",
+                    "" if estado["arbitro"] else "arbitro ",
+                    "" if estado["comandos"] >= 5 else "estrategia-comandando"))
+
+        else:
+            print("alvo desconhecido: %s" % alvo, file=sys.stderr)
+    finally:
+        no.destroy_node()
+        rclpy.shutdown()
+
+    gasto = time.time() - t0
+    if achou:
+        print("   %s pronto em %.1fs" % (alvo, gasto))
+        sys.exit(0)
+    print("   ! %s NAO ficou pronto em %.0fs" % (alvo, limite))
+    sys.exit(1)
+
+
 def _ferramenta_decisao():
     """Confere a DECISAO da jogada sem simulador algum: chuta, passa, ou nada.
 
@@ -1116,6 +1266,7 @@ if __name__ == "__main__":
         dur = float(sys.argv[3]) if len(sys.argv) > 3 else 12.0
         sys.exit(rodar(sys.argv[2], dur))
 
+    elif acao == "pronto":   _ferramenta_pronto()
     elif acao == "cadeia":   _ferramenta_cadeia()
     elif acao == "esperar":  _ferramenta_esperar()
     elif acao == "resumo":   _ferramenta_resumo()
