@@ -25,6 +25,23 @@
 #  O companheiro deste arquivo e o ararabots.py, que faz a parte de dentro do
 #  container: monta cenario, grava, resume e diagnostica.
 #
+#  ONDE ELE MORA: em ssl-VICE/docs/. A pasta RAIZ (a que tem os repositorios
+#  irmaos ssl-VICE, ssl-gui, ssl-game-controller e grSim, como o README exige) e
+#  descoberta subindo a arvore - ver _descobrir_raiz. Nao ha caminho fixo, entao
+#  mover este arquivo de lugar nao quebra nada.
+#
+#  POR QUE ELE EXISTE, se ja ha o Game Controller e a GUI: o arbitro manda
+#  comandos mas nao POSICIONA bola e robos, e a GUI e para humanos olharem. Um
+#  teste precisa de posicao exata, sequencia de arbitro exata, gravacao e
+#  repeticao - e nada disso da para fazer clicando. Este script nao substitui
+#  nenhum dos dois: ele usa os dois.
+#
+#  ELE NAO MEXE NO SISTEMA. Nao cria node de estrategia, nao substitui a visao,
+#  nao altera codigo do time. O unico node que ele cria e um GRAVADOR passivo
+#  ('gravador_cenarios'), que so assina /visionTopic e /commandTopic para anotar
+#  o que aconteceu. A bola e os robos sao posicionados por UDP direto no grSim
+#  (protocolo grSim_Replacement, porta 20011), fora do ROS.
+#
 #  ANTES DE TESTAR, DUAS COISAS QUE JA CUSTARAM HORAS:
 #
 #  1. No modo com janela, MANTENHA A JANELA DO grSim VISIVEL. Ele so avanca a
@@ -45,7 +62,31 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RAIZ="$SCRIPT_DIR"
+
+# A RAIZ e a pasta que contem os repositorios IRMAOS (ssl-VICE, ssl-gui,
+# ssl-game-controller, grSim) - o layout que o README do ssl-VICE exige, porque
+# o docker-compose.yml referencia ../ssl-gui.
+#
+# Descobrimos essa pasta subindo a arvore, em vez de fixar o caminho: este
+# script ja morou na pasta de trabalho (RAIZ = ao lado dele) e hoje mora em
+# ssl-VICE/docs/ (RAIZ = dois niveis acima). Fixar o caminho quebrou uma vez -
+# com RAIZ=SCRIPT_DIR dentro de docs/, o VICE apontava para
+# ssl-VICE/docs/ssl-VICE, que nao existe, e todo comando falhava sem dizer
+# porque. Assim funciona das duas formas, e de qualquer outra que apareca.
+_descobrir_raiz() {
+    local d="$SCRIPT_DIR"
+    for _ in 1 2 3 4 5; do
+        # a raiz e quem tem ssl-VICE como filho
+        [ -d "$d/ssl-VICE/scripts" ] && { echo "$d"; return; }
+        # ou estamos DENTRO do ssl-VICE: a raiz e o pai dele
+        [ -f "$d/scripts/vice" ] && { dirname "$d"; return; }
+        d="$(dirname "$d")"
+        [ "$d" = "/" ] && break
+    done
+    echo "$SCRIPT_DIR"      # ultimo recurso: instalacao do zero cria tudo aqui
+}
+
+RAIZ="$(_descobrir_raiz)"
 VICE="$RAIZ/ssl-VICE"
 PY="$SCRIPT_DIR/ararabots.py"
 
@@ -87,7 +128,7 @@ cmd_limpar() {
 
 # ============================================================================
 cmd_grsim() {
-    BIN="$SCRIPT_DIR/Arara_Bots/grSim/bin/grSim"
+    BIN="$RAIZ/grSim/bin/grSim"
 
     MODO="janela"
     ARGS=()
@@ -613,146 +654,177 @@ cmd_menu() {
 
 # ============================================================================
 cmd_instalar() {
-    # O trap e LOCAL a esta funcao: sem o 'trap - ERR' no fim ele continuaria
-    # valendo para o resto do script, e um erro banal em outro subcomando
-    # abortaria tudo com uma mensagem de instalacao sem sentido.
-    trap 'echo ""; echo "XX ERRO na linha $LINENO. Abortando a instalacao."; trap - ERR; return 1' ERR
+    # ==========================================================================
+    #  Instalacao POR PECA, nao em bloco.
+    # ==========================================================================
+    #
+    # Cada peca e verificada e instalada por conta propria. Rodar de novo depois
+    # de uma falha continua de onde parou, em vez de recomecar - e rodar com tudo
+    # pronto nao faz nada.
+    #
+    # Antes era um roteiro linear de 6 passos que abortava no primeiro tropeco, e
+    # tinha um caso pior: ao adicionar o usuario ao grupo 'docker' ele DESISTIA
+    # do resto e pedia para rodar tudo de novo.
+    #
+    # O layout de pastas e o que o README do ssl-VICE exige: os repositorios
+    # precisam ser IRMAOS, porque o docker-compose.yml referencia ../ssl-gui.
+    #
+    #     <RAIZ>/ssl-VICE  ssl-gui  ssl-game-controller  grSim
+    local feitos=() pulados=() falhos=()
 
-    titulo() {
-        echo ""
-        echo "==============================================================="
-        echo "  $1"
-        echo "==============================================================="
-    }
+    titulo() { echo ""; echo "-- $1"; }
+    _ok()    { echo "   ok: $1";   feitos+=("$1"); }
+    _pulo()  { echo "   ja ok: $1"; pulados+=("$1"); }
+    _falha() { echo "   XX $1";    falhos+=("$1"); }
 
-    # Clona o repositorio se nao existir; se existir, apenas atualiza.
-    clonar_ou_atualizar() {
-        local url="$1" dir="$2"
-        if [ -d "$RAIZ/$dir/.git" ]; then
-            echo "-> $dir ja existe, atualizando..."
-            git -C "$RAIZ/$dir" pull --ff-only || echo "   (aviso: pull falhou, seguindo com a versao local)"
-        else
-            echo "-> Clonando $dir..."
-            git clone "$url" "$RAIZ/$dir"
-        fi
-    }
+    # ---------------------------------------------------------------- pacotes
+    # Ubuntu/Debian e Arch. O repositorio documenta os dois (ver
+    # docs/archlinux-setup.md), entao o instalador nao pode assumir apt.
+    local GER=""
+    command -v apt    >/dev/null && GER="apt"
+    command -v pacman >/dev/null && GER="pacman"
 
-    # ------------------------------------------------------------------------------
-    titulo "1/6  Verificando o sistema"
-    # ------------------------------------------------------------------------------
-    if ! command -v apt >/dev/null; then
-        echo "XX Este script assume Ubuntu/Debian (apt nao encontrado)."
-        return 1
-    fi
-    echo "-> $(. /etc/os-release && echo "$PRETTY_NAME")"
-
-    if ! command -v docker >/dev/null; then
-        echo "-> Docker nao encontrado. Instalando..."
-        sudo apt update
-        sudo apt install -y docker.io docker-compose-v2
-        sudo systemctl enable --now docker
-        sudo usermod -aG docker "$USER"
-        echo ""
-        echo "!! Voce foi adicionado ao grupo 'docker'. FACA LOGOUT E LOGIN"
-        echo "!! (ou rode 'newgrp docker') e execute este script novamente."
-        return 0
-    fi
-    echo "-> Docker $(docker --version | grep -oP '\d+\.\d+\.\d+' | head -1) OK"
-
-    if ! docker info >/dev/null 2>&1; then
-        echo "XX Sem permissao para falar com o Docker."
-        echo "   Rode: sudo usermod -aG docker \$USER  e faca logout/login."
-        return 1
-    fi
-
-    mkdir -p "$RAIZ"
-
-    # ------------------------------------------------------------------------------
-    titulo "2/6  Dependencias de compilacao do grSim"
-    # ------------------------------------------------------------------------------
-    # Lista oficial do INSTALL.md do grSim. pkg-config e libglu1-mesa-dev sao
-    # obrigatorios - sem eles o cmake falha.
-    # VarTypes NAO entra aqui: o CMakeLists do grSim baixa e compila sozinho.
-    echo "-> Instalando pacotes (pode pedir sua senha)..."
-    sudo apt update
-    sudo apt install -y \
-        git build-essential cmake pkg-config \
-        qtbase5-dev libqt5opengl5-dev \
-        libgl1-mesa-dev libglu1-mesa-dev \
-        libprotobuf-dev protobuf-compiler \
-        libode-dev libboost-dev
-
-    # ------------------------------------------------------------------------------
-    titulo "3/6  Baixando os repositorios"
-    # ------------------------------------------------------------------------------
-    clonar_ou_atualizar https://github.com/Ararabots-UFMS/ssl-VICE.git          ssl-VICE
-    clonar_ou_atualizar https://github.com/Ararabots-UFMS/ssl-gui.git           ssl-gui
-    clonar_ou_atualizar https://github.com/RoboCup-SSL/ssl-game-controller.git  ssl-game-controller
-    clonar_ou_atualizar https://github.com/RoboCup-SSL/grSim.git                grSim
-
-    # ------------------------------------------------------------------------------
-    titulo "4/6  Compilando o grSim (nativo)"
-    # ------------------------------------------------------------------------------
-    # Nativo em vez de Docker: o grSim e OpenGL pesado e repassar X11 para container
-    # costuma cair em software rendering, derrubando o FPS da simulacao.
-    if [ -x "$RAIZ/grSim/bin/grSim" ]; then
-        echo "-> grSim ja compilado. Pulando."
-        echo "   (para recompilar: rm -rf '$RAIZ/grSim/build')"
+    titulo "Pacotes do sistema"
+    if [ -z "$GER" ]; then
+        _falha "gerenciador de pacotes nao reconhecido (nem apt nem pacman) - instale as dependencias a mao"
+    elif [ -x "$RAIZ/grSim/bin/grSim" ] && command -v docker >/dev/null && command -v cmake >/dev/null; then
+        _pulo "dependencias ja presentes"
     else
-        echo "-> Compilando (10-20 min; o VarTypes e baixado automaticamente)..."
-        mkdir -p "$RAIZ/grSim/build"
-        cd "$RAIZ/grSim/build"
-        cmake ..
-        make -j"$(nproc)"
-        cd "$SCRIPT_DIR"
+        echo "   instalando (pode pedir sua senha)..."
+        if [ "$GER" = "apt" ]; then
+            # Lista do INSTALL.md do grSim. pkg-config e libglu1-mesa-dev sao
+            # obrigatorios: sem eles o cmake falha. VarTypes NAO entra - o
+            # CMakeLists do grSim baixa e compila sozinho.
+            sudo apt update && sudo apt install -y \
+                git build-essential cmake pkg-config \
+                qtbase5-dev libqt5opengl5-dev \
+                libgl1-mesa-dev libglu1-mesa-dev \
+                libprotobuf-dev protobuf-compiler \
+                libode-dev libboost-dev docker.io docker-compose-v2 \
+                && _ok "pacotes" || _falha "apt install falhou"
+        else
+            sudo pacman -S --needed --noconfirm \
+                git base-devel cmake pkgconf qt5-base glu \
+                protobuf ode boost docker docker-compose \
+                && _ok "pacotes" || _falha "pacman falhou"
+        fi
     fi
-    echo "-> Executavel: $RAIZ/grSim/bin/grSim"
 
-    # ------------------------------------------------------------------------------
-    titulo "5/6  Construindo as imagens Docker"
-    # ------------------------------------------------------------------------------
-    # ssl-VICE: o CLI 'vice' cria a imagem (base ros:humble-ros-base) e o container.
-    echo "-> ssl-VICE + workspace ROS 2..."
-    "$RAIZ/ssl-VICE/scripts/vice" build
-
-    # ssl-gui: build do Vite/node20. O npm install as vezes cai com ECONNRESET
-    # por instabilidade de rede, entao tentamos ate 3 vezes.
-    echo ""
-    echo "-> ssl-gui (interface web)..."
-    cd "$RAIZ/ssl-VICE"
-    for tentativa in 1 2 3; do
-        if docker compose build ssl-gui; then
-            break
+    # ---------------------------------------------------------------- docker
+    titulo "Docker"
+    if ! command -v docker >/dev/null; then
+        _falha "docker nao instalado"
+    else
+        sudo systemctl enable --now docker >/dev/null 2>&1 || true
+        if docker info >/dev/null 2>&1; then
+            _pulo "docker acessivel"
+        else
+            # Adiciona ao grupo e SEGUE. Antes o script desistia aqui e mandava
+            # rodar tudo de novo - o resto da instalacao nao depende disto.
+            sudo usermod -aG docker "$USER" 2>/dev/null || true
+            _falha "sem permissao no docker - faca logout/login (ou 'newgrp docker') e rode de novo"
         fi
-        if [ "$tentativa" = 3 ]; then
-            echo "XX Falhou 3 vezes. Verifique sua conexao e rode de novo."
-            return 1
+    fi
+
+    # ---------------------------------------------------------------- repos
+    titulo "Repositorios (irmaos em $RAIZ)"
+    mkdir -p "$RAIZ"
+    local repos="ssl-VICE|https://github.com/Ararabots-UFMS/ssl-VICE.git
+ssl-gui|https://github.com/Ararabots-UFMS/ssl-gui.git
+ssl-game-controller|https://github.com/RoboCup-SSL/ssl-game-controller.git
+grSim|https://github.com/RoboCup-SSL/grSim.git"
+    local linha dir url
+    while IFS='|' read -r dir url; do
+        [ -z "$dir" ] && continue
+        if [ -d "$RAIZ/$dir/.git" ]; then
+            _pulo "$dir"
+        else
+            echo "   clonando $dir..."
+            git clone --quiet "$url" "$RAIZ/$dir" && _ok "$dir" || _falha "clone de $dir"
         fi
-        echo "   Tentativa $tentativa falhou (comum: ECONNRESET no npm). Repetindo..."
-        sleep 5
-    done
-    cd "$SCRIPT_DIR"
+    done <<< "$repos"
 
-    # ssl-game-controller: imagem oficial pronta, evita um build Go+frontend longo.
-    echo ""
-    echo "-> ssl-game-controller (imagem oficial)..."
-    docker pull robocupssl/ssl-game-controller:latest
+    # ---------------------------------------------------------------- grSim
+    titulo "grSim (compilacao nativa)"
+    # Nativo e nao em Docker: o grSim e OpenGL pesado, e repassar X11 para o
+    # container costuma cair em software rendering e derrubar o FPS.
+    if [ -x "$RAIZ/grSim/bin/grSim" ]; then
+        _pulo "grSim compilado"
+    elif [ ! -d "$RAIZ/grSim" ]; then
+        _falha "grSim nao foi clonado"
+    else
+        echo "   compilando (10-20 min; o VarTypes e baixado sozinho)..."
+        ( mkdir -p "$RAIZ/grSim/build" && cd "$RAIZ/grSim/build" \
+          && cmake .. >/dev/null && make -j"$(nproc)" >/dev/null ) \
+            && _ok "grSim" || _falha "compilacao do grSim"
+    fi
 
-    # ------------------------------------------------------------------------------
-    titulo "6/6  Pronto"
-    # ------------------------------------------------------------------------------
+    # ---------------------------------------------------------------- imagens
+    titulo "Imagens Docker"
+    if ! docker info >/dev/null 2>&1; then
+        _falha "docker inacessivel - pulei as imagens"
+    else
+        if docker image inspect robocupssl/ssl-game-controller:latest >/dev/null 2>&1; then
+            _pulo "imagem do arbitro"
+        else
+            # Imagem oficial pronta: evita um build Go + frontend demorado.
+            docker pull -q robocupssl/ssl-game-controller:latest >/dev/null \
+                && _ok "imagem do arbitro" || _falha "pull do arbitro"
+        fi
+
+        if [ -x "$VICE/scripts/vice" ]; then
+            if [ -n "$(docker images -q ssl-vice 2>/dev/null)" ]; then
+                _pulo "imagem do ssl-VICE"
+            else
+                echo "   construindo a imagem do ssl-VICE (via CLI 'vice')..."
+                "$VICE/scripts/vice" build && _ok "imagem do ssl-VICE" \
+                    || _falha "vice build"
+            fi
+        else
+            _falha "scripts/vice nao encontrado em $VICE"
+        fi
+    fi
+
+    # ---------------------------------------------------------------- workspace
+    titulo "Workspace ROS 2"
+    # Clonar nao basta: sem colcon build o 'ros2 run strategy strategyNode'
+    # falha com "package not found", e o sintoma so aparece cinco passos depois
+    # como "a estrategia nao sobe".
+    if [ -z "$(docker ps -q -f name=^vice$)" ]; then
+        "$VICE/scripts/vice" start >/dev/null 2>&1 || true
+        sleep 3
+    fi
+    if [ -z "$(docker ps -q -f name=^vice$)" ]; then
+        _falha "container 'vice' nao subiu - workspace nao compilado"
+    elif docker exec vice test -d /root/ssl-VICE/install/strategy 2>/dev/null; then
+        _pulo "workspace compilado"
+    else
+        echo "   colcon build (alguns minutos)..."
+        docker exec vice bash -c \
+            "cd /root/ssl-VICE && source /opt/ros/humble/setup.bash && colcon build" \
+            >/dev/null 2>&1 && _ok "workspace" || _falha "colcon build"
+    fi
+
+    # ---------------------------------------------------------------- resumo
     echo ""
-    echo "    Tudo instalado. Para validar:"
+    echo "==============================================================="
+    echo "  RESUMO DA INSTALACAO"
+    echo "==============================================================="
+    [ ${#pulados[@]} -gt 0 ] && printf "  ja estava pronto: %s\n" "$(IFS=, ; echo "${pulados[*]}")"
+    [ ${#feitos[@]}  -gt 0 ] && printf "  instalado agora : %s\n" "$(IFS=, ; echo "${feitos[*]}")"
+    if [ ${#falhos[@]} -gt 0 ]; then
+        printf "  FALTOU          : %s\n" "$(IFS=, ; echo "${falhos[*]}")"
+        echo ""
+        echo "  Rode ./ararabots.sh instalar de novo - ele continua de onde parou."
+        return 1
+    fi
     echo ""
-    echo "        ./ararabots.sh preparar     sobe o sistema e confere cada elo"
-    echo "        ./ararabots.sh              menu de cenarios"
+    echo "  Tudo pronto. Agora:  ./ararabots.sh"
     echo ""
-    echo "    Enderecos quando o sistema estiver no ar:"
-    echo "        http://localhost:5173   interface (ssl-gui)"
-    echo "        http://localhost:8081   arbitro (ssl-game-controller)"
-    echo "        http://localhost:5000   API do apiNode"
+    echo "  Interface   http://localhost:5173     Arbitro  http://localhost:8081"
     echo ""
-    trap - ERR
+    echo "  Dica do README: coloque $VICE/scripts no PATH para usar o CLI 'vice'."
+    return 0
 }
 
 
