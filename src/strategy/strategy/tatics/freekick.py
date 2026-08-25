@@ -219,7 +219,16 @@ PASSO_MIN = 60.0
 # andou 80, 259 e 309 mm). Com o alvo parando NA bola, o robo desacelera ao
 # chegar e da ao chutador o instante parado de que ele precisa - medimos a bola
 # saindo a ~5,5 m/s (498 mm em 0,09 s), que e chute de verdade.
-ALEM_DA_BOLA = 0.0
+# Quanto o alvo do empurrao fica ALEM da bola. Ele nunca e alcancado: existe
+# para o robo seguir reto e com velocidade util ate o contato acontecer.
+AVANCO_RETO = 350.0
+
+# (LATERAL_ATE_S / LATERAL_DESLOC_MAX removidas - ver _empurrar_para_o_gol:
+#  as duas versoes da correcao lateral foram testadas e revertidas.)
+
+# (XX_PARA_SEGURAR foi removida - ver _empurrar_para_o_gol. Freava o robo em
+# xx < 60 mm quando o grSim so dispara com xx < 31,5: ele parava na faixa onde
+# chutar e impossivel.)
 
 # Ate onde abrir a mira dentro da meta, em milimetros a partir do centro.
 #
@@ -343,7 +352,20 @@ LIM_YY_GRSIM = 40.0
 
 # Para ARMAR exigimos folga sobre o limite do grSim; para MANTER armado
 # aceitamos ate o limite. Sem essa histerese o chute volta a piscar.
-YY_PARA_ARMAR = 25.0
+YY_PARA_ARMAR = 32.0
+# 25 -> 32, com medicao. Refazendo o teste do grSim (robot.cpp:128) quadro a
+# quadro na visao CRUA, a janela do chutador abriu em 4 de 6 execucoes - e em 2
+# delas ficou aberta por ~30 quadros (0,5 s) com a estrategia NUNCA armada.
+# Perdiamos o chute com a geometria na mao.
+#
+# A causa e aritmetica, do mesmo tipo do XX_PARA_SEGURAR: exigiamos yy <= 25
+# para ARMAR quando o simulador aceita ate 40. O HANDOVER §23 ja lista isto
+# entre os erros proprios ("fiz nossa trava mais rigida que a do simulador").
+#
+# 32 mantem 20% de folga sobre os 40 e fica abaixo dos 38 que o §18 registra
+# como geradores de tiro de raspao - e aquele teste rodou com o XX_PARA_SEGURAR
+# ainda no lugar, quando o robo parava a 50-60 mm e todo contato era marginal.
+# A histerese continua: arma em 32, sustenta ate 40.
 YY_PARA_MANTER = LIM_YY_GRSIM
 # Distancia da placa a partir da qual ja vale deixar o chute armado esperando o
 # contato. Armar cedo nao tem custo: o grSim so dispara quando encosta.
@@ -660,7 +682,31 @@ class OurFreekick(_BaseFreekick):
             return False
         xx, yy = g
         if self.estado.chute_armado.get(robot_id):
-            armado = yy <= YY_PARA_MANTER
+            # UMA VEZ ARMADO, SEGUE ARMADO enquanto a placa estiver chegando.
+            #
+            # Antes desarmavamos assim que o NOSSO yy passava de 40. Mas esse yy
+            # vem da visao filtrada, e a orientacao dela atrasa: com o filtro
+            # corrigido sao ~4,7 graus, sem ele 17-23 - o que vale 8 a 42 mm de
+            # yy so de atraso. O resultado e o chute piscando durante a
+            # aproximacao final, e a chance de estar armado justo no quadro do
+            # contato virar sorte.
+            #
+            # MEDIDO refazendo o teste do grSim quadro a quadro na visao crua:
+            # a janela do chutador abriu em 4 de 6 execucoes, ficou aberta ~30
+            # quadros (0,5 s) em duas delas, e o disparo nao saiu - com a
+            # estrategia tendo pedido chute em algum outro momento. Pedido e
+            # janela simplesmente nao se encontravam.
+            #
+            # O HANDOVER §18 ja prescrevia isto: "arme o chute durante toda a
+            # aproximacao final. Armar cedo nao custa nada: o grSim so dispara
+            # no contato. Recusar armar, sim, custa."
+            #
+            # Quem arbitra continua sendo o grSim (robot.cpp:128 exige xx<31,5 E
+            # yy<40 no instante do comando): manter armado nao cria chute torto,
+            # so deixa de perder o chute certo. A direcao segue protegida por
+            # _atras_da_bola (10 graus) e _mira_esta_boa (0,15 rad), que sao
+            # verificadas antes de o comando sair.
+            armado = xx <= XX_PARA_ARMAR
         else:
             armado = yy <= YY_PARA_ARMAR and xx <= XX_PARA_ARMAR
         self.estado.chute_armado[robot_id] = armado
@@ -981,8 +1027,54 @@ class OurFreekick(_BaseFreekick):
         # Agora o desempacamento entra por FORA da frenagem: freia normalmente,
         # mas se o robo nao responde, empurra mais forte de qualquer jeito.
         base = max(PASSO_MIN, min(PASSO_MAX, d * FRACAO_FREIO))
-        passo = max(base, self._passo_de_desempacamento(robot_id))
+        desempacar = self._passo_de_desempacamento(robot_id)
+        passo = max(base, desempacar)
         if d <= passo:
+            # ALVO PERTO E ROBO EMPACADO: estende o alvo ALEM dele.
+            #
+            # A rampa anti-empacamento era INERTE justamente no caso para o qual
+            # foi criada. Ela cresce o PASSO, mas quando o alvo ja esta mais
+            # perto que o passo esta linha devolvia o alvo intacto - e o erro
+            # comandado continuava pequeno. Com kp=1,5, um erro de 100 mm pede
+            # 0,15 m/s, abaixo dos ~0,35 m/s que o robo precisa para sair do
+            # lugar (§16.3): ele fica parado para sempre, e a rampa cresce sem
+            # nunca mudar o que e comandado.
+            #
+            # MEDIDO: em 4 de 12 execucoes o cobrador morria no ponto de encaixe.
+            # A assinatura e inconfundivel - o ponto fica 250 mm atras da bola e
+            # a placa a 75,5 mm do centro, entao parar ali da xx ~ 174; medimos
+            # xx = 184, 145, 121 e 114, com a bola andando 0 a 289 mm. Nessas
+            # execucoes a janela do chutador NUNCA abriu.
+            #
+            # Estendendo o alvo, a DIRECAO nao muda - so a amplitude do erro,
+            # ate vencer a zona morta. E transitorio por construcao: assim que o
+            # robo anda, _passo_de_desempacamento zera e a frenagem normal volta
+            # no ciclo seguinte.
+            # EXTENSAO DO ALVO: implementada, medida, e deixada DESLIGADA.
+            #
+            # O defeito que ela corrige e real e esta provado: a rampa
+            # anti-empacamento cresce o PASSO, mas com o alvo mais perto que o
+            # passo esta linha devolve o alvo intacto, entao o que e COMANDADO
+            # nunca muda. Robo parado a 100 mm do alvo pede 0,15 m/s com kp=1,5,
+            # abaixo dos ~0,35 m/s da zona morta (§16.3) - e continua pedindo
+            # isso para sempre, por mais que a rampa suba. A rampa e inerte
+            # exatamente no caso para o qual foi criada.
+            #
+            # A correcao (estender o alvo ate a distancia da rampa, na MESMA
+            # direcao) foi testada: os gols foram de 4/12 para 5/12 e o balde
+            # "nao chegou" de 4 para 3 - dentro do ruido. E o A/B na oscilacao
+            # foi inconclusivo (10/15/11 inversoes com, 13/3/15 sem).
+            #
+            # Fica desligada por duas razoes. Primeiro, o §14: o que nao melhora
+            # de forma separavel do ruido nao entra. Segundo, e um CONTORNO de
+            # um defeito que mora fora daqui - medimos o robo a 142 mm do
+            # setpoint do driver na mediana e 36% do tempo acima de 200 mm (ver
+            # HANDOVER §34). Pedir um alvo mais longe para vencer a zona morta
+            # e remendo sobre remendo enquanto a malha estiver aberta.
+            #
+            # Para religar, troque o return abaixo por:
+            #     if desempacar > d > 1.0:
+            #         return p[0] + dx * desempacar / d, p[1] + dy * desempacar / d
             return alvo_x, alvo_y
         return p[0] + dx * passo / d, p[1] + dy * passo / d
 
@@ -1080,9 +1172,88 @@ class OurFreekick(_BaseFreekick):
         # ALEM_DA_BOLA para ele nao sair correndo atras da bola depois do chute;
         # de qualquer forma _recuar_apos_chute assume assim que o chute e
         # registrado.
-        s_alvo = min(ALEM_DA_BOLA, s_atual + PASSO_MAX)
-        alvo_x = self.ball.position_x + ux * s_alvo
-        alvo_y = self.ball.position_y + uy * s_alvo
+        # RETO, DE UMA VEZ, ALEM DA BOLA.
+        #
+        # Antes o alvo avancava em passos (s_atual + PASSO_MAX) e parava NA bola
+        # (ALEM_DA_BOLA = 0). Dois problemas, ambos medidos:
+        #   - parando na bola, o erro de posicao vai a zero junto com o contato
+        #     e o robo estaciona a ~118 mm do centro dela, enquanto a placa do
+        #     chutador exige no maximo ~107 mm: o chute nunca dispara;
+        #   - em passos curtos, o comando vira kp vezes um erro pequeno, abaixo
+        #     dos ~0,35 m/s que o robo precisa para sair do lugar.
+        #
+        # Com um alvo fixo alem da bola o erro permanece grande, a velocidade
+        # permanece util, e o robo ATRAVESSA o ponto de contato em vez de parar
+        # nele. E o que uma cobranca e: apontar para o canto e ir reto.
+        # PARA DE AVANCAR QUANDO A PLACA JA ALCANCA A BOLA.
+        #
+        # O alvo alem da bola serve para o robo ATRAVESSAR o ponto de contato em
+        # vez de estacionar antes dele. Mas depois que a placa chega na bola,
+        # continuar avancando so faz mal: o grSim subtrai velocidade da bola a
+        # cada contato (KickerDampFactor, robot.cpp:168), e o robo alcanca a bola
+        # que acabou de sair.
+        #
+        # MEDIDO: com o chute disparando e a bola bem centrada (yy de 20 a 25 mm),
+        # ela percorria 1306, 1482 e 1679 mm - quando 6,4 m/s no atrito medido
+        # rendem 2362 mm. Faltavam ~40% da energia, roubados pelo proprio robo.
+        #
+        # Dentro do alcance da placa o alvo passa a ser a posicao ATUAL: o
+        # chutador dispara no contato de qualquer forma, e o robo para de
+        # empurrar. E o gesto de uma cobranca de verdade - bate e nao segue.
+        # REMOVIDA a frenagem por xx (era XX_PARA_SEGURAR = 60 mm).
+        #
+        # Ela mandava o robo parar - alvo = posicao atual - assim que a placa
+        # chegava a menos de 60 mm da bola. Mas o grSim so dispara com a bola a
+        # menos de 31,5 mm da placa (robot.cpp:128). O robo freava DENTRO da
+        # faixa 31,5-60, onde chutar e impossivel: a margem estava aplicada ao
+        # contrario, dando folga para parar antes em vez de folga para chegar.
+        #
+        # Medido em 12 execucoes com ela ativa: xx ficou em 14, 24, 50, 57, 65,
+        # 70, 87, 99, 115, 127, 140, 151, 160 - UMA entrou na janela de 31,5.
+        #
+        # Ela foi criada para impedir que o robo roubasse energia da bola ao
+        # continuar avancando. Essa premissa nao se sustenta: lendo a visao crua
+        # do grSim, a bola sai a 6103-6207 mm/s dos 6400 comandados - 96% da
+        # energia chega. O HANDOVER §24 ja registrava a hipotese como "testada e
+        # nao confirmada", e o §27 registra que esta iteracao deu 1 gol em 6
+        # contra os 2 em 6 da melhor configuracao. Nunca foi revertida.
+        #
+        # O motivo legitimo dela - nao empurrar a bola depois do chute - continua
+        # coberto por _recuar_apos_chute, que para o robo no lugar assim que o
+        # chute e registrado. La a frenagem acontece DEPOIS do disparo, que e
+        # quando ela faz sentido.
+        alvo_x = self.ball.position_x + ux * AVANCO_RETO
+        alvo_y = self.ball.position_y + uy * AVANCO_RETO
+
+        # TENTADA E REVERTIDA: correcao lateral durante o empurrao.
+        #
+        # A geometria estava certa - deslocar o alvo de o = L*(1 - 1/f), com
+        # f = -s/(AVANCO_RETO - s), faz a reta cruzar a linha exatamente na
+        # bola, e num teste deterministico levava o desvio de 23-105 mm para 0.
+        #
+        # No simulador NAO se confirmou: 12 execucoes, 0 gols e 0 disparos,
+        # contra 1 e 1 sem ela. O defeito e que a correcao DIVERGE na reta
+        # final: quando s -> 0 (o robo chegando na bola) f -> 0 e o alvo e
+        # jogado para o lado ate saturar no teto, entao o robo passa a andar de
+        # banda em vez de fechar. Media o efeito: xx otimo (3,2 / 8,6 / 28,5 mm)
+        # e yy grande do mesmo jeito (66, 88, 130 mm).
+        #
+        # v2 TAMBEM REVERTIDA. Congelamos a correcao nos ultimos 150 mm para
+        # matar a manobra lateral que afundou a v1, e a convergencia continua
+        # boa no papel: simulando ciclo a ciclo, o desvio no ponto da bola caia
+        # de 23-88 mm para 11-50 mm, dentro dos 40 para desvio inicial ate
+        # 120 mm.
+        #
+        # No simulador: 1 gol em 6, contra 5 em 12 sem ela. E pior, a janela do
+        # chutador chegou a ficar aberta 32 e 76 quadros SEM disparo - mais
+        # oportunidade perdida do que antes, nao menos.
+        #
+        # A leitura honesta e que curvar a trajetoria de aproximacao atrapalha
+        # algo que ainda nao medimos - provavelmente a orientacao, que e
+        # comandada como angulo fixo enquanto o caminho deixa de ser reto.
+        # Duas tentativas, duas reversoes: o proximo a mexer aqui deve MEDIR
+        # primeiro o desvio lateral ao longo do tempo, e nao propor outra
+        # formula no escuro.
         alvo_x, alvo_y = self._dentro_do_campo(alvo_x, alvo_y)
 
         # Aponta para a BOLA, nao para o gol.
@@ -1289,6 +1460,22 @@ class OurFreekick(_BaseFreekick):
         bx, by = self.ball.position_x, self.ball.position_y
         ux, uy = self._versor_bola_gol()
 
+        # PASSOU DA BOLA DE RASPAO? Volte para o ponto de cobranca, nao orbite.
+        #
+        # A orbita existe para quando o robo esta LONGE e do lado errado. Quando
+        # ele apenas ultrapassou a bola sem toca-la - que e o que acontece
+        # quando erra o alinhamento - a orbita o manda para 300-700 mm de
+        # distancia e a jogada se desfaz. Medimos exatamente isso: projecao
+        # indo de -238 para +369 em 1,2 s, fase virando 'contornar', e o robo
+        # terminando a 2820 mm da bola sem nunca mais voltar.
+        #
+        # Estando perto, o caminho de volta e simplesmente RECUAR pela propria
+        # linha ate o ponto de cobranca. E o que um jogador faz: errou a bola,
+        # volta e tenta de novo.
+        if p is not None and hypot(p[0] - bx, p[1] - by) < 500.0:
+            return self._dentro_do_campo(bx - ux * DIST_ATRAS_DA_BOLA,
+                                         by - uy * DIST_ATRAS_DA_BOLA)
+
         if p is None:
             return self._dentro_do_campo(bx - ux * RAIO_CONTORNO,
                                          by - uy * RAIO_CONTORNO)
@@ -1302,8 +1489,22 @@ class OurFreekick(_BaseFreekick):
         passo = max(-0.9, min(0.9, delta))          # ~50 graus
         ang_novo = ang_atual + passo
 
-        # mantem (ou abre) o raio, para nunca raspar na bola durante a volta
-        raio = max(RAIO_CONTORNO, hypot(p[0] - bx, p[1] - by))
+        # FECHA o raio a cada ciclo, ate RAIO_CONTORNO. Antes era
+        #     raio = max(RAIO_CONTORNO, dist_atual)
+        # que nunca diminui: qualquer afastamento virava o raio novo, e o raio
+        # novo garantia o afastamento no ciclo seguinte. Uma catraca - o robo
+        # saia e NAO VOLTAVA MAIS.
+        #
+        # MEDIDO numa execucao (distancia robo-bola ao longo do tempo):
+        #     172 mm -> 1003 -> 164 -> 2449 -> 3000 -> 989 -> 1437
+        # com 12 inversoes de sentido. E o "vai pra frente e pra tras" que o
+        # Felipe viu nas 3 execucoes dele, e a razao de a bola nunca ser tocada.
+        #
+        # A intencao original - nao raspar na bola durante a volta - continua
+        # atendida: o raio so encolhe PASSO_MAX por ciclo e nunca fica abaixo de
+        # RAIO_CONTORNO, entao o caminho jamais corta por cima da bola. A
+        # diferenca e que agora ele converge para a orbita em vez de fugir dela.
+        raio = max(RAIO_CONTORNO, hypot(p[0] - bx, p[1] - by) - PASSO_MAX)
         return self._dentro_do_campo(bx + raio * cos(ang_novo),
                                      by + raio * sin(ang_novo))
 
@@ -1311,11 +1512,28 @@ class OurFreekick(_BaseFreekick):
         """Fase 1: dar a volta por fora, com a bola como obstaculo."""
         alvo_x, alvo_y = self._ponto_de_contorno(robot_id)
         alvo_x, alvo_y = self._passo_ate(robot_id, alvo_x, alvo_y)
+
+        # ANGULO CONSTANTE EM TODAS AS FASES - a direcao da mira.
+        #
+        # Antes esta fase comandava "aponte para a bola a partir do proximo
+        # ponto da orbita". Como esse ponto se move a cada ciclo, o alvo angular
+        # tambem se movia - e entre fases ele saltava de vez.
+        #
+        # MEDIDO: a velocidade angular comandada saturava alternando entre +2,0
+        # e -2,0 rad/s (os extremos do controlador) e o robo girava sem parar.
+        # Girando, a cinematica inversa converte a velocidade no referencial
+        # errado - o robo passou a acelerar para LONGE da bola com a saida
+        # saturada em (-1,5 , +1,5) m/s, chegando a 3,2 m de distancia.
+        # Realimentacao positiva: gira, erra a direcao, se afasta, gira mais.
+        #
+        # O robo e holonomico: ele contorna de lado sem precisar virar. Manter o
+        # angulo fixo na direcao do chute elimina o giro, e com ele o
+        # descontrole - e ainda deixa o corpo ja apontado quando chegar a hora.
+        ux_mira, uy_mira = self._versor_bola_gol()
         comando = self.skills_factory.move_with_angle(
             robot_id=robot_id, target_x=alvo_x, target_y=alvo_y,
             vel_x=0.0, vel_y=0.0,
-            angle=atan2(self.ball.position_y - alvo_y,
-                        self.ball.position_x - alvo_x),
+            angle=atan2(uy_mira, ux_mira),
         )
         self._obstaculos(comando, robot_id, evitar_bola=True)
         comando.deactivate_kick()

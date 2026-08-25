@@ -122,20 +122,43 @@ class ObjectTracker(object):
         # TODO Implement a Hungarian algorithm to give the balls an id?
         recieved_objects_id, time_stamp = [], message.detection.t_capture
 
-        self.dt = time_stamp - self.last_time_stamp
+        # >>> ARARABOTS_AJUSTE   (ligado/desligado por: ararabots.sh ajustes on|off)
+        #
+        # Efeito medido no desalinhamento do chutador (limite do grSim: 40 mm):
+        #     sem o ajuste -> yy = 68, 78, 84, 108, 114, 143 mm
+        #     com o ajuste -> yy = 29, 50, 71 mm
+        #
+        # Fica DESLIGADO por padrao: e codigo fora de src/strategy/ e a decisao
+        # de adota-lo e do time. O script liga ao testar e desliga ao sair.
+        self.dt = time_stamp - self.last_time_stamp   # ORIGINAL: dt cru, sem validacao
+        #AJUSTE# dt = time_stamp - self.last_time_stamp   # intervalo entre DOIS quadros
+        # dt == 0 NAO pode cair aqui - MEDIDO, e era o erro.
+        #
+        # O grSim emite um pacote por CAMERA. Medimos 181 pacotes/s vindos de 4
+        # cameras para apenas 46 quadros distintos: 75% dos pacotes tem o MESMO
+        # t_capture do anterior, ou seja dt == 0.
+        #
+        # O vision_node chama tracker.update() uma vez por PACOTE, e cada update
+        # termina chamando predict() para TODOS os objetos. Entao predict roda
+        # 181x/s enquanto cada objeto e corrigido so 46x/s - quatro predicoes
+        # para cada correcao.
+        #
+        # Com dt == 0 isso e inofensivo: a matriz de transicao vira identidade e
+        # o ruido de processo vira zero, entao a predicao e um no-op. Era assim
+        # no codigo original.
+        #
+        # Trocando dt == 0 por 1/60, como esta guarda fazia, cada um desses 75%
+        # virava uma predicao CHEIA: o filtro passava a avancar o modelo dele 4x
+        # mais rapido que o tempo real, e a posicao estimada corria na frente da
+        # realidade. E o mecanismo mais plausivel para a "trajetoria estranha".
+        #
+        # Entao: dt < 0 (grSim reiniciado), dt > 1 (pausa longa) e o primeiro
+        # quadro continuam sendo substituidos. dt == 0 fica 0.
+        #AJUSTE# if self.last_time_stamp == 0 or dt < 0 or dt > 1.0:
+            #AJUSTE# dt = 1.0 / 60.0   # periodo tipico de um quadro, em vez de um valor que estoura a covariancia
+        #AJUSTE# self.dt = dt   # so entao publica, ja validado
+        # <<< ARARABOTS_AJUSTE
 
-        # DESCOMENTE AS 4 LINHAS ABAIXO (e comente a de cima) AO RODAR TESTES.
-        #
-        # Sem isso, o primeiro dt vira o proprio t_capture - segundos desde que o
-        # grSim subiu, ja medimos 100s - e esse valor gigante estoura a
-        # covariancia do Kalman: o filtro passa a ignorar as medicoes e as
-        # posicoes publicadas ficam congeladas ou se arrastando. Depois de um
-        # teleporte, o rastreador leva dezenas de segundos para convergir.
-        #
-        # dt = time_stamp - self.last_time_stamp
-        # if self.last_time_stamp == 0 or dt <= 0 or dt > 1.0:
-        #     dt = 1.0 / 60.0
-        # self.dt = dt
         self.last_time_stamp = time_stamp
 
         if message.detection.robots_yellow:

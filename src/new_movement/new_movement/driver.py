@@ -20,6 +20,43 @@ import rclpy
 from rclpy.node import Node
 
 
+# >>> ARARABOTS_AJUSTE   (ligado/desligado por: ararabots.sh ajustes on|off driver)
+#
+# Dois ajustes na cadeia de movimento. Com os valores ABAIXO o comportamento e
+# exatamente o do repositorio - quem muda e o script, trocando as duas linhas.
+#
+# 1) OBSTACULOS_NO_LACO
+#    publish_control roda a 100 Hz e chama driver_init(), que reconstroi TODOS
+#    os obstaculos de TODOS os robos a cada chamada. Isso ja e feito por um
+#    timer dedicado a 0,5 s (update_obstacles_timer_callback): e trabalho
+#    redundante 200x por segundo dentro do laco que precisa publicar na hora.
+#    MEDIDO: /control_command entregou 19 e 34 Hz contra os 100 do timer, com
+#    buracos de ate 2394 ms sem publicar setpoint nenhum.
+#
+# 2) SETPOINT_ESPERA (mm)
+#    publish_control avanca a trajetoria pelo relogio (time_offset += dt), sem
+#    nunca comparar com onde o robo esta. Se ele fica para tras, o setpoint
+#    continua andando e a distancia cresce.
+#    MEDIDO: o robo fica a 142 mm do proprio setpoint na mediana, p90 de 622 mm,
+#    e 36% do tempo acima de 200 mm. As execucoes que fizeram gol tiveram
+#    mediana de 76 e 153 mm; a que falhou, 306 mm.
+#    Com um valor > 0, o setpoint SO avanca enquanto o robo estiver a menos que
+#    isso dele. E conservador: so consegue ATRASAR o setpoint, nunca mandar o
+#    robo para outro lugar.
+#
+# 3) SETPOINT_ESPERA_MAX (s)
+#    Teto da espera acima. Sem ele nasce um travamento novo: robo na zona morta
+#    do controlador (nao se move abaixo de ~0,35 m/s), setpoint parado
+#    esperando, e nenhum dos dois cede. Passado esse tempo o setpoint volta a
+#    andar de qualquer jeito.
+#AJUSTE# ARARABOTS_OBSTACULOS_NO_LACO = False
+#AJUSTE# ARARABOTS_SETPOINT_ESPERA = 250.0
+ARARABOTS_OBSTACULOS_NO_LACO = True
+ARARABOTS_SETPOINT_ESPERA = 0.0
+ARARABOTS_SETPOINT_ESPERA_MAX = 0.5
+# <<< ARARABOTS_AJUSTE
+
+
 class PathDriver(Node):
     def __init__(self):
         super().__init__("path_driver")
@@ -122,7 +159,10 @@ class PathDriver(Node):
                     }
 
             # Update obstacles for all ids
-            if self.robot_data[id]["last_obs_request"] is not None:
+            # (ARARABOTS_OBSTACULOS_NO_LACO: ver o bloco de ajustes no topo -
+            #  com False, quem cuida disto e o update_obstacles_timer_callback)
+            if (ARARABOTS_OBSTACULOS_NO_LACO
+                    and self.robot_data[id]["last_obs_request"] is not None):
                 self.robot_data[id]["obstacles"] = (
                     self.obstacle_factory.create_obstacles(
                         self.robot_data[id]["last_obs_request"],
@@ -169,12 +209,34 @@ class PathDriver(Node):
 
                 controlCommandList.append(robotControlCommand)
 
+                # ARARABOTS_SETPOINT_ESPERA: segura o avanco enquanto o robo
+                # nao alcanca o setpoint. Ver o bloco de ajustes no topo.
+                avanca = True
+                if ARARABOTS_SETPOINT_ESPERA > 0.0:
+                    medido = self.ally_robots.get(robot_id)
+                    if medido is not None:
+                        erro = (
+                            (medido.position_x - robotState.position.x) ** 2
+                            + (medido.position_y - robotState.position.y) ** 2
+                        ) ** 0.5
+                        if erro > ARARABOTS_SETPOINT_ESPERA:
+                            esperando = robot_info.get("esperando", 0.0) + dt
+                            robot_info["esperando"] = esperando
+                            # teto: passado ele, anda de qualquer jeito, para
+                            # nao travar contra a zona morta do controlador
+                            avanca = esperando >= ARARABOTS_SETPOINT_ESPERA_MAX
+                        else:
+                            robot_info["esperando"] = 0.0
+                    if avanca:
+                        robot_info["esperando"] = 0.0
+
                 total_duration = trajectory.get_total_duration()
                 if (
                     total_duration is not None
                     and robot_info["time_offset"] <= total_duration
                 ):
-                    robot_info["time_offset"] += dt
+                    if avanca:
+                        robot_info["time_offset"] += dt
                 else:
                     robot_info["time_offset"] = (
                         total_duration if total_duration is not None else 0.0
