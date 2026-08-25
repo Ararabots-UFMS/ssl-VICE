@@ -4,7 +4,7 @@ from rclpy.node import Node
 
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
-from system_interfaces.msg import ControlCommand, GameState, RobotCommand, TeamCommand
+from system_interfaces.msg import ControlCommand, GameState, RobotCommand, TeamCommand, FilterCommand
 from system_interfaces.srv import (
     ControlParams,
     GetGameConfig,
@@ -17,7 +17,7 @@ from system_interfaces.srv import (
 class Controller(Node):
     """Simplified controller node.
 
-    Consumes high-frequency GameState and ControlCommand messages, publishes TeamCommand.
+    Consumes high-frequency GameState and pmand messages, publishes TeamCommand.
     Fetches low-frequency configuration (team color) once via GetGameConfig service.
     """
 
@@ -54,7 +54,7 @@ class Controller(Node):
         self.create_subscription(
             ControlCommand, "control_command", self.receive_command, 10
         )
-        self.publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
+        self.publisher = self.create_publisher(FilterCommand, "filter_command", 10)
         self.create_service(ControlParams, "update_pid", self.update_parameters)
         self.create_service(
             SetOrientation, "set_orientation", self.set_orientation_callback
