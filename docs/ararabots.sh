@@ -451,7 +451,12 @@ cmd_preparar() {
     # esta - 3 gols em 9 contra 1 em 6, dentro da dispersao. Ligar por padrao
     # seria empilhar uma camada nao comprovada, que e como a tatica virou uma
     # maquina que nao funcionava (§17). Para medi-lo: ajustes on filtro.
+    # 'controle' entra junto a partir de 25/08: e o unico ajuste da cadeia de
+    # movimento que se confirmou. A/B de 4 contra 12 execucoes, so ele mudando:
+    # o yy caiu de 82,0 para 28,5 mm de mediana e passou a ficar dentro do
+    # limite do grSim em 7 de 12 execucoes (era 0 de 4). Ver HANDOVER §42.
     cmd_ajustes on tracker
+    cmd_ajustes on controle
 
     passo 1 "Verificando pré-requisitos"
 

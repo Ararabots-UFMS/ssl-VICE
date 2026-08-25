@@ -1181,8 +1181,17 @@ class OurFreekick(_BaseFreekick):
             # ~0,35 m/s que o robo precisa para sair do lugar (§16.3). Ele nao
             # consegue andar esse ultimo trecho - que e exatamente o caso para o
             # qual esta extensao existe.
-            if desempacar > d > 1.0:
-                return p[0] + dx * desempacar / d, p[1] + dy * desempacar / d
+            # MEDIDO NAS DUAS POSICOES, 10 execucoes cada, com o resto igual:
+            #
+            #                        xx med   yy med   rastreio
+            #   desligada             85,8     28,5      328
+            #   ligada                63,4     33,1      403
+            #
+            # Ela melhora o xx em 25% - que e o gargalo - mas piora o rastreio
+            # e o yy. Ambigua, entao fica DESLIGADA pelo criterio de sempre.
+            # Para religar, troque o return abaixo por:
+            #     if desempacar > d > 1.0:
+            #         return p[0] + dx * desempacar / d, p[1] + dy * desempacar / d
             return alvo_x, alvo_y
         return p[0] + dx * passo / d, p[1] + dy * passo / d
 
