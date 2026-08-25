@@ -130,8 +130,8 @@ class ObjectTracker(object):
         #
         # Fica DESLIGADO por padrao: e codigo fora de src/strategy/ e a decisao
         # de adota-lo e do time. O script liga ao testar e desliga ao sair.
-        self.dt = time_stamp - self.last_time_stamp   # ORIGINAL: dt cru, sem validacao
-        #AJUSTE# dt = time_stamp - self.last_time_stamp   # intervalo entre DOIS quadros
+        #ORIG# self.dt = time_stamp - self.last_time_stamp   # ORIGINAL: dt cru, sem validacao
+        dt = time_stamp - self.last_time_stamp   # intervalo entre DOIS quadros
         # dt == 0 NAO pode cair aqui - MEDIDO, e era o erro.
         #
         # O grSim emite um pacote por CAMERA. Medimos 181 pacotes/s vindos de 4
@@ -154,9 +154,9 @@ class ObjectTracker(object):
         #
         # Entao: dt < 0 (grSim reiniciado), dt > 1 (pausa longa) e o primeiro
         # quadro continuam sendo substituidos. dt == 0 fica 0.
-        #AJUSTE# if self.last_time_stamp == 0 or dt < 0 or dt > 1.0:
-            #AJUSTE# dt = 1.0 / 60.0   # periodo tipico de um quadro, em vez de um valor que estoura a covariancia
-        #AJUSTE# self.dt = dt   # so entao publica, ja validado
+        if self.last_time_stamp == 0 or dt < 0 or dt > 1.0:
+            dt = 1.0 / 60.0   # periodo tipico de um quadro, em vez de um valor que estoura a covariancia
+        self.dt = dt   # so entao publica, ja validado
         # <<< ARARABOTS_AJUSTE
 
         self.last_time_stamp = time_stamp

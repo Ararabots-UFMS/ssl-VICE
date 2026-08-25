@@ -952,16 +952,25 @@ cmd_menu() {
 
     rodar_dispersao() {
         local nome="$1" n="$2"
+        # APAGA OS RESULTADOS ANTIGOS ANTES DE COMECAR.
+        #
+        # BUG QUE ISTO CORRIGE: o resumo lia TODOS os JSON da pasta, entao
+        # execucoes de lotes anteriores entravam na conta. No lote de 12 do
+        # Felipe, 7 repeticoes foram bloqueadas pelo portao e mesmo assim o
+        # resumo mostrou "10 execucoes" e "GOLS: 1 de 10" - o gol era de um lote
+        # de uma hora antes. Um resumo que mistura lotes e pior que nenhum.
+        docker exec vice sh -c "rm -f /tmp/cenarios_freekick/*disp_*.json /tmp/cenarios_freekick/*disp_*.html" >/dev/null 2>&1 || true
         echo
         echo "=============================================================="
         echo "  DISPERSAO: $nome  x$n"
         echo "=============================================================="
+        local BLOQ=0
         for i in $(seq 1 "$n"); do
             echo; echo "----- repeticao $i/$n -----"
             cmd_cenario "$nome" >/dev/null
             local st=$?
             [ $st -eq 1 ] && { echo "   XX o cenario nao montou"; continue; }
-            [ $st -eq 3 ] && { echo "   XX bloqueado pelo portao de medicao"; continue; }
+            [ $st -eq 3 ] && { echo "   XX bloqueado pelo portao de medicao"; BLOQ=$((BLOQ+1)); continue; }
             [ $st -eq 2 ] && echo "   !! a estrategia nao comandou - resultado suspeito"
             ros_run "BRANCH=disp_$i python3 /tmp/ararabots.py rodar $nome $DURACAO" \
                 | grep -E "GOL|sem gol|DISPARO|RASTREIO|acima de 200|laco do driver|abriu em|nunca abriu|robo [0-9]:|BOLA:" | sed 's/^/   /'
@@ -971,6 +980,12 @@ cmd_menu() {
         echo
         rm -rf "$SCRIPT_DIR/saida" && docker cp vice:/tmp/cenarios_freekick "$SCRIPT_DIR/saida" >/dev/null 2>&1
         python3 "$PY" resumo disp
+        if [ "${BLOQ:-0}" -gt 0 ]; then
+            echo
+            echo "  !! $BLOQ de $n repeticoes foram BLOQUEADAS pelo portao de medicao."
+            echo "     O resumo acima cobre so as que rodaram. Feche o que puder"
+            echo "     na maquina (navegador inclusive) e rode de novo."
+        fi
     }
 
     # ------------------------------------------------------------------- menu
@@ -1241,9 +1256,11 @@ cmd_ajustes() {
         tracker) ARQS=("$VICE/src/vision/vision/tracker.py") ;;
         filtro)  ARQS=("$VICE/src/vision/vision/kalman_filter.py") ;;
         driver)  ARQS=("$VICE/src/new_movement/new_movement/driver.py") ;;
+        controle) ARQS=("$VICE/src/control/control/pid_controller.py") ;;
         tudo|*)  ARQS=("$VICE/src/vision/vision/tracker.py"
                        "$VICE/src/vision/vision/kalman_filter.py"
-                       "$VICE/src/new_movement/new_movement/driver.py") ;;
+                       "$VICE/src/new_movement/new_movement/driver.py"
+                       "$VICE/src/control/control/pid_controller.py") ;;
     esac
     python3 - "$acao" "${ARQS[@]}" <<'PY'
 import re, sys

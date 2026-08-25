@@ -176,6 +176,63 @@ DESVIO_TRAVADO = 150.0
 #
 # Uma cobranca de falta nao precisa de velocidade, precisa de precisao: trocar
 # alcance por controle e exatamente o negocio certo aqui.
+# MODO MECANICO: um alvo por fase, sem picotar o caminho.
+#
+# O LACO QUE ISTO QUEBRA (medido em 24/08):
+#
+#   driver.replan()  ->  time_offset = 0.0   (driver.py:331 - toda chamada
+#                                             reinicia a trajetoria do zero)
+#   strategy.py      ->  so reenvia se o alvo mudou mais que 30 mm
+#                        (LIMIAR_ALVO_MM, criado justamente para conter isso)
+#   _passo_ate       ->  recalcula o alvo a partir da posicao MEDIDA, todo
+#                        ciclo, com passo minimo de 60 mm
+#
+# Como o passo minimo (60) e maior que o limiar (30), o alvo mudava SEMPRE.
+# Entao o driver replanejava sempre, e o time_offset voltava a zero sempre: o
+# robo nunca executava mais que os primeiros ~100 ms de trajetoria nenhuma.
+#
+# Isso tambem explica a bimodalidade do erro de rastreio que nos confundiu: nas
+# execucoes em que ele dava 7-22 mm, era o setpoint GRUDADO no robo, nao o robo
+# seguindo bem. O robo ficava parado e o alvo ficava em cima dele.
+#
+# O passo curto foi criado para contornar o driver (§16.1). Medimos agora que
+# ele causa um problema maior que o que resolve.
+#
+# Com False, cada fase manda o alvo FINAL uma vez; como esse alvo e funcao da
+# bola (parada numa cobranca), ele nao muda, o _alvo_mudou devolve False e a
+# trajetoria roda inteira. E o "angula e vai reto".
+# TENTATIVA MECANICA - implementada, medida e REVERTIDA (24/08/2026).
+#
+# A ideia (do Felipe): "angula, vai reto e chuta" - um alvo por fase, sem
+# picotar o caminho. Ela esta CERTA, e o motivo de nao funcionar aqui nao e a
+# ideia: e que a estrategia nao tem como executa-la.
+#
+# O laco, medido:
+#   driver.replan() zera o time_offset (driver.py:331), entao toda chamada a
+#   strategy_command reinicia a trajetoria do zero. E strategy.py so reenvia se
+#   o alvo mudou mais de 30 mm (LIMIAR_ALVO_MM), defesa criada contra isso.
+#
+# As tres formas foram testadas, 3 execucoes cada:
+#
+#   reenviar todo ciclo  -> replan a cada ciclo, time_offset sempre zero: o robo
+#                           nunca passa dos primeiros ~100 ms de trajetoria
+#   enviar UMA vez       -> a trajetoria acaba e ninguem corrige. Medido: bola
+#                           andou 0 em 3 de 3, e numa delas o rastreio deu 4 mm
+#                           com xx=467 - o robo PARADO com o setpoint em cima
+#   segurar ~1 s         -> o valor recalculado e identico (o alvo e funcao da
+#                           bola, que esta parada), entao _alvo_mudou bloqueia e
+#                           vira o caso "uma vez". Bola andou 0 em 3 de 3
+#
+# Prova direta, da ultima execucao: o driver publicou UM alvo distinto em 1506
+# publicacoes, amplitude 0 mm, em cima da posicao do robo; o ponto de encaixe
+# ficou a 334 mm e nunca foi comandado.
+#
+# CONCLUSAO: a estrategia precisa reenviar para progredir, e reenviar destroi o
+# progresso. Nao ha saida deste lado. A ideia mecanica tem de ser implementada
+# na camada de movimento - um modo "va em linha reta ate este ponto", sem
+# planner e sem time_offset, com o controlador fechando a malha na posicao
+# medida. E o alvo da branch de refatoracao.
+#
 PASSO_MAX = 150.0
 
 # Passo curto so funciona se o robo REAGIR a ele. Medindo a cadeia, ha execucoes
@@ -712,6 +769,45 @@ class OurFreekick(_BaseFreekick):
         self.estado.chute_armado[robot_id] = armado
         return armado
 
+    def _armar_se_der(self, comando, robot_id):
+        """Arma o chute em QUALQUER fase, se a geometria e a direcao permitirem.
+
+        POR QUE ISTO EXISTE - medido em 24/08
+        --------------------------------------
+        O chute so era armado dentro da fase de EMPURRAO. Nas fases 'contornar'
+        e 'encaixar' o codigo chamava deactivate_kick() incondicionalmente.
+
+        Refazendo o teste do grSim quadro a quadro na visao crua, num lote de 12:
+
+            rep     janela aberta   desses ARMADOS   disparou
+            1            130              0            NAO
+            2             28              0            NAO
+            5             14              0            NAO
+            7            118              0            NAO
+
+        290 quadros de geometria perfeita - quase 5 segundos - com o chute
+        armado em ZERO deles. Nao era azar de temporizacao: era impossivel por
+        construcao, porque o robo nao estava na fase que arma.
+
+        O HANDOVER §18 ja prescrevia o contrario: "arme o chute durante toda a
+        aproximacao final. Armar cedo nao custa nada: o grSim so dispara no
+        contato. Recusar armar, sim, custa."
+
+        A TRAVA QUE NAO PODE SAIR: _mira_esta_boa. O teste do chutador do grSim
+        e SIMETRICO - a bola alinhada ao eixo satisfaz o disparo com o robo de
+        frente ou de costas (§18). Sem checar a direcao, ja medimos 6,4 m/s
+        mandando a bola de (2500,0) para (1580,-523), o nosso campo.
+        """
+        if (self._tem_alvo_valido()
+                and self._check_double_touch(robot_id)
+                and self._mira_esta_boa(robot_id)
+                and self._chute_deve_estar_armado(robot_id)):
+            comando.kick = self._forca_do_chute(robot_id)
+        else:
+            self.estado.chute_armado[robot_id] = False
+            comando.deactivate_kick()
+        return comando
+
     def _mira_esta_boa(self, robot_id) -> bool:
         """P11: o robo esta mesmo apontado para o gol?
 
@@ -1072,9 +1168,21 @@ class OurFreekick(_BaseFreekick):
             # HANDOVER §34). Pedir um alvo mais longe para vencer a zona morta
             # e remendo sobre remendo enquanto a malha estiver aberta.
             #
-            # Para religar, troque o return abaixo por:
-            #     if desempacar > d > 1.0:
-            #         return p[0] + dx * desempacar / d, p[1] + dy * desempacar / d
+            # RELIGADA em 25/08, agora que o yy deixou de mascarar o problema.
+            #
+            # Com o feedforward removido (ajuste 'controle'), o yy caiu de 82
+            # para 28,5 mm de mediana e passou a ficar dentro do limite em 7 de
+            # 12 execucoes. Isso deixou o xx sozinho como gargalo: mediana de
+            # 86 mm contra os 31,5 que o grSim exige, com 1 de 12 dentro.
+            #
+            # xx = 86 quer dizer que a bola esta a 161 mm do centro do robo,
+            # quando o contato fisico acontece a 111: ele para 50 mm ANTES de
+            # encostar. E 50 mm com kp=1,5 pedem 0,075 m/s, muito abaixo dos
+            # ~0,35 m/s que o robo precisa para sair do lugar (§16.3). Ele nao
+            # consegue andar esse ultimo trecho - que e exatamente o caso para o
+            # qual esta extensao existe.
+            if desempacar > d > 1.0:
+                return p[0] + dx * desempacar / d, p[1] + dy * desempacar / d
             return alvo_x, alvo_y
         return p[0] + dx * passo / d, p[1] + dy * passo / d
 
@@ -1115,8 +1223,7 @@ class OurFreekick(_BaseFreekick):
         )
         # bola como obstaculo enquanto contorna; o alvo agora esta FORA dela
         self._obstaculos(comando, robot_id, evitar_bola=True)
-        comando.deactivate_kick()
-        return comando
+        return self._armar_se_der(comando, robot_id)
 
     def _empurrar_para_o_gol(self, robot_id):
         """Ja esta atras da bola: empurra na linha do gol e chuta se puder."""
@@ -1307,14 +1414,7 @@ class OurFreekick(_BaseFreekick):
         # O que continua sendo exigido: haver alvo valido (gol livre ou
         # companheiro), nao violar duplo toque, e o corpo estar apontado para a
         # bola dentro da largura da placa.
-        if (self._tem_alvo_valido()
-                and self._check_double_touch(robot_id)
-                and self._chute_deve_estar_armado(robot_id)):
-            comando.kick = self._forca_do_chute(robot_id)
-        else:
-            self.estado.chute_armado[robot_id] = False
-            comando.deactivate_kick()
-        return comando
+        return self._armar_se_der(comando, robot_id)
 
     def _recuar_apos_chute(self, robot_id):
         """Depois de chutar, o cobrador recua e libera a bola."""
@@ -1536,8 +1636,7 @@ class OurFreekick(_BaseFreekick):
             angle=atan2(uy_mira, ux_mira),
         )
         self._obstaculos(comando, robot_id, evitar_bola=True)
-        comando.deactivate_kick()
-        return comando
+        return self._armar_se_der(comando, robot_id)
 
     def _atras_da_bola(self, robot_id) -> bool:
         """O robo esta ATRAS da bola, na linha que leva ao gol?

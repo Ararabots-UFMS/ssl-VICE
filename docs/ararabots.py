@@ -865,8 +865,16 @@ def _criar_gravador():
                 # e problema de estrategia, a outra da cadeia de controle - e
                 # ate agora escolhemos entre elas no palpite.
                 if self.gravando:
+                    # Guarda tambem a VELOCIDADE do setpoint. control.py usa ela
+                    # como feedforward direto (output = feedforward + kp*erro),
+                    # entao ela pode dominar o comando: se a trajetoria carrega
+                    # uma velocidade "errada", o robo anda naquela direcao
+                    # independente do erro de posicao. Sem gravar isto nao da
+                    # para separar as duas hipoteses.
                     self.alvos.append((round(time.monotonic() - self.t0, 4),
-                                       int(c.id), alvo[0], alvo[1]))
+                                       int(c.id), alvo[0], alvo[1],
+                                       float(c.velocity_x) * 1000.0,
+                                       float(c.velocity_y) * 1000.0))
 
         def _drenar_visao_crua(self):
             """Le os quadros de visao do grSim sem passar pelo tracker."""
@@ -1430,7 +1438,8 @@ def erro_de_rastreio(resultado):
     for tc, rid, x, y, _ori in rc:
         por_tc.setdefault(rid, []).append((tc, x, y))
     erros = []
-    for tn, rid, ax, ay in alvos:
+    for reg in alvos:
+        tn, rid, ax, ay = reg[0], reg[1], reg[2], reg[3]
         serie = por_tc.get(rid)
         if not serie:
             continue
@@ -1524,7 +1533,8 @@ def gerar_replay(resultado, destino):
         return list(unicos.values())
 
     alvos_t = sorted((para_tc(tn), [rid, round(ax), round(ay)])
-                     for tn, rid, ax, ay in (resultado.get("alvos") or []))
+                     for tn, rid, ax, ay in
+                     ((r[0], r[1], r[2], r[3]) for r in (resultado.get("alvos") or [])))
     eventos = [{"t": round(para_tc(e["t"]) - t0, 4), **e}
                for e in (resultado.get("eventos_chutador") or [])]
 
@@ -1917,6 +1927,7 @@ def rodar(nome, duracao=12.0):
         "robos_crus": robos_crus,
         "alvos": alvos,
         "janela_chutador": janela,
+        "janelas_kick": janelas_kick,
         "rastreio": rastreio_calc,
         "t_pedido_chute": {str(k): v for k, v in pedido_chute.items()},
         "energia": energia,

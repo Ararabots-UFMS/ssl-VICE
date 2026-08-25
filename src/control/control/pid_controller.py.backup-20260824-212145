@@ -62,34 +62,7 @@ class PIDController:
 
         feedforward = target_velocity
 
-        # >>> ARARABOTS_AJUSTE   (ligado/desligado por: ararabots.sh ajustes on|off controle)
-        #
-        # O FEEDFORWARD DOMINA E APONTA PARA O LUGAR ERRADO.
-        #
-        # 'target_velocity' vem de trajectory.get_state(time_offset) no driver.
-        # Como replan() zera o time_offset a cada chamada (driver.py:331) e
-        # planeja a partir do estado PLANEJADO (nao do medido), o que volta e a
-        # velocidade que o robo tinha quando o plano foi feito. O feedforward
-        # passa a mandar "continue fazendo o que estava fazendo", e isso nunca
-        # se corrige: e realimentacao positiva.
-        #
-        # MEDIDO em duas execucoes, comparando a direcao em que o robo ANDA com:
-        #     a velocidade do setpoint (feedforward):  49 graus e 43 graus
-        #     o erro de posicao:                      145 graus e 136 graus
-        #
-        # Ou seja: o robo acompanha o feedforward e anda ~140 graus AO CONTRARIO
-        # de onde o erro de posicao manda. Ele foge do alvo.
-        #
-        # Magnitudes na mesma faixa, o que explica a dominancia: velocidade do
-        # setpoint com p90 de 223-451 mm/s e maximo de 695, contra kp*erro =
-        # 1,5 * 0,3 m = 450 mm/s. Com o erro pequeno, o feedforward vence.
-        #
-        # Sem o feedforward sobra a malha fechada na posicao medida, que e o que
-        # se quer aqui. O termo faz sentido quando a trajetoria e confiavel -
-        # nao e o caso enquanto o time_offset zerar a cada ciclo.
-        output = proportional + integral_term + derivative
-        #ORIG# output = feedforward + proportional + integral_term + derivative
-        # <<< ARARABOTS_AJUSTE
+        output = feedforward + proportional + integral_term + derivative
 
         output = max(-self.output_limit, min(self.output_limit, output))
 
