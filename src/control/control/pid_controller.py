@@ -3,9 +3,17 @@ from typing import Optional
 
 from new_movement.entities.States import State, Vector2D
 
+# Everything here is in metres and m/s. kp=1 meant a 1m error bought a 1m/s correction
+# and kd=0 meant no velocity feedback at all, which left the controller as feedforward
+# replay with a weak trim. Tune these against the real robots.
+DEFAULT_KP = 4.0
+DEFAULT_KI = 0.0
+DEFAULT_KD = 0.4
+DEFAULT_SLEW_LIMIT = 3.0  # m/s²
+
 
 class PIDController:
-    def __init__(self, kp: float, ki: float, kd: float):
+    def __init__(self, kp: float, ki: float, kd: float, slew_limit: float = 3.0):
         self.kp = kp
         self.ki = ki
         self.kd = kd
@@ -13,9 +21,13 @@ class PIDController:
         self.previous_error: Optional[float] = None
         self.integral: float = 0.0
         self.previous_time: Optional[float] = None
+        self.previous_output: Optional[float] = None
 
         self.integral_limit: float = 1  # Anti Windup
         self.output_limit: float = 3  # Max velocity
+        # m/s². Should match what the robot can actually deliver: a command that steps
+        # faster than that is answered with wheel slip, not acceleration.
+        self.slew_limit: float = slew_limit
 
     def update_params(self, kp: float, ki: float, kd: float):
         self.kp = kp
@@ -26,6 +38,7 @@ class PIDController:
         self.previous_error = None
         self.integral = 0.0
         self.previous_time = None
+        self.previous_output = None
 
     def compute_trajectory_following(
         self,
@@ -62,7 +75,21 @@ class PIDController:
 
         output = max(-self.output_limit, min(self.output_limit, output))
 
+        # A reference discontinuity — a replan, a handoff, the goal moving — would
+        # otherwise reach the wheels as a step. Seeded from the measurement so a fresh
+        # or just-reset controller resumes from where the robot actually is.
+        if self.previous_output is None:
+            self.previous_output = current_velocity
+
+        if dt > 0:
+            max_delta = self.slew_limit * dt
+            output = max(
+                self.previous_output - max_delta,
+                min(self.previous_output + max_delta, output),
+            )
+
         self.previous_error = position_error
+        self.previous_output = output
 
         return output
 
@@ -70,9 +97,15 @@ class PIDController:
 class Vector2DTrajectoryController:
     """2D trajectory following controller with feedforward + feedback"""
 
-    def __init__(self, kp: float = 1.0, ki: float = 0.0, kd: float = 0.0):
-        self.x_controller = PIDController(kp, ki, kd)
-        self.y_controller = PIDController(kp, ki, kd)
+    def __init__(
+        self,
+        kp: float = DEFAULT_KP,
+        ki: float = DEFAULT_KI,
+        kd: float = DEFAULT_KD,
+        slew_limit: float = DEFAULT_SLEW_LIMIT,
+    ):
+        self.x_controller = PIDController(kp, ki, kd, slew_limit)
+        self.y_controller = PIDController(kp, ki, kd, slew_limit)
 
     def update_params(self, kp: float, ki: float, kd: float):
         self.x_controller.update_params(kp, ki, kd)
@@ -114,15 +147,19 @@ class RobotTrajectoryController:
         self.last_targets = {}  # For position triggered reset
         self.reset_threshold = 0.5  # Reset if target jumps > 0.5m
 
-        self.default_kp = 1
-        self.default_ki = 0.0
-        self.default_kd = 0.0
+        self.default_kp = DEFAULT_KP
+        self.default_ki = DEFAULT_KI
+        self.default_kd = DEFAULT_KD
+        self.default_slew_limit = DEFAULT_SLEW_LIMIT
 
     def get_controller(self, robot_id: int) -> Vector2DTrajectoryController:
         """Get or create trajectory controller for robot"""
         if robot_id not in self.trajectory_controllers:
             self.trajectory_controllers[robot_id] = Vector2DTrajectoryController(
-                self.default_kp, self.default_ki, self.default_kd
+                self.default_kp,
+                self.default_ki,
+                self.default_kd,
+                self.default_slew_limit,
             )
         return self.trajectory_controllers[robot_id]
 
