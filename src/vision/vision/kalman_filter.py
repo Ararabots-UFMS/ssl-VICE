@@ -44,7 +44,26 @@ class KalmanFilterClass2D(object):
 
         # The error covariance matrix that is Identity for now. It gets updated based on Q, A and R.
         self.P = np.eye(self.x.shape[0])
-        
+
+    def initialize(self, x: float, y: float, velocity_sd: float = 3000.0):
+        '''
+        Seeds the filter with the first detection of an object.
+
+        Without this the state starts at the origin with P = I, which claims a 1 mm
+        confidence in a position the filter has never measured: the initial gain comes
+        out at ~R^-1 and the estimate crawls to the real position over ~1 s, publishing
+        metres of error in the meantime.
+
+        Position starts at the measurement with the sensor's own variance. A single
+        frame carries no velocity information, so velocity starts at zero with a
+        variance wide enough to cover a robot at full speed.
+        '''
+        self.x = np.matrix([[x], [y], [0.0], [0.0]])
+        self.P = np.matrix([[self.R[0, 0], 0.0, 0.0, 0.0],
+                            [0.0, self.R[1, 1], 0.0, 0.0],
+                            [0.0, 0.0, velocity_sd ** 2, 0.0],
+                            [0.0, 0.0, 0.0, velocity_sd ** 2]])
+
     def predict(self, dt):
         self.B = np.matrix([[(dt**2)/2, 0],
                             [0, (dt**2)/2],
@@ -131,7 +150,16 @@ class KalmanFilterClass1D(object):
         self.R = np.matrix([[a_sd ** 2]])
         # State Covariance matrix
         self.P = np.eye(self.x.shape[0])
-        
+
+    def initialize(self, angle: float, velocity_sd: float = 30.0):
+        '''
+        Seeds the filter with the first orientation measured for an object.
+        Same reasoning as the 2D filter: one frame gives an angle but no angular rate.
+        '''
+        self.x = np.matrix([[self._wrap_angle(float(angle))], [0.0]])
+        self.P = np.matrix([[self.R[0, 0], 0.0],
+                            [0.0, velocity_sd ** 2]])
+
     @staticmethod
     def _wrap_angle(angle: float) -> float:
         """Wraps an angle to the [-pi, pi] range."""

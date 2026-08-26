@@ -81,8 +81,17 @@ class ObjectTracker(object):
         object_.skip_count = 0
         
     def add_object(self, id: ID, x: float, y: float, confidence: float, orientation: Optional[float] = None) -> None:
+        object_ = Object([[x], [y]], id, confidence, orientation = orientation)
+
+        # Seed the filters with this first detection instead of letting them start at
+        # the origin — otherwise a robot that has just been picked up is published
+        # metres away from where it actually is until the estimate converges.
+        object_.KF.initialize(x, y)
+        if not id.is_ball and orientation is not None:
+            object_.orientation_KF.initialize(orientation)
+
         self.objects_id.append(id)
-        self.objects.append(Object([[x], [y]], id, confidence, orientation = orientation))
+        self.objects.append(object_)
     
     def delete_undetected_objects(self, recieved_objects_id: List[ID]) -> None:
         # Walked backwards so the deletions don't shift the indexes still to be
