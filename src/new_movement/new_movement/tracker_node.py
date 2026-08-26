@@ -1,5 +1,6 @@
 import copy
-from typing import Dict, List, Optional
+import math
+from typing import Dict, List, Optional, Tuple
 
 import rclpy
 from rclpy.node import Node
@@ -7,9 +8,10 @@ from rclpy.node import Node
 from movement_interfaces.msg import Trajectory as TrajectoryMsg
 from movement_interfaces.msg import TrajectoryPoint as TrajectoryPointMsg
 from movement_interfaces.msg import GUITrajectories
+from system_interfaces.msg import GameState
 
 from new_movement.entities.Trajectory import Trajectory
-from new_movement.entities.States import State
+from new_movement.entities.States import State, Vector2D
 
 
 def build_overhead_point(
@@ -43,6 +45,40 @@ def build_overhead_point(
     point.wall_stamp = now_sec + (sample_time - time_offset)
     point.trajectory = trajectory_msg
     return point
+
+
+def tracking_error(
+    trajectory: Trajectory,
+    time_offset: float,
+    measured_pos: Vector2D,
+    measurement_age: float,
+) -> Optional[Tuple[float, float]]:
+    """
+    Along- and cross-track error at the instant the measurement was taken.
+
+    Comparing vision against the reference at time_offset would report the vision delay
+    as tracking error, so the reference is evaluated measurement_age seconds back.
+    Along-track is signed: negative means the robot is behind its reference. Returns
+    None when the measurement predates the trajectory.
+    """
+    t_meas = time_offset - measurement_age
+    if t_meas < 0.0 or t_meas > trajectory.get_total_duration():
+        return None
+
+    reference = trajectory.get_state(t_meas)
+    if reference is None:
+        return None
+
+    dx = measured_pos.x - reference.position.x
+    dy = measured_pos.y - reference.position.y
+
+    speed = math.hypot(reference.velocity.x, reference.velocity.y)
+    if speed < 1e-6:
+        # No heading to project onto; report it all as cross-track.
+        return 0.0, math.hypot(dx, dy)
+
+    ux, uy = reference.velocity.x / speed, reference.velocity.y / speed
+    return dx * ux + dy * uy, dx * -uy + dy * ux
 
 
 def build_control_reference_point(
@@ -79,18 +115,41 @@ class TrackerNode(Node):
 
         # dt_late per activated plan: the measured latency lookahead_time should follow.
         self._handoff_latencies: List[float] = []
+        # (along, cross) per robot per vision frame, for sizing the divergence threshold.
+        self._tracking_errors: Dict[int, List[Tuple[float, float]]] = {}
 
         self.traj_sub = self.create_subscription(TrajectoryMsg, "planner/trajectories", self.trajectory_callback, 10)
-        
+        self.game_state_sub = self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+
         self.overhead_pub = self.create_publisher(TrajectoryPointMsg, "movement_tracker/overhead", 10)
         self.control_reference_pub = self.create_publisher(TrajectoryPointMsg, "movement_tracker/control_reference", 10)
         self.gui_trajectories_pub = self.create_publisher(GUITrajectories, "gui/trajectories", 10)
 
         self.timer = self.create_timer(0.01, self.timer_callback)
         self.gui_timer = self.create_timer(0.1, self._update_gui_trajectories)
-        self.latency_timer = self.create_timer(5.0, self._log_handoff_latency)
+        self.diagnostics_timer = self.create_timer(5.0, self._log_diagnostics)
 
         self.get_logger().info("TrackerNode ONLINE")
+
+    def game_state_callback(self, msg: GameState):
+        # Sampled here rather than in the timer so there is one measurement per vision
+        # frame, not one per tracker tick over the same stale frame.
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        measurement_age = now_sec - msg.vision_wall_stamp
+
+        for robot in msg.ally_robots:
+            data = self.robot_data.get(robot.id)
+            if data is None or data.get("trajectory") is None:
+                continue
+
+            error = tracking_error(
+                data["trajectory"],
+                float(data.get("time_offset", 0.0)),
+                Vector2D(robot.position_x, robot.position_y),
+                measurement_age,
+            )
+            if error is not None:
+                self._tracking_errors.setdefault(robot.id, []).append(error)
 
     def trajectory_callback(self, msg: TrajectoryMsg):
         if not msg.segments:
@@ -243,6 +302,10 @@ class TrackerNode(Node):
         data["time_offset"] = new_offset
         data["pending"] = None
 
+    def _log_diagnostics(self):
+        self._log_handoff_latency()
+        self._log_tracking_error()
+
     def _log_handoff_latency(self):
         if not self._handoff_latencies:
             return
@@ -256,6 +319,22 @@ class TrackerNode(Node):
             f"mean {1000 * sum(samples) / len(samples):.1f}ms, "
             f"p95 {1000 * p95:.1f}ms, max {1000 * samples[-1]:.1f}ms"
         )
+
+    def _log_tracking_error(self):
+        errors, self._tracking_errors = self._tracking_errors, {}
+
+        for robot_id, samples in sorted(errors.items()):
+            if not samples:
+                continue
+
+            along = [sample[0] for sample in samples]
+            cross = [abs(sample[1]) for sample in samples]
+
+            self.get_logger().info(
+                f"Robot {robot_id} tracking error over {len(samples)} frames: "
+                f"along mean {sum(along) / len(along):.1f}mm worst {min(along):.1f}mm, "
+                f"cross mean {sum(cross) / len(cross):.1f}mm worst {max(cross):.1f}mm"
+            )
 
     def _update_gui_trajectories(self):
         msg = GUITrajectories()

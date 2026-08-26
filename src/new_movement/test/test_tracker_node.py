@@ -1,3 +1,4 @@
+import math
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,6 +10,7 @@ from new_movement.tracker_node import (
     TrackerNode,
     build_control_reference_point,
     build_overhead_point,
+    tracking_error,
 )
 
 
@@ -26,6 +28,7 @@ def _tracker() -> TrackerNode:
     tracker.overhead_pub = MagicMock()
     tracker.control_reference_pub = MagicMock()
     tracker._handoff_latencies = []
+    tracker._tracking_errors = {}
     return tracker
 
 
@@ -186,3 +189,102 @@ class TestOverheadFreshness:
         tracker._update_active_trajectory(1, data, dt=0.01, now_sec=500.0, lookahead=0.2)
 
         assert not tracker.overhead_pub.publish.called
+
+
+class TestTrackingError:
+    """
+    Vision is delayed, so the reference has to be evaluated at the instant the
+    measurement was taken. Comparing against the reference at time_offset would report
+    the delay itself as tracking error.
+    """
+
+    OFFSET = 1.0
+    AGE = 0.1
+
+    def _setup(self):
+        trajectory = _trajectory(4000.0)
+        reference = trajectory.get_state(self.OFFSET - self.AGE)
+        return trajectory, reference
+
+    def _error(self, trajectory, dx, dy):
+        reference = trajectory.get_state(self.OFFSET - self.AGE)
+        measured = Vector2D(reference.position.x + dx, reference.position.y + dy)
+        return tracking_error(trajectory, self.OFFSET, measured, self.AGE)
+
+    def test_robot_on_its_reference_has_no_error(self):
+        trajectory, _ = self._setup()
+        along, cross = self._error(trajectory, 0.0, 0.0)
+
+        assert along == pytest.approx(0.0, abs=1e-6)
+        assert cross == pytest.approx(0.0, abs=1e-6)
+
+    def test_the_measurement_delay_is_not_counted_as_error(self):
+        trajectory, reference = self._setup()
+
+        # Comparing against the reference at time_offset instead reports one delay's
+        # worth of travel as error.
+        naive = trajectory.get_state(self.OFFSET).position.distance(reference.position)
+        along, cross = self._error(trajectory, 0.0, 0.0)
+
+        assert naive > 20.0
+        assert math.hypot(along, cross) < naive / 100.0
+
+    def test_lagging_robot_reports_negative_along_track(self):
+        trajectory, _ = self._setup()
+        along, cross = self._error(trajectory, -30.0, 0.0)
+
+        assert along == pytest.approx(-30.0, abs=1e-6)
+        assert cross == pytest.approx(0.0, abs=1e-6)
+
+    def test_sideways_displacement_reports_cross_track(self):
+        trajectory, _ = self._setup()
+        along, cross = self._error(trajectory, 0.0, 50.0)
+
+        assert along == pytest.approx(0.0, abs=1e-6)
+        assert abs(cross) == pytest.approx(50.0, abs=1e-6)
+
+    def test_measurement_older_than_the_trajectory_is_dropped(self):
+        trajectory = _trajectory(4000.0)
+
+        assert tracking_error(trajectory, 0.0, Vector2D(0, 0), measurement_age=0.1) is None
+
+
+class TestTrackingErrorSampling:
+    def test_one_sample_per_vision_frame_per_robot(self):
+        tracker = _tracker()
+        tracker.get_clock = MagicMock()
+        tracker.get_clock().now().nanoseconds = int(100.1 * 1e9)
+
+        trajectory = _trajectory(4000.0)
+        tracker.robot_data = {
+            1: {"trajectory": trajectory, "time_offset": 1.0},
+        }
+
+        robot = MagicMock()
+        robot.id = 1
+        robot.position_x, robot.position_y = 0.0, 0.0
+        msg = MagicMock()
+        msg.ally_robots = [robot]
+        msg.vision_wall_stamp = 100.0
+
+        tracker.game_state_callback(msg)
+        tracker.game_state_callback(msg)
+
+        assert len(tracker._tracking_errors[1]) == 2
+
+    def test_robots_without_a_trajectory_are_skipped(self):
+        tracker = _tracker()
+        tracker.get_clock = MagicMock()
+        tracker.get_clock().now().nanoseconds = int(100.1 * 1e9)
+        tracker.robot_data = {}
+
+        robot = MagicMock()
+        robot.id = 7
+        robot.position_x, robot.position_y = 0.0, 0.0
+        msg = MagicMock()
+        msg.ally_robots = [robot]
+        msg.vision_wall_stamp = 100.0
+
+        tracker.game_state_callback(msg)
+
+        assert tracker._tracking_errors == {}
