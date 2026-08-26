@@ -66,6 +66,8 @@ class ObjectTracker(object):
         # None until the first packet arrives. Starting at 0 made the first dt the
         # whole Unix epoch, which blew the state up to ~1e17 mm for one frame.
         self.last_time_stamp = None
+        # ROS-clock instant matching last_time_stamp, so consumers can age the data.
+        self.last_wall_stamp = 0.0
         self.dt = 0.0
 
     def update_object(self, object_: Object, x: float, y: float, confidence: float, orientation: Optional[float] = None) -> None:
@@ -130,9 +132,19 @@ class ObjectTracker(object):
         
         return id
 
-    def update(self, message: SSL_WrapperPacket) -> VisionMessage:
+    def update(self, message: SSL_WrapperPacket, wall_stamp: float = 0.0) -> VisionMessage:
         '''
         Updates the position and velocity of objects based on the detections.
+
+        Every filter is propagated from the previous capture instant to this one
+        BEFORE the new detections are fused in, so each measurement is compared
+        against a prior that covers exactly the interval that just elapsed. The old
+        order (fuse first, propagate afterwards) compared each measurement against a
+        prior stretched by the *previous* interval and left the published state
+        extrapolated one frame past its own timestamp.
+
+        wall_stamp is the ROS-clock reading at packet arrival; it labels the same
+        instant as t_capture in a clock the rest of the system can compare against.
         '''
         # TODO Implement a Hungarian algorithm to give the balls an id?
         recieved_objects_id, time_stamp = [], message.detection.t_capture
@@ -141,6 +153,9 @@ class ObjectTracker(object):
         # seeds the clock and propagates nothing.
         self.dt = 0.0 if self.last_time_stamp is None else time_stamp - self.last_time_stamp
         self.last_time_stamp = time_stamp
+        self.last_wall_stamp = wall_stamp
+
+        self.predict()
 
         if message.detection.robots_yellow:
             for yellow_robot in message.detection.robots_yellow:
@@ -159,5 +174,3 @@ class ObjectTracker(object):
             recieved_objects_id.append(ball_id)
                 
         self.delete_undetected_objects(recieved_objects_id)
-
-        self.predict()

@@ -15,8 +15,15 @@ from vision.proto.messages_robocup_ssl_geometry_pb2 import SSL_GeometryData
 from typing import List
 
 
-def wrap_message(objects: List[Object]) -> VisionMessage:
+def wrap_message(
+    objects: List[Object], capture_stamp: float = 0.0, wall_stamp: float = 0.0
+) -> VisionMessage:
     message = VisionMessage()
+
+    # The estimates below are valid at this instant, not at the moment this message is
+    # published — the two differ by however long the packet has been sitting here.
+    message.capture_stamp = float(capture_stamp)
+    message.wall_stamp = float(wall_stamp)
 
     for object_ in objects:
         if object_.id.is_ball:
