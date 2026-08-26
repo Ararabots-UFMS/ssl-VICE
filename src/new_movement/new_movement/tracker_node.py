@@ -224,9 +224,6 @@ class TrackerNode(Node):
             return
 
         total_duration = trajectory.get_total_duration()
-        if total_duration <= 0:
-            return
-
         time_offset = float(data.get("time_offset", 0.0))
 
         # Publish Control Reference
@@ -239,6 +236,12 @@ class TrackerNode(Node):
         )
         if control_ref is not None:
             self.control_reference_pub.publish(control_ref)
+
+        # A zero-duration plan means the robot is already at the goal. Its reference
+        # still has to go out — bailing before that left the controller chasing the
+        # previous, moving one — but there is nothing to predict or advance.
+        if total_duration <= 0:
+            return
 
         # Publish Overhead Point
         if time_offset < total_duration:
@@ -299,7 +302,7 @@ class TrackerNode(Node):
 
         data["trajectory"] = pending_traj
         data["trajectory_msg"] = pending["trajectory_msg"]
-        data["time_offset"] = new_offset
+        data["time_offset"] = float(new_offset)
         data["pending"] = None
 
     def _log_diagnostics(self):
@@ -352,7 +355,7 @@ class TrackerNode(Node):
             pending_trajectories.append(
                 pending["trajectory_msg"] if pending else TrajectoryMsg()
             )
-            time_offsets.append(data.get("time_offset", 0.0))
+            time_offsets.append(float(data.get("time_offset", 0.0)))
 
         msg.current_trajectories = current_trajectories
         msg.pending_trajectories = pending_trajectories

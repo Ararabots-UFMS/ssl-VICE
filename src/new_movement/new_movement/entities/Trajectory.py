@@ -106,7 +106,9 @@ class TrajectorySegment:
     def get_local_duration(self) -> float:
         """Obtém a duração total deste segmento."""
         # REFACTOR: Usando sum() para mais clareza e eficiência.
-        return sum(p.duration for p in self.motion_path.motion_path)
+        # O 0.0 inicial importa: um segmento sem primitivas (start == goal) devolvia o
+        # int 0, que viaja até os campos float das mensagens ROS e quebra a publicação.
+        return sum((p.duration for p in self.motion_path.motion_path), 0.0)
 
     def get_total_duration(self) -> float:
         """Obtém o tempo total da trajetória a partir deste segmento."""

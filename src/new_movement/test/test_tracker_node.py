@@ -288,3 +288,61 @@ class TestTrackingErrorSampling:
         tracker.game_state_callback(msg)
 
         assert tracker._tracking_errors == {}
+
+
+def _stationary_trajectory() -> Trajectory:
+    """A plan whose start is already its goal: no primitives, zero duration."""
+    generator = TrajectoryGenerator()
+    at_rest = State(Vector2D(1000, 500), Vector2D(0, 0))
+    return Trajectory(generator.generate(at_rest, at_rest))
+
+
+class TestZeroDurationPlans:
+    """
+    A start == goal plan has an empty motion path, and sum() of nothing is int 0. That
+    int reached GUITrajectories.time_offsets, whose field is float, and killed the node.
+    """
+
+    def test_duration_is_a_float(self):
+        assert isinstance(_stationary_trajectory().get_total_duration(), float)
+
+    def test_activating_one_keeps_time_offset_a_float(self):
+        tracker = _tracker()
+        trajectory = _stationary_trajectory()
+        data = {"pending": _pending(trajectory, 100.0)}
+
+        tracker._handle_pending_handoff(1, data, now_sec=101.0, lookahead=0.2)
+
+        assert isinstance(data["time_offset"], float)
+
+    def test_the_gui_message_only_carries_floats(self):
+        tracker = _tracker()
+        tracker.gui_trajectories_pub = MagicMock()
+        trajectory = _stationary_trajectory()
+        tracker.robot_data = {
+            1: {
+                "trajectory": trajectory,
+                "trajectory_msg": trajectory.to_msg(1),
+                "time_offset": 0,
+            }
+        }
+
+        tracker._update_gui_trajectories()
+
+        msg = tracker.gui_trajectories_pub.publish.call_args[0][0]
+        assert all(isinstance(offset, float) for offset in msg.time_offsets)
+
+    def test_the_control_reference_is_still_published(self):
+        tracker = _tracker()
+        trajectory = _stationary_trajectory()
+        data = {
+            "trajectory": trajectory,
+            "trajectory_msg": trajectory.to_msg(1),
+            "time_offset": 0.0,
+        }
+
+        tracker._update_active_trajectory(1, data, dt=0.01, now_sec=500.0, lookahead=0.2)
+
+        # Bailing before this left the controller chasing the previous, moving reference.
+        assert tracker.control_reference_pub.publish.called
+        assert not tracker.overhead_pub.publish.called
