@@ -36,7 +36,7 @@ class PlannerNode(Node):
         
         # Tools
         self.planner = Planner()
-        self.factory = ObstacleFactory()
+        self.factory = ObstacleFactory(logger=self.get_logger())
         self.par_executor = ThreadPoolExecutor(max_workers=self.get_parameter('max_threads').value)
         
         # ROS Communication
@@ -136,15 +136,24 @@ class PlannerNode(Node):
             )
 
         # Generate Obstacles
-        obstacles = self.factory.create_obstacles(
-            robot_id=robot_id,
-            config=target,
-            geometry=self.game_state.geometry if self.game_state else None,
-            balls=self.game_state.balls if self.game_state else [],
-            enemy_robots=self.game_state.enemy_robots if self.game_state else [],
-            ally_robots=self.game_state.ally_robots if self.game_state else [],
-            ally_info=self.cur_overhead_points
-        )
+        # A safety-critical obstacle (field border, penalty area) that fails to build
+        # aborts the plan: driving with an incomplete obstacle set is worse than not
+        # issuing a new trajectory at all.
+        try:
+            obstacles = self.factory.create_obstacles(
+                robot_id=robot_id,
+                config=target,
+                geometry=self.game_state.geometry if self.game_state else None,
+                balls=self.game_state.balls if self.game_state else [],
+                enemy_robots=self.game_state.enemy_robots if self.game_state else [],
+                ally_robots=self.game_state.ally_robots if self.game_state else [],
+                ally_info=self.cur_overhead_points
+            )
+        except Exception as e:
+            self.get_logger().warn(
+                f"Could not build the obstacle set for robot {robot_id}, skipping plan: {e}"
+            )
+            return None
 
         # Solve
         try:

@@ -35,7 +35,7 @@ class OptimizerNode(Node):
         self.game_state: Optional[GameState] = None
         self.cur_targets: Optional[TargetArray] = None
 
-        self.factory = ObstacleFactory()
+        self.factory = ObstacleFactory(logger=self.get_logger())
 
         self.optimizer = TrajectoryOptimizer()
         self.generator = TrajectoryGenerator()

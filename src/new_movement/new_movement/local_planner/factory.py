@@ -11,8 +11,14 @@ from new_movement.entities.Trajectory import Trajectory
 
 
 class ObstacleFactory:
-    def __init__(self):
-        pass
+    def __init__(self, logger=None):
+        # Optional rclpy logger. Obstacle construction failures used to be swallowed
+        # silently, which let a robot plan with no field border at all.
+        self.logger = logger
+
+    def _warn(self, message: str) -> None:
+        if self.logger is not None:
+            self.logger.warn(message)
 
     def create_obstacles(
         self,
@@ -28,28 +34,26 @@ class ObstacleFactory:
         ally_info = ally_info or {}
 
         # 1. Field Border (Always on if geometry exists)
+        # Safety critical: a failure here propagates so the caller drops the plan
+        # instead of driving a robot that believes the field is unbounded.
         if geometry:
-            try:
-                obstacles.append(FieldBorderObstacle(geometry))
-            except Exception:
-                pass
+            obstacles.append(FieldBorderObstacle(geometry))
 
         # 2. Toggleable Penalty Area
         planning_opts = getattr(config, 'planning_options', config)
-        
+
+        # Safety critical as well: entering the penalty area is a foul, so a broken
+        # obstacle must abort planning rather than silently allow the shortcut.
         if getattr(planning_opts, 'avoid_penalty_area', True) and geometry:
-            try:
-                obstacles.append(PenaltyAreaObstacle(geometry, FieldSide.RIGHT))
-                obstacles.append(PenaltyAreaObstacle(geometry, FieldSide.LEFT))
-            except Exception:
-                pass
+            obstacles.append(PenaltyAreaObstacle(geometry, FieldSide.RIGHT))
+            obstacles.append(PenaltyAreaObstacle(geometry, FieldSide.LEFT))
 
         # 3. Toggleable Center Area
         if getattr(planning_opts, 'avoid_center_area', False):
             try:
                 obstacles.append(GenericCircleObstacle(Vector2D(0, 0), 500))
-            except Exception:
-                pass
+            except Exception as e:
+                self._warn(f"Could not build the center area obstacle: {e}")
 
         # 4. Ball (Usually always on)
         if getattr(planning_opts, 'avoid_ball', True) and balls:
@@ -58,8 +62,8 @@ class ObstacleFactory:
                 obstacles.append(
                     GenericCircleObstacle(Vector2D(ball.position_x, ball.position_y), 60)
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                self._warn(f"Could not build the ball obstacle: {e}")
 
         # 5. Enemy Robots (Always on)
         for enemy in enemy_robots:
@@ -70,8 +74,8 @@ class ObstacleFactory:
                 )
                 # radius = 90 (enemy robot) + 90 (own robot) + 20 (safety) = 200
                 obstacles.append(EnemyRobotObstacle(state, radius=200))
-            except Exception:
-                pass
+            except Exception as e:
+                self._warn(f"Could not build the obstacle for enemy robot: {e}")
 
         # 6. Ally Robots (With Trajectory Support)
         for ally in ally_robots:
@@ -103,7 +107,7 @@ class ObstacleFactory:
                 else:
                     # Fallback if no tracker info available
                     obstacles.append(EnemyRobotObstacle(state, radius=200))
-            except Exception:
-                pass
+            except Exception as e:
+                self._warn(f"Could not build the obstacle for ally robot {a_id}: {e}")
 
         return obstacles
