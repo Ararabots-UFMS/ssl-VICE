@@ -44,15 +44,17 @@ class TrajectorySegment:
     def add_child(self, child) -> None:
         """Adiciona um segmento filho, garantindo a continuidade da trajetória."""
         local_destination = self.get_local_destination()
-        # Verifica a continuidade da posição e velocidade
-        if (
-            local_destination.position.distance(child.init_pos) < 1e-3
-            or local_destination.velocity.distance(child.init_vel) < 1e-3
-        ):
+        # Verifica a continuidade da posição E da velocidade: as duas precisam bater,
+        # senão um segmento que termina metros longe do filho é aceito só porque as
+        # velocidades coincidem (o caso comum de ambas serem zero).
+        position_gap = local_destination.position.distance(child.init_pos)
+        velocity_gap = local_destination.velocity.distance(child.init_vel)
+        if position_gap < 1e-3 and velocity_gap < 1e-3:
             self.child = child
         else:
             raise Exception(
-                f"Attempting to add a non continuous trajectory {local_destination.position.distance(child.init_pos)}"
+                f"Attempting to add a non continuous trajectory "
+                f"(position gap {position_gap}, velocity gap {velocity_gap})"
             )
 
     def get_state(self, t: float) -> State:
