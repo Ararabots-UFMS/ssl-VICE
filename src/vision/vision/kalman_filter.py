@@ -139,7 +139,10 @@ class KalmanFilterClass1D(object):
     This version is modified to handle the circular nature of angles in the [-pi, pi] range
     and uses a numerically stable covariance update to prevent divergence.
     '''
-    def __init__(self, a_sd: float = 0.1, u: float = 0.0, sd_acceleration: float = 1.0):
+    # a_sd is ssl-vision's orientation noise (~0.02 rad), sd_acceleration the angular
+    # acceleration the robot can actually reach. At 0.1/1.0 the filter trusted a
+    # constant-rate model over the measurements and lagged badly through every turn.
+    def __init__(self, a_sd: float = 0.02, u: float = 0.0, sd_acceleration: float = 50.0):
         self.sd_acceleration = sd_acceleration
         self.u = u
         # State vector: [angle; angular velocity]

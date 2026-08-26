@@ -138,3 +138,77 @@ class TestObjectDeletion:
             assert len(tracker.objects_id) == len(tracker.objects)
 
         assert tracker.objects_id == []
+
+
+class TestOrientationTuning:
+    """
+    The orientation filter feeds the inverse kinematics, so heading error rotates the
+    executed velocity sideways. Its old tuning trusted a constant-rate model far more
+    than the measurements, which is only correct while the rate is actually constant.
+    """
+
+    DT = 1 / 60.0
+    MEASUREMENT_SD = 0.01  # rad, ssl-vision orientation noise
+    ALPHA = 50.0           # rad/s², angular acceleration
+    RATE = 10.0            # rad/s
+
+    def _spin(self):
+        """Accelerate to RATE, hold, decelerate back to rest."""
+        ramp = int(self.RATE / self.ALPHA / self.DT)
+        steps = 180
+        angle, omega, out = 0.0, 0.0, []
+        for k in range(steps):
+            if k < ramp:
+                alpha = self.ALPHA
+            elif k < steps - ramp:
+                alpha = 0.0
+            else:
+                alpha = -self.ALPHA
+            omega += alpha * self.DT
+            angle += omega * self.DT
+            out.append(angle)
+        return out
+
+    def _worst_error(self, kf, seed=3):
+        rng = np.random.default_rng(seed)
+        angles = self._spin()
+        kf.initialize(KalmanFilterClass1D._wrap_angle(angles[0]))
+
+        worst = 0.0
+        for angle in angles:
+            noisy = KalmanFilterClass1D._wrap_angle(
+                angle + rng.normal(0.0, self.MEASUREMENT_SD)
+            )
+            kf.predict(self.DT)
+            kf.update(np.matrix([[noisy]]))
+            error = KalmanFilterClass1D._wrap_angle(
+                kf.x[0, 0] - KalmanFilterClass1D._wrap_angle(angle)
+            )
+            worst = max(worst, abs(error))
+        return np.degrees(worst)
+
+    def test_the_default_tuning_holds_heading_through_a_spin(self):
+        worst = self._worst_error(KalmanFilterClass1D())
+
+        # 5deg at 2000mm/s is ~175mm/s of sideways velocity through the kinematics.
+        assert worst < 5.0
+
+    def test_the_old_tuning_would_not(self):
+        worst = self._worst_error(KalmanFilterClass1D(a_sd=0.1, sd_acceleration=1.0))
+
+        assert worst > 20.0
+
+    def test_a_still_robot_is_still_smoothed(self):
+        rng = np.random.default_rng(5)
+        kf = KalmanFilterClass1D()
+        kf.initialize(0.0)
+
+        errors = []
+        for _ in range(600):
+            kf.predict(self.DT)
+            kf.update(np.matrix([[rng.normal(0.0, self.MEASUREMENT_SD)]]))
+            errors.append(abs(kf.x[0, 0]))
+
+        # Responsiveness costs some jitter, but the estimate must still beat the raw
+        # measurement it is filtering.
+        assert np.mean(errors) < self.MEASUREMENT_SD
