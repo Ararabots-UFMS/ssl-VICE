@@ -1,3 +1,5 @@
+import random
+
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
@@ -9,7 +11,7 @@ from new_movement.local_planner.optimizer import TrajectoryOptimizer
 from new_movement.local_planner.planner import Planner, SolverConfig
 from new_movement.local_planner.factory import ObstacleFactory
 
-from new_movement.entities.States import State, Vector2D
+from new_movement.entities.States import State, Vector2D, MoveConstraints
 from new_movement.entities.Trajectory import Trajectory, TrajectorySegment
 from new_movement.entities.StaticObstacle import GenericCircleObstacle, StaticObstacle
 from new_movement.entities.DynamicObstacles import EnemyRobotObstacle
@@ -27,6 +29,99 @@ def sampler():
 def obstacles():
     # A circle obstacle at (1000, 0) with radius 200
     return [GenericCircleObstacle(Vector2D(1000, 0), 200, padding=0)]
+
+class TestTrajectoryGeneratorRegression:
+    """
+    Guards the constraint signs. With a negative bound on one axis the trapezoidal
+    steer brakes the wrong way and stops enforcing the velocity cap, which used to
+    leave ~65% of the generated trajectories short of their goal without ever
+    raising. These tests are cheap enough to run on every commit.
+    """
+
+    FIELD_HALF_LENGTH = 6000.0
+    FIELD_HALF_WIDTH = 4500.0
+
+    @pytest.fixture
+    def planner_generator(self):
+        config = SolverConfig()
+        return TrajectoryGenerator(
+            MoveConstraints(config.max_velocity, config.max_acceleration)
+        ), config
+
+    def _random_state(self, rng, max_velocity):
+        return State(
+            Vector2D(
+                rng.uniform(-self.FIELD_HALF_LENGTH, self.FIELD_HALF_LENGTH),
+                rng.uniform(-self.FIELD_HALF_WIDTH, self.FIELD_HALF_WIDTH),
+            ),
+            Vector2D(
+                rng.uniform(-max_velocity.x, max_velocity.x),
+                rng.uniform(-max_velocity.y, max_velocity.y),
+            ),
+        )
+
+    def test_generated_trajectories_reach_the_goal(self, planner_generator):
+        generator, config = planner_generator
+        rng = random.Random(0)
+
+        for _ in range(2000):
+            start = self._random_state(rng, config.max_velocity)
+            goal = State(
+                self._random_state(rng, config.max_velocity).position, Vector2D(0.0, 0.0)
+            )
+
+            destination = generator.generate(start, goal).get_local_destination()
+
+            assert destination.position.distance(goal.position) < 1.0, (
+                f"start={start} goal={goal} reached={destination}"
+            )
+            assert destination.velocity.distance(goal.velocity) < 1.0, (
+                f"start={start} goal={goal} reached={destination}"
+            )
+
+    def test_velocity_limit_is_enforced(self, planner_generator):
+        generator, config = planner_generator
+        start = State(Vector2D(0.0, 0.0), Vector2D(0.0, 0.0))
+        goal = State(Vector2D(4000.0, 4000.0), Vector2D(0.0, 0.0))
+
+        segment = generator.generate(start, goal)
+
+        duration = segment.get_total_duration()
+        for t in np.arange(0.0, duration, 0.01):
+            velocity = segment.get_state(float(t)).velocity
+            assert abs(velocity.x) <= config.max_velocity.x + 1.0
+            assert abs(velocity.y) <= config.max_velocity.y + 1.0
+
+
+class TestSolverConfig:
+    def test_rejects_negative_velocity_bound(self):
+        with pytest.raises(ValueError):
+            SolverConfig(max_velocity=Vector2D(2000.0, -2000.0))
+
+    def test_rejects_negative_acceleration_bound(self):
+        with pytest.raises(ValueError):
+            SolverConfig(max_acceleration=Vector2D(1500.0, -1500.0))
+
+    def test_defaults_are_independent_between_instances(self):
+        first, second = SolverConfig(), SolverConfig()
+        assert first.max_velocity is not second.max_velocity
+
+
+class TestTrajectoryContinuity:
+    def test_add_child_rejects_a_position_gap(self, generator):
+        start = State(Vector2D(0, 0), Vector2D(0, 0))
+        goal = State(Vector2D(1000, 0), Vector2D(0, 0))
+        segment = generator.generate(start, goal)
+
+        # Same (zero) velocity as the parent's endpoint, but three metres away.
+        detached = generator.generate(
+            State(Vector2D(4000, 0), Vector2D(0, 0)),
+            State(Vector2D(5000, 0), Vector2D(0, 0)),
+        )
+
+        with pytest.raises(Exception):
+            segment.add_child(detached)
+
 
 class TestCollisionEngine:
     def test_no_collision(self, generator):
