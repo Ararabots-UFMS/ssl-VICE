@@ -1,19 +1,44 @@
+from unittest.mock import MagicMock
+
+import pytest
+
 from new_movement.entities.States import State, Vector2D
 from new_movement.entities.Trajectory import Trajectory
 from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
 from new_movement.tracker_node import (
+    TrackerNode,
     build_control_reference_point,
     build_overhead_point,
 )
 
 
-def test_build_overhead_point():
+def _trajectory(distance: float = 1000.0) -> Trajectory:
     generator = TrajectoryGenerator()
     start = State(Vector2D(0, 0), Vector2D(0, 0))
-    goal = State(Vector2D(1000, 0), Vector2D(0, 0))
-    segment = generator.generate(start, goal)
-    trajectory = Trajectory(segment)
+    goal = State(Vector2D(distance, 0), Vector2D(0, 0))
+    return Trajectory(generator.generate(start, goal))
 
+
+def _tracker() -> TrackerNode:
+    """A TrackerNode without the ROS machinery, as in test_movement_manager."""
+    tracker = TrackerNode.__new__(TrackerNode)
+    tracker.get_logger = MagicMock()
+    tracker.overhead_pub = MagicMock()
+    tracker.control_reference_pub = MagicMock()
+    tracker._handoff_latencies = []
+    return tracker
+
+
+def _pending(trajectory: Trajectory, handoff_stamp: float) -> dict:
+    return {
+        "trajectory": trajectory,
+        "trajectory_msg": trajectory.to_msg(1),
+        "handoff_stamp": handoff_stamp,
+    }
+
+
+def test_build_overhead_point():
+    trajectory = _trajectory()
     msg = trajectory.to_msg(robot_id=1)
     point = build_overhead_point(
         1, msg, trajectory, time_offset=0.0, lookahead_time=0.1, now_sec=500.0
@@ -26,11 +51,7 @@ def test_build_overhead_point():
 
 
 def test_build_control_reference_point():
-    generator = TrajectoryGenerator()
-    start = State(Vector2D(0, 0), Vector2D(0, 0))
-    goal = State(Vector2D(1000, 0), Vector2D(0, 0))
-    segment = generator.generate(start, goal)
-    trajectory = Trajectory(segment)
+    trajectory = _trajectory()
     msg = trajectory.to_msg(robot_id=2)
 
     state = State(Vector2D(1500, -500), Vector2D(300, -200))
@@ -44,3 +65,124 @@ def test_build_control_reference_point():
     assert point.vel.y == -200
     assert point.timestamp == 0.5
     assert len(point.trajectory.segments) > 0
+
+
+class TestHandoffClamping:
+    """
+    A plan that arrives later than its own duration used to be discarded, leaving the
+    robot driving the previous trajectory to the previous goal. Short corrective moves
+    have the shortest durations, so they were the ones most often thrown away.
+    """
+
+    def test_late_plan_is_activated_at_its_goal(self):
+        tracker = _tracker()
+        trajectory = _trajectory(200.0)
+        duration = trajectory.get_total_duration()
+        data = {"pending": _pending(trajectory, 100.0)}
+
+        tracker._handle_pending_handoff(
+            1, data, now_sec=100.0 + duration + 1.0, lookahead=0.2
+        )
+
+        assert data["trajectory"] is trajectory
+        assert data["time_offset"] == pytest.approx(duration)
+        assert data["pending"] is None
+
+    def test_late_plan_replaces_the_previous_goal(self):
+        tracker = _tracker()
+        old = _trajectory(5000.0)
+        new = _trajectory(200.0)
+        duration = new.get_total_duration()
+        data = {
+            "trajectory": old,
+            "trajectory_msg": old.to_msg(1),
+            "time_offset": 0.0,
+            "pending": _pending(new, 100.0),
+        }
+
+        tracker._handle_pending_handoff(
+            1, data, now_sec=100.0 + duration + 1.0, lookahead=0.2
+        )
+
+        assert data["trajectory"] is new
+        reference = new.get_state(data["time_offset"]).position
+        assert reference.distance(new.get_destination().position) < 1.0
+
+    def test_on_time_plan_starts_at_its_own_age(self):
+        tracker = _tracker()
+        trajectory = _trajectory(3000.0)
+        data = {"pending": _pending(trajectory, 100.0)}
+
+        tracker._handle_pending_handoff(1, data, now_sec=100.05, lookahead=0.2)
+
+        assert data["time_offset"] == pytest.approx(0.05)
+
+    def test_handoff_in_the_future_waits(self):
+        tracker = _tracker()
+        data = {"pending": _pending(_trajectory(3000.0), 100.0)}
+
+        tracker._handle_pending_handoff(1, data, now_sec=99.9, lookahead=0.2)
+
+        assert data["pending"] is not None
+        assert "trajectory" not in data
+
+    def test_unstamped_plan_starts_at_zero(self):
+        tracker = _tracker()
+        data = {"pending": _pending(_trajectory(3000.0), 0.0)}
+
+        tracker._handle_pending_handoff(1, data, now_sec=100.0, lookahead=0.2)
+
+        assert data["time_offset"] == pytest.approx(0.0)
+        assert tracker._handoff_latencies == []
+
+
+class TestHandoffLatency:
+    def test_latency_is_recorded_per_activated_plan(self):
+        tracker = _tracker()
+        for stamp in (100.0, 100.5):
+            data = {"pending": _pending(_trajectory(3000.0), stamp)}
+            tracker._handle_pending_handoff(1, data, now_sec=stamp + 0.04, lookahead=0.2)
+
+        assert tracker._handoff_latencies == [
+            pytest.approx(0.04),
+            pytest.approx(0.04),
+        ]
+
+    def test_summary_clears_the_window(self):
+        tracker = _tracker()
+        tracker._handoff_latencies = [0.01, 0.02, 0.03]
+
+        tracker._log_handoff_latency()
+
+        assert tracker._handoff_latencies == []
+        assert tracker.get_logger().info.called
+
+
+class TestOverheadFreshness:
+    """
+    A fresh overhead point is always stamped in the future, which is what makes the
+    planner's tight overhead_max_age correct: any positive age means the tracker has
+    stopped refreshing it and the planner should fall back to the vision state.
+    """
+
+    def test_overhead_point_is_stamped_ahead_of_now(self):
+        trajectory = _trajectory(3000.0)
+        point = build_overhead_point(
+            1, trajectory.to_msg(1), trajectory,
+            time_offset=0.0, lookahead_time=0.2, now_sec=500.0,
+        )
+
+        assert point.wall_stamp == pytest.approx(500.2)
+
+    def test_overhead_stops_when_the_trajectory_ends(self):
+        tracker = _tracker()
+        trajectory = _trajectory(1000.0)
+        data = {
+            "trajectory": trajectory,
+            "trajectory_msg": trajectory.to_msg(1),
+            "time_offset": trajectory.get_total_duration(),
+        }
+
+        tracker._update_active_trajectory(1, data, dt=0.01, now_sec=500.0, lookahead=0.2)
+
+        assert not tracker.overhead_pub.publish.called

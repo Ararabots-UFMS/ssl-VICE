@@ -1,5 +1,5 @@
 import copy
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import rclpy
 from rclpy.node import Node
@@ -77,6 +77,9 @@ class TrackerNode(Node):
         self.robot_data: Dict[int, Dict[str, object]] = {}
         self.last_time = self.get_clock().now()
 
+        # dt_late per activated plan: the measured latency lookahead_time should follow.
+        self._handoff_latencies: List[float] = []
+
         self.traj_sub = self.create_subscription(TrajectoryMsg, "planner/trajectories", self.trajectory_callback, 10)
         
         self.overhead_pub = self.create_publisher(TrajectoryPointMsg, "movement_tracker/overhead", 10)
@@ -85,6 +88,7 @@ class TrackerNode(Node):
 
         self.timer = self.create_timer(0.01, self.timer_callback)
         self.gui_timer = self.create_timer(0.1, self._update_gui_trajectories)
+        self.latency_timer = self.create_timer(5.0, self._log_handoff_latency)
 
         self.get_logger().info("TrackerNode ONLINE")
 
@@ -214,23 +218,44 @@ class TrackerNode(Node):
             return
 
         pending_traj = pending["trajectory"]
-        if new_offset < pending_traj.get_total_duration():
-            data["trajectory"] = pending_traj
-            data["trajectory_msg"] = pending["trajectory_msg"]
-            data["time_offset"] = new_offset
+        duration = pending_traj.get_total_duration()
 
-            if handoff_stamp != 0.0 and dt_late > lookahead * 0.5:
+        if handoff_stamp != 0.0:
+            self._handoff_latencies.append(dt_late)
+
+        # Clamped, not discarded: a late plan still ends at the current goal, while the
+        # one it replaces ends at the old one.
+        if new_offset >= duration:
+            new_offset = duration
+            if duration > 1e-3:
                 self.get_logger().warn(
-                    f"Late handoff for robot {robot_id}: {dt_late:.3f}s "
-                    f"(lookahead was {lookahead:.3f}s)"
+                    f"Handoff for robot {robot_id} arrived {dt_late:.3f}s late, past its "
+                    f"{duration:.3f}s duration — activating at the goal"
                 )
-        else:
-            if pending_traj.get_total_duration() > 1e-3:
-                self.get_logger().warn(
-                    f"Discarding fully-elapsed pending trajectory for robot {robot_id} "
-                    f"(late by {dt_late:.3f}s, duration was {pending_traj.get_total_duration():.3f}s)"
-                )
+        elif handoff_stamp != 0.0 and dt_late > lookahead * 0.5:
+            self.get_logger().warn(
+                f"Late handoff for robot {robot_id}: {dt_late:.3f}s "
+                f"(lookahead was {lookahead:.3f}s)"
+            )
+
+        data["trajectory"] = pending_traj
+        data["trajectory_msg"] = pending["trajectory_msg"]
+        data["time_offset"] = new_offset
         data["pending"] = None
+
+    def _log_handoff_latency(self):
+        if not self._handoff_latencies:
+            return
+
+        samples = sorted(self._handoff_latencies)
+        self._handoff_latencies = []
+        p95 = samples[min(len(samples) - 1, int(0.95 * len(samples)))]
+
+        self.get_logger().info(
+            f"Handoff latency over {len(samples)} plans: "
+            f"mean {1000 * sum(samples) / len(samples):.1f}ms, "
+            f"p95 {1000 * p95:.1f}ms, max {1000 * samples[-1]:.1f}ms"
+        )
 
     def _update_gui_trajectories(self):
         msg = GUITrajectories()

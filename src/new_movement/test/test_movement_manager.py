@@ -44,6 +44,7 @@ def movement_manager():
 
     mgr._movement_commands = None
     mgr._robots = None
+    mgr._vision_stamp = 0.0
     mgr._static_obstacles = None
     mgr._goal_keeper_id = None
 
@@ -96,6 +97,17 @@ def test_game_state_callback_trigger(manager, test_robot):
 
     assert manager._robots == [test_robot]
     manager.try_publish_targets.assert_called_once()
+
+
+def test_game_state_callback_captures_the_vision_stamp(manager, test_robot):
+    manager.try_publish_targets = MagicMock()
+    msg = MagicMock()
+    msg.ally_robots = [test_robot]
+    msg.vision_wall_stamp = 1234.5
+
+    manager.game_state_callback(msg)
+
+    assert manager._vision_stamp == 1234.5
 
 
 def test_try_publish_targets_no_commands(manager, test_robot):
@@ -202,6 +214,7 @@ def test_build_target_array_maps_fields(manager, test_robot1, test_robot2, test_
     assert target1.target_pos.y == test_command1.target_pos.y
     assert target1.planning_options.avoid_penalty_area is False
     assert target1.planning_options.avoid_center_area is False
+    assert target1.vision_stamp == manager._vision_stamp
 
     target2 = result.targets[1]
     assert target2.robot_id == 2

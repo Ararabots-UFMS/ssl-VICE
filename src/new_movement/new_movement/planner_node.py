@@ -25,7 +25,10 @@ class PlannerNode(Node):
         # Parameters
         self.declare_parameter('planner_freq', 50.0)
         self.declare_parameter('max_threads', 8)
-        self.declare_parameter('overhead_max_age', 0.5)
+        # build_overhead_point stamps a point at now + (sample_time - time_offset), so a
+        # fresh one is always stamped in the future: any positive age is already stale.
+        # At 0.5s the planner kept trusting a cache the tracker had stopped refreshing.
+        self.declare_parameter('overhead_max_age', 0.05)
         self.declare_parameter('accept_radius', 10)
         
         # State
@@ -108,8 +111,9 @@ class PlannerNode(Node):
         # from vision
         init_pos = Vector2D(target.initial_pos.x, target.initial_pos.y)
         init_vel = Vector2D(target.initial_vel.x, target.initial_vel.y)
-        handoff_stamp = 0.0
 
+        # handoff_stamp is the instant initial_state refers to, so the tracker starts the
+        # plan at the right offset rather than at t=0 whenever it happens to arrive.
         if robot_id in self.cur_overhead_points:
             overhead_point = self.cur_overhead_points[robot_id]
             age = (self.get_clock().now().nanoseconds / 1e9) - overhead_point.wall_stamp
@@ -127,8 +131,10 @@ class PlannerNode(Node):
                     return None  # already there, nothing to plan
                 # Far enough to be worth replanning from vision state
                 initial_state = State(init_pos, init_vel)
+                handoff_stamp = float(target.vision_stamp)
         else:
             initial_state = State(init_pos, init_vel)
+            handoff_stamp = float(target.vision_stamp)
 
         target_state = State(
             Vector2D(target.target_pos.x, target.target_pos.y),

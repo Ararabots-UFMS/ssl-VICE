@@ -21,6 +21,7 @@ class MovementManager(Node):
         self._movement_commands = None
 
         self._robots = None
+        self._vision_stamp = 0.0
         self._static_obstacles = None
         self._goal_keeper_id = None
 
@@ -30,6 +31,7 @@ class MovementManager(Node):
 
     def game_state_callback(self, msg):
         self._robots = msg.ally_robots
+        self._vision_stamp = msg.vision_wall_stamp
         self.try_publish_targets()
 
     def _set_static_obstacles(self, request, response):
@@ -81,6 +83,7 @@ class MovementManager(Node):
             target.initial_pos.y = robot.position_y
             target.initial_vel.x = robot.velocity_x
             target.initial_vel.y = robot.velocity_y
+            target.vision_stamp = self._vision_stamp
             target.planning_options.avoid_center_area = self._static_obstacles['center_area']
             target.target_pos = cmd.target_pos
 
