@@ -18,7 +18,15 @@ class KalmanFilterClass2D(object):
     - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
     - "https://cookierobotics.com/071/"
     '''
-    def __init__(self, x_sd: float = 0.1, y_sd: float = 0.1, u_x: float = 0.1, u_y: float = 0.1, sd_acceleration: float = 1):
+    # Defaults are in millimetres, matched to SSL hardware at ~60 Hz:
+    # - sd_acceleration is the process noise. Robots accelerate at 3000-5000 mm/s²;
+    #   the old value of 1 mm/s² made the filter distrust motion and lag the true
+    #   velocity by up to 900 mm/s during an acceleration ramp.
+    # - x_sd / y_sd is the SSL-Vision measurement noise, realistically 5-20 mm,
+    #   not the 0.1 mm the filter used to assume.
+    # - u is the control input. The vision node has no access to the commanded
+    #   acceleration, so it must be zero — a constant bias just drifts the estimate.
+    def __init__(self, x_sd: float = 15.0, y_sd: float = 15.0, u_x: float = 0.0, u_y: float = 0.0, sd_acceleration: float = 3000.0):
         self.sd_acceleration = sd_acceleration
 
         self.u = np.matrix([[u_x],[u_y]])
@@ -55,7 +63,6 @@ class KalmanFilterClass2D(object):
                             [(dt**3)/2, 0, dt**2, 0],
                             [0, (dt**3)/2, 0, dt**2]]) * self.sd_acceleration ** 2
 
-        # If we add the B.u it doesnt work... maybe its a dt problem
         self.x = np.dot(self.A, self.x) + np.dot(self.B, self.u)
         
         # Updation of the error covariance matrix 
@@ -75,25 +82,32 @@ class KalmanFilterClass2D(object):
         # Update State vector
         self.x = self.x + np.dot(K, (z - np.dot(self.H, self.x)))
 
+        # Numerically stable Joseph form, same as the 1D filter.
         I = np.eye(self.H.shape[1])
+        I_KH = I - np.dot(K, self.H)
+        self.P = np.dot(I_KH, self.P).dot(I_KH.T) + np.dot(K, self.R).dot(K.T)
 
-        self.P = (I -(K*self.H))*self.P  
-        
         return self.x
-    
+
     def set_param(self, x_sd: Optional[float] = None,
                         y_sd: Optional[float] = None,
                         u_x:  Optional[float] = None,
                         u_y:  Optional[float] = None,
                         acceleration_sd_2d: Optional[float] = None):
 
-        self.R[0] = [x_sd**2, 0] if x_sd else self.R[0]
-        self.R[1] = [0, y_sd**2] if y_sd else self.R[1]
-        
-        self.u[0] = [u_x] if u_x else self.u[0]
-        self.u[1] = [u_y] if u_y else self.u[1]
+        # Compared against None, not truthiness, so that a caller can set u to zero.
+        if x_sd is not None:
+            self.R[0] = [x_sd**2, 0]
+        if y_sd is not None:
+            self.R[1] = [0, y_sd**2]
 
-        self.sd_acceleration = acceleration_sd_2d if acceleration_sd_2d else self.sd_acceleration
+        if u_x is not None:
+            self.u[0] = [u_x]
+        if u_y is not None:
+            self.u[1] = [u_y]
+
+        if acceleration_sd_2d is not None:
+            self.sd_acceleration = acceleration_sd_2d
 
 import numpy as np
 from typing import Optional

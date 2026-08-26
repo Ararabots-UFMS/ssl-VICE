@@ -63,8 +63,11 @@ class ObjectTracker(object):
         self.max_frame_skipped = max_frame_skipped
         self.objects_id = []
         self.objects = []
-        self.last_time_stamp = 0
-        
+        # None until the first packet arrives. Starting at 0 made the first dt the
+        # whole Unix epoch, which blew the state up to ~1e17 mm for one frame.
+        self.last_time_stamp = None
+        self.dt = 0.0
+
     def update_object(self, object_: Object, x: float, y: float, confidence: float, orientation: Optional[float] = None) -> None:
         # Predict position and velocity.
         object_.prediction = object_.KF.update([[x], [y]])
@@ -82,10 +85,13 @@ class ObjectTracker(object):
         self.objects.append(Object([[x], [y]], id, confidence, orientation = orientation))
     
     def delete_undetected_objects(self, recieved_objects_id: List[ID]) -> None:
-         for i in range(len(self.objects_id)):
+        # Walked backwards so the deletions don't shift the indexes still to be
+        # visited — the forward loop raised IndexError as soon as any robot stayed
+        # occluded for longer than max_frame_skipped.
+        for i in reversed(range(len(self.objects_id))):
             if self.objects_id[i] not in recieved_objects_id:
                 if self.objects[i].skip_count > self.max_frame_skipped:
-                    self.objects_id.remove(self.objects[i].id)
+                    del self.objects_id[i]
                     del self.objects[i]
                 else:
                     self.objects[i].skip_count += 1
@@ -121,8 +127,10 @@ class ObjectTracker(object):
         '''
         # TODO Implement a Hungarian algorithm to give the balls an id?
         recieved_objects_id, time_stamp = [], message.detection.t_capture
-        
-        self.dt = time_stamp - self.last_time_stamp
+
+        # First packet has no previous stamp to difference against, so it only
+        # seeds the clock and propagates nothing.
+        self.dt = 0.0 if self.last_time_stamp is None else time_stamp - self.last_time_stamp
         self.last_time_stamp = time_stamp
 
         if message.detection.robots_yellow:
