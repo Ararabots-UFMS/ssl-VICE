@@ -14,8 +14,8 @@ class PIDController:
         self.integral: float = 0.0
         self.previous_time: Optional[float] = None
 
-        self.integral_limit: float = 0.5  # Anti Windup
-        self.output_limit: float = 1.5  # Max velocity
+        self.integral_limit: float = 1  # Anti Windup
+        self.output_limit: float = 3  # Max velocity
 
     def update_params(self, kp: float, ki: float, kd: float):
         self.kp = kp
@@ -38,14 +38,10 @@ class PIDController:
         """
         Compute feedforward + feedback control for trajectory following
         """
-        current_time = time.time()
-
-        # Calculate time step
         if dt is None:
-            if self.previous_time is not None:
-                dt = current_time - self.previous_time
-            else:
-                dt = 0.02  # Default 20ms
+            current_time = time.time()
+            dt = (current_time - self.previous_time) if self.previous_time else 0.02
+            self.previous_time = current_time
 
         position_error = target_position - current_position
         velocity_error = target_velocity - current_velocity
@@ -67,7 +63,6 @@ class PIDController:
         output = max(-self.output_limit, min(self.output_limit, output))
 
         self.previous_error = position_error
-        self.previous_time = current_time
 
         return output
 
@@ -119,9 +114,9 @@ class RobotTrajectoryController:
         self.last_targets = {}  # For position triggered reset
         self.reset_threshold = 0.5  # Reset if target jumps > 0.5m
 
-        self.default_kp = 2.3
+        self.default_kp = 1
         self.default_ki = 0.0
-        self.default_kd = 0.1
+        self.default_kd = 0.0
 
     def get_controller(self, robot_id: int) -> Vector2DTrajectoryController:
         """Get or create trajectory controller for robot"""

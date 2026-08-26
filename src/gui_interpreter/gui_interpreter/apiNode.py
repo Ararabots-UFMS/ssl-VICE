@@ -10,13 +10,15 @@ import ctypes
 from utils.converter import todict
 
 from grsim_messenger.grsim_publisher import grSimPublisher
-from hardware_messenger.hardware_publisher import HardwarePublisher
+# from hardware_messenger.hardware_publisher import HardwarePublisher
 
+from movement_interfaces.msg import GUITrajectories
 from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, TrajectoryMessage, RefereeMessage
 from system_interfaces.srv import ControlParams, SetKp, SetOrientation, StrategyCommand, UpdateObstacle
 from std_srvs.srv import SetBool
 from vision.vision_node import Vision
 from referee.referee_node import RefereeNode
+from new_movement.entities.Trajectory import Trajectory
 
 app = Flask(__name__)
 gui_socket = SocketIO(app, cors_allowed_origins="*")
@@ -74,7 +76,9 @@ class APINode(Node):
         self.vision_subscriber = None
         self.vision_node = Vision()
 
-        self.trajectory_subscriber = None
+        self.trajectory_subscriber = self.create_subscription(
+            GUITrajectories, "gui/trajectories", self.emit_trajectory_message, 10
+        )
         self.referee_subscriber = self.create_subscription(
             RefereeMessage, "refereeTopic", self.emit_referee_message, 10
         )
@@ -109,9 +113,6 @@ class APINode(Node):
         self.vision_subscriber = self.create_subscription(
             VisionMessage, "visionTopic", self.emit_vision_message, 10
         )
-        self.trajectory_subscriber = self.create_subscription(
-            TrajectoryMessage, "trajectory_topic", self.emit_trajectory_message, 10
-        )
         gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
         gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
     
@@ -124,32 +125,75 @@ class APINode(Node):
             "balls":  data["balls"],
         })
 
-    def emit_trajectory_message(self, msg: TrajectoryMessage) -> None:
-        """Trajectory emission to GUI"""
+    def emit_trajectory_message(self, msg: GUITrajectories) -> None:
         trajectories_data = []
-        
-        for robot_trajectory in msg.trajectories:
-            robot_data = {
-                "robot_id": robot_trajectory.robot_id,
-                "total_duration": robot_trajectory.total_duration,
-                "points": []
-            }
-            
-            for point in robot_trajectory.points:
-                point_data = {
-                    "x": point.x,
-                    "y": point.y,
-                    "velocity_x": point.velocity_x,
-                    "velocity_y": point.velocity_y,
-                    "timestamp": point.timestamp
-                }
-                robot_data["points"].append(point_data)
-            
-            trajectories_data.append(robot_data)
-        
-        gui_socket.emit("trajectory_update", {
-            "trajectories": trajectories_data
-        })
+
+        for idx, cur_trajectory_msg in enumerate(msg.current_trajectories):
+            if not cur_trajectory_msg.segments:
+                continue
+
+            cur_trajectory = Trajectory.from_msg(cur_trajectory_msg)
+            time_offset = msg.time_offsets[idx]
+            total_duration = cur_trajectory.get_total_duration()
+
+            # time_offset → end
+            current_points = []
+            if time_offset < total_duration:
+                states = cur_trajectory.to_list(
+                    time_step=0.2,
+                    start_time=time_offset,
+                    end_time=total_duration,
+                    output_states=True,
+                )
+                current_points = [
+                    {
+                        "x": s.position.x,
+                        "y": s.position.y,
+                        "vx": s.velocity.x,
+                        "vy": s.velocity.y,
+                    }
+                    for s in states
+                ]
+
+            # Pending trajectory t=0 → end
+            pending_points = []
+            pending_handoff = None
+            pending_msg = msg.pending_trajectories[idx]
+            if pending_msg.segments:
+                pending_trajectory = Trajectory.from_msg(pending_msg)
+                pending_duration = pending_trajectory.get_total_duration()
+                if pending_duration > 1e-3:
+                    states = pending_trajectory.to_list(
+                        time_step=0.2,
+                        start_time=0.0,
+                        end_time=pending_duration,
+                        output_states=True,
+                    )
+                    pending_points = [
+                        {
+                            "x": s.position.x,
+                            "y": s.position.y,
+                            "vx": s.velocity.x,
+                            "vy": s.velocity.y,
+                        }
+                        for s in states
+                    ]
+                    pending_handoff = pending_msg.handoff_stamp
+
+            trajectories_data.append({
+                "robot_id": cur_trajectory_msg.robot_id,
+                "current": {
+                    "points": current_points,
+                    "total_duration": total_duration,
+                    "time_offset": time_offset,
+                },
+                "pending": {
+                    "points": pending_points,
+                    "handoff_stamp": pending_handoff,
+                },
+            })
+
+        gui_socket.emit("trajectory_update", {"trajectories": trajectories_data})
 
     def emit_referee_message(self, msg: RefereeMessage) -> None:
         """Forward referee messages to the GUI."""
@@ -590,21 +634,21 @@ class APINode(Node):
     def check_strategy_services_status(self):
         """Check status of all strategy services and emit to GUI"""
         services_status = {
-            "strategy": self.strategy_client.wait_for_service(timeout_sec=0.1),
-            "pid": self.pid_client.wait_for_service(timeout_sec=0.1),
-            "kp_angular": self.kp_angular_client.wait_for_service(timeout_sec=0.1),
-            "orientation": self.set_orientation_client.wait_for_service(timeout_sec=0.1),
-            "obstacles": self.update_obstacles_client.wait_for_service(timeout_sec=0.1),
-            "team_color": self.set_team_color_client.wait_for_service(timeout_sec=0.1)
+            "strategy": self.strategy_client.service_is_ready(),
+            "pid": self.pid_client.service_is_ready(),
+            "kp_angular": self.kp_angular_client.service_is_ready(),
+            "orientation": self.set_orientation_client.service_is_ready(),
+            "obstacles": self.update_obstacles_client.service_is_ready(),
+            "team_color": self.set_team_color_client.service_is_ready()
         }
-        
+
         gui_socket.emit("services_status", services_status)
         return services_status
 
 
 def main(args=None):
     rclpy.init(args=args)
-    executor = MultiThreadedExecutor(num_threads=2)
+    executor = MultiThreadedExecutor(num_threads=4)
     node = APINode(
         "api_node", executor, vision_running, communication_running, referee_running
     )

@@ -1,0 +1,6 @@
+uint8 robot_id
+Vector2D initial_pos
+Vector2D initial_vel
+Vector2D target_pos
+Vector2D target_vel
+PlanningOptions planning_options
