@@ -36,6 +36,9 @@ class PlannerNode(Node):
         self.cur_overhead_points: Dict[int, TrajectoryPointMsg] = {}
         self.game_state: Optional[GameState] = None
         self.active_futures: Dict[int, any] = {} # Track running tasks per robot
+        # Last via point per robot, warm-starting the bypass solver. Held here rather
+        # than in Planner so the solver stays reentrant across the worker threads.
+        self.last_vias: Dict[int, State] = {}
         
         # Tools
         self.planner = Planner()
@@ -163,8 +166,12 @@ class PlannerNode(Node):
 
         # Solve
         try:
-            trajectory = self.planner.find(initial_state, target_state, obstacles)
+            trajectory = self.planner.find(
+                initial_state, target_state, obstacles, self.last_vias.get(robot_id)
+            )
             if trajectory and trajectory.root:
+                # None when a direct path was found — the warm start is dropped with it.
+                self.last_vias[robot_id] = trajectory.via_state
                 return robot_id, trajectory, handoff_stamp
         except Exception as e:
             self.get_logger().warn(f"Solver error for robot {robot_id}: {e}")

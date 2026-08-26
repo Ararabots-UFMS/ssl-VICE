@@ -29,3 +29,26 @@ class InformedSampler:
         v = self.max_velocity
         sampled_v = np.random.uniform(-v, v, size=2)
         return Vector2D(float(sampled_v[0]), float(sampled_v[1]))
+
+    def sample_tangential_velocity(
+        self, start: Vector2D, via: Vector2D, goal: Vector2D
+    ) -> Vector2D:
+        """
+        Samples a speed along the tangent of a smooth path through the via point.
+
+        Uniform sampling of the velocity square spends most samples on via velocities
+        pointing away from the goal, which either fail or win on duration by accident and
+        give the robot a different-looking path every cycle.
+        """
+        direction = None
+        for leg in (via.subtract(start), goal.subtract(via)):
+            if leg.size() > 1e-6:
+                unit = leg.norm()
+                direction = unit if direction is None else direction.add(unit)
+
+        # Degenerate when the via lies beyond the goal on the same line: stop there.
+        if direction is None or direction.size() < 1e-6:
+            return Vector2D(0.0, 0.0)
+
+        speed = float(np.random.uniform(0.0, self.max_velocity))
+        return direction.norm().multiplyByScalar(speed)

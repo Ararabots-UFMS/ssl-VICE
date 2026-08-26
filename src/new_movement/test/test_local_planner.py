@@ -173,6 +173,25 @@ class TestInformedSampler:
             p = sampler.sample_near_axis(start, goal)
             assert isinstance(p, Vector2D)
 
+    def test_tangential_velocity_points_down_the_path(self, sampler):
+        start, via, goal = Vector2D(0, 0), Vector2D(1000, 500), Vector2D(2000, 0)
+
+        for _ in range(100):
+            v = sampler.sample_tangential_velocity(start, via, goal)
+            assert v.size() <= 3000 + 1e-6
+            if v.size() < 1e-6:
+                continue
+            # Uniform sampling of the velocity square would point half of these back.
+            assert v.dot(goal.subtract(start)) > 0
+
+    def test_tangential_velocity_is_zero_when_the_via_doubles_back(self, sampler):
+        # via beyond the goal on the same line: the two legs cancel.
+        v = sampler.sample_tangential_velocity(
+            Vector2D(0, 0), Vector2D(3000, 0), Vector2D(2000, 0)
+        )
+
+        assert v.size() == pytest.approx(0.0)
+
 class TestBypassSolver:
     def test_solve_blocked_path(self, sampler, generator):
         solver = BypassSolver(max_iterations=100, sampler=sampler, collision_time_step=0.05)
@@ -188,6 +207,77 @@ class TestBypassSolver:
         # Verify result is collision free
         assert not CollisionEngine.is_collision(traj.root, obstacles)
         assert not CollisionEngine.is_collision(traj.root.child, obstacles)
+
+
+class TestBypassSolverStability:
+    """
+    Sampling alone returns a structurally different path every cycle for unchanged
+    inputs, so the controller never gets a reference it can settle on. The previous via
+    point is re-solved from the current start and defended by cost_margin.
+    """
+
+    START = State(Vector2D(-2000, 0), Vector2D(0, 0))
+    GOAL = State(Vector2D(2000, 0), Vector2D(0, 0))
+
+    def _solver(self, sampler, margin=0.15):
+        return BypassSolver(
+            max_iterations=20,
+            sampler=sampler,
+            collision_time_step=0.04,
+            cost_margin=margin,
+        )
+
+    def _blocking(self, radius=500):
+        return [GenericCircleObstacle(Vector2D(0, 0), radius, padding=0)]
+
+    def test_the_via_point_is_reported(self, sampler, generator):
+        traj = self._solver(sampler).solve(
+            self.START, self.GOAL, self._blocking(), generator
+        )
+
+        assert traj.via_state is not None
+
+    def test_an_unbeaten_via_point_survives_replanning(self, sampler, generator):
+        solver = self._solver(sampler)
+        obstacles = self._blocking()
+
+        first = solver.solve(self.START, self.GOAL, obstacles, generator)
+        for _ in range(20):
+            again = solver.solve(
+                self.START, self.GOAL, obstacles, generator, first.via_state
+            )
+            assert again.via_state.position.distance(first.via_state.position) == 0.0
+
+    def test_a_blocked_via_point_is_abandoned(self, sampler, generator):
+        solver = self._solver(sampler)
+        obstacles = self._blocking()
+
+        first = solver.solve(self.START, self.GOAL, obstacles, generator)
+        blocked = obstacles + [
+            GenericCircleObstacle(first.via_state.position, 500, padding=0)
+        ]
+
+        second = solver.solve(self.START, self.GOAL, blocked, generator, first.via_state)
+
+        assert second is not None
+        assert second.via_state.position.distance(first.via_state.position) > 100.0
+        assert not CollisionEngine.is_collision(second.root, blocked)
+        assert not CollisionEngine.is_collision(second.root.child, blocked)
+
+    def test_a_zero_margin_takes_any_improvement(self, sampler, generator):
+        """The margin is what makes it sticky, not the warm start on its own."""
+        solver = self._solver(sampler, margin=0.0)
+        obstacles = self._blocking()
+
+        first = solver.solve(self.START, self.GOAL, obstacles, generator)
+        durations = {first.get_total_duration()}
+        via = first.via_state
+        for _ in range(20):
+            result = solver.solve(self.START, self.GOAL, obstacles, generator, via)
+            via = result.via_state
+            durations.add(result.get_total_duration())
+
+        assert len(durations) > 1
 
 class TestTrajectoryOptimizer:
     def test_optimize_shortens_path(self, generator):

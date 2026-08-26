@@ -24,38 +24,82 @@ class BaseSolver:
 class BypassSolver(BaseSolver):
     """RRT-inspired solver for finding collision-free bypasses."""
     
-    def __init__(self, max_iterations: int, sampler: InformedSampler, collision_time_step: float):
+    def __init__(
+        self,
+        max_iterations: int,
+        sampler: InformedSampler,
+        collision_time_step: float,
+        cost_margin: float = 0.15,
+    ):
         self.max_iterations = max_iterations
         self.sampler = sampler
         self.collision_time_step = collision_time_step
+        # How much faster a new bypass has to be before it replaces the previous one.
+        self.cost_margin = cost_margin
 
     def solve(
-        self, 
-        start: State, 
-        goal: State, 
-        obstacles: List[Obstacle], 
-        generator: TrajectoryGenerator
+        self,
+        start: State,
+        goal: State,
+        obstacles: List[Obstacle],
+        generator: TrajectoryGenerator,
+        previous_via: Optional[State] = None,
     ) -> Optional[Trajectory]:
-        """Iteratively attempts to find a via-point that clears all obstacles."""
-        found_trajectories = []
+        """
+        Attempts to find a via-point that clears all obstacles.
+
+        The previous cycle's via point is re-solved from the current start and defended
+        by cost_margin. Sampling alone returns a structurally different path every cycle
+        for unchanged inputs, and the controller cannot track a reference that keeps
+        changing its mind about which side of an obstacle to pass.
+        """
+        incumbent = None
+        if previous_via is not None:
+            incumbent = self._build(start, goal, obstacles, generator, previous_via)
+
+        challenger = None
         for _ in range(self.max_iterations):
+            via_position = self.sampler.sample_near_axis(start.position, goal.position)
             via_state = State(
-                self.sampler.sample_near_axis(start.position, goal.position),
-                self.sampler.sample_velocity()
+                via_position,
+                self.sampler.sample_tangential_velocity(
+                    start.position, via_position, goal.position
+                ),
             )
 
-            segment_1 = generator.generate(start, via_state)
-            segment_2 = generator.generate(via_state, goal)
+            candidate = self._build(start, goal, obstacles, generator, via_state)
+            if candidate is None:
+                continue
+            if challenger is None or candidate.get_total_duration() < challenger.get_total_duration():
+                challenger = candidate
 
-            if self._is_safe(segment_1, obstacles) and self._is_safe(segment_2, obstacles):
-                segment_1.add_child(segment_2)
-                found_trajectories.append(Trajectory(segment_1))
+        if incumbent is None:
+            return challenger
+        if challenger is None:
+            return incumbent
 
-        if not found_trajectories:
+        margin = incumbent.get_total_duration() * (1.0 - self.cost_margin)
+        return challenger if challenger.get_total_duration() < margin else incumbent
+
+    def _build(
+        self,
+        start: State,
+        goal: State,
+        obstacles: List[Obstacle],
+        generator: TrajectoryGenerator,
+        via_state: State,
+    ) -> Optional[Trajectory]:
+        """Two segments through via_state, or None if either one collides."""
+        segment_1 = generator.generate(start, via_state)
+        segment_2 = generator.generate(via_state, goal)
+
+        if not self._is_safe(segment_1, obstacles) or not self._is_safe(segment_2, obstacles):
             return None
-        
-        fastest_trajectory = min(found_trajectories, key=lambda t: t.get_total_duration())
-        return fastest_trajectory
+
+        segment_1.add_child(segment_2)
+        trajectory = Trajectory(segment_1)
+        trajectory.via_state = via_state
+        return trajectory
 
     def _is_safe(self, segment: TrajectorySegment, obstacles: List[Obstacle]) -> bool:
         return not CollisionEngine.is_collision(

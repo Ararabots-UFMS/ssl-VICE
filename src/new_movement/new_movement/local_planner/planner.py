@@ -23,6 +23,8 @@ class SolverConfig:
     max_velocity: Vector2D = field(default_factory=lambda: Vector2D(2000.0, 2000.0))  # mm/s
     max_acceleration: Vector2D = field(default_factory=lambda: Vector2D(1500.0, 1500.0)) # mm/s²
     continuity_threshold: float = 1e-3
+    # How much faster a newly sampled bypass must be to replace the previous one.
+    bypass_cost_margin: float = 0.15
     # Collision sampling step. At 2000 mm/s a 0.2 s step advances 400 mm between
     # samples — wider than an obstacle diameter, so the check can tunnel through it.
     # 0.04 s is ~80 mm of travel.
@@ -54,15 +56,27 @@ class Planner:
         self.solver = BypassSolver(
             max_iterations=self.config.max_iterations,
             sampler=self.sampler,
-            collision_time_step=self.config.collision_time_step
+            collision_time_step=self.config.collision_time_step,
+            cost_margin=self.config.bypass_cost_margin
         )
         
         self.status = PlanningStatus.FAILED
 
-    def find(self, start: State, goal: State, obstacles: List[Obstacle]) -> Trajectory:
-        """Primary entry point for calculating a trajectory."""
+    def find(
+        self,
+        start: State,
+        goal: State,
+        obstacles: List[Obstacle],
+        previous_via: Optional[State] = None,
+    ) -> Trajectory:
+        """
+        Primary entry point for calculating a trajectory.
+
+        previous_via is the via point of the last plan for this robot, if any. The caller
+        owns that cache so this stays reentrant across the planner's worker threads.
+        """
         start, goal, safety_trajectory = self._handle_static_collisions(start, goal, obstacles)
-        
+
 
         # 1. Try direct path
         direct_seg = self.generator.generate(start, goal)
@@ -72,10 +86,11 @@ class Planner:
             return safety_trajectory
 
         # 2. Try bypass solver
-        bypass_traj = self.solver.solve(start, goal, obstacles, self.generator)
+        bypass_traj = self.solver.solve(start, goal, obstacles, self.generator, previous_via)
         if bypass_traj and bypass_traj.root:
             self.status = PlanningStatus.BYPASS_FOUND
             safety_trajectory.append(bypass_traj.root)
+            safety_trajectory.via_state = bypass_traj.via_state
             return safety_trajectory
 
         # 3. Recovery fallback

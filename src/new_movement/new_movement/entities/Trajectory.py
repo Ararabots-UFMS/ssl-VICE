@@ -123,6 +123,8 @@ class Trajectory:
         self.root: Optional[TrajectorySegment] = initial_segment
         # REFACTOR: Adicionado ponteiro para a cauda para otimizar o append para O(1).
         self.tail: Optional[TrajectorySegment] = initial_segment
+        # Via point que o BypassSolver usou, para servir de warm start no próximo ciclo.
+        self.via_state: Optional[State] = None
         if self.root:
             # Encontra a cauda inicial se a trajetória não for vazia
             node = self.root
