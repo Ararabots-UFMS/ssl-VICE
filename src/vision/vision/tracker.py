@@ -35,16 +35,25 @@ class Object(object):
         self.prediction = np.asarray(detections)
         self.id = Id
         self.confidence = confidence
+        self.friction = friction
         self.KF = ExtendedKalmanFilterClass2D(friction=self.friction)
         self.last_seen = time.time()
         self.last_prediction = self.last_seen
         self.orientation = orientation
         self.orientation_KF = ExtendedKalmanFilterClass1D(friction=self.friction)
 
+        # Init the Kalman filter state with the first detection
+        self.KF.x[0, 0] = detections[0][0]
+        self.KF.x[1, 0] = detections[1][0]
+        if orientation is not None and not self.id.is_ball:
+            self.orientation_KF.x[0, 0] = orientation
+
     def update(self, x: float, y: float, confidence: float, orientation: Optional[float] = None):
-        self.prediction = self.KF.update([[x], [y]])
+        z = np.matrix([[x], [y]])
+        self.prediction = self.KF.update(z)
         if not self.id.is_ball and orientation is not None:
-            self.orientation = self.orientation_KF.update(np.matrix([[orientation]]))
+            z_orientation = np.matrix([[orientation]])
+            self.orientation = self.orientation_KF.update(z_orientation)[0, 0]
         self.confidence = confidence
         self.last_seen = time.time()
         self.last_prediction = self.last_seen

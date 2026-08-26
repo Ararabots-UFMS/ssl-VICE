@@ -321,21 +321,18 @@ class ExtendedKalmanFilterClass1D(object):
         return F
     
     def predict(self, dt: float):
-        # Process noise covariance
-        self.Q = np.matrix([[(dt**4)/4, (dt**3)/2],
-                            [(dt**3)/2, dt**2]]) * self.sd_acceleration**2
+        # Matriz de transição para 1D (posição e velocidade)
+        F = np.array([[1, dt],
+                    [0, 1]])
 
-        # Cache prior state
-        prior_x = self.x.copy()
+        # Ruído de processo compatível com 2x2
+        Q = np.array([[dt**4/4, dt**3/2],
+                    [dt**3/2, dt**2]]) * self.q_variance
 
-        # Jacobian evaluated at prior state
-        F = self._jacobian_F(prior_x, dt)
-
-        # Predict state
-        self.x = self._transition_function(prior_x, dt)
-
-        # Predict covariance
-        self.P = F @ self.P @ F.T + self.Q
+        # Predição do estado
+        self.x = F @ self.x
+        # Predição da covariância
+        self.P = F @ self.P @ F.T + Q
 
         return self.x
 

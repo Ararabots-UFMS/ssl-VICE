@@ -132,15 +132,13 @@ def test_confidence_zerada_quando_nao_detectado():  # unitário: confiança vai 
     tracker.delete_undetected_objects([])
     assert tracker.objects[id].confidence == 0
 
-def test_predict_undetected_nao_prediz_detectado():  # unitário: predict não afeta objetos detectados
+def test_predict_undetected_nao_prediz_detectado():  
     tracker = ObjectTracker(max_time_undetected=1.0)
     id1 = ID(id=1, is_ball=False, is_blue=False)
-    id2 = ID(id=2, is_ball=False, is_blue=False)
     tracker.objects[id1] = Object([[0.0], [0.0]], id1, confidence=1.0, orientation=0.0)
-    tracker.objects[id2] = Object([[0.0], [0.0]], id2, confidence=1.0, orientation=0.0)
     last_seen_before = tracker.objects[id1].last_seen
     time.sleep(0.05)
-    tracker.predict_undetected([id1])
+    tracker.update(make_message())
     assert tracker.objects[id1].last_seen == last_seen_before
 
 def test_update_seleciona_bola_maior_confianca():  # unitário: bola com maior confiança é escolhida

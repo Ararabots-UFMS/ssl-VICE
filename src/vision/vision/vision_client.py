@@ -1,5 +1,6 @@
 import socket
 import struct
+import logging
 from typing import Optional
 from rclpy.logging import get_logger
 
@@ -8,7 +9,8 @@ from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
 MAX_PACKET_SIZE = 4096  # SSL-Vision packets are safely under this size
 
 class Client:
-    def __init__(self, ip: str, port: int, interface_ip: Optional[str] = None, timeout: float = 0.0):
+    def __init__(self, ip: str, port: int, interface_ip: Optional[str] = None, 
+                timeout: float = 0.0, logger: Optional[logging.Logger] = None):
         """UDP multicast client for ssl-vision.
 
         ip: multicast group address (e.g. 224.5.23.2)
@@ -21,7 +23,7 @@ class Client:
         self.interface_ip = interface_ip or ""
         self.timeout = timeout
         self.sock: Optional[socket.socket] = None
-        self.logger = logger
+        self.logger = logger or logging.getLogger(__name__)
 
 
     def connect(self):
@@ -32,7 +34,7 @@ class Client:
         try:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         except OSError as e:
-            logger.warning(f"SO_REUSEADDR not supported: {e}")
+            self.logger.warning(f"SO_REUSEADDR not supported: {e}")
 
         # Bind to all interfaces (important for receiving on Linux)
         sock.bind(("", self.port))
@@ -43,7 +45,7 @@ class Client:
             try:
                 local_ip = socket.inet_aton(self.interface_ip)
             except OSError as e:
-                logger.warning(f"Invalid interface IP, using INADDR_ANY: {e}")
+                self.logger.warning(f"Invalid interface IP, using INADDR_ANY: {e}")
                 local_ip = struct.pack("!I", socket.INADDR_ANY)
         else:
             local_ip = struct.pack("!I", socket.INADDR_ANY)
@@ -56,7 +58,7 @@ class Client:
         try:
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 0)
         except OSError as e:
-            logger.warning(f"Could not disable loopback: {e}")
+            self.logger.warning(f"Could not disable loopback: {e}")
 
         # Set blocking or timeout mode
         if self.timeout == 0:
@@ -65,7 +67,7 @@ class Client:
             sock.settimeout(self.timeout)
 
         self.sock = sock
-        logger.info(f"Multicast client connected to {self.ip}:{self.port}")
+        self.logger.info(f"Multicast client connected to {self.ip}:{self.port}")
 
     def receive(self):
         """Try to receive and decode one SSL_WrapperPacket. """
@@ -79,7 +81,7 @@ class Client:
         except (BlockingIOError, socket.timeout):
             return None
         except OSError as e:
-            logger.warning(f"Socket error: {e}")
+            self.logger.warning(f"Socket error: {e}")
             return None
 
         # Parse the protobuf message from the received data
@@ -88,6 +90,6 @@ class Client:
             packet.ParseFromString(data)
         except Exception as e:
             # If the packet is invalid, it is discarted.
-            logger.debug(f"Invalid packet: {e}")
+            self.logger.debug(f"Invalid packet: {e}")
             return None
         return packet
