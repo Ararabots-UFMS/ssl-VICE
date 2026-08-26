@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from new_movement.entities.Trajectory import Trajectory
@@ -17,10 +17,26 @@ class SolverConfig:
     max_iterations: int = 20
     field_length: float = 12000.0
     field_width: float = 9000.0
-    max_velocity: Vector2D = Vector2D(2000.0, -2000.0)  # mm/s
-    max_acceleration: Vector2D = Vector2D(1500.0, -1500.0) # mm/s
+    # Bounds are magnitudes: MoveConstraints derives min = -max from them. Negative
+    # values invert the bounds and break the trapezoidal steer (braking accelerates,
+    # the velocity cap is never enforced), so __post_init__ rejects them.
+    max_velocity: Vector2D = field(default_factory=lambda: Vector2D(2000.0, 2000.0))  # mm/s
+    max_acceleration: Vector2D = field(default_factory=lambda: Vector2D(1500.0, 1500.0)) # mm/s²
     continuity_threshold: float = 1e-3
-    collision_time_step: float = 0.2
+    # Collision sampling step. At 2000 mm/s a 0.2 s step advances 400 mm between
+    # samples — wider than an obstacle diameter, so the check can tunnel through it.
+    # 0.04 s is ~80 mm of travel.
+    collision_time_step: float = 0.04
+
+    def __post_init__(self):
+        if self.max_velocity.x <= 0 or self.max_velocity.y <= 0:
+            raise ValueError(
+                f"max_velocity must be positive on both axes, got {self.max_velocity}"
+            )
+        if self.max_acceleration.x <= 0 or self.max_acceleration.y <= 0:
+            raise ValueError(
+                f"max_acceleration must be positive on both axes, got {self.max_acceleration}"
+            )
 
 class Planner:
     """High-level Orchestrator for Robot Planning."""
