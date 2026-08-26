@@ -58,12 +58,12 @@ def manager(movement_manager):
 def test_set_static_obstacles(manager):
     request = MagicMock()
     request.border_area = True
-    request.center_circle = False
+    request.center_area = False
     response = MagicMock()
 
     manager._set_static_obstacles(request, response)
 
-    assert manager._static_obstacles == {'border_area': True, 'center_circle': False}
+    assert manager._static_obstacles == {'border_area': True, 'center_area': False}
 
 
 def test_set_goal_keeper(manager):
@@ -100,7 +100,7 @@ def test_game_state_callback_trigger(manager, test_robot):
 
 def test_try_publish_targets_no_commands(manager, test_robot):
     manager._robots = [test_robot]
-    manager._static_obstacles = {'center_circle': False}
+    manager._static_obstacles = {'center_area': False}
     manager._goal_keeper_id = 1
 
     manager.try_publish_targets()
@@ -109,7 +109,7 @@ def test_try_publish_targets_no_commands(manager, test_robot):
 
 def test_try_publish_targets_no_robots(manager, test_command):
     manager._movement_commands = [test_command]
-    manager._static_obstacles = {'center_circle': False}
+    manager._static_obstacles = {'center_area': False}
     manager._goal_keeper_id = 1
 
     manager.try_publish_targets()
@@ -128,7 +128,7 @@ def test_try_publish_targets_no_static_obstacles(manager, test_command, test_rob
 def test_try_publish_targets_no_goal_keeper(manager, test_command, test_robot):
     manager._movement_commands = [test_command]
     manager._robots = [test_robot]
-    manager._static_obstacles = {'center_circle': False}
+    manager._static_obstacles = {'center_area': False}
 
     manager.try_publish_targets()
     manager._target_array_pub.publish.assert_not_called()
@@ -137,7 +137,7 @@ def test_try_publish_targets_no_goal_keeper(manager, test_command, test_robot):
 def test_try_publish_targets_success(manager, test_command, test_robot):
     manager._movement_commands = [test_command]
     manager._robots = [test_robot]
-    manager._static_obstacles = {'center_circle': False, 'border_area': True}
+    manager._static_obstacles = {'center_area': False, 'border_area': True}
     manager._goal_keeper_id = 1
 
     manager.try_publish_targets()
@@ -185,7 +185,7 @@ def test_command2():
 def test_build_target_array_maps_fields(manager, test_robot1, test_robot2, test_command1, test_command2):
     manager._movement_commands = [test_command1, test_command2]
     manager._robots = [test_robot1, test_robot2]
-    manager._static_obstacles = {'center_circle': False, 'border_area': True}
+    manager._static_obstacles = {'center_area': False, 'border_area': True}
     manager._goal_keeper_id = 1
 
     result = manager._build_target_array()
@@ -211,7 +211,7 @@ def test_build_target_array_maps_fields(manager, test_robot1, test_robot2, test_
 def test_build_target_array_goalkeeper_last(manager, test_robot1, test_robot2, test_command1, test_command2):
     manager._movement_commands = [test_command1, test_command2]
     manager._robots = [test_robot1, test_robot2]
-    manager._static_obstacles = {'center_circle': False, 'border_area': True}
+    manager._static_obstacles = {'center_area': False, 'border_area': True}
     manager._goal_keeper_id = 2
 
     result = manager._build_target_array()

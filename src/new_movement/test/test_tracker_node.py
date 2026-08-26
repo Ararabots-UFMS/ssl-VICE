@@ -15,7 +15,9 @@ def test_build_overhead_point():
     trajectory = Trajectory(segment)
 
     msg = trajectory.to_msg(robot_id=1)
-    point = build_overhead_point(1, msg, trajectory, time_offset=0.0, lookahead_time=0.1)
+    point = build_overhead_point(
+        1, msg, trajectory, time_offset=0.0, lookahead_time=0.1, now_sec=500.0
+    )
 
     assert point is not None
     assert point.robot_id == 1
