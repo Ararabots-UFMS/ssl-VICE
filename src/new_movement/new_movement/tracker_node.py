@@ -117,6 +117,10 @@ class TrackerNode(Node):
         # rather than a bad frame. Debounced so noise cannot trip it.
         self.declare_parameter('divergence_radius', 400.0)
         self.declare_parameter('divergence_frames', 3)
+        # Asymmetric on purpose: quick to distrust the prediction, slow to trust it
+        # again. A single good frame used to clear the flag, which handed planning
+        # straight back to the prediction that had just failed.
+        self.declare_parameter('recovery_frames', 10)
 
         self.robot_data: Dict[int, Dict[str, object]] = {}
         self.last_time = self.get_clock().now()
@@ -126,6 +130,7 @@ class TrackerNode(Node):
         # (along, cross) per robot per vision frame, for sizing the divergence threshold.
         self._tracking_errors: Dict[int, List[Tuple[float, float]]] = {}
         self._divergence_streak: Dict[int, int] = {}
+        self._recovery_streak: Dict[int, int] = {}
         self._diverged: Dict[int, bool] = {}
 
         self.traj_sub = self.create_subscription(TrajectoryMsg, "planner/trajectories", self.trajectory_callback, 10)
@@ -173,23 +178,27 @@ class TrackerNode(Node):
         out within overhead_max_age and it falls back to the measured state.
         """
         radius = float(self.get_parameter('divergence_radius').value)
-        frames = int(self.get_parameter('divergence_frames').value)
+        enter_after = int(self.get_parameter('divergence_frames').value)
+        leave_after = int(self.get_parameter('recovery_frames').value)
 
-        off_path = math.hypot(*error) > radius
-        streak = self._divergence_streak.get(robot_id, 0) + 1 if off_path else 0
-        self._divergence_streak[robot_id] = streak
+        if math.hypot(*error) > radius:
+            self._divergence_streak[robot_id] = self._divergence_streak.get(robot_id, 0) + 1
+            self._recovery_streak[robot_id] = 0
+        else:
+            self._recovery_streak[robot_id] = self._recovery_streak.get(robot_id, 0) + 1
+            self._divergence_streak[robot_id] = 0
 
-        diverged = streak >= frames
-        if diverged != self._diverged.get(robot_id, False):
-            self._diverged[robot_id] = diverged
-            if diverged:
-                self.get_logger().warn(
-                    f"Robot {robot_id} has left its path "
-                    f"(along {error[0]:.0f}mm, cross {error[1]:.0f}mm) — "
-                    f"replanning from the measured state"
-                )
-            else:
+        if self._diverged.get(robot_id, False):
+            if self._recovery_streak.get(robot_id, 0) >= leave_after:
+                self._diverged[robot_id] = False
                 self.get_logger().info(f"Robot {robot_id} is back on its path")
+        elif self._divergence_streak.get(robot_id, 0) >= enter_after:
+            self._diverged[robot_id] = True
+            self.get_logger().warn(
+                f"Robot {robot_id} has left its path "
+                f"(along {error[0]:.0f}mm, cross {error[1]:.0f}mm) — "
+                f"replanning from the measured state"
+            )
 
     def trajectory_callback(self, msg: TrajectoryMsg):
         if not msg.segments:
@@ -352,9 +361,12 @@ class TrackerNode(Node):
         data["time_offset"] = float(new_offset)
         data["pending"] = None
 
-        # Error against the trajectory just replaced says nothing about this one.
+        # Streaks restart against the new trajectory, but the flag does not: it clears
+        # on measured recovery only. Clearing it here resumed the overhead point at the
+        # moment of handoff, so planning went back to the prediction that had just
+        # failed and the correction never survived a single cycle.
         self._divergence_streak[robot_id] = 0
-        self._diverged[robot_id] = False
+        self._recovery_streak[robot_id] = 0
 
     def _log_diagnostics(self):
         self._log_handoff_latency()

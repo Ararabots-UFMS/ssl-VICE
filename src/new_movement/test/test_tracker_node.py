@@ -30,9 +30,14 @@ def _tracker(**params) -> TrackerNode:
     tracker._handoff_latencies = []
     tracker._tracking_errors = {}
     tracker._divergence_streak = {}
+    tracker._recovery_streak = {}
     tracker._diverged = {}
 
-    values = {"divergence_radius": 400.0, "divergence_frames": 3}
+    values = {
+        "divergence_radius": 400.0,
+        "divergence_frames": 3,
+        "recovery_frames": 10,
+    }
     values.update(params)
     tracker.get_parameter = lambda name: MagicMock(value=values[name])
 
@@ -390,15 +395,38 @@ class TestDivergence:
 
         assert tracker._diverged.get(0) is not True
 
-    def test_recovery_clears_the_flag(self):
+    def test_one_good_frame_does_not_clear_the_flag(self):
+        """Asymmetric hysteresis: the flag survives a frame of luck."""
         tracker = _tracker()
         for _ in range(3):
             tracker._update_divergence(0, self.OFF_PATH)
 
+        tracker._update_divergence(0, self.ON_PATH)
+
+        assert tracker._diverged[0] is True
+
+    def test_sustained_recovery_clears_the_flag(self):
+        tracker = _tracker()
         for _ in range(3):
+            tracker._update_divergence(0, self.OFF_PATH)
+
+        for _ in range(10):
             tracker._update_divergence(0, self.ON_PATH)
 
         assert tracker._diverged[0] is False
+
+    def test_a_bad_frame_restarts_the_recovery_count(self):
+        tracker = _tracker()
+        for _ in range(3):
+            tracker._update_divergence(0, self.OFF_PATH)
+
+        for _ in range(9):
+            tracker._update_divergence(0, self.ON_PATH)
+        tracker._update_divergence(0, self.OFF_PATH)
+        for _ in range(9):
+            tracker._update_divergence(0, self.ON_PATH)
+
+        assert tracker._diverged[0] is True
 
     def test_along_track_error_alone_can_trigger_it(self):
         tracker = _tracker()
@@ -451,7 +479,11 @@ class TestDivergenceSuppressesTheOverhead:
         assert tracker.overhead_pub.publish.called
         assert data["time_offset"] == pytest.approx(0.51)
 
-    def test_activating_a_new_plan_clears_the_flag(self):
+    def test_activating_a_new_plan_restarts_the_streaks_but_not_the_flag(self):
+        """
+        Clearing the flag here resumed the overhead point at the moment of handoff, so
+        planning went back to the prediction that had just failed.
+        """
         tracker = _tracker()
         tracker._diverged[1] = True
         tracker._divergence_streak[1] = 9
@@ -459,5 +491,6 @@ class TestDivergenceSuppressesTheOverhead:
 
         tracker._handle_pending_handoff(1, data, now_sec=100.05, lookahead=0.15)
 
-        assert tracker._diverged[1] is False
+        assert tracker._diverged[1] is True
         assert tracker._divergence_streak[1] == 0
+        assert tracker._recovery_streak[1] == 0
