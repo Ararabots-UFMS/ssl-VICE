@@ -255,10 +255,28 @@ class TestTrackingError:
         assert along == pytest.approx(0.0, abs=1e-6)
         assert abs(cross) == pytest.approx(50.0, abs=1e-6)
 
-    def test_measurement_older_than_the_trajectory_is_dropped(self):
+    def test_a_measurement_predating_the_plan_is_clamped_not_dropped(self):
+        """
+        A plan stamped from vision is activated at a time_offset equal to that
+        measurement's own age, so returning None here made the error unmeasurable in
+        exactly the situation the divergence flag creates, and the flag could not clear.
+        """
         trajectory = _trajectory(4000.0)
+        start = trajectory.get_state(0.0).position
 
-        assert tracking_error(trajectory, 0.0, Vector2D(0, 0), measurement_age=0.1) is None
+        error = tracking_error(trajectory, 0.0, start, measurement_age=0.1)
+
+        assert error is not None
+        assert math.hypot(*error) == pytest.approx(0.0, abs=1e-6)
+
+    def test_a_measurement_past_the_end_is_clamped_to_the_goal(self):
+        trajectory = _trajectory(4000.0)
+        goal = trajectory.get_destination().position
+
+        error = tracking_error(trajectory, 99.0, goal, measurement_age=0.0)
+
+        assert error is not None
+        assert math.hypot(*error) == pytest.approx(0.0, abs=1e-6)
 
 
 class TestTrackingErrorSampling:
@@ -464,12 +482,16 @@ class TestDivergenceSuppressesTheOverhead:
 
         assert tracker.control_reference_pub.publish.called
 
-    def test_the_reference_stops_advancing(self):
+    def test_the_reference_keeps_advancing(self):
+        """
+        Freezing it while replans kept arriving pinned the reference to the opening
+        frames of each new trajectory, and the robot crawled.
+        """
         tracker = _tracker()
 
         data = self._active(tracker, diverged=True)
 
-        assert data["time_offset"] == pytest.approx(0.5)
+        assert data["time_offset"] == pytest.approx(0.51)
 
     def test_a_robot_on_its_path_is_unaffected(self):
         tracker = _tracker()
@@ -494,3 +516,36 @@ class TestDivergenceSuppressesTheOverhead:
         assert tracker._diverged[1] is True
         assert tracker._divergence_streak[1] == 0
         assert tracker._recovery_streak[1] == 0
+
+
+class TestDivergenceRecoveryEndToEnd:
+    def test_a_robot_back_on_its_path_always_recovers(self):
+        """
+        Regression for a latch. While diverged the planner replans from the vision
+        state, so plans are stamped at the measurement instant and activated at a
+        time_offset equal to that measurement's age — which made tracking_error return
+        None on every frame, so the recovery count never advanced. The flag stayed on
+        for the rest of the run, every plan activated the moment it arrived, and the
+        reference never got past the opening frames of a trajectory.
+        """
+        tracker = _tracker()
+        trajectory = _trajectory(4000.0)
+        vision_age = 0.06
+
+        tracker._diverged[0] = True
+        tracker.robot_data = {0: {"trajectory": trajectory, "time_offset": 0.05}}
+        tracker.get_clock = MagicMock()
+        tracker.get_clock().now().nanoseconds = int((100.0 + vision_age) * 1e9)
+
+        on_path = trajectory.get_state(0.0).position
+        robot = MagicMock()
+        robot.id = 0
+        robot.position_x, robot.position_y = on_path.x, on_path.y
+        msg = MagicMock()
+        msg.ally_robots = [robot]
+        msg.vision_wall_stamp = 100.0
+
+        for _ in range(20):
+            tracker.game_state_callback(msg)
+
+        assert tracker._diverged[0] is False

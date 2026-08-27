@@ -58,12 +58,15 @@ def tracking_error(
 
     Comparing vision against the reference at time_offset would report the vision delay
     as tracking error, so the reference is evaluated measurement_age seconds back.
-    Along-track is signed: negative means the robot is behind its reference. Returns
-    None when the measurement predates the trajectory.
+    Along-track is signed: negative means the robot is behind its reference.
+
+    The instant is clamped into the trajectory rather than rejected. A plan stamped from
+    the vision state is activated at a time_offset equal to that measurement's own age,
+    so rejecting made this return None on every frame of exactly the situation the
+    divergence flag creates — and the flag needs these numbers to clear.
     """
-    t_meas = time_offset - measurement_age
-    if t_meas < 0.0 or t_meas > trajectory.get_total_duration():
-        return None
+    duration = trajectory.get_total_duration()
+    t_meas = min(max(time_offset - measurement_age, 0.0), duration)
 
     reference = trajectory.get_state(t_meas)
     if reference is None:
@@ -292,15 +295,13 @@ class TrackerNode(Node):
         if total_duration <= 0:
             return
 
-        # Withheld while the robot is off its path, which does two things: the planner's
-        # cached point ages out and it replans from the measured state, and the reference
-        # stops advancing away from a robot that is not following it.
-        if self._diverged.get(robot_id, False):
-            return
-
         # Publish Overhead Point
-
-        if time_offset < total_duration:
+        # Withheld while the robot is off its path, so the planner's cached point ages
+        # out and it replans from the measured state. Only the point is withheld — the
+        # offset below keeps advancing, since freezing it while replans keep arriving
+        # pinned the reference to the opening frames of each new trajectory.
+        diverged = self._diverged.get(robot_id, False)
+        if time_offset < total_duration and not diverged:
             overhead_point = build_overhead_point(
                 robot_id,
                 data.get("trajectory_msg"),
