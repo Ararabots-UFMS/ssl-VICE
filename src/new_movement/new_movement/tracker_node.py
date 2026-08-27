@@ -112,6 +112,11 @@ class TrackerNode(Node):
             "control_reference_topic", "movement_tracker/control_reference"
         )
         self.declare_parameter('change_radius', 10)
+        # Measured transients reach ~350mm in healthy tracking, so this sits above them:
+        # 400mm is more than two robot diameters off the path, which is a real departure
+        # rather than a bad frame. Debounced so noise cannot trip it.
+        self.declare_parameter('divergence_radius', 400.0)
+        self.declare_parameter('divergence_frames', 3)
 
         self.robot_data: Dict[int, Dict[str, object]] = {}
         self.last_time = self.get_clock().now()
@@ -120,6 +125,8 @@ class TrackerNode(Node):
         self._handoff_latencies: List[float] = []
         # (along, cross) per robot per vision frame, for sizing the divergence threshold.
         self._tracking_errors: Dict[int, List[Tuple[float, float]]] = {}
+        self._divergence_streak: Dict[int, int] = {}
+        self._diverged: Dict[int, bool] = {}
 
         self.traj_sub = self.create_subscription(TrajectoryMsg, "planner/trajectories", self.trajectory_callback, 10)
         self.game_state_sub = self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
@@ -153,6 +160,36 @@ class TrackerNode(Node):
             )
             if error is not None:
                 self._tracking_errors.setdefault(robot.id, []).append(error)
+                self._update_divergence(robot.id, error)
+
+    def _update_divergence(self, robot_id: int, error: Tuple[float, float]) -> None:
+        """
+        Flags a robot that is no longer on the path it was given.
+
+        The plan it is following was built from a prediction, and once the robot has
+        left the path that prediction has stopped describing it — so every plan built
+        on top of it is wrong too. Suppressing the overhead point (see
+        _update_active_trajectory) is what breaks that: the planner's cached point ages
+        out within overhead_max_age and it falls back to the measured state.
+        """
+        radius = float(self.get_parameter('divergence_radius').value)
+        frames = int(self.get_parameter('divergence_frames').value)
+
+        off_path = math.hypot(*error) > radius
+        streak = self._divergence_streak.get(robot_id, 0) + 1 if off_path else 0
+        self._divergence_streak[robot_id] = streak
+
+        diverged = streak >= frames
+        if diverged != self._diverged.get(robot_id, False):
+            self._diverged[robot_id] = diverged
+            if diverged:
+                self.get_logger().warn(
+                    f"Robot {robot_id} has left its path "
+                    f"(along {error[0]:.0f}mm, cross {error[1]:.0f}mm) — "
+                    f"replanning from the measured state"
+                )
+            else:
+                self.get_logger().info(f"Robot {robot_id} is back on its path")
 
     def trajectory_callback(self, msg: TrajectoryMsg):
         if not msg.segments:
@@ -246,7 +283,14 @@ class TrackerNode(Node):
         if total_duration <= 0:
             return
 
+        # Withheld while the robot is off its path, which does two things: the planner's
+        # cached point ages out and it replans from the measured state, and the reference
+        # stops advancing away from a robot that is not following it.
+        if self._diverged.get(robot_id, False):
+            return
+
         # Publish Overhead Point
+
         if time_offset < total_duration:
             overhead_point = build_overhead_point(
                 robot_id,
@@ -307,6 +351,10 @@ class TrackerNode(Node):
         data["trajectory_msg"] = pending["trajectory_msg"]
         data["time_offset"] = float(new_offset)
         data["pending"] = None
+
+        # Error against the trajectory just replaced says nothing about this one.
+        self._divergence_streak[robot_id] = 0
+        self._diverged[robot_id] = False
 
     def _log_diagnostics(self):
         self._log_handoff_latency()

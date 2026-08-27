@@ -21,7 +21,7 @@ def _trajectory(distance: float = 1000.0) -> Trajectory:
     return Trajectory(generator.generate(start, goal))
 
 
-def _tracker() -> TrackerNode:
+def _tracker(**params) -> TrackerNode:
     """A TrackerNode without the ROS machinery, as in test_movement_manager."""
     tracker = TrackerNode.__new__(TrackerNode)
     tracker.get_logger = MagicMock()
@@ -29,6 +29,13 @@ def _tracker() -> TrackerNode:
     tracker.control_reference_pub = MagicMock()
     tracker._handoff_latencies = []
     tracker._tracking_errors = {}
+    tracker._divergence_streak = {}
+    tracker._diverged = {}
+
+    values = {"divergence_radius": 400.0, "divergence_frames": 3}
+    values.update(params)
+    tracker.get_parameter = lambda name: MagicMock(value=values[name])
+
     return tracker
 
 
@@ -346,3 +353,111 @@ class TestZeroDurationPlans:
         # Bailing before this left the controller chasing the previous, moving reference.
         assert tracker.control_reference_pub.publish.called
         assert not tracker.overhead_pub.publish.called
+
+
+class TestDivergence:
+    """
+    Measured: a robot sat 355mm off its reference for nearly five seconds, peaking at
+    966mm, and nothing replanned. Every plan issued in that window was built on a
+    prediction the robot had already stopped matching.
+    """
+
+    ON_PATH = (10.0, 20.0)
+    OFF_PATH = (100.0, 500.0)
+
+    def test_one_bad_frame_is_not_a_divergence(self):
+        tracker = _tracker()
+
+        tracker._update_divergence(0, self.OFF_PATH)
+
+        assert tracker._diverged.get(0) is not True
+
+    def test_a_sustained_departure_is(self):
+        tracker = _tracker()
+
+        for _ in range(3):
+            tracker._update_divergence(0, self.OFF_PATH)
+
+        assert tracker._diverged[0] is True
+
+    def test_a_good_frame_resets_the_streak(self):
+        tracker = _tracker()
+
+        tracker._update_divergence(0, self.OFF_PATH)
+        tracker._update_divergence(0, self.OFF_PATH)
+        tracker._update_divergence(0, self.ON_PATH)
+        tracker._update_divergence(0, self.OFF_PATH)
+
+        assert tracker._diverged.get(0) is not True
+
+    def test_recovery_clears_the_flag(self):
+        tracker = _tracker()
+        for _ in range(3):
+            tracker._update_divergence(0, self.OFF_PATH)
+
+        for _ in range(3):
+            tracker._update_divergence(0, self.ON_PATH)
+
+        assert tracker._diverged[0] is False
+
+    def test_along_track_error_alone_can_trigger_it(self):
+        tracker = _tracker()
+
+        for _ in range(3):
+            tracker._update_divergence(0, (-800.0, 0.0))
+
+        assert tracker._diverged[0] is True
+
+
+class TestDivergenceSuppressesTheOverhead:
+    def _active(self, tracker, diverged):
+        trajectory = _trajectory(4000.0)
+        tracker._diverged[1] = diverged
+        data = {
+            "trajectory": trajectory,
+            "trajectory_msg": trajectory.to_msg(1),
+            "time_offset": 0.5,
+        }
+        tracker._update_active_trajectory(1, data, dt=0.01, now_sec=500.0, lookahead=0.15)
+        return data
+
+    def test_the_overhead_point_is_withheld(self):
+        tracker = _tracker()
+
+        self._active(tracker, diverged=True)
+
+        # The planner's cache ages out and it falls back to the measured state.
+        assert not tracker.overhead_pub.publish.called
+
+    def test_the_control_reference_still_goes_out(self):
+        tracker = _tracker()
+
+        self._active(tracker, diverged=True)
+
+        assert tracker.control_reference_pub.publish.called
+
+    def test_the_reference_stops_advancing(self):
+        tracker = _tracker()
+
+        data = self._active(tracker, diverged=True)
+
+        assert data["time_offset"] == pytest.approx(0.5)
+
+    def test_a_robot_on_its_path_is_unaffected(self):
+        tracker = _tracker()
+
+        data = self._active(tracker, diverged=False)
+
+        assert tracker.overhead_pub.publish.called
+        assert data["time_offset"] == pytest.approx(0.51)
+
+    def test_activating_a_new_plan_clears_the_flag(self):
+        tracker = _tracker()
+        tracker._diverged[1] = True
+        tracker._divergence_streak[1] = 9
+        data = {"pending": _pending(_trajectory(3000.0), 100.0)}
+
+        tracker._handle_pending_handoff(1, data, now_sec=100.05, lookahead=0.15)
+
+        assert tracker._diverged[1] is False
+        assert tracker._divergence_streak[1] == 0

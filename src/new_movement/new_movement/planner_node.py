@@ -30,6 +30,8 @@ class PlannerNode(Node):
         # At 0.5s the planner kept trusting a cache the tracker had stopped refreshing.
         self.declare_parameter('overhead_max_age', 0.05)
         self.declare_parameter('accept_radius', 10)
+        # How far the committed via point has to move before the route counts as changed.
+        self.declare_parameter('path_switch_radius', 500.0)
         
         # State
         self.cur_targets: Optional[TargetArray] = None
@@ -165,18 +167,39 @@ class PlannerNode(Node):
             return None
 
         # Solve
+        previous_via = self.last_vias.get(robot_id)
         try:
             trajectory = self.planner.find(
-                initial_state, target_state, obstacles, self.last_vias.get(robot_id)
+                initial_state, target_state, obstacles, previous_via
             )
             if trajectory and trajectory.root:
+                self._warn_on_path_switch(robot_id, previous_via, trajectory, initial_state)
                 # None when a direct path was found — the warm start is dropped with it.
                 self.last_vias[robot_id] = trajectory.via_state
                 return robot_id, trajectory, handoff_stamp
         except Exception as e:
             self.get_logger().warn(f"Solver error for robot {robot_id}: {e}")
-            
+
         return None
+
+    def _warn_on_path_switch(self, robot_id, previous_via, trajectory, initial_state):
+        """
+        Reports the committed route changing shape, and how fast the robot was going
+        when it did. A switch at speed and a stale prediction produce the same tracking
+        error, and this is what tells them apart in the log.
+        """
+        if previous_via is None or trajectory.via_state is None:
+            return
+
+        moved = previous_via.position.distance(trajectory.via_state.position)
+        if moved < float(self.get_parameter('path_switch_radius').value):
+            return
+
+        speed = initial_state.velocity.size()
+        self.get_logger().warn(
+            f"Robot {robot_id} switched route: via point moved {moved:.0f}mm "
+            f"at {speed:.0f}mm/s"
+        )
 
 def main(args=None):
     rclpy.init(args=args)
