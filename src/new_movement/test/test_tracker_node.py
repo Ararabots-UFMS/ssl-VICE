@@ -31,12 +31,14 @@ def _tracker(**params) -> TrackerNode:
     tracker._tracking_errors = {}
     tracker._divergence_streak = {}
     tracker._recovery_streak = {}
+    tracker._divergence_age = {}
     tracker._diverged = {}
 
     values = {
         "divergence_radius": 400.0,
         "divergence_frames": 3,
         "recovery_frames": 10,
+        "divergence_timeout_frames": 120,
     }
     values.update(params)
     tracker.get_parameter = lambda name: MagicMock(value=values[name])
@@ -501,21 +503,20 @@ class TestDivergenceSuppressesTheOverhead:
         assert tracker.overhead_pub.publish.called
         assert data["time_offset"] == pytest.approx(0.51)
 
-    def test_activating_a_new_plan_restarts_the_streaks_but_not_the_flag(self):
+    def test_a_handoff_leaves_the_divergence_state_alone(self):
         """
-        Clearing the flag here resumed the overhead point at the moment of handoff, so
-        planning went back to the prediction that had just failed.
+        Resetting the streaks here latched the flag on: while diverged, plans activate
+        on arrival faster than a recovery streak of 10 vision frames can accumulate.
         """
         tracker = _tracker()
         tracker._diverged[1] = True
-        tracker._divergence_streak[1] = 9
+        tracker._recovery_streak[1] = 7
         data = {"pending": _pending(_trajectory(3000.0), 100.0)}
 
         tracker._handle_pending_handoff(1, data, now_sec=100.05, lookahead=0.15)
 
         assert tracker._diverged[1] is True
-        assert tracker._divergence_streak[1] == 0
-        assert tracker._recovery_streak[1] == 0
+        assert tracker._recovery_streak[1] == 7
 
 
 class TestDivergenceRecoveryEndToEnd:
@@ -549,3 +550,61 @@ class TestDivergenceRecoveryEndToEnd:
             tracker.game_state_callback(msg)
 
         assert tracker._diverged[0] is False
+
+
+class TestDivergenceUnderHeavyReplanning:
+    """
+    While diverged, plans are stamped in the past and activate on arrival — measured at
+    ~42/s against vision's 60/s. A recovery streak that any handoff could reset never
+    reached the 10 consecutive frames it needed, so the flag latched on.
+    """
+
+    VISION_HZ, HANDOFF_HZ, SECONDS = 60.0, 42.0, 5.0
+
+    def test_recovery_survives_a_handoff_on_every_other_frame(self):
+        tracker = _tracker()
+        trajectory = _trajectory(4000.0)
+        vision_age = 0.09
+
+        tracker._diverged[0] = True
+        tracker.robot_data = {0: {"trajectory": trajectory, "time_offset": vision_age}}
+        tracker.get_clock = MagicMock()
+        tracker.get_clock().now().nanoseconds = int((100.0 + vision_age) * 1e9)
+
+        on_path = trajectory.get_state(0.0).position
+        robot = MagicMock()
+        robot.id = 0
+        robot.position_x, robot.position_y = on_path.x, on_path.y
+        msg = MagicMock()
+        msg.ally_robots = [robot]
+        msg.vision_wall_stamp = 100.0
+
+        events = (
+            [(k / self.VISION_HZ, "vision")
+             for k in range(int(self.SECONDS * self.VISION_HZ))]
+            + [(k / self.HANDOFF_HZ, "handoff")
+               for k in range(int(self.SECONDS * self.HANDOFF_HZ))]
+        )
+        for _, kind in sorted(events):
+            if kind == "vision":
+                tracker.game_state_callback(msg)
+            else:
+                tracker._handle_pending_handoff(
+                    0,
+                    {"pending": _pending(trajectory, 100.0)},
+                    now_sec=100.0 + vision_age,
+                    lookahead=0.15,
+                )
+
+        assert tracker._diverged[0] is False
+
+    def test_the_flag_cannot_be_held_indefinitely(self):
+        """Safety valve: this flag has latched twice, so it is bounded by construction."""
+        tracker = _tracker(divergence_timeout_frames=30)
+        tracker._diverged[0] = True
+
+        for _ in range(30):
+            tracker._update_divergence(0, (600.0, 0.0))  # never recovering
+
+        assert tracker._diverged[0] is False
+        assert tracker.get_logger().warn.called

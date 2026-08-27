@@ -17,6 +17,16 @@ from new_movement.entities.StaticObstacle import GenericCircleObstacle, StaticOb
 from new_movement.entities.DynamicObstacles import EnemyRobotObstacle
 from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
 
+@pytest.fixture(autouse=True)
+def deterministic_sampling():
+    """
+    The solver samples from numpy's global RNG, so without this a test's result depends
+    on how many samples the tests before it happened to draw.
+    """
+    np.random.seed(20260827)
+    random.seed(20260827)
+
+
 @pytest.fixture
 def generator():
     return TrajectoryGenerator()
@@ -237,16 +247,29 @@ class TestBypassSolverStability:
 
         assert traj.via_state is not None
 
-    def test_an_unbeaten_via_point_survives_replanning(self, sampler, generator):
-        solver = self._solver(sampler)
+    def test_a_via_point_is_only_replaced_by_a_real_improvement(self, sampler, generator):
+        """
+        The contract is the margin, not absolute stickiness: a committed route is kept
+        unless a sampled one beats it by cost_margin.
+        """
+        solver = self._solver(sampler, margin=0.15)
         obstacles = self._blocking()
 
-        first = solver.solve(self.START, self.GOAL, obstacles, generator)
-        for _ in range(20):
-            again = solver.solve(
-                self.START, self.GOAL, obstacles, generator, first.via_state
+        current = solver.solve(self.START, self.GOAL, obstacles, generator)
+        replacements = 0
+
+        for _ in range(40):
+            incumbent = current.get_total_duration()
+            result = solver.solve(
+                self.START, self.GOAL, obstacles, generator, current.via_state
             )
-            assert again.via_state.position.distance(first.via_state.position) == 0.0
+            if result.via_state.position.distance(current.via_state.position) > 1e-9:
+                replacements += 1
+                assert result.get_total_duration() < incumbent * 0.85
+            current = result
+
+        # And it settles rather than churning.
+        assert replacements < 5
 
     def test_a_blocked_via_point_is_abandoned(self, sampler, generator):
         solver = self._solver(sampler)

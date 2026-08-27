@@ -124,6 +124,8 @@ class TrackerNode(Node):
         # again. A single good frame used to clear the flag, which handed planning
         # straight back to the prediction that had just failed.
         self.declare_parameter('recovery_frames', 10)
+        # Upper bound on how long the flag may stay raised without recovering.
+        self.declare_parameter('divergence_timeout_frames', 120)
 
         self.robot_data: Dict[int, Dict[str, object]] = {}
         self.last_time = self.get_clock().now()
@@ -134,6 +136,7 @@ class TrackerNode(Node):
         self._tracking_errors: Dict[int, List[Tuple[float, float]]] = {}
         self._divergence_streak: Dict[int, int] = {}
         self._recovery_streak: Dict[int, int] = {}
+        self._divergence_age: Dict[int, int] = {}
         self._diverged: Dict[int, bool] = {}
 
         self.traj_sub = self.create_subscription(TrajectoryMsg, "planner/trajectories", self.trajectory_callback, 10)
@@ -192,10 +195,25 @@ class TrackerNode(Node):
             self._divergence_streak[robot_id] = 0
 
         if self._diverged.get(robot_id, False):
+            held = self._divergence_age.get(robot_id, 0) + 1
+            self._divergence_age[robot_id] = held
+
             if self._recovery_streak.get(robot_id, 0) >= leave_after:
                 self._diverged[robot_id] = False
                 self.get_logger().info(f"Robot {robot_id} is back on its path")
+            elif held >= int(self.get_parameter('divergence_timeout_frames').value):
+                # Safety valve. This flag has latched twice now, each time by stalling
+                # the evidence it needs to clear, so it is not allowed to be permanent.
+                # If the robot really is still off its path the detector re-enters
+                # within divergence_frames, and the log says which happened.
+                self._diverged[robot_id] = False
+                self._divergence_age[robot_id] = 0
+                self.get_logger().warn(
+                    f"Robot {robot_id} held in divergence for {held} frames without "
+                    f"recovering — releasing it"
+                )
         elif self._divergence_streak.get(robot_id, 0) >= enter_after:
+            self._divergence_age[robot_id] = 0
             self._diverged[robot_id] = True
             self.get_logger().warn(
                 f"Robot {robot_id} has left its path "
@@ -362,12 +380,11 @@ class TrackerNode(Node):
         data["time_offset"] = float(new_offset)
         data["pending"] = None
 
-        # Streaks restart against the new trajectory, but the flag does not: it clears
-        # on measured recovery only. Clearing it here resumed the overhead point at the
-        # moment of handoff, so planning went back to the prediction that had just
-        # failed and the correction never survived a single cycle.
-        self._divergence_streak[robot_id] = 0
-        self._recovery_streak[robot_id] = 0
+        # Deliberately does not touch the divergence streaks. Resetting them here
+        # latched the flag on: while diverged, plans activate on arrival at roughly
+        # 42/s against vision's 60/s, so a recovery streak needing 10 consecutive
+        # frames never got past 2. The error is recomputed against the current
+        # trajectory every frame anyway, so a stale frame or two costs nothing.
 
     def _log_diagnostics(self):
         self._log_handoff_latency()
