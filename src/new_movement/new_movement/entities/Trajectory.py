@@ -127,6 +127,9 @@ class Trajectory:
         self.tail: Optional[TrajectorySegment] = initial_segment
         # Via point que o BypassSolver usou, para servir de warm start no próximo ciclo.
         self.via_state: Optional[State] = None
+        # PlanningStatus de quem gerou esta trajetória. Fica aqui, e não no Planner,
+        # porque o Planner é compartilhado entre as threads que planejam cada robô.
+        self.status = None
         if self.root:
             # Encontra a cauda inicial se a trajetória não for vazia
             node = self.root

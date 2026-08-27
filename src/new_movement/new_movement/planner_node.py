@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from new_movement.entities.States import State, Vector2D
 from new_movement.entities.Trajectory import Trajectory
-from new_movement.local_planner import Planner, ObstacleFactory
+from new_movement.local_planner import Planner, ObstacleFactory, PlanningStatus
 
 from movement_interfaces.msg import (
     TargetArray,
@@ -39,6 +39,7 @@ class PlannerNode(Node):
         # Last via point per robot, warm-starting the bypass solver. Held here rather
         # than in Planner so the solver stays reentrant across the worker threads.
         self.last_vias: Dict[int, State] = {}
+        self._last_warned: Dict[str, float] = {}
         
         # Tools
         self.planner = Planner()
@@ -108,6 +109,14 @@ class PlannerNode(Node):
                 self.get_logger().error(f"Planning failed for robot {robot_id}: {e}")
         return callback
 
+    def _warn_throttled(self, key: str, message: str, period: float = 2.0) -> None:
+        """One line per key per period: this repeats at the planning rate while it lasts."""
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        if now_sec - self._last_warned.get(key, float("-inf")) < period:
+            return
+        self._last_warned[key] = now_sec
+        self.get_logger().warn(message)
+
     def plan_for_robot(self, target):
         robot_id = target.robot_id
         
@@ -171,6 +180,14 @@ class PlannerNode(Node):
                 initial_state, target_state, obstacles, previous_via
             )
             if trajectory and trajectory.root:
+                if trajectory.status == PlanningStatus.RECOVERY:
+                    # Neither a direct path nor a bypass cleared the obstacles, so this
+                    # is a stop, not a route. It arrives as a very short plan, which is
+                    # what the tracker's late-handoff warnings were reporting downstream.
+                    self._warn_throttled(
+                        f"recovery-{robot_id}",
+                        f"No path for robot {robot_id}; stopping instead",
+                    )
                 # Kept across direct paths rather than cleared with them. An obstacle
                 # crossing the line and stepping back off it used to re-roll the route
                 # from scratch each time it returned. A via that has gone stale is

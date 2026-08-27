@@ -141,6 +141,7 @@ class TrackerNode(Node):
         self._recovery_streak: Dict[int, int] = {}
         self._divergence_age: Dict[int, int] = {}
         self._diverged: Dict[int, bool] = {}
+        self._last_warned: Dict[str, float] = {}
 
         self.traj_sub = self.create_subscription(TrajectoryMsg, "planner/trajectories", self.trajectory_callback, 10)
         self.game_state_sub = self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
@@ -375,15 +376,23 @@ class TrackerNode(Node):
         # one it replaces ends at the old one.
         if new_offset >= duration:
             new_offset = duration
-            if duration > 1e-3:
-                self.get_logger().warn(
+            # Only worth a line when the plan was long enough to have been caught. A
+            # plan whose whole duration is shorter than the planning latency always
+            # arrives past its own end — that is the case the clamp exists for, not a
+            # fault, and near the goal it is most of them.
+            if duration > lookahead:
+                self._warn_throttled(
+                    f"elapsed-{robot_id}",
                     f"Handoff for robot {robot_id} arrived {dt_late:.3f}s late, past its "
-                    f"{duration:.3f}s duration — activating at the goal"
+                    f"{duration:.3f}s duration — activating at the goal",
+                    now_sec,
                 )
         elif handoff_stamp != 0.0 and dt_late > lookahead:
-            self.get_logger().warn(
+            self._warn_throttled(
+                f"late-{robot_id}",
                 f"Late handoff for robot {robot_id}: {dt_late:.3f}s "
-                f"(lookahead was {lookahead:.3f}s)"
+                f"(lookahead was {lookahead:.3f}s)",
+                now_sec,
             )
 
         data["trajectory"] = pending_traj
@@ -396,6 +405,17 @@ class TrackerNode(Node):
         # 42/s against vision's 60/s, so a recovery streak needing 10 consecutive
         # frames never got past 2. The error is recomputed against the current
         # trajectory every frame anyway, so a stale frame or two costs nothing.
+
+    def _warn_throttled(self, key: str, message: str, now_sec: float, period: float = 2.0):
+        """
+        One line per key per period. Every condition warned about here repeats at the
+        planner's rate for as long as it lasts, so an unthrottled line reports the
+        planner's frequency rather than the event.
+        """
+        if now_sec - self._last_warned.get(key, float("-inf")) < period:
+            return
+        self._last_warned[key] = now_sec
+        self.get_logger().warn(message)
 
     def _log_diagnostics(self):
         self._log_handoff_latency()

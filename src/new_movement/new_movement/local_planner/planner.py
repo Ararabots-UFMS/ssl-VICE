@@ -82,6 +82,7 @@ class Planner:
         direct_seg = self.generator.generate(start, goal)
         if not CollisionEngine.is_collision(direct_seg, obstacles, self.config.collision_time_step):
             self.status = PlanningStatus.DIRECT_PATH
+            safety_trajectory.status = PlanningStatus.DIRECT_PATH
             safety_trajectory.append(direct_seg)
             return safety_trajectory
 
@@ -89,13 +90,16 @@ class Planner:
         bypass_traj = self.solver.solve(start, goal, obstacles, self.generator, previous_via)
         if bypass_traj and bypass_traj.root:
             self.status = PlanningStatus.BYPASS_FOUND
+            safety_trajectory.status = PlanningStatus.BYPASS_FOUND
             safety_trajectory.append(bypass_traj.root)
             safety_trajectory.via_state = bypass_traj.via_state
             return safety_trajectory
 
         # 3. Recovery fallback
         self.status = PlanningStatus.RECOVERY
-        return self._get_recovery_trajectory(start)
+        recovery = self._get_recovery_trajectory(start)
+        recovery.status = PlanningStatus.RECOVERY
+        return recovery
 
     def _handle_static_collisions(
         self, start: State, goal: State, obstacles: List[Obstacle]

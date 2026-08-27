@@ -30,6 +30,7 @@ def _tracker(**params) -> TrackerNode:
     tracker._handoff_latencies = []
     tracker._tracking_errors = {}
     tracker._diagnostics_period = 5.0
+    tracker._last_warned = {}
     tracker._divergence_streak = {}
     tracker._recovery_streak = {}
     tracker._divergence_age = {}
@@ -649,3 +650,80 @@ class TestDiagnosticsAreOptIn:
             tracker._update_divergence(0, (0.0, 900.0))
 
         assert tracker._diverged[0] is True
+
+
+class TestWarningVolume:
+    """
+    Every condition warned about here repeats at the planner's rate for as long as it
+    lasts. Unthrottled, the log reported the planning frequency rather than the event.
+    """
+
+    def _late_handoff(self, tracker, trajectory, now_sec, stamp=100.0):
+        tracker._handle_pending_handoff(
+            1, {"pending": _pending(trajectory, stamp)}, now_sec=now_sec, lookahead=0.15
+        )
+
+    def test_a_repeating_condition_is_reported_once_per_period(self):
+        tracker = _tracker()
+        trajectory = _trajectory(3000.0)
+        duration = trajectory.get_total_duration()
+
+        # 50 plans over half a second, every one of them fully elapsed on arrival.
+        for k in range(50):
+            self._late_handoff(
+                tracker, trajectory, now_sec=100.0 + duration + 1.0 + k * 0.01
+            )
+
+        assert tracker.get_logger().warn.call_count == 1
+
+    def test_it_reports_again_once_the_period_has_passed(self):
+        tracker = _tracker()
+        trajectory = _trajectory(3000.0)
+        duration = trajectory.get_total_duration()
+        base = 100.0 + duration + 1.0
+
+        self._late_handoff(tracker, trajectory, now_sec=base)
+        self._late_handoff(tracker, trajectory, now_sec=base + 5.0)
+
+        assert tracker.get_logger().warn.call_count == 2
+
+    def test_a_plan_shorter_than_the_lookahead_is_not_a_fault(self):
+        """
+        Its whole duration is under the planning latency, so it could never have been
+        caught in time. Near the goal that is most plans, and it is what the clamp is
+        for — measured at 0.004s to 0.2s durations arriving 80-220ms late.
+        """
+        tracker = _tracker()
+        trajectory = _trajectory(1.0)
+        duration = trajectory.get_total_duration()
+        assert duration < 0.15
+
+        self._late_handoff(tracker, trajectory, now_sec=100.0 + duration + 0.1)
+
+        assert not tracker.get_logger().warn.called
+
+    def test_a_substantial_plan_fully_missed_still_reports(self):
+        tracker = _tracker()
+        trajectory = _trajectory(3000.0)
+        duration = trajectory.get_total_duration()
+        assert duration > 0.15
+
+        self._late_handoff(tracker, trajectory, now_sec=100.0 + duration + 1.0)
+
+        assert tracker.get_logger().warn.called
+
+    def test_robots_are_throttled_independently(self):
+        tracker = _tracker()
+        trajectory = _trajectory(3000.0)
+        duration = trajectory.get_total_duration()
+        now = 100.0 + duration + 1.0
+
+        for robot_id in (1, 2, 3):
+            tracker._handle_pending_handoff(
+                robot_id,
+                {"pending": _pending(trajectory, 100.0)},
+                now_sec=now,
+                lookahead=0.15,
+            )
+
+        assert tracker.get_logger().warn.call_count == 3
