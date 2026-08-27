@@ -56,6 +56,14 @@ ESPERA_HALT = 8.0
 GOL_X = 4500.0
 GOL_MEIA_LARGURA = 500.0
 
+# ===============================================================
+# CONFIGURAÇÕES E FLUXOS DO ÁRBITRO
+# ===============================================================
+FLUXOS_ARBITRAGEM = {
+    "freekick": ["STOP", "DIRECT_FREE_KICK_YELLOW"],
+    "kickoff":  ["STOP", "PREPARE_KICKOFF_YELLOW", "NORMAL_START"]
+}
+
 # ==========================================================================
 #  Cenarios
 # ==========================================================================
@@ -262,6 +270,39 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, 3050, 0, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
+    # NOVOS CENÁRIOS DE KICKOFF
+    "kickoff_favor": {
+        "titulo": "Nosso Kickoff",
+        "descricao": "Kickoff a favor no centro do campo",
+        "bola": (0.0, 0.0),
+        "comando": ("KICKOFF", "BLUE"),
+        "azuis": [
+            (0, -2200.0, 0.0, 0.0),     # Robo 0: Goleiro na nossa meta
+            (1, -300.0, 0.0, 0.0),      # Robo 1: Cobrador atras da bola
+            (2, -1000.0, 600.0, 0.0),   # Robo 2: Apoio
+        ],
+        "amarelos": [
+            (0, 2200.0, 0.0, 3.14),     # Robo 0: Goleiro deles
+            (1, 1000.0, -500.0, 3.14),  # Robo 1: Defesa amarela
+            (2, 1000.0, 500.0, 3.14),   # Robo 2: Defesa amarela
+        ],
+    },
+    "kickoff_contra": {
+        "titulo": "Kickoff Adversario",
+        "descricao": "Kickoff deles no centro do campo",
+        "bola": (0.0, 0.0),
+        "comando": ("KICKOFF", "YELLOW"),
+        "azuis": [
+            (0, -2200.0, 0.0, 0.0),     # Robo 0: Goleiro na nossa meta
+            (1, -750.0, -400.0, 0.0),   # Robo 1: Defesa azul (fora do raio central)
+            (2, -750.0, 400.0, 0.0),    # Robo 2: Defesa azul
+        ],
+        "amarelos": [
+            (0, 2200.0, 0.0, 3.14),     # Robo 0: Goleiro deles
+            (1, 300.0, 0.0, 3.14),      # Robo 1: Cobrador amarelo
+            (2, 1000.0, 600.0, 3.14),   # Robo 2: Apoio amarelo
+        ],
+    },
 }
 
 
@@ -386,32 +427,7 @@ def _ir_para(rx, ry, ax, ay, vel=1.2, freio=400.0):
 
 
 def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=None):
-    """Adversario com PAPEIS, em vez de um robo solto atacando a bola.
-
-    POR QUE ISTO EXISTE
-    -------------------
-    O banco de testes so TELEPORTAVA os amarelos e os deixava parados. Com
-    adversario estatico nao da para saber se a nossa defesa bloqueia de verdade,
-    nem se o nosso chute no canto sobrevive a um goleiro que se mexe - o goleiro
-    parado em (4300,0) chegou a defender chutes perfeitos por 8 mm, mas um
-    goleiro parado nao e um teste, e um obstaculo.
-
-    PAPEIS
-      goleiro   (id 0) - mesma logica do NOSSO goleiro: fica na linha da meta e
-                         acompanha o y da bola, limitado a largura do gol.
-      barreira         - na NOSSA falta, respeita os 500 mm da regra 5.3.3 e se
-                         poe na linha bola->meta deles, que e o que uma barreira
-                         faz.
-      cobrador         - na falta DELES, cobra de verdade: contorna a bola, se
-                         encaixa atras dela na linha ate o NOSSO gol, avanca e
-                         chuta.
-      apoio            - na falta deles, abre a frente para receber.
-      marcador         - em jogo normal, marca o azul mais perigoso (o mais
-                         proximo da meta deles).
-
-    'modo' vem do comando do arbitro no cenario: "nossa_falta", "falta_deles" ou
-    "jogo".
-    """
+    """Adversario com PAPEIS, em vez de um robo solto atacando a bola."""
     if not amarelos:
         return
     azuis = azuis or {}
@@ -431,30 +447,54 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
         gx, gy, gori = amarelos[0]
         alvo_x = meta_deles_x - 120.0
 
-        # REFLEXO: intercepta, nao persegue.
-        #
-        # Seguir o y da bola faz o goleiro chegar sempre atrasado - quando ele
-        # alcanca o y, a bola ja passou. Um goleiro de verdade vai para ONDE A
-        # BOLA VAI CRUZAR a linha. Com a bola vindo em direcao a meta, extrapolamos
-        # a reta ate x da linha e usamos esse y.
-        #
-        # Sem isso o relato foi: "o goleiro se move bem pouco e quase nada de
-        # reflexo" - ele so acompanhava o y de uma bola parada, que nao muda.
         bvx, bvy = bola_vel if bola_vel else (0.0, 0.0)
         alvo_y = by
-        if bvx > 300.0:                      # bola indo para a meta deles (+x)
+        if bvx > 300.0:
             t = max(0.0, (alvo_x - bx) / bvx)
-            if t < 3.0:                      # so vale prever o futuro proximo
+            if t < 3.0:
                 alvo_y = by + bvy * t
         alvo_y = max(-GOL_MEIA_LARGURA + 60.0, min(GOL_MEIA_LARGURA - 60.0, alvo_y))
 
-        # Mais rapido e com freio curto: um goleiro que anda a 1,4 m/s com freio
-        # de 400 mm nunca chega. O robo do grSim faz ~2 m/s (VelAbsoluteMax=5 na
-        # config, mas o torque do motor limita antes disso).
         vx, vy = _ir_para(gx, gy, alvo_x, alvo_y, vel=2.5, freio=120.0)
         _cmd_amarelo(c, 0, gori, vx, vy)
 
     linha = [r for r in ids if r != 0]
+
+    # ------------------------------------------------------------- nosso KICKOFF (falta azul)
+    if modo == "nosso_kickoff" and linha:
+        # Robôs amarelos defendem: mantêm-se no campo deles (x > 750 mm) fora do círculo central
+        for ordem, rid in enumerate(linha):
+            rx, ry, rori = amarelos[rid]
+            lado = 1.0 if ordem % 2 == 0 else -1.0
+            ax = 850.0 + (ordem // 2) * 350.0
+            ay = lado * (600.0 + (ordem // 2) * 450.0)
+            vx, vy = _ir_para(rx, ry, ax, ay, vel=1.2)
+            _cmd_amarelo(c, rid, rori, vx, vy)
+        _enviar_agora(pacote)
+        return
+
+    # ------------------------------------------------------------- KICKOFF deles (falta amarela)
+    if modo == "kickoff_deles" and linha:
+        cobrador = min(linha, key=lambda r: math.hypot(amarelos[r][0] - bx, amarelos[r][1] - by))
+        for ordem, rid in enumerate(linha):
+            rx, ry, rori = amarelos[rid]
+            if rid == cobrador:
+                # Cobrador se posiciona em +x (atrás da bola) apontando para o nosso gol (-x)
+                dist_bola = math.hypot(rx - bx, ry - by)
+                atras_x, atras_y = bx + 220.0, by
+                perto = dist_bola < 140.0
+                alvo = (bx, by) if math.hypot(rx - atras_x, ry - atras_y) < 150.0 else (atras_x, atras_y)
+                vx, vy = _ir_para(rx, ry, alvo[0], alvo[1], vel=0.9, freio=250.0)
+                _cmd_amarelo(c, rid, rori, vx, vy, chute=5.0 if perto else 0.0)
+            else:
+                # Demais robôs aguardam o passe na metade do seu campo
+                lado = 1.0 if ordem % 2 == 0 else -1.0
+                ax = 1100.0
+                ay = lado * (750.0 + ordem * 300.0)
+                vx, vy = _ir_para(rx, ry, ax, ay, vel=1.0)
+                _cmd_amarelo(c, rid, rori, vx, vy)
+        _enviar_agora(pacote)
+        return
 
     # ------------------------------------------------------------- falta DELES
     if modo == "falta_deles" and linha:
@@ -463,13 +503,11 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
         for ordem, rid in enumerate(linha):
             rx, ry, rori = amarelos[rid]
             if rid == cobrador:
-                # direcao bola -> NOSSO gol
                 dx, dy = nossa_meta_x - bx, 0.0 - by
                 n = math.hypot(dx, dy) or 1.0
                 ux, uy = dx / n, dy / n
                 atras_x, atras_y = bx - ux * 260.0, by - uy * 260.0
                 dist_bola = math.hypot(rx - bx, ry - by)
-                # a frente da bola? contorna por fora antes de encaixar
                 proj = (rx - bx) * ux + (ry - by) * uy
                 if proj > -80.0:
                     ang = math.atan2(ry - by, rx - bx) + 0.7
@@ -484,7 +522,6 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
                     vx, vy = _ir_para(rx, ry, alvo[0], alvo[1], vel=0.9, freio=250.0)
                     _cmd_amarelo(c, rid, rori, vx, vy, chute=5.0 if perto else 0.0)
             else:
-                # apoio: abre a frente, na direcao do nosso gol
                 lado = 1.0 if ordem % 2 == 0 else -1.0
                 ax = bx - 900.0
                 ay = max(-2400.0, min(2400.0, by + lado * 900.0))
@@ -495,8 +532,6 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
 
     # ------------------------------------------------------------- nossa falta
     if modo == "nossa_falta" and linha:
-        # Regra 5.3.3: na falta do adversario, ficar a pelo menos 500 mm da bola.
-        # A barreira se poe na linha bola->meta deles, que e o caminho do chute.
         dx, dy = meta_deles_x - bx, 0.0 - by
         n = math.hypot(dx, dy) or 1.0
         ux, uy = dx / n, dy / n
@@ -506,7 +541,6 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
             lado = (ordem // 2 + 1) * (1.0 if ordem % 2 == 0 else -1.0)
             ax = bx + ux * 700.0 + px * lado * 180.0
             ay = by + uy * 700.0 + py * lado * 180.0
-            # nunca dentro dos 500 mm da regra
             if math.hypot(ax - bx, ay - by) < 550.0:
                 ax, ay = bx + ux * 600.0, by + uy * 600.0
             vx, vy = _ir_para(rx, ry, ax, ay, vel=1.2)
@@ -517,11 +551,9 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
     # ------------------------------------------------------------- jogo normal
     for ordem, rid in enumerate(linha):
         rx, ry, rori = amarelos[rid]
-        # marca o azul mais perigoso: o mais proximo da meta deles
         candidatos = sorted(azuis.items(), key=lambda kv: abs(meta_deles_x - kv[1][0]))
         if ordem < len(candidatos):
             azul = candidatos[ordem][1]
-            # fica ENTRE o azul e a meta deles, a 350 mm dele
             dx, dy = meta_deles_x - azul[0], 0.0 - azul[1]
             n = math.hypot(dx, dy) or 1.0
             ax, ay = azul[0] + dx / n * 350.0, azul[1] + dy / n * 350.0
@@ -1748,24 +1780,6 @@ def rodar(nome, duracao=12.0):
         ok, onde, atraso = conferir_teleporte(no, alvo, limite=25.0)
         if ok:
             print(f"   cenario confirmado pela visao em {atraso:.1f}s")
-
-            # ---------------------------------------------------------------
-            #  Assentamento sob HALT: deixa o driver se reancorar sozinho.
-            #
-            #  O driver cria a trajetoria de um robo UMA unica vez (driver.py:90)
-            #  e dali em diante replaneja a partir do setpoint do plano anterior
-            #  (driver.py:257), nunca da posicao medida. Depois de um teleporte
-            #  ele ficaria planejando a partir de uma origem fantasma.
-            #
-            #  Mas tatics/halt.py manda cada robo para a PROPRIA posicao lida da
-            #  visao. Entao, mantendo HALT por alguns segundos, o driver replaneja
-            #  ate a posicao real; quando essa trajetoria termina, get_state()
-            #  passa a devolver o ponto final - que e a posicao verdadeira. A
-            #  ancora se corrige sozinha, sem reiniciar node nenhum e sem tocar
-            #  no codigo do time.
-            #
-            #  E o mesmo que acontece numa partida de verdade: sempre ha HALT
-            #  antes de uma falta.
             print("   assentando sob HALT (driver reancora as trajetorias)...")
             enviar_comando_arbitro("HALT")
             gasto = esperar_assentar(no, limite=ESPERA_HALT, piso=1.5)
@@ -1797,40 +1811,36 @@ def rodar(nome, duracao=12.0):
 
         print(f"   bola confirmada em ({no.bola[0]:.0f}, {no.bola[1]:.0f})")
 
-        # Um freekick so vale a partir do STOP.
-        # STOP nao e assentamento, e um ESTADO do arbitro que a estrategia
-        # precisa enxergar antes de receber o DIRECT. Por isso tem piso de tempo:
-        # aqui nao ha nada para "ficar pronto", ha uma transicao para propagar.
+        # 1. Transição inicial obrigatória para STOP
         enviar_comando_arbitro("STOP")
         _girar(no, 1.5)
 
         tipo, cor = cen["comando"]
-        print(f"   comando do arbitro: {tipo} {cor}")
-        enviar_comando_arbitro(tipo, cor)
+        tipo_cen = tipo.upper()
+        cor_cen = cor.upper()
+
+        # 2. SEÇÃO MODIFICADA: Envio do comando de arbitragem conforme a regra
+        if tipo_cen in ("KICKOFF", "PREPARE_KICKOFF"):
+            print(f"   comando do arbitro: PREPARE_KICKOFF {cor_cen} -> NORMAL_START")
+            enviar_comando_arbitro("PREPARE_KICKOFF", cor_cen)
+            _girar(no, 2.0)  # Tempo para o posicionamento de kickoff
+            enviar_comando_arbitro("NORMAL_START")
+        else:
+            print(f"   comando do arbitro: {tipo} {cor}")
+            enviar_comando_arbitro(tipo, cor)
 
         print(f"   gravando por {duracao:.0f}s (olhe a janela do grSim)...")
         no.t0 = time.monotonic()
         no.gravando = True
-        # Enquanto grava, o adversario ATACA - senao a defesa nao e testada.
-        # ADVERSARIO ATIVO.
-        #
-        # Ficou desligado durante a cacada do bug do chute, para nao introduzir
-        # uma variavel nova no meio da investigacao. Agora que o chute funciona,
-        # testar contra adversario parado nao mede quase nada: o goleiro em
-        # (4300,0) chegou a defender chutes perfeitos por 8 mm, mas por acaso -
-        # um goleiro que nao se mexe e um obstaculo, nao um teste.
-        #
-        # O modo sai do proprio comando do arbitro do cenario, entao cada cenario
-        # exercita o papel certo: barreira na nossa falta, cobranca na deles,
-        # marcacao em jogo normal.
-        #
-        # ADVERSARIO=0 desliga, para quando for preciso isolar a nossa jogada.
-        tipo_cen = (cen.get("comando") or ("", ""))[0].upper()
-        cor_cen = (cen.get("comando") or ("", ""))[1].upper()
+
+        # 3. SEÇÃO MODIFICADA: Mapeamento do comportamento do adversário
         if tipo_cen in ("DIRECT", "INDIRECT"):
             modo_adv = "nossa_falta" if cor_cen == "BLUE" else "falta_deles"
+        elif tipo_cen in ("KICKOFF", "PREPARE_KICKOFF"):
+            modo_adv = "nosso_kickoff" if cor_cen == "BLUE" else "kickoff_deles"
         else:
             modo_adv = "jogo"
+
         adversario_ligado = os.environ.get("ADVERSARIO", "1") != "0"
         print(f"   adversario: {'ativo (' + modo_adv + ')' if adversario_ligado else 'desligado'}")
 
@@ -1838,8 +1848,6 @@ def rodar(nome, duracao=12.0):
         proximo_cmd = 0.0
         while time.time() < fim:
             _girar(no, 0.1)
-            # 10 Hz basta: mais que isso so aumenta o trafego UDP sem melhorar o
-            # comportamento, e a visao nem atualiza tao rapido.
             if adversario_ligado and no.bola and time.time() >= proximo_cmd:
                 proximo_cmd = time.time() + 0.1
                 comandar_amarelos(no.bola, no.amarelos,
@@ -1865,37 +1873,15 @@ def rodar(nome, duracao=12.0):
     kick_ativado = any(v > 0 for v in kicks.values())
     energia = energia_do_chute(amostras, eventos_chutador, pedido_chute,
                                visao_crua)
-    # O "CHUTE: ATIVADO" diz apenas que a ESTRATEGIA pediu chute no
-    # /commandTopic. Se o disparo aconteceu e outra coisa: o grSim so dispara se
-    # a geometria do chutador estiver satisfeita NO INSTANTE do comando
-    # (robot.cpp:128). Medimos uma execucao com "ATIVADO" e geometria de livro
-    # no ponto de maior aproximacao (xx=24, yy=17) em que a bola andou 557 mm -
-    # empurrao: o pedido e o contato nao coincidiram no tempo.
-    #
-    # E este o numero que vale para o criterio "o chute ativando em todas as
-    # execucoes", nao o pedido da estrategia.
     disparou = next((x for x in eventos_chutador if x.get("flat_kick")), None)
     janela = janela_do_chutador(visao_crua, robos_crus, janelas_kick,
                                 eventos_chutador)
     _res_parcial = {"alvos": alvos, "robos_crus": robos_crus, "visao_crua": visao_crua}
     rastreio_calc = erro_de_rastreio(_res_parcial)
-    # O gol passa a ser decidido pela fonte crua sempre que ela existir; o
-    # veredito do topico fica guardado ao lado, para as duas leituras poderem
-    # ser comparadas quando divergirem.
     gol_topico = no.gol
     gol_cru, gol_x, gol_y = gol_pela_visao_crua(visao_crua)
     gol_final = gol_cru if visao_crua else gol_topico
-    # Guardamos as constantes do perfil para o relatorio poder DESENHAR onde a
-    # estrategia acha que fica o gol - e a diferenca contra o gol real de 4500
-    # explica de imediato o goleiro fora de posicao.
-    # Medidas que a estrategia esta REALMENTE usando, para o relatorio desenhar
-    # a referencia certa.
-    #
-    # Antes o padrao caia em "original" (gol +/-2250) sempre que o perfil nao
-    # fosse reconhecido - inclusive com CAMPO=codigo, que e o modo normal. O
-    # relatorio entao acusava "o goleiro abandona a meta" comparando com uma
-    # medida que o codigo nao usa mais. Agora o padrao e Division B, que e o que
-    # o codigo assume quando nao ha geometria da visao.
+
     perfis = {
         "original": {"goal_x": 2250.0, "kick_threshold": 1125.0},
         "divb": {"goal_x": 4500.0, "kick_threshold": 2250.0},
@@ -1956,7 +1942,7 @@ def rodar(nome, duracao=12.0):
         for rid, (d, xx, yy) in sorted(no.contato.items()):
             veredito = "PODIA CHUTAR" if (xx < 31.5 and yy < 40.0) else (
                 "torto (yy=%.0f)" % yy if yy >= 40.0 else "longe (xx=%.0f)" % xx)
-            print("     robo %d: aproximou %4.0f mm  xx=%5.1f  yy=%5.1f  -> %s"
+            print("      robo %d: aproximou %4.0f mm  xx=%5.1f  yy=%5.1f  -> %s"
                   % (rid, d, xx, yy, veredito))
     print(f"   CHUTE: {'ATIVADO' if kick_ativado else 'nao ativado'}", end="")
     if kicks:
@@ -1992,15 +1978,15 @@ def rodar(nome, duracao=12.0):
             d = math.hypot(r["x"] - ini["x"], r["y"] - ini["y"])
             papel = " (goleiro)" if r["id"] == 0 else ""
             print(
-                f"     robo {r['id']}{papel}: "
+                f"      robo {r['id']}{papel}: "
                 f"({ini['x']:7.0f},{ini['y']:7.0f}) -> "
-                f"({r['x']:7.0f},{r['y']:7.0f})  andou {d:6.0f}"
+                f"({r['x']:7.0f},{r['y']:7.0f})   andou {d:6.0f}"
             )
         if prim["bola"] and ult["bola"]:
             b0, b1 = prim["bola"][0], ult["bola"][0]
             db = math.hypot(b1["x"] - b0["x"], b1["y"] - b0["y"])
-            print(f"     BOLA: ({b0['x']:.0f},{b0['y']:.0f}) -> "
-                  f"({b1['x']:.0f},{b1['y']:.0f})  andou {db:.0f}")
+            print(f"      BOLA: ({b0['x']:.0f},{b0['y']:.0f}) -> "
+                  f"({b1['x']:.0f},{b1['y']:.0f})   andou {db:.0f}")
 
     print(f"   salvo em {destino}")
     try:
@@ -2011,8 +1997,7 @@ def rodar(nome, duracao=12.0):
     except Exception as exc:
         print(f"   (replay nao gerado: {exc})")
     return 0
-
-
+    
 def _ferramenta_cadeia():
     """Conta mensagens em cada topico e diz o que esta vivo na cadeia."""
 
