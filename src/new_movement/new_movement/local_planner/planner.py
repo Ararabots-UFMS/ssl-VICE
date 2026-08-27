@@ -25,6 +25,9 @@ class SolverConfig:
     continuity_threshold: float = 1e-3
     # How much faster a newly sampled bypass must be to replace the previous one.
     bypass_cost_margin: float = 0.15
+    # How far past an obstacle's boundary to place an escape point. adaptDestination
+    # returns the boundary itself, where isCollidingAt is still true.
+    escape_margin: float = 20.0
     # Collision sampling step. At 2000 mm/s a 0.2 s step advances 400 mm between
     # samples — wider than an obstacle diameter, so the check can tunnel through it.
     # 0.04 s is ~80 mm of travel.
@@ -75,7 +78,9 @@ class Planner:
         previous_via is the via point of the last plan for this robot, if any. The caller
         owns that cache so this stays reentrant across the planner's worker threads.
         """
-        start, goal, safety_trajectory = self._handle_static_collisions(start, goal, obstacles)
+        start, goal, safety_trajectory = self._handle_start_and_goal_collisions(
+            start, goal, obstacles
+        )
 
 
         # 1. Try direct path
@@ -101,24 +106,64 @@ class Planner:
         recovery.status = PlanningStatus.RECOVERY
         return recovery
 
-    def _handle_static_collisions(
+    def _escape_point(self, obs: Obstacle, position: Vector2D) -> Optional[Vector2D]:
+        """
+        Where to move to get clear of this obstacle, or None if already clear.
+
+        Placed escape_margin beyond the boundary: adaptDestination returns the boundary
+        itself, and isCollidingAt is true there (distance zero fails its <= 0 test), so
+        escaping exactly onto it leaves the next plan starting in a collision.
+        """
+        if isinstance(obs, StaticObstacle):
+            if not obs.isCollidingAt(position):
+                return None
+            boundary = obs.adaptDestination(position)
+        else:
+            if not obs.isCollidingAt(position, 0.0):
+                return None
+            boundary = obs.adaptDestination(position, 0.0)
+
+        outward = boundary.subtract(position)
+        if outward.size() < 1e-6:
+            return None  # touching rather than penetrating; nothing to escape
+        return boundary.add(outward.norm().multiplyByScalar(self.config.escape_margin))
+
+    def _handle_start_and_goal_collisions(
         self, start: State, goal: State, obstacles: List[Obstacle]
     ) -> Tuple[State, State, Trajectory]:
         traj = Trajectory()
         for obs in obstacles:
-            if not isinstance(obs, StaticObstacle):
-                continue
-            if obs.isCollidingAt(goal.position):
+            # Only static obstacles move the goal: where a robot will be by the time we
+            # arrive is a different question from where it is now.
+            if isinstance(obs, StaticObstacle) and obs.isCollidingAt(goal.position):
                 goal = State(obs.adaptDestination(goal.position), goal.velocity)
-            if obs.isCollidingAt(start.position):
-                exit_point = obs.adaptDestination(start.position)
-                exit_state = State(exit_point, start.velocity)
-                traj.append(self.generator.generate(start, exit_state))
-                start = exit_state
+
+            # Escaping applies to every obstacle. Gated to static ones, a robot pressed
+            # against another robot had every candidate path collide at t=0, so the
+            # solver fell through to a stop and it stayed stuck there.
+            exit_point = self._escape_point(obs, start.position)
+            if exit_point is None:
+                continue
+
+            exit_state = State(exit_point, start.velocity)
+            traj.append(self.generator.generate(start, exit_state))
+            start = exit_state
         return start, goal, traj
 
     def _get_recovery_trajectory(self, current_state: State) -> Trajectory:
-        stop_state = State(current_state.position, Vector2D(0, 0))
+        """
+        Brake to a stop wherever that lands, rather than returning to the position the
+        robot held when this was planned. Asking a robot at 2000mm/s to end at its
+        current position means overshooting and driving back, which is what the
+        positive along-track excursions after every recovery were.
+        """
+        velocity = current_state.velocity
+        acceleration = self.config.max_acceleration
+        braking_offset = Vector2D(
+            velocity.x * abs(velocity.x) / (2.0 * acceleration.x),
+            velocity.y * abs(velocity.y) / (2.0 * acceleration.y),
+        )
+        stop_state = State(current_state.position.add(braking_offset), Vector2D(0, 0))
         return Trajectory(self.generator.generate(current_state, stop_state))
 
     def validate_continuity(self, trajectory: Trajectory) -> bool:

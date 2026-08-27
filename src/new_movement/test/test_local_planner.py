@@ -347,12 +347,116 @@ class TestPlanner:
         obs = GenericCircleObstacle(Vector2D(0, 0), 200, padding=0)
         start = State(Vector2D(50, 50), Vector2D(0, 0)) # Inside obstacle
         goal = State(Vector2D(1000, 0), Vector2D(0, 0))
-        
-        new_start, new_goal, safety_traj = planner._handle_static_collisions(start, goal, [obs])
-        
+
+        new_start, new_goal, safety_traj = planner._handle_start_and_goal_collisions(
+            start, goal, [obs]
+        )
+
         # Safety traj should take us out of the obstacle
         assert safety_traj.root is not None
         assert not obs.isCollidingAt(new_start.position)
+
+
+class TestEscapingObstacles:
+    """
+    A robot pressed against another robot had every candidate path collide at t=0, so
+    the solver fell through to a stop and it stayed stuck there. Escaping was gated to
+    static obstacles, but adaptDestination is on the base Obstacle interface.
+    """
+
+    GOAL = State(Vector2D(3000, 0), Vector2D(0, 0))
+
+    def _pinned_against_a_robot(self):
+        enemy = EnemyRobotObstacle(
+            State(Vector2D(0, 0), Vector2D(0, 0)), radius=190.0
+        )
+        # 60mm inside its radius: touching and overlapping, as after a collision.
+        return enemy, State(Vector2D(130.0, 0.0), Vector2D(0, 0))
+
+    def test_a_robot_inside_another_gets_an_escape_segment(self):
+        planner = Planner()
+        enemy, start = self._pinned_against_a_robot()
+
+        new_start, _, safety = planner._handle_start_and_goal_collisions(
+            start, self.GOAL, [enemy]
+        )
+
+        assert safety.root is not None
+        assert not enemy.isCollidingAt(new_start.position, 0.0)
+
+    def test_the_escape_clears_the_boundary_not_just_reaches_it(self):
+        """adaptDestination returns the boundary, where isCollidingAt is still true."""
+        planner = Planner()
+        enemy, start = self._pinned_against_a_robot()
+
+        escape = planner._escape_point(enemy, start.position)
+
+        assert escape.distance(Vector2D(0, 0)) > 190.0
+        assert not enemy.isCollidingAt(escape, 0.0)
+
+    def test_a_clear_robot_is_left_alone(self):
+        planner = Planner()
+        enemy = EnemyRobotObstacle(State(Vector2D(0, 0), Vector2D(0, 0)), radius=190.0)
+
+        assert planner._escape_point(enemy, Vector2D(2000.0, 0.0)) is None
+
+    def test_the_planner_no_longer_dead_ends_when_pinned(self):
+        planner = Planner()
+        enemy, start = self._pinned_against_a_robot()
+
+        trajectory = planner.find(start, self.GOAL, [enemy])
+
+        assert trajectory.status != PlanningStatus.RECOVERY
+        assert trajectory.root is not None
+
+
+class TestRecoveryBraking:
+    """
+    Recovery returned the robot to the position it held when the plan was made. At speed
+    that means overshooting and driving back, which showed up as positive along-track
+    excursions of +262mm to +573mm right after every "no path" fallback.
+    """
+
+    def test_a_moving_robot_stops_ahead_of_where_it_was(self):
+        planner = Planner()
+        start = State(Vector2D(0, 0), Vector2D(2000.0, 0.0))
+
+        recovery = planner._get_recovery_trajectory(start)
+        stop = recovery.get_destination()
+
+        assert stop.position.x > 0.0
+        assert stop.velocity.size() == pytest.approx(0.0, abs=1.0)
+
+    def test_it_never_reverses(self):
+        planner = Planner()
+        start = State(Vector2D(0, 0), Vector2D(2000.0, 0.0))
+
+        recovery = planner._get_recovery_trajectory(start)
+        duration = recovery.get_total_duration()
+
+        samples = [
+            recovery.get_state(float(t)).velocity.x
+            for t in np.arange(0.0, duration, 0.01)
+        ]
+        assert min(samples) >= -1.0
+
+    def test_the_stop_is_at_the_braking_distance(self):
+        planner = Planner()
+        speed = 2000.0
+        start = State(Vector2D(0, 0), Vector2D(speed, 0.0))
+
+        stop = planner._get_recovery_trajectory(start).get_destination()
+
+        expected = speed ** 2 / (2.0 * planner.config.max_acceleration.x)
+        assert stop.position.x == pytest.approx(expected, rel=0.02)
+
+    def test_a_stationary_robot_stays_put(self):
+        planner = Planner()
+        start = State(Vector2D(500.0, -200.0), Vector2D(0, 0))
+
+        stop = planner._get_recovery_trajectory(start).get_destination()
+
+        assert stop.position.distance(start.position) == pytest.approx(0.0, abs=1.0)
 
 class TestObstacleFactory:
     def test_create_obstacles(self):
