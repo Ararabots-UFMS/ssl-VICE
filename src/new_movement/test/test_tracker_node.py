@@ -31,6 +31,7 @@ def _tracker(**params) -> TrackerNode:
     tracker._tracking_errors = {}
     tracker._diagnostics_period = 5.0
     tracker._last_warned = {}
+    tracker._measured = {}
     tracker._divergence_streak = {}
     tracker._recovery_streak = {}
     tracker._divergence_age = {}
@@ -727,3 +728,78 @@ class TestWarningVolume:
             )
 
         assert tracker.get_logger().warn.call_count == 3
+
+
+class TestHandoffReprojection:
+    """
+    dt_late as the starting offset assumes the robot spent that long following this
+    plan. For a plan built from a measured state, or a recovery stop, the opening
+    stretch describes motion the robot never made — measured at 0.28s late, half a
+    metre of reference placed where the robot has never been.
+    """
+
+    SPEED = 2000.0
+
+    def _measured_at(self, tracker, position, velocity=(0.0, 0.0), stamp=100.0):
+        tracker._measured[1] = (
+            Vector2D(*position), Vector2D(*velocity), stamp
+        )
+
+    def _activate(self, tracker, trajectory, stamp, now_sec):
+        data = {"pending": _pending(trajectory, stamp)}
+        tracker._handle_pending_handoff(1, data, now_sec=now_sec, lookahead=0.15)
+        return data["time_offset"]
+
+    def test_it_starts_where_the_robot_actually_is(self):
+        tracker = _tracker()
+        trajectory = _trajectory(4000.0)
+
+        # Plan stamped 0.28s ago, but the robot never drove its opening stretch — it is
+        # still sitting at the plan's start.
+        start = trajectory.get_state(0.0).position
+        self._measured_at(tracker, (start.x, start.y), stamp=100.28)
+
+        offset = self._activate(tracker, trajectory, stamp=100.0, now_sec=100.28)
+
+        assert offset == pytest.approx(0.0, abs=0.02)
+
+    def test_a_robot_that_did_follow_it_starts_where_it_got_to(self):
+        tracker = _tracker()
+        trajectory = _trajectory(4000.0)
+
+        travelled = trajectory.get_state(0.20).position
+        self._measured_at(tracker, (travelled.x, travelled.y), stamp=100.28)
+
+        offset = self._activate(tracker, trajectory, stamp=100.0, now_sec=100.28)
+
+        assert offset == pytest.approx(0.20, abs=0.03)
+
+    def test_the_reference_never_leads_by_more_than_the_elapsed_time(self):
+        tracker = _tracker()
+        trajectory = _trajectory(4000.0)
+
+        # Robot far down the path, but only 50ms has elapsed since the plan's stamp.
+        far = trajectory.get_state(1.0).position
+        self._measured_at(tracker, (far.x, far.y), stamp=100.05)
+
+        offset = self._activate(tracker, trajectory, stamp=100.0, now_sec=100.05)
+
+        assert offset <= 0.05 + 1e-9
+
+    def test_the_common_case_is_untouched(self):
+        """An overhead-stamped plan arrives with dt_late near zero and nothing to search."""
+        tracker = _tracker()
+        trajectory = _trajectory(4000.0)
+        self._measured_at(tracker, (0.0, 0.0), stamp=100.0)
+
+        offset = self._activate(tracker, trajectory, stamp=100.0, now_sec=100.002)
+
+        assert offset == pytest.approx(0.0, abs=0.003)
+
+    def test_it_falls_back_to_dt_late_without_a_measurement(self):
+        tracker = _tracker()
+        trajectory = _trajectory(4000.0)
+
+        offset = self._activate(tracker, trajectory, stamp=100.0, now_sec=100.1)
+
+        assert offset == pytest.approx(0.1)

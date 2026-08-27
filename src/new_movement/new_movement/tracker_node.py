@@ -142,6 +142,8 @@ class TrackerNode(Node):
         self._divergence_age: Dict[int, int] = {}
         self._diverged: Dict[int, bool] = {}
         self._last_warned: Dict[str, float] = {}
+        # Latest vision pose per robot: (position, velocity, wall stamp).
+        self._measured: Dict[int, Tuple[Vector2D, Vector2D, float]] = {}
 
         self.traj_sub = self.create_subscription(TrajectoryMsg, "planner/trajectories", self.trajectory_callback, 10)
         self.game_state_sub = self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
@@ -168,6 +170,12 @@ class TrackerNode(Node):
         measurement_age = now_sec - msg.vision_wall_stamp
 
         for robot in msg.ally_robots:
+            self._measured[robot.id] = (
+                Vector2D(robot.position_x, robot.position_y),
+                Vector2D(robot.velocity_x, robot.velocity_y),
+                msg.vision_wall_stamp,
+            )
+
             data = self.robot_data.get(robot.id)
             if data is None or data.get("trajectory") is None:
                 continue
@@ -375,7 +383,6 @@ class TrackerNode(Node):
         # Clamped, not discarded: a late plan still ends at the current goal, while the
         # one it replaces ends at the old one.
         if new_offset >= duration:
-            new_offset = duration
             # Only worth a line when the plan was long enough to have been caught. A
             # plan whose whole duration is shorter than the planning latency always
             # arrives past its own end — that is the case the clamp exists for, not a
@@ -397,7 +404,9 @@ class TrackerNode(Node):
 
         data["trajectory"] = pending_traj
         data["trajectory_msg"] = pending["trajectory_msg"]
-        data["time_offset"] = float(new_offset)
+        data["time_offset"] = float(
+            self._reprojected_offset(robot_id, pending_traj, new_offset, now_sec)
+        )
         data["pending"] = None
 
         # Deliberately does not touch the divergence streaks. Resetting them here
@@ -405,6 +414,49 @@ class TrackerNode(Node):
         # 42/s against vision's 60/s, so a recovery streak needing 10 consecutive
         # frames never got past 2. The error is recomputed against the current
         # trajectory every frame anyway, so a stale frame or two costs nothing.
+
+    def _reprojected_offset(self, robot_id, trajectory, dt_late, now_sec):
+        """
+        The offset along this plan whose reference best matches where the robot is.
+
+        dt_late on its own assumes the robot spent that long following this plan. That
+        holds for a plan built from its own predicted trajectory, where dt_late is a few
+        milliseconds. It does not hold for one built from a measured state, or for a
+        recovery stop: their opening stretch describes motion the robot never made, so
+        starting dt_late into them puts the reference somewhere the robot has never
+        been — measured at up to 0.28s, which is half a metre at cruising speed.
+
+        Searched over [0, dt_late] only. Past that is the future of a plan that has not
+        run yet, and the reference must never lead the robot by more than the elapsed
+        time.
+        """
+        duration = trajectory.get_total_duration()
+        upper = min(max(dt_late, 0.0), duration)
+        if upper <= 0.0:
+            return 0.0
+
+        measured = self._measured.get(robot_id)
+        if measured is None:
+            return upper
+
+        position, velocity, stamp = measured
+        age = max(0.0, now_sec - stamp)
+        now_position = Vector2D(
+            position.x + velocity.x * age, position.y + velocity.y * age
+        )
+
+        best_offset, best_distance = 0.0, float("inf")
+        steps = 24
+        for k in range(steps + 1):
+            offset = upper * k / steps
+            state = trajectory.get_state(offset)
+            if state is None:
+                continue
+            distance = state.position.distance(now_position)
+            if distance < best_distance:
+                best_offset, best_distance = offset, distance
+
+        return best_offset
 
     def _warn_throttled(self, key: str, message: str, now_sec: float, period: float = 2.0):
         """

@@ -17,6 +17,10 @@ from system_interfaces.msg import GameState
 from typing import Dict, Optional
 from time import time
 
+# Beyond this, vision has stopped arriving and carrying the pose forward on its last
+# velocity is worse than planning from it as it stands.
+MAX_VISION_AGE = 0.2
+
 
 class PlannerNode(Node):
     def __init__(self):
@@ -109,6 +113,30 @@ class PlannerNode(Node):
                 self.get_logger().error(f"Planning failed for robot {robot_id}: {e}")
         return callback
 
+    def _state_from_vision(self, target):
+        """
+        The measured state carried forward to now, with the stamp to match.
+
+        Vision is already ~60ms old when it arrives and planning adds more, so a plan
+        left on the raw stamp reaches the tracker 150-280ms after the instant it
+        describes. The tracker then starts it that far in, and for a braking plan the
+        stop point it names is half a metre closer than the robot can still reach —
+        the robot runs past it and gets dragged back.
+        """
+        position = Vector2D(target.initial_pos.x, target.initial_pos.y)
+        velocity = Vector2D(target.initial_vel.x, target.initial_vel.y)
+        stamp = float(target.vision_stamp)
+
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        age = now_sec - stamp
+        if stamp <= 0.0 or age < 0.0 or age > MAX_VISION_AGE:
+            return State(position, velocity), stamp
+
+        carried = Vector2D(
+            position.x + velocity.x * age, position.y + velocity.y * age
+        )
+        return State(carried, velocity), now_sec
+
     def _warn_throttled(self, key: str, message: str, period: float = 2.0) -> None:
         """One line per key per period: this repeats at the planning rate while it lasts."""
         now_sec = self.get_clock().now().nanoseconds / 1e9
@@ -142,11 +170,9 @@ class PlannerNode(Node):
                 if goal_pos.distance(init_pos) < float(self.get_parameter('accept_radius').value):
                     return None  # already there, nothing to plan
                 # Far enough to be worth replanning from vision state
-                initial_state = State(init_pos, init_vel)
-                handoff_stamp = float(target.vision_stamp)
+                initial_state, handoff_stamp = self._state_from_vision(target)
         else:
-            initial_state = State(init_pos, init_vel)
-            handoff_stamp = float(target.vision_stamp)
+            initial_state, handoff_stamp = self._state_from_vision(target)
 
         target_state = State(
             Vector2D(target.target_pos.x, target.target_pos.y),
