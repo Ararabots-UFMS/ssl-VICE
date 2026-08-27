@@ -126,6 +126,9 @@ class TrackerNode(Node):
         self.declare_parameter('recovery_frames', 10)
         # Upper bound on how long the flag may stay raised without recovering.
         self.declare_parameter('divergence_timeout_frames', 120)
+        # Seconds between handoff-latency and tracking-error summaries. Off by default;
+        # set it to 5.0 to size lookahead_time or divergence_radius against real runs.
+        self.declare_parameter('diagnostics_period', 0.0)
 
         self.robot_data: Dict[int, Dict[str, object]] = {}
         self.last_time = self.get_clock().now()
@@ -148,7 +151,12 @@ class TrackerNode(Node):
 
         self.timer = self.create_timer(0.01, self.timer_callback)
         self.gui_timer = self.create_timer(0.1, self._update_gui_trajectories)
-        self.diagnostics_timer = self.create_timer(5.0, self._log_diagnostics)
+
+        self._diagnostics_period = float(self.get_parameter('diagnostics_period').value)
+        if self._diagnostics_period > 0.0:
+            self.diagnostics_timer = self.create_timer(
+                self._diagnostics_period, self._log_diagnostics
+            )
 
         self.get_logger().info("TrackerNode ONLINE")
 
@@ -169,9 +177,12 @@ class TrackerNode(Node):
                 Vector2D(robot.position_x, robot.position_y),
                 measurement_age,
             )
-            if error is not None:
+            if error is None:
+                continue
+
+            if self._diagnostics_period > 0.0:
                 self._tracking_errors.setdefault(robot.id, []).append(error)
-                self._update_divergence(robot.id, error)
+            self._update_divergence(robot.id, error)
 
     def _update_divergence(self, robot_id: int, error: Tuple[float, float]) -> None:
         """
@@ -357,7 +368,7 @@ class TrackerNode(Node):
         pending_traj = pending["trajectory"]
         duration = pending_traj.get_total_duration()
 
-        if handoff_stamp != 0.0:
+        if handoff_stamp != 0.0 and self._diagnostics_period > 0.0:
             self._handoff_latencies.append(dt_late)
 
         # Clamped, not discarded: a late plan still ends at the current goal, while the
@@ -369,7 +380,7 @@ class TrackerNode(Node):
                     f"Handoff for robot {robot_id} arrived {dt_late:.3f}s late, past its "
                     f"{duration:.3f}s duration — activating at the goal"
                 )
-        elif handoff_stamp != 0.0 and dt_late > lookahead * 0.5:
+        elif handoff_stamp != 0.0 and dt_late > lookahead:
             self.get_logger().warn(
                 f"Late handoff for robot {robot_id}: {dt_late:.3f}s "
                 f"(lookahead was {lookahead:.3f}s)"

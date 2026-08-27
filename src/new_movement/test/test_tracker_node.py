@@ -29,6 +29,7 @@ def _tracker(**params) -> TrackerNode:
     tracker.control_reference_pub = MagicMock()
     tracker._handoff_latencies = []
     tracker._tracking_errors = {}
+    tracker._diagnostics_period = 5.0
     tracker._divergence_streak = {}
     tracker._recovery_streak = {}
     tracker._divergence_age = {}
@@ -608,3 +609,43 @@ class TestDivergenceUnderHeavyReplanning:
 
         assert tracker._diverged[0] is False
         assert tracker.get_logger().warn.called
+
+
+class TestDiagnosticsAreOptIn:
+    """
+    The latency and tracking-error summaries were built to size lookahead_time and
+    divergence_radius against real runs. They are kept, but silent unless asked for.
+    """
+
+    def test_nothing_accumulates_when_the_period_is_zero(self):
+        tracker = _tracker()
+        tracker._diagnostics_period = 0.0
+        trajectory = _trajectory(4000.0)
+        tracker.robot_data = {0: {"trajectory": trajectory, "time_offset": 0.5}}
+        tracker.get_clock = MagicMock()
+        tracker.get_clock().now().nanoseconds = int(100.05 * 1e9)
+
+        robot = MagicMock()
+        robot.id = 0
+        robot.position_x, robot.position_y = 0.0, 0.0
+        msg = MagicMock()
+        msg.ally_robots = [robot]
+        msg.vision_wall_stamp = 100.0
+
+        for _ in range(30):
+            tracker.game_state_callback(msg)
+        tracker._handle_pending_handoff(
+            0, {"pending": _pending(trajectory, 100.0)}, now_sec=100.05, lookahead=0.15
+        )
+
+        assert tracker._tracking_errors == {}
+        assert tracker._handoff_latencies == []
+
+    def test_divergence_still_works_with_diagnostics_off(self):
+        tracker = _tracker()
+        tracker._diagnostics_period = 0.0
+
+        for _ in range(3):
+            tracker._update_divergence(0, (0.0, 900.0))
+
+        assert tracker._diverged[0] is True
