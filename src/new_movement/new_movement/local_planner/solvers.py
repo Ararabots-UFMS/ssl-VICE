@@ -9,6 +9,11 @@ from new_movement.utilities.trajectory_generator.TrajGenerator import Trajectory
 from .collision import CollisionEngine
 from .sampler import InformedSampler
 
+# Perpendicular sampling sigma, as a fraction of the start-goal distance.
+MIN_SPREAD = 0.03
+MAX_SPREAD = 0.35
+
+
 class PlanningStatus(Enum):
     SUCCESS = auto()
     DIRECT_PATH = auto()
@@ -58,8 +63,15 @@ class BypassSolver(BaseSolver):
             incumbent = self._build(start, goal, obstacles, generator, previous_via)
 
         challenger = None
-        for _ in range(self.max_iterations):
-            via_position = self.sampler.sample_near_axis(start.position, goal.position)
+        for attempt in range(self.max_iterations):
+            # Progressive widening: the tight offsets that keep the route close to the
+            # direct line are tried first, and only widen when they keep colliding.
+            spread = MIN_SPREAD + (MAX_SPREAD - MIN_SPREAD) * (
+                attempt / max(1, self.max_iterations - 1)
+            )
+            via_position = self.sampler.sample_near_axis(
+                start.position, goal.position, spread
+            )
             via_state = State(
                 via_position,
                 self.sampler.sample_tangential_velocity(

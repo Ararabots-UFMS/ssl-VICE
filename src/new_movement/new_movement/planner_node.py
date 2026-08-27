@@ -174,8 +174,13 @@ class PlannerNode(Node):
             )
             if trajectory and trajectory.root:
                 self._warn_on_path_switch(robot_id, previous_via, trajectory, initial_state)
-                # None when a direct path was found — the warm start is dropped with it.
-                self.last_vias[robot_id] = trajectory.via_state
+                # Kept across direct paths rather than cleared with them. An obstacle
+                # crossing the line and stepping back off it used to re-roll the route
+                # from scratch each time it returned. A via that has gone stale is
+                # self-correcting: the solver rebuilds through it from the current start
+                # and a sampled route beats it whenever it is genuinely worse.
+                if trajectory.via_state is not None:
+                    self.last_vias[robot_id] = trajectory.via_state
                 return robot_id, trajectory, handoff_stamp
         except Exception as e:
             self.get_logger().warn(f"Solver error for robot {robot_id}: {e}")

@@ -9,14 +9,33 @@ class InformedSampler:
         self.field_width = field_width
         self.max_velocity = max_velocity
 
-    def sample_near_axis(self, start: Vector2D, goal: Vector2D) -> Vector2D:
-        """Samples a point with a bias towards the line connecting start and goal."""
-        if np.random.random() > 0.3:
-            midpoint = np.array([(start.x + goal.x) / 2, (start.y + goal.y) / 2])
-            dist = start.distance(goal)
-            sampled_point = np.random.normal(midpoint, dist / 4)
-            return Vector2D(float(sampled_point[0]), float(sampled_point[1]))
-        return self.sample_uniform()
+    def sample_near_axis(
+        self, start: Vector2D, goal: Vector2D, spread: float = 0.05
+    ) -> Vector2D:
+        """
+        Samples a via point offset perpendicular to the start-goal line.
+
+        spread is the perpendicular sigma in units of robot radius; the solver widens it
+        as attempts fail, so the cheap routes close to the line are tried first.
+
+        The offset is perpendicular only. Sliding a via along the line barely changes
+        the route but does change its duration, so sampling that axis mostly produces a
+        different-looking answer to the same question. The previous version sampled a 2D
+        gaussian of sigma = distance/4 around the midpoint, which for a corner-to-corner
+        move put half the samples more than 2m off the line — metres of scatter to clear
+        obstacles a couple of hundred millimetres wide.
+        """
+        axis = goal.subtract(start)
+        length = axis.size()
+        if length < 1e-6:
+            return self.sample_uniform()
+
+        unit = axis.multiplyByScalar(1.0 / length)
+        along = float(np.random.uniform(0.25, 0.75)) * length
+        offset = float(np.random.normal(0.0, spread * length))
+
+        point = start.add(unit.multiplyByScalar(along))
+        return point.add(unit.perpendicular().multiplyByScalar(offset))
 
     def sample_uniform(self) -> Vector2D:
         """Standard uniform field sampling."""
