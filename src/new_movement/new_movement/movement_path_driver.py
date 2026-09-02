@@ -126,6 +126,9 @@ class MovementPathDriver(Node):
             # Update obstacles for all ids
             if self.robot_data[id]["last_obs_request"] is not None:
                 self.robot_data[id]["obstacles"] = (
+                    # TODO: signature is create_obstacles(robot_id, config, geometry, balls,
+                    # enemy_robots, ally_robots, ally_info=None) -- this passes a request object
+                    # where robot_id is expected and self.robot_data where config is expected.
                     self.obstacle_factory.create_obstacles(
                         self.robot_data[id]["last_obs_request"],
                         self.robot_data,
@@ -308,6 +311,9 @@ class MovementPathDriver(Node):
             response.success = False
             return response
 
+        # TODO: signature is create_obstacles(robot_id, config, geometry, balls,
+        # enemy_robots, ally_robots, ally_info=None) -- this passes `request` where
+        # robot_id is expected and self.robot_data where config is expected.
         new_obstacles: list[Obstacle] = self.obstacle_factory.create_obstacles(
             request,
             self.robot_data,
@@ -326,6 +332,9 @@ class MovementPathDriver(Node):
     def update_obstacles_timer_callback(self):
         for robot_id, robot_info in self.robot_data.items():
             if robot_info["last_obs_request"] is not None:
+                # TODO: signature is create_obstacles(robot_id, config, geometry, balls,
+                # enemy_robots, ally_robots, ally_info=None) -- this passes a request object
+                # where robot_id is expected and self.robot_data where config is expected.
                 new_obstacles = self.obstacle_factory.create_obstacles(
                     robot_info["last_obs_request"],
                     self.robot_data,

@@ -48,7 +48,7 @@ class TrajectorySegment:
         # Verifica a continuidade da posição e velocidade
         if (
             local_destination.position.distance(child.init_pos) < 1e-3
-            or local_destination.velocity.distance(child.init_vel) < 1e-3
+            and local_destination.velocity.distance(child.init_vel) < 1e-3
         ):
             self.child = child
         else:
@@ -99,6 +99,7 @@ class TrajectorySegment:
         """Obtém a aceleração em um tempo t no caminho."""
         local_duration = self.get_local_duration()
         if t <= local_duration:
+            # TODO: MotionPath has no get_acceleration_at_time method -- this always raises AttributeError.
             return self.motion_path.get_acceleration_at_time(t)
         elif self.child:
             return self.child.get_acceleration(t - local_duration)

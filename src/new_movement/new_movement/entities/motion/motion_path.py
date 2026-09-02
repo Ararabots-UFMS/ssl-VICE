@@ -42,6 +42,8 @@ class MotionPath:
         second_path: list[MotionPrimitive] = []
 
         for primitive in self.motion_path:
+            # TODO: strict "<" drops this primitive from second_path entirely when t lands
+            # exactly on a primitive boundary (elapsed_time + duration == t). Should be "<=".
             if elapsed_time + primitive.duration < t:
                 first_path.append(primitive)
                 elapsed_time += primitive.duration
