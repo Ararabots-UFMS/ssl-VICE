@@ -327,7 +327,7 @@ class ExtendedKalmanFilterClass1D(object):
 
         # Ruído de processo compatível com 2x2
         Q = np.array([[dt**4/4, dt**3/2],
-                    [dt**3/2, dt**2]]) * self.q_variance
+                    [dt**3/2, dt**2]]) * self.sd_acceleration**2
 
         # Predição do estado
         self.x = F @ self.x
