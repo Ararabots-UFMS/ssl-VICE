@@ -1,7 +1,8 @@
 from new_movement.entities.States import Vector2D
 from strategy.skills.skills import Skills
 from strategy.behaviour import TaskStatus
-from math import atan2, hypot, cos, sin, pi
+from math import atan2, hypot, cos, sin, pi, acos
+import os
 import time
 
 
@@ -72,6 +73,22 @@ DIST_TOQUE = 300.0          # a partir daqui o cobrador passa a empurrar a bola
 # _can_kick nunca chega a ser consultado. Com 250 < 300 o robo entra na faixa de
 # toque assim que estaciona, e a jogada avanca para o chute.
 DIST_ATRAS_DA_BOLA = 250.0
+# TENTADO 400, MEDIDO, REVERTIDO.
+#
+# A aritmetica do trajeto era boa: o erro lateral de entrada decai ao longo da
+# reta do empurrao, entao partir de mais longe deixaria 37 mm no ponto da bola
+# em vez de 46, e daria 150 mm a mais de reta para convergir.
+#
+# No simulador: passes 1 de 6 -> 0 de 6, e a janela do chutador nao abriu em
+# NENHUMA das 6 (antes abria, uma vez por 162 quadros). A condicao de geometria
+# continuou reprovando em 249 de 249 ciclos.
+#
+# Junte as reversoes desta jogada: apertar DESVIO_LATERAL_MAX (50), curvar o
+# empurrao (v1 e v2), travar o cobrador (duas formas), afrouxar o assentamento,
+# exigir alinhamento do corpo, e agora afastar o ponto de encaixe. Oito. NENHUM
+# ajuste de parametro da tatica resolve o erro lateral no contato - o que falta
+# nao e um numero melhor, e um mecanismo que corrija o lado enquanto avanca, e
+# esse mecanismo nao existe em lugar nenhum desta cadeia.
 # 250 mm: valor que FUNCIONOU na medicao de referencia (chute ativado, bola de
 # (2500,0) para (3564,0)). Cheguei a subir para 400 achando que o robo precisava
 # de espaco para alinhar - mas com o ponto mais longe ele deixou de chegar na
@@ -142,6 +159,15 @@ MARGEM_ATRAS = 80.0     # o quanto o robo precisa estar atras da bola
 # fase existe para evitar. Quem decide se o chute sai continua sendo
 # _atras_da_bola (10 graus) e _mira_esta_boa (0,15 rad).
 DESVIO_TRAVADO = 150.0
+
+# Teto do empurrao, em segundos. Ver _fase_da_cobranca.
+#
+# EXISTE PARA NAO CRIAR IMPASSE. Estamos tirando a condicao que soltava a fase
+# (cruzar a bola), e sem um teto o robo poderia empurrar para sempre. Um teto de
+# TEMPO nao pode travar: ele sempre expira. Da fase de encaixe ate o contato
+# medimos ~0,5 s; 2 s cobrem o pior caso e ainda deixam varias tentativas
+# dentro do limite de 30 s da jogada.
+TEMPO_EMPURRAO_MAX = 2.0
 
 # Tamanho maximo do passo pedido ao driver, em milimetros.
 #
@@ -280,6 +306,41 @@ PASSO_MIN = 60.0
 # para o robo seguir reto e com velocidade util ate o contato acontecer.
 AVANCO_RETO = 350.0
 
+# Erro angular maximo do corpo para ENTRAR no empurrao, em radianos.
+#
+# POR QUE ISTO FALTAVA - e por que o gol funcionava e o passe nao
+# ---------------------------------------------------------------
+# O comentario de _pronto_para_empurrar sempre disse "o robo se posiciona, para,
+# ALINHA, e so entao avanca". Posicao e parada eram verificadas; o alinhamento
+# nunca foi.
+#
+# Passou despercebido porque no CHUTE A GOL nao faz falta: a direcao do empurrao
+# e ~-0,1 rad e o cobrador ja nasce apontado para la, entao o corpo esta alinhado
+# antes mesmo de comecar.
+#
+# No PASSE a mesma omissao e fatal. Para um receptor em (3200,1500) com a bola em
+# (2500,0), a direcao e +1,13 rad - 65 graus de giro. O controlador de orientacao
+# e proporcional (kp=1, teto de 2 rad/s), entao leva mais de um segundo. O
+# empurrao comeca antes disso: _mira_esta_boa reprova, o chute nao arma, e o robo
+# ATRAVESSA a bola sem chutar.
+#
+# MEDIDO (sonda_impasse.py, cenario passe_aberto): aos 4,0 s ele entra em
+# 'empurrar' bem posicionado (lateral 41 mm), o alvo salta para 350 mm alem da
+# bola, ele acelera, e aos 6,1 s ja esta com projecao +68 - passou da bola, com
+# kick=0 o tempo todo. Volta, refaz a aproximacao, repete. Em 3 de 6 execucoes a
+# bola nao saiu do lugar.
+#
+# 0,25 rad e mais frouxo que TOLERANCIA_MIRA (0,15) de proposito: aqui so
+# decidimos QUANDO comecar a avancar. Quem libera o disparo continua sendo
+# _mira_esta_boa, com o criterio apertado.
+ALINHAMENTO_PARA_AVANCAR = 0.25
+
+# Recepcao: o companheiro arma o chute quando a bola chega a esta distancia.
+# Ver o bloco no execute() - serve para PROVAR que ele recebeu, porque o grSim so
+# dispara com a bola encostada na placa.
+DIST_RECEPCAO = 300.0
+FORCA_RECEPCAO = 2.0
+
 # (LATERAL_ATE_S / LATERAL_DESLOC_MAX removidas - ver _empurrar_para_o_gol:
 #  as duas versoes da correcao lateral foram testadas e revertidas.)
 
@@ -348,7 +409,24 @@ HISTERESE_MIRA = 150.0
 AVANCO_MIN_PASSE = 400.0     # o companheiro precisa estar a frente da bola
 DIST_MIN_PASSE = 700.0       # abaixo disso nao vale a pena passar
 DIST_MAX_PASSE = 3000.0      # acima disso a bola nao chega (ver alcance medido)
-FOLGA_LINHA_PASSE = 400.0    # distancia minima de um adversario ate a linha
+# Folga minima de um adversario ate a linha do passe, em milimetros.
+#
+# ERA 400 E APROVAVA EXATAMENTE AS LINHAS QUE SAO INTERCEPTADAS.
+#
+# MEDIDO no cenario ataque, 6 execucoes seguidas: a distancia minima entre a
+# bola e um adversario ao longo do passe foi 246, 356, 367, 371, 394, 460 e
+# 469 mm - todas dentro ou na borda dos 400 que aceitavamos, e TODAS terminaram
+# em intercepcao. Nenhum passe chegou.
+#
+# 400 mm parece muito, mas nao e uma folga estatica: o passe leva ~1 s para
+# percorrer 1,6 m, e nesse tempo um robo a 400 mm da linha anda de sobra ate
+# ela. A folga tem de cobrir o deslocamento do adversario durante o voo, nao so
+# a posicao dele no instante da decisao.
+#
+# 700 mm = os 400 antigos mais ~300 mm, que e o quanto um robo cobre em 1 s a
+# uma velocidade modesta. Rejeitar mais linhas nao trava a jogada: quando nao ha
+# passe limpo, _alvo_da_jogada cai para o chute ou para outro companheiro.
+FOLGA_LINHA_PASSE = 700.0
 
 # O quanto o companheiro pode estar ATRAS da bola e ainda valer o passe.
 #
@@ -371,6 +449,32 @@ RECUO_MAX_PASSE = -2500.0
 # 111,5 mm; a execucao que fez gol passou a 179 mm dele. 200 mm e o minimo com
 # algum respiro, sem descartar o unico angulo que funciona.
 FOLGA_LINHA_TIRO = 200.0
+
+# ==========================================================================
+#  VARREDURA DA BOCA DO GOL  -  no lugar de um canto fixo
+# ==========================================================================
+#
+# POR QUE NAO SERVE UM CANTO FIXO
+# -------------------------------
+# Com MIRA_NO_CANTO fixo em 350 mm o cobrador fez 6 de 6 no cenario de um robo
+# so. Mas canto fixo nao se adapta a geometria: a folga que sobra depende de
+# onde o adversario esta e de quao longe a bola esta do gol.
+#
+# Medicoes que mostram os dois lados do problema:
+#   - goleiro em (4300,0), bola em (2500,0): mirar em 350 deixa 310 mm de folga,
+#     mas mirar em 240 deixa 214 mm E fica mais longe do poste. Varrendo,
+#     escolhemos 240 e a dispersao do tiro na chegada caiu de 96 para 31 mm.
+#   - barreira legal em (3050,0), a 550 mm da bola: para limpa-la com 180 mm
+#     seria preciso mirar a 654 mm do centro, e a meia-largura da meta e 500 mm.
+#     Nao ha canto que sirva - e a varredura DIZ isso, em vez de chutar contra a
+#     barreira. Medido: a bola raspava com 113 mm de folga e saia desviada para
+#     y = -1901.
+#
+# A varredura devolve a informacao que _alvo_da_jogada precisa para decidir
+# entre finalizar e tocar.
+FOLGA_MINIMA_MIRA = 180.0    # contato e 111,5 mm; 180 absorve o erro de pontaria
+VARRE_MIRA = 420.0           # 80 mm de respiro ate o poste (meia-largura 500)
+PASSO_MIRA = 60.0
 
 # ==========================================================================
 #  GEOMETRIA DO CHUTADOR DO grSim  (robot.cpp:120-128)
@@ -439,7 +543,26 @@ XX_PARA_ARMAR = 250.0
 # v = sqrt(2 * 1,33 * d), ou seja v ~ 1,64 * sqrt(d) para a bola PARAR em cima
 # do companheiro. Usamos 1,9 para ela chegar ainda rolando, que e o que se quer
 # num passe - o companheiro recebe a bola viva, nao parada.
-FATOR_PASSE = 1.9
+# FATOR_PASSE: v_comandada = FATOR_PASSE * sqrt(distancia_em_metros)
+#
+# ERA 1,9 E FALTAVA UM TERCO DO CAMINHO. A conta original assumia que a
+# velocidade COMANDADA e a velocidade de SAIDA da bola. Nao e.
+#
+# MEDIDO no proprio grSim (relatorio do ararabots.sh, cenario um_so_cobrador):
+#     chute comandado 6,4 m/s  ->  VELOCIDADE DE SAIDA 4,95 m/s
+# ou seja, o chutador entrega ~77% do que se pede.
+#
+# A conta certa, com a desaceleracao de 1,36 m/s2 que medi em campo vazio
+# (alcance_bola.py: 3,0 m/s -> 3314 mm):
+#     para so ALCANCAR:      v_saida = sqrt(2 * 1,36 * d) = 1,65 * sqrt(d)
+#     compensando os 77%:    v_cmd   = 1,65 / 0,77 * sqrt(d) = 2,14 * sqrt(d)
+#     para CHEGAR ROLANDO:   +35% de margem            = 2,9  * sqrt(d)
+#
+# Chegar rolando importa: uma bola que morre no pe do companheiro nao e recepcao,
+# e um adversario a 350 mm da linha alcanca antes. Com 1,9 um passe de 1,6 m saia
+# a 2,4 comandados = 1,85 reais, que percorrem 1,26 m - faltavam 35 cm, e era
+# exatamente o que se via.
+FATOR_PASSE = 2.9
 VEL_MIN_PASSE = 1.5
 
 
@@ -478,7 +601,7 @@ class EstadoFreekick:
         self.empacado = {}
         # Lado da meta em que estamos mirando (-1 ou +1), TRAVADO.
         # Ver _ponto_de_mira para a medicao que obrigou a travar.
-        self.lado_mira = None
+        self.mira_y = None
         # Companheiro escolhido para receber o passe, TRAVADO uma vez decidido.
         # Mesma licao de lado_mira: alvo que troca a cada ciclo faz o cobrador
         # perseguir um ponto que nunca para quieto.
@@ -486,6 +609,17 @@ class EstadoFreekick:
         # Chute ARMADO por robo. Ver o bloco da geometria do chutador: o disparo
         # so acontece se o chute estiver armado no instante exato do contato.
         self.chute_armado = {}
+        # Alvo decidido NESTE ciclo. Ver _alvo_da_jogada: sem isto a decisao era
+        # refeita ~15 vezes por ciclo e podia mudar no meio dele.
+        self.alvo_ciclo = None
+        # Modo "voltar pelo ponto de encaixe" por robo. Ver _ponto_de_contorno:
+        # e a histerese que impede a fronteira de 500 mm de vibrar.
+        self.voltando = {}
+        # Ultimo alvo pedido por robo, com o RAMO que pediu. Ver _diag_alvo.
+        self.diag_alvo = {}
+        # Instante em que cada robo entrou no empurrao. Ver TEMPO_EMPURRAO_MAX:
+        # e o teto que substitui a condicao de geometria que se autodestruia.
+        self.inicio_empurrao = {}
 
     def iniciar_se_preciso(self):
         if self.inicio is None:
@@ -497,9 +631,13 @@ class EstadoFreekick:
         self.last_kick_time = None
         self.fase_travada = {}
         self.empacado = {}
-        self.lado_mira = None
+        self.mira_y = None
         self.receptor = None
         self.chute_armado = {}
+        self.alvo_ciclo = None
+        self.voltando = {}
+        self.diag_alvo = {}
+        self.inicio_empurrao = {}
 
     def decorrido(self) -> float:
         return 0.0 if self.inicio is None else time.time() - self.inicio
@@ -509,19 +647,62 @@ class EstadoFreekick:
         self.last_kick_time = time.time()
 
 
+# Meia-largura util para o goleiro se deslocar sobre a linha, em milimetros.
+#
+# A meta tem 500 mm de meia-largura. Descontando o raio do robo (90) sobra 410;
+# usamos 380 para ele nao encostar na trave.
+ALCANCE_GOLEIRO = 380.0
+
+
 class GoalkeeperKickoff:
-    """Leva o goleiro para o centro da propria meta."""
+    """Goleiro: acompanha a bola sobre a linha da propria meta.
+
+    ANTES ELE FICAVA PARADO no centro da meta, e era so isso. Um goleiro parado
+    nao e goleiro: ele so defende o que vem no meio, e vira um obstaculo fixo que
+    o atacante aprende a contornar - foi exatamente o que aconteceu nos nossos
+    testes, em que a cobranca passou a mirar o canto e o goleiro nunca reagiu.
+
+    Agora ele se desloca sobre a linha, seguindo a bola:
+      - se a bola vem em direcao a meta, ele vai ao ponto onde ela CRUZA a linha;
+      - se nao, acompanha o y da bola.
+    Nos dois casos limitado a ALCANCE_GOLEIRO para nao sair da meta.
+
+    O mesmo comportamento e aplicado ao goleiro ADVERSARIO no banco de testes
+    (ver comandar_goleiro_adversario em cenarios_freekick.py). Testar contra um
+    adversario estatico media uma coisa que nao existe em jogo.
+    """
 
     def __init__(self):
         self.name = "GoalkeeperKickoff"
         self.skills_factory = Skills("Movement")
 
+    def _y_de_defesa(self, goal_position, ball) -> float:
+        """Onde o goleiro deve estar sobre a linha da meta."""
+        if ball is None:
+            return goal_position.y
+        bx = float(getattr(ball, "position_x", 0.0) or 0.0)
+        by = float(getattr(ball, "position_y", 0.0) or 0.0)
+        vx = float(getattr(ball, "velocity_x", 0.0) or 0.0)
+        vy = float(getattr(ball, "velocity_y", 0.0) or 0.0)
+
+        alvo = by
+        # Bola indo para a nossa meta: intercepta onde ela vai cruzar a linha.
+        # 200 mm/s de limiar para nao reagir a ruido de visao - com o ruido
+        # gaussiano ligado a velocidade estimada nunca e exatamente zero.
+        indo = (goal_position.x - bx) * vx > 0.0 and hypot(vx, vy) > 200.0
+        if indo and abs(vx) > 1e-6:
+            t = (goal_position.x - bx) / vx
+            if t > 0.0:
+                alvo = by + vy * t
+
+        return max(-ALCANCE_GOLEIRO, min(ALCANCE_GOLEIRO, alvo))
+
     def execute(self, goal_position: Vector2D, angle: float, ally_ids=None,
-                enemy_ids=None):
+                enemy_ids=None, ball=None):
         robot_command = self.skills_factory.move_with_angle(
             robot_id=0,
             target_x=goal_position.x,
-            target_y=goal_position.y,
+            target_y=self._y_de_defesa(goal_position, ball),
             vel_x=0.0,
             vel_y=0.0,
             angle=angle,
@@ -668,6 +849,7 @@ class _BaseFreekick:
                 alvo_x = bx + dx / d * folga
                 alvo_y = by + dy / d * folga
             alvo_x, alvo_y = self._dentro_do_campo(alvo_x, alvo_y)
+            self._diag_alvo(rid, "parada_segura", alvo_x, alvo_y)
             cmd = self.skills_factory.move_with_angle(
                 robot_id=rid, target_x=alvo_x, target_y=alvo_y,
                 vel_x=0.0, vel_y=0.0, angle=atan2(by - alvo_y, bx - alvo_x),
@@ -711,10 +893,30 @@ class OurFreekick(_BaseFreekick):
         return self.ball.position_x > self.kick_threshold
 
     def _geometria_do_chutador(self, robot_id):
-        """(xx, yy) da bola em relacao a placa do chutador, como o grSim calcula.
+        """(xx, yy, frente) da bola em relacao a placa do chutador.
 
-        Reproduz robot.cpp:120-128. xx = distancia ao longo do eixo do corpo
-        (quao perto a bola esta da face da placa), yy = desalinhamento lateral.
+        xx e yy reproduzem robot.cpp:120-128: xx = distancia ao longo do eixo do
+        corpo ate a face da placa, yy = desalinhamento lateral.
+
+        'frente' e a projecao COM SINAL de robo->bola no eixo do corpo, e nao
+        existe no grSim - foi ela que faltou aqui.
+
+        POR QUE ELA PRECISA EXISTIR
+        ---------------------------
+        O teste do grSim usa fabs() no eixo do corpo, entao ele e SIMETRICO: uma
+        bola encostada nas COSTAS do robo satisfaz exatamente o mesmo criterio
+        que uma bola na placa. Reproduzindo esse teste aqui, herdamos a
+        simetria - e com ela um chute que dispara para tras.
+
+        Foi o que um companheiro viu em campo: o robo virava de costas e ficava
+        chutando a bola com a traseira. Reproduzido na sonda determinista
+        (sonda_costas.py): robo em (2650,0) com a bola em (2500,0), corpo a
+        173 graus da direcao da bola - ou seja, de costas - e o chute ARMADO
+        em 6,4.
+
+        Nenhuma das travas existentes pegava isso: _mira_esta_boa so verifica
+        que o corpo aponta para o GOL, o que e verdade mesmo com a bola atras
+        do robo; e xx/yy nao distinguem frente de tras por construcao.
         """
         r = self.ally_robots.get(robot_id)
         if r is None:
@@ -724,7 +926,9 @@ class OurFreekick(_BaseFreekick):
         ky = r.position_y + (CENTRO_ATE_PLACA + ESPESSURA_PLACA * 0.5) * dy
         ex = kx - self.ball.position_x
         ey = ky - self.ball.position_y
-        return abs(ex * dx + ey * dy), abs(-ex * dy + ey * dx)
+        frente = ((self.ball.position_x - r.position_x) * dx
+                  + (self.ball.position_y - r.position_y) * dy)
+        return abs(ex * dx + ey * dy), abs(-ex * dy + ey * dx), frente
 
     def _chute_deve_estar_armado(self, robot_id) -> bool:
         """Manter o chute armado agora?
@@ -737,7 +941,13 @@ class OurFreekick(_BaseFreekick):
         g = self._geometria_do_chutador(robot_id)
         if g is None:
             return False
-        xx, yy = g
+        xx, yy, frente = g
+
+        # A BOLA PRECISA ESTAR NA FRENTE. Ver _geometria_do_chutador: sem isto o
+        # criterio e simetrico e arma com a bola encostada nas costas do robo.
+        if frente <= 0.0:
+            self.estado.chute_armado[robot_id] = False
+            return False
         if self.estado.chute_armado.get(robot_id):
             # UMA VEZ ARMADO, SEGUE ARMADO enquanto a placa estiver chegando.
             #
@@ -798,6 +1008,17 @@ class OurFreekick(_BaseFreekick):
         frente ou de costas (§18). Sem checar a direcao, ja medimos 6,4 m/s
         mandando a bola de (2500,0) para (1580,-523), o nosso campo.
         """
+        # NAO acrescente _atras_da_bola aqui. Eu tentei, e custou 3 gols em 4.
+        #
+        # Ela exige cosseno >= 0,985 (~10 graus) entre robo->bola e bola->alvo.
+        # No instante do contato o robo esta a ~120 mm da bola, e a essa
+        # distancia 20 mm de desvio lateral ja valem 10 graus: a trava pisca
+        # exatamente no quadro em que o chutador encostaria. Medido: 4 de 4 gols
+        # sem ela, 1 de 4 com ela.
+        #
+        # Quem impede o chute para tras e o sinal de 'frente' em
+        # _chute_deve_estar_armado, que e a condicao FISICA correta (a bola do
+        # lado da placa) e nao depende de angulo fino nenhum.
         if (self._tem_alvo_valido()
                 and self._check_double_touch(robot_id)
                 and self._mira_esta_boa(robot_id)
@@ -828,6 +1049,25 @@ class OurFreekick(_BaseFreekick):
     # e ele acabava esbarrando na bola sem querer. 100 mm/s ja e praticamente
     # parado para o tamanho do campo.
     VEL_ASSENTADO = 100.0
+
+    def _corpo_alinhado(self, robot_id) -> bool:
+        """O corpo ja aponta na direcao em que vamos empurrar?
+
+        Compara a orientacao MEDIDA com a direcao bola->alvo. Ver
+        ALINHAMENTO_PARA_AVANCAR para a medicao que obrigou a criar isto.
+        """
+        r = self.ally_robots.get(robot_id)
+        if r is None:
+            return False
+        ux, uy = self._versor_bola_gol()
+        erro = (float(r.orientation) - atan2(uy, ux) + pi) % (2 * pi) - pi
+        return abs(erro) <= ALINHAMENTO_PARA_AVANCAR
+
+    def _velocidade(self, robot_id) -> float:
+        r = self.ally_robots.get(robot_id)
+        if r is None:
+            return float("inf")
+        return hypot(float(r.velocity_x), float(r.velocity_y))
 
     def _robot_is_stable(self, robot_id) -> bool:
         """O robo esta praticamente parado?"""
@@ -909,33 +1149,193 @@ class OurFreekick(_BaseFreekick):
         Antes TODO robo de linha recebia o mesmo alvo (a bola), entao dois ou tres
         disputavam a mesma coordenada, colidiam e se bloqueavam. O desempate por
         id evita que a escolha fique oscilando entre ciclos.
+
+        TENTEI TRAVAR A ESCOLHA E PIOREI - fica registrado para ninguem repetir.
+        --------------------------------------------------------------------
+        O problema e real: no cenario passe_aberto o robo 2, que era o RECEPTOR,
+        assumiu a cobranca depois do toque e levou a bola para o corner, enquanto
+        o cobrador original virou apoio.
+
+        Mas travar a escolha custou a jogada inteira:
+          - travando no primeiro ciclo: 0 de 6 (a bola nao saiu do lugar);
+          - travando so apos o cobrador chegar a 900 mm da bola: 0 de 6 tambem.
+        Contra 1 de 6 sem trava nenhuma. Nao investiguei ate o fim POR QUE a
+        trava mata a jogada - so sei que mata. Quem for mexer: meça antes de
+        assumir que a causa e a que parece.
         """
         candidatos = self._ids_de_linha()
         if not candidatos:
             return None
         return min(candidatos, key=lambda r: (round(self._dist_ate_bola(r), 1), r))
 
-    def _ponto_de_mira(self):
-        """Onde mirar DENTRO da meta adversaria.
+    def _folga_do_tiro(self, mira_y) -> float:
+        """Menor distancia de um adversario ao segmento bola -> mira.
 
-        Sem adversario perto da meta, o centro serve. Com goleiro, mira no canto
-        oposto ao lado em que ele esta - ver MIRA_NO_CANTO para as medicoes que
-        mostraram chutes perfeitos sendo defendidos por 8 mm.
+        E a conta que diz se o tiro passa ou se bate na barreira. Diferente de
+        _linha_livre, que so responde sim/nao: aqui queremos o VALOR, para poder
+        comparar candidatos e escolher o melhor.
+        """
+        bx, by = self.ball.position_x, self.ball.position_y
+        dx = self.attack_goal.x - bx
+        dy = mira_y - by
+        l2 = dx * dx + dy * dy
+        if l2 <= 1.0:
+            return float("inf")
+        menor = float("inf")
+        for r in self.enemy_robots.values():
+            t = ((r.position_x - bx) * dx + (r.position_y - by) * dy) / l2
+            t = max(0.0, min(1.0, t))          # so o trecho da bola ate a meta
+            px, py = bx + t * dx, by + t * dy
+            menor = min(menor, hypot(r.position_x - px, r.position_y - py))
+        return menor
+
+    def _goleiro_adversario(self):
+        """O adversario que esta defendendo a meta, ou None.
+
+        E o mais proximo da linha de gol dentro de RAIO_GOLEIRO. Qualquer outro
+        adversario e barreira, nao goleiro: barreira entra em _folga_do_tiro
+        (ela bloqueia a linha), goleiro entra na ESCOLHA DO CANTO (ele nao
+        bloqueia a linha agora - ele vai estar em outro lugar quando a bola
+        chegar).
         """
         gx = self.attack_goal.x
-        goleiros = [r for r in self.enemy_robots.values()
-                    if abs(r.position_x - gx) < RAIO_GOLEIRO]
-        if not goleiros:
-            return gx, 0.0
-        gk = min(goleiros, key=lambda r: abs(r.position_x - gx))
+        melhor = None
+        for r in self.enemy_robots.values():
+            d = hypot(r.position_x - gx, r.position_y)
+            if d <= RAIO_GOLEIRO and (melhor is None or d < melhor[0]):
+                melhor = (d, r)
+        return None if melhor is None else melhor[1]
 
-        # Lado TRAVADO: so troca se o goleiro se mudar de verdade para o canto
-        # que estamos mirando. Ver HISTERESE_MIRA.
-        lado = self.estado.lado_mira
-        if lado is None or gk.position_y * lado > HISTERESE_MIRA:
-            lado = -1.0 if gk.position_y >= 0.0 else 1.0
-            self.estado.lado_mira = lado
-        return gx, lado * MIRA_NO_CANTO
+    def _ponto_de_mira(self):
+        """Onde mirar DENTRO da meta: o canto mais LONGE do goleiro.
+
+        POR QUE DEIXOU DE SER "O MAIS CENTRAL" - o relato do Felipe
+        -----------------------------------------------------------
+        A regra anterior escolhia, entre os pontos com folga suficiente, o mais
+        CENTRAL. Ela foi calibrada contra um goleiro IMOVEL parado em y=0: ali o
+        centro estava bloqueado, o ponto mais central que sobrava era ~240 mm, e
+        a dispersao do tiro na chegada caiu de 96 para 31 mm. Estava certa para
+        aquele goleiro.
+
+        Com o goleiro varrendo a meta (ver ararabots.py, _varredura_y), ela
+        passou a errar de forma sistematica: no instante da decisao o goleiro
+        costuma estar perto de um poste, entao o CENTRO tem folga de sobra e
+        vence a comparacao. Meio segundo depois o goleiro voltou ao centro e
+        defende. Era isso que o Felipe via - "chuta sempre no meio e/ou desvia
+        no goleiro".
+
+        POR QUE O CANTO E A ESCOLHA CERTA, em numeros
+        ---------------------------------------------
+        A bola sai a ~6 m/s (medido: 4910-8367 mm/s). De uma falta em x=2500 ate
+        a linha sao 2000 mm, ou seja ~0,33 s de voo. O goleiro anda a 1,2 m/s no
+        limite: nesse tempo ele cobre ~400 mm.
+
+        Logo o que decide o gol nao e a folga AGORA, e sim a distancia entre o
+        goleiro e o ponto de chegada da bola: acima de ~400 mm ele nao alcanca.
+        Mirar no canto oposto ao goleiro deixa ate 840 mm quando ele esta no
+        canto contrario - fora de alcance. Mirar no centro deixa, na media da
+        varredura, metade disso.
+
+        O que NAO fazemos: prever onde o goleiro vai estar. A varredura e
+        periodica e daria para extrapolar, mas o instante do chute nao e
+        conhecido de antemao (depende de quanto o cobrador demora na
+        aproximacao), entao a previsao seria uma conta precisa sobre um tempo
+        inventado. Maximizar a distancia e robusto sem precisar disso.
+
+        A folga de linha (FOLGA_MINIMA_MIRA) continua valendo e continua sendo
+        calculada contra TODOS os adversarios, barreira inclusive: ela responde
+        "a bola passa por aqui?", que e outra pergunta.
+        """
+        gx = self.attack_goal.x
+
+        # Mira TRAVADA, com uma saida a mais que antes.
+        #
+        # Sem trava nenhuma o alvo oscilava com o ruido da visao - o goleiro
+        # parado ficava em y=0, em cima da fronteira entre "esta em cima" e
+        # "esta embaixo", e o canto escolhido alternava a cada quadro. O
+        # cobrador perseguia uma linha que trocava de lado e nunca chutava.
+        #
+        # Mas a trava total tem o defeito oposto, e e o que estamos consertando:
+        # a escolha era feita uma unica vez, no comeco da aproximacao, contra
+        # uma posicao do goleiro que ja nao existe quando o chute sai.
+        #
+        # Meio-termo: refaz a escolha se a linha fechou (como antes) OU se o
+        # goleiro se mudou para o lado que estamos mirando - e "se mudou" quer
+        # dizer atravessar HISTERESE_MIRA (150 mm), nao tremer no ruido de 1 mm
+        # da visao. Uma vez em 'empurrar' a fase esta travada e o alvo nao muda
+        # mais: nesse ponto o robo esta comprometido com a linha.
+        # TRAVA DURA, e ela fica. TENTEI AFROUXAR E MEDI O ESTRAGO.
+        #
+        # A ideia era: a mira e escolhida uma vez so, no comeco da aproximacao,
+        # contra uma posicao do goleiro que ja nao existe quando o chute sai -
+        # entao libere a re-escolha quando o goleiro chegar a HISTERESE_MIRA
+        # (150 mm) do ponto mirado.
+        #
+        # POR QUE FOI UM DESASTRE: o goleiro agora VARRE a meta inteira a
+        # 600 mm/s. Ele passa a menos de 150 mm de QUALQUER ponto da boca do gol
+        # duas vezes por periodo (~3,5 s). A condicao de liberacao, que eu
+        # imaginava rara, dispara sempre - e cada re-escolha inverte o lado,
+        # porque a regra do canto pega o mais longe do goleiro.
+        #
+        # MEDIDO no replay, quadro a quadro, com a mira no canto: o cobrador
+        # deslizou DE LADO pela bola, com ela perpendicular ao corpo a ~100 mm
+        # (xx de 56 para -7 enquanto yy ficava em -100), e a orientacao foi de
+        # +0,116 para -0,011 rad quando uma mira fixa em y=-420 exigiria -0,21
+        # rad constante. A linha estava trocando de lado embaixo dele.
+        #
+        # Licao, que e a mesma do HANDOVER: contra um goleiro que se mexe, uma
+        # condicao de liberacao "so dispara quando ele chegar perto" nao e rara,
+        # e periodica. A mira tem de ser escolhida uma vez e respeitada.
+        atual = self.estado.mira_y
+        if atual is not None and self._folga_do_tiro(atual) >= FOLGA_MINIMA_MIRA:
+            return gx, atual
+
+        candidatos = []
+        n = int(VARRE_MIRA / PASSO_MIRA)
+        for k in range(-n, n + 1):
+            y = k * PASSO_MIRA
+            candidatos.append((self._folga_do_tiro(y), y))
+
+        gk = self._goleiro_adversario()
+        gky = 0.0 if gk is None else gk.position_y
+
+        # Entre os que passam na folga de linha, o mais LONGE do goleiro.
+        # Desempate pelo mais central, para nao gastar margem ate o poste de
+        # graca quando duas opcoes distam o mesmo do goleiro (o caso simetrico,
+        # goleiro no centro: +420 e -420 empatam, e ai tanto faz).
+        # A MIRA NO CANTO ESTA MEDIDA E REPROVADA - fica atras de MIRA_CANTO=1.
+        #
+        # A regra do canto (mais longe do goleiro) e a certa no papel e continua
+        # aqui porque a conta do voo nao mudou. Mas ela nao EXECUTA. A/B de 6 e 6
+        # execucoes, mesma maquina, mesmo lote, headless, ajustes 16/16:
+        #
+        #   regra          disparou   gols   yy no ponto de contato
+        #   central          6 de 6    2/6   8, 10, 14, 18, 22, 29 mm
+        #   canto (+-420)    1 de 6    0/6   13, 14, 88, 95, 96, 103 mm
+        #
+        # O grSim so dispara com yy < 40 mm. Mirar no canto inclina a linha de
+        # aproximacao, o cobrador chega com ~90 mm de desalinhamento lateral e
+        # o chute nem arma. Nao e erro de pontaria: e a aproximacao nao dando
+        # conta de uma linha angulada.
+        #
+        # E EXATAMENTE O MESMO MURO DO PASSE (§6.8, §9-0000): la a linha fica a
+        # 1,13 rad da direcao em que o robo ja esta e ele atravessa a bola sem
+        # chutar; aqui a linha fica angulada e o yy nao fecha. Chute a gol e
+        # passe nao sao dois problemas - sao o mesmo problema, a aproximacao
+        # nao sabe executar uma linha que nao seja a que o robo ja aponta.
+        #
+        # Por isso NAO adianta mexer mais na escolha do canto. Enquanto a
+        # aproximacao nao entregar uma linha angulada, a mira central e
+        # estritamente melhor: pelo menos o chute sai.
+        if os.environ.get("MIRA_CANTO"):
+            passam = [(-abs(y - gky), abs(y), y)
+                      for folga, y in candidatos if folga >= FOLGA_MINIMA_MIRA]
+        else:
+            passam = [(abs(y), 0.0, y)
+                      for folga, y in candidatos if folga >= FOLGA_MINIMA_MIRA]
+        melhor = min(passam)[2] if passam else max(candidatos)[1]
+        self.estado.mira_y = melhor
+        return gx, melhor
 
     def _linha_livre(self, ax, ay, bx, by, folga=FOLGA_LINHA_PASSE) -> bool:
         """Nenhum adversario a menos de 'folga' do segmento a->b."""
@@ -975,11 +1375,80 @@ class OurFreekick(_BaseFreekick):
                                      r.position_x, r.position_y):
                 continue
             # entre os validos, o mais adiantado
-            if melhor is None or avanco > melhor[0]:
-                melhor = (avanco, rid)
+            # ESCOLHA PELO CUSTO DE EXECUTAR, nao pelo terreno ganho.
+            #
+            # Antes era 'avanco > melhor[0]': ganhava sempre o companheiro mais
+            # adiantado. O criterio parece obvio e e a raiz do problema - ele
+            # escolhe o passe e SO DEPOIS o robo se contorce para executa-lo.
+            #
+            # O custo de executar um passe e o quanto o cobrador precisa girar e
+            # contornar para ficar atras da bola NAQUELA linha. Medido no
+            # passe_aberto: escolhendo o mais adiantado, a linha do passe ficava
+            # a 1,13 rad (65 graus) da direcao em que o robo ja estava. O
+            # controlador de orientacao e proporcional (kp=1, teto 2 rad/s),
+            # entao leva mais de um segundo - e o empurrao comeca antes de o giro
+            # terminar. Resultado: ele atravessa a bola sem chutar, em 3 de 6
+            # execucoes a bola nao saiu do lugar.
+            #
+            # Agora comparamos a direcao cobrador->bola com a direcao
+            # bola->companheiro. Quando as duas coincidem, o cobrador JA esta
+            # atras da bola para aquele passe: nao ha orbita e nao ha giro.
+            #
+            # Isto NAO e mais uma trava - nenhum candidato e rejeitado por
+            # causa disso. So muda a ordem de preferencia entre os que ja
+            # passaram por todos os criterios. Travas novas foram tentadas cinco
+            # vezes nesta jogada e as cinco criaram impasses novos.
+            pc = self._pos(cobrador)
+            if pc is None:
+                custo = 0.0
+            else:
+                cbx = self.ball.position_x - pc[0]
+                cby = self.ball.position_y - pc[1]
+                nc = hypot(cbx, cby) or 1.0
+                np_ = dist or 1.0
+                cos_ang = (cbx / nc) * (px / np_) + (cby / nc) * (py / np_)
+                custo = acos(max(-1.0, min(1.0, cos_ang)))   # 0 = ja alinhado
+
+            # desempate pelo avanco, para nao trocar terreno por nada
+            chave = (round(custo, 2), -avanco)
+            if melhor is None or chave < melhor[0]:
+                melhor = (chave, rid)
         return None if melhor is None else melhor[1]
 
     def _alvo_da_jogada(self, cobrador=None):
+        """Alvo da jogada, DECIDIDO UMA VEZ POR CICLO.
+
+        POR QUE O CACHE EXISTE - o bug mais fundo desta tatica
+        ------------------------------------------------------
+        _versor_bola_gol chama isto, e _versor_bola_gol e chamado em 15 lugares:
+        a fase, o ponto de encaixe, o alvo do empurrao, a mira, o desvio
+        lateral, a projecao na linha, o armar do chute. Ou seja, a decisao era
+        refeita ~15 vezes por ciclo.
+
+        E ela NAO e pura: escreve estado.receptor, estado.alvo_passe e
+        estado.mira_y. Pior, ela pode responder DIFERENTE entre duas chamadas do
+        mesmo ciclo - o passo 1 depende de _linha_livre contra a posicao ATUAL
+        dos adversarios, e basta uma chamada reprovar para a execucao cair no
+        passo 3, que SOBRESCREVE o alvo congelado com a posicao de agora.
+
+        Consequencia: dentro de um unico ciclo, a fase podia ser calculada
+        contra uma linha e o comando de movimento contra outra. O robo entao
+        anda numa direcao que nenhuma das duas pediu - e a geometria que
+        medimos, deslizando de lado pela bola com ela perpendicular ao corpo a
+        ~100 mm.
+
+        E o mesmo defeito que ja provamos na mira: uma trava que parece firme e
+        na verdade e liberada periodicamente. La era o goleiro varrendo que
+        disparava a liberacao; aqui e o adversario andando perto da linha do
+        passe. Congelar a decisao por ciclo faz a trava valer de verdade, e nao
+        acrescenta trava nenhuma - a decisao e exatamente a mesma, so deixa de
+        ser recalculada no meio do ciclo.
+        """
+        if self.estado.alvo_ciclo is None:
+            self.estado.alvo_ciclo = self._decidir_alvo_da_jogada(cobrador)
+        return self.estado.alvo_ciclo
+
+    def _decidir_alvo_da_jogada(self, cobrador=None):
         """Para onde esta cobranca vai: o gol, ou um companheiro.
 
         Devolve (x, y, tipo) com tipo em {"gol", "passe"}.
@@ -992,25 +1461,65 @@ class OurFreekick(_BaseFreekick):
         if cobrador is None:
             cobrador = self._eleger_cobrador()
 
-        # 1) FINALIZAR - so se o gol esta ao alcance E a linha de tiro esta livre.
-        #    Checar a linha aqui e o que impede o cobrador de chutar contra as
-        #    costas de um adversario parado na frente, que era o comportamento
-        #    antigo (so a distancia era verificada).
-        if self._can_kick():
-            mx, my = self._ponto_de_mira()
-            if self._linha_livre(self.ball.position_x, self.ball.position_y,
-                                 mx, my, FOLGA_LINHA_TIRO):
-                return mx, my, "gol"
-
-        # 2) Receptor ja escolhido continua valendo enquanto a linha estiver
-        #    livre. Alvo que troca a cada ciclo faz o cobrador perseguir um ponto
-        #    que nunca para quieto - mesma licao de lado_mira.
+        # 1) PASSE JA DECIDIDO MANDA - antes de reconsiderar o chute.
+        #
+        # A ORDEM AQUI E O CONSERTO. Antes o passo 1 era "finalizar" e o
+        # receptor travado so era consultado depois: bastava a linha de tiro
+        # abrir por um instante para a jogada largar o passe e voltar a mirar o
+        # gol. E ela abre sozinha, sem ninguem decidir nada - os robos de APOIO
+        # se reposicionam durante a cobranca, a geometria muda, e o
+        # _folga_do_tiro de um ciclo nao e o do seguinte.
+        #
+        # MEDIDO no cenario ataque, 6 execucoes: a bola saia sempre (6 de 6) mas
+        # terminava a ~1980 mm do companheiro mais proximo - MAIS longe do que os
+        # 1612 mm que os separavam no inicio. Ou seja, ela era conduzida ao gol,
+        # nao tocada. E era consistente, nao ruido: 1953, 1975, 1988, 2012.
+        #
+        # Uma cobranca de falta nao muda de ideia no meio. Decidido o passe, ele
+        # so cai se a linha ATE O COMPANHEIRO fechar - e isso continua sendo
+        # verificado logo abaixo.
         rid = self.estado.receptor
         if rid is not None and rid in self.ally_robots and rid != cobrador:
             r = self.ally_robots[rid]
             if self._linha_livre(self.ball.position_x, self.ball.position_y,
                                  r.position_x, r.position_y):
-                return r.position_x, r.position_y, "passe"
+                # ALVO CONGELADO - e o conserto do vaivem.
+                #
+                # POR QUE O COBRADOR ANDAVA DE UM LADO PARA O OUTRO
+                # -------------------------------------------------
+                # O alvo do passe e um COMPANHEIRO, e companheiro anda: os robos
+                # de apoio se reposicionam durante a cobranca (_posicao_de_apoio
+                # os move conforme a bola). A cada ciclo a linha bola->receptor
+                # girava um pouco, o ponto de encaixe (250 mm atras da bola
+                # NAQUELA linha) pulava junto, e o cobrador ficava perseguindo um
+                # ponto que fugia. Dai o vaivem - ele nunca chegava a "estar no
+                # ponto" porque o ponto nao esperava.
+                #
+                # O chute a gol nunca teve esse problema pelo motivo mais simples
+                # do mundo: a meta nao se mexe.
+                #
+                # Entao congelamos a posicao do receptor no instante da decisao e
+                # miramos ALI. O passe passa a ter geometria estatica, igual ao
+                # chute - e a logica de aproximacao que ja funciona no chute vale
+                # sem mudanca nenhuma: posiciona, alinha, vai para a frente e
+                # chuta.
+                #
+                # A linha continua sendo re-verificada contra a posicao ATUAL
+                # dele: se ele se mudar para longe do congelado, _linha_livre
+                # reprova e a jogada escolhe outra coisa.
+                if self.estado.alvo_passe is None:
+                    self.estado.alvo_passe = (r.position_x, r.position_y)
+                ax, ay = self.estado.alvo_passe
+                return ax, ay, "passe"
+
+        # 2) FINALIZAR - so se o gol esta ao alcance E a linha de tiro esta livre.
+        if self._can_kick():
+            mx, my = self._ponto_de_mira()
+            # MESMO criterio que escolheu a mira (ver _folga_do_tiro): quem
+            # seleciona e quem valida tem de usar a mesma conta, senao o
+            # escolhido passa raspando no validador e qualquer ruido o reprova.
+            if self._folga_do_tiro(my) >= FOLGA_MINIMA_MIRA:
+                return mx, my, "gol"
 
         # 3) PASSE PARA A FRENTE - o melhor caso, ganha terreno.
         # 4) PASSE LATERAL OU PARA TRAS - pior que avancar, mas MUITO melhor que
@@ -1025,11 +1534,13 @@ class OurFreekick(_BaseFreekick):
             if rid is not None:
                 self.estado.receptor = rid
                 r = self.ally_robots[rid]
+                self.estado.alvo_passe = (r.position_x, r.position_y)
                 return r.position_x, r.position_y, "passe"
 
         # 6) Ninguem disponivel: mantem a direcao do gol. Pelo menos leva a bola
         #    para a frente, e e o comportamento historico.
         self.estado.receptor = None
+        self.estado.alvo_passe = None
         mx, my = self._ponto_de_mira()
         return mx, my, "gol"
 
@@ -1091,6 +1602,52 @@ class OurFreekick(_BaseFreekick):
         return self._dentro_do_campo(x, y)
 
     # ------------------------------------------------------------- acoes
+    def _diag_alvo(self, robot_id, origem, x, y):
+        """Registra QUAL ramo pediu o alvo deste ciclo. Ver _diag_linha.
+
+        Existe porque tres diagnosticos meus seguidos erraram por inferencia: o
+        setpoint saia para um ponto que nao correspondia a nenhum dos alvos que
+        eu conseguia calcular de fora (nem o encaixe, nem o raio de contorno), e
+        eu fiquei propondo hipoteses em vez de perguntar ao codigo. Com isto o
+        ramo se identifica sozinho.
+        """
+        self.estado.diag_alvo[robot_id] = (origem, x, y)
+
+    def _diag_linha(self, robot_id, fase):
+        """Uma linha por ciclo no log do strategyNode, se DIAG_FK estiver ligado.
+
+        Sai em /tmp/strategy.log e e tabulado por 'ararabots.py sonda'. Nao ha
+        script solto: a leitura mora na ferramenta unica, como o resto.
+        """
+        if not os.environ.get("DIAG_FK"):
+            return
+        p = self._pos(robot_id)
+        if p is None:
+            return
+        origem, ax, ay = self.estado.diag_alvo.get(robot_id, ("?", 0.0, 0.0))
+        alvo_x, alvo_y, tipo = self._alvo_da_jogada(robot_id)
+        bx, by = self.ball.position_x, self.ball.position_y
+        # AS QUATRO CONDICOES DE ARMAR, cada uma separada.
+        #
+        # Sem isto so da para ver que o chute nao armou, nao QUAL condicao
+        # barrou - e foi medido um caso de 162 quadros (2,7 s) com a janela do
+        # chutador do grSim ABERTA e o chute armado em zero deles.
+        g = self._geometria_do_chutador(robot_id)
+        gxx, gyy, gfrente = g if g else (float("nan"),) * 3
+        print("[FK] t=%.2f rid=%d fase=%s ramo=%s pedido=(%.0f,%.0f) "
+              "robo=(%.0f,%.0f) bola=(%.0f,%.0f) tipo=%s alvo=(%.0f,%.0f) "
+              "d=%.0f lat=%.0f proj=%.0f v=%.0f "
+              "alvoval=%d dtoque=%d mira=%d geom=%d xx=%.0f yy=%.0f frente=%.0f"
+              % (time.time() % 1000.0, robot_id, fase, origem, ax, ay,
+                 p[0], p[1], bx, by, tipo, alvo_x, alvo_y,
+                 hypot(p[0] - bx, p[1] - by), self._desvio_lateral(robot_id),
+                 self._projecao_na_linha(robot_id), self._velocidade(robot_id),
+                 self._tem_alvo_valido(), self._check_double_touch(robot_id),
+                 self._mira_esta_boa(robot_id),
+                 self._chute_deve_estar_armado(robot_id),
+                 gxx, gyy, gfrente),
+              flush=True)
+
     def _passo_ate(self, robot_id, alvo_x, alvo_y):
         """Reduz um alvo distante a um passo curto a partir da posicao MEDIDA.
 
@@ -1225,6 +1782,7 @@ class OurFreekick(_BaseFreekick):
         alvo_y = self.ball.position_y - uy * DIST_ATRAS_DA_BOLA
         alvo_x, alvo_y = self._dentro_do_campo(alvo_x, alvo_y)
         alvo_x, alvo_y = self._passo_ate(robot_id, alvo_x, alvo_y)
+        self._diag_alvo(robot_id, "encaixar", alvo_x, alvo_y)
 
         comando = self.skills_factory.move_with_angle(
             robot_id=robot_id, target_x=alvo_x, target_y=alvo_y,
@@ -1372,6 +1930,23 @@ class OurFreekick(_BaseFreekick):
         # formula no escuro.
         alvo_x, alvo_y = self._dentro_do_campo(alvo_x, alvo_y)
 
+        # PASSO, como em todos os outros ramos. Este era o UNICO que nao dava.
+        #
+        # Ele mandava o alvo inteiro - medimos 548 mm - que e exatamente a
+        # condicao que o PASSO_MAX existe para evitar: "pedir um alvo longe faz
+        # o robo ou nao sair do lugar ou disparar e passar mais de um metro
+        # alem".
+        #
+        # MEDIDO com a sonda [FK]: durante o empurrao a distancia ate a bola foi
+        # 194 -> 206 -> 271 mm. Ele se AFASTAVA enquanto deveria estar fechando.
+        #
+        # _passo_ate preserva a DIRECAO e so encurta o pedido, entao o alvo alem
+        # da bola continua valendo (o robo segue pressionando, que e o motivo de
+        # ele existir); muda so o driver receber um pedido executavel. O
+        # desempacamento embutido no _passo_ate tambem passa a valer aqui.
+        alvo_x, alvo_y = self._passo_ate(robot_id, alvo_x, alvo_y)
+        self._diag_alvo(robot_id, "empurrar", alvo_x, alvo_y)
+
         # Aponta para a BOLA, nao para o gol.
         #
         # grSim robot.cpp:128 exige que a bola esteja a menos de
@@ -1447,6 +2022,7 @@ class OurFreekick(_BaseFreekick):
         else:
             alvo_x, alvo_y = p_atual
         alvo_x, alvo_y = self._dentro_do_campo(alvo_x, alvo_y)
+        self._diag_alvo(robot_id, "recuar", alvo_x, alvo_y)
         comando = self.skills_factory.move_with_angle(
             robot_id=robot_id, target_x=alvo_x, target_y=alvo_y,
             vel_x=0.0, vel_y=0.0, angle=atan2(uy, ux),
@@ -1489,8 +2065,31 @@ class OurFreekick(_BaseFreekick):
             #
             # Sem isso ele chegava com velocidade e ATROPELAVA a bola de lado -
             # medimos colisoes com o corpo a 98 graus da bola, mandando-a para o
-            # nosso proprio campo. Uma cobranca de falta e deliberada: o robo se
-            # posiciona, para, alinha, e so entao avanca em linha reta.
+            # nosso proprio campo.
+            #
+            # JA TENTEI AFROUXAR ISTO, E CUSTOU CARO. A hipotese era boa: com o
+            # ruido ligado o robo nunca fica abaixo de 100 mm/s, entao a trava
+            # pareceria um impasse. Troquei por 'nao venha carregando'
+            # (450 mm/s) e o resultado foi:
+            #     gols  4 de 6  ->  3 de 6   (abaixo do criterio)
+            #     passes 2 de 6 ->  2 de 6   (nao melhorou nada)
+            # Ou seja: piorou o que funcionava e nao consertou o que nao
+            # funcionava. Revertido.
+            #
+            # Uma cobranca de falta e deliberada: o robo se posiciona, para,
+            # alinha, e so entao avanca em linha reta.
+            # NAO exija alinhamento do corpo aqui. TENTEI, e foi de 2 de 6
+            # para 0 de 6 - a bola nao saiu do lugar em nenhuma execucao.
+            #
+            # O raciocinio parecia solido: no passe o corpo precisa girar 65
+            # graus e o empurrao comeca antes de o giro terminar, entao exigir
+            # alinhamento (0,25 rad) resolveria. Mas isso cria um impasse novo -
+            # parado no ponto, com o ruido da visao e o proprio atraso do
+            # controlador de orientacao, ele nunca fecha o angulo, e nunca
+            # avanca. Trocar um problema por outro pior.
+            #
+            # O metodo _corpo_alinhado continua aqui, sem uso, para quem quiser
+            # medir o angulo durante a investigacao.
             return self._robot_is_stable(robot_id)
 
         # ja encostado na bola (por exemplo, ela rolou ate ele): segue em frente
@@ -1534,16 +2133,42 @@ class OurFreekick(_BaseFreekick):
         # O chute em si continua com as travas de sempre (_atras_da_bola,
         # _mira_esta_boa): travar a fase nao afrouxa nada do disparo.
         if self.estado.fase_travada.get(robot_id) == "empurrar":
-            if (projecao < -MARGEM_ATRAS
+            # O EMPURRAO NAO PODE SER SOLTO POR EMPURRAR.
+            #
+            # A condicao antiga era 'projecao < -MARGEM_ATRAS': mantinha a fase
+            # so enquanto o robo estivesse ATRAS da bola. Mas o alvo do empurrao
+            # fica AVANCO_RETO = 350 mm ALEM dela, entao avancar - a unica coisa
+            # que a fase manda fazer - cruza o limiar e derruba a propria fase.
+            # A jogada caia em 'contornar' e a orbita expulsava o robo.
+            #
+            # MEDIDO com a sonda [FK] no cenario 'passe', 163 ciclos:
+            #     encaixar (d~170) -> empurrar por ~2 ciclos -> contornar
+            #     (500-860 mm da bola) -> volta -> repete;  8 trocas de fase
+            #
+            # No CHUTE A GOL isto nao aparecia porque a bola parte no contato e
+            # o robo nunca chega a cruzar. No passe o chute nao sai, ele cruza,
+            # e e expulso. E o "atravessa a bola sem chutar" ja registrado.
+            #
+            # Agora a fase termina por: passar MUITO da bola (alem do proprio
+            # alvo do empurrao, ou seja, a tentativa acabou), desalinhar, ou
+            # estourar o tempo. Nenhuma delas e produzida pelo avanco normal, e
+            # o teto de tempo garante que isto nao vira impasse novo.
+            passou_demais = projecao > AVANCO_RETO
+            t_ini = self.estado.inicio_empurrao.get(robot_id)
+            demorou = (t_ini is not None
+                       and time.time() - t_ini > TEMPO_EMPURRAO_MAX)
+            if (not passou_demais and not demorou
                     and self._desvio_lateral(robot_id) <= DESVIO_TRAVADO):
                 return "empurrar"
             self.estado.fase_travada.pop(robot_id, None)
+            self.estado.inicio_empurrao.pop(robot_id, None)
 
         if projecao > -MARGEM_ATRAS:
             self.estado.fase_travada.pop(robot_id, None)
             return "contornar"
         if self._pronto_para_empurrar(robot_id):
             self.estado.fase_travada[robot_id] = "empurrar"
+            self.estado.inicio_empurrao.setdefault(robot_id, time.time())
             return "empurrar"
         return "encaixar"
 
@@ -1581,7 +2206,27 @@ class OurFreekick(_BaseFreekick):
         # Estando perto, o caminho de volta e simplesmente RECUAR pela propria
         # linha ate o ponto de cobranca. E o que um jogador faz: errou a bola,
         # volta e tenta de novo.
-        if p is not None and hypot(p[0] - bx, p[1] - by) < 500.0:
+        # HISTERESE NA FRONTEIRA - senao ela vibra e o robo nunca chega.
+        #
+        # Era um limiar seco em 500 mm: perto, volta ao ponto de encaixe (250 mm
+        # da bola); longe, orbita a RAIO_CONTORNO (700 mm). Os dois alvos ficam
+        # em lados OPOSTOS da fronteira, entao cada decisao empurra o robo para
+        # o outro regime e a decisao seguinte se inverte.
+        #
+        # MEDIDO no cenario 'passe', distancia robo-bola ao longo de 22 s:
+        #     283 -> 814 -> 247 -> 751 -> 258 -> 730 -> 258
+        # Ele oscila em torno dos 500 e nunca fecha. E o mesmo vaivem que o
+        # HANDOVER descreve, com a causa agora identificada.
+        #
+        # Com histerese: entra no modo "voltar pelo ponto" a 500 mm e so sai
+        # dele a 900 mm - acima de RAIO_CONTORNO, entao a orbita nao o traz de
+        # volta para dentro sozinha. Isto nao acrescenta trava: e um limiar que
+        # ja existia deixando de vibrar.
+        d_bola = 1e9 if p is None else hypot(p[0] - bx, p[1] - by)
+        perto = self.estado.voltando.get(robot_id, False)
+        perto = d_bola < (900.0 if perto else 500.0)
+        self.estado.voltando[robot_id] = perto
+        if p is not None and perto:
             return self._dentro_do_campo(bx - ux * DIST_ATRAS_DA_BOLA,
                                          by - uy * DIST_ATRAS_DA_BOLA)
 
@@ -1621,6 +2266,7 @@ class OurFreekick(_BaseFreekick):
         """Fase 1: dar a volta por fora, com a bola como obstaculo."""
         alvo_x, alvo_y = self._ponto_de_contorno(robot_id)
         alvo_x, alvo_y = self._passo_ate(robot_id, alvo_x, alvo_y)
+        self._diag_alvo(robot_id, "contornar", alvo_x, alvo_y)
 
         # ANGULO CONSTANTE EM TODAS AS FASES - a direcao da mira.
         #
@@ -1705,6 +2351,9 @@ class OurFreekick(_BaseFreekick):
         # adversario - o cobrador largava a bola e recuava para o ponto de
         # bloqueio. Com SUCCESS a jogada segue sendo nossa, apenas em modo de
         # parada segura.
+        # UM CICLO, UMA DECISAO. Ver _alvo_da_jogada.
+        self.estado.alvo_ciclo = None
+
         if self._check_timeout():
             return TaskStatus.SUCCESS, self._parada_segura("tempo esgotado")
         if not self._is_ball_position_valid():
@@ -1720,6 +2369,7 @@ class OurFreekick(_BaseFreekick):
                     self.gk_target, self.gk_angle,
                     ally_ids=list(self.ally_robots),
                     enemy_ids=list(self.enemy_robots),
+                    ball=self.ball,
                 )
             )
 
@@ -1761,9 +2411,34 @@ class OurFreekick(_BaseFreekick):
                         comandos.append(self._aproximar_da_bola(rid))
                     else:
                         comandos.append(self._contornar_a_bola(rid))
+                    self._diag_linha(rid, fase)
             else:
-                alvo_x, alvo_y = self._posicao_de_apoio(ordem_apoio)
-                ordem_apoio += 1
+                # O RECEPTOR ESCOLHIDO PARA. Quem vai receber nao se reposiciona.
+                #
+                # A rev.16 congelou o ALVO do passe na posicao do receptor no
+                # instante da decisao, e isso curou o cobrador perseguindo um
+                # ponto que fugia. Mas so metade do problema: o receptor
+                # continuava obedecendo _posicao_de_apoio, que o move conforme a
+                # bola. O congelamento passou a ser uma premissa falsa - o
+                # cobrador mirava direitinho onde ele ESTAVA.
+                #
+                # MEDIDO no cenario 'passe', 22 s de uma execucao: o receptor
+                # saiu de (1737,584) para (1203,1100) e ficou la. O cobrador
+                # manteve o corpo em 0,30-0,39 rad o tempo todo - exatamente o
+                # angulo do alvo congelado (0,325 rad) - enquanto a direcao ate
+                # onde ele realmente estava era 0,74 rad. O passe seria entregue
+                # a 700 mm de ninguem.
+                #
+                # Fazer o receptor PARAR e o que torna o congelamento verdadeiro,
+                # e e o que um jogador faz: pediu a bola, se oferece e espera.
+                # Nao e trava nova - nenhuma condicao nova precisa fechar para a
+                # jogada andar; e um robo a menos se mexendo.
+                if (rid == self.estado.receptor
+                        and self.estado.alvo_passe is not None):
+                    alvo_x, alvo_y = self.estado.alvo_passe
+                else:
+                    alvo_x, alvo_y = self._posicao_de_apoio(ordem_apoio)
+                    ordem_apoio += 1
                 cmd = self.skills_factory.move_with_angle(
                     robot_id=rid, target_x=alvo_x, target_y=alvo_y,
                     vel_x=0.0, vel_y=0.0,
@@ -1771,7 +2446,23 @@ class OurFreekick(_BaseFreekick):
                                 self.ball.position_x - alvo_x),
                 )
                 self._obstaculos(cmd, rid, evitar_bola=True)
-                cmd.deactivate_kick()
+
+                # RECEPTOR CHUTA AO RECEBER - e o nosso oraculo de recepcao.
+                #
+                # "A bola parou perto do companheiro" nao prova recepcao: ela
+                # pode ter apenas morrido ao lado dele. O chutador do grSim, sim,
+                # prova - ele so dispara com a bola encostada na placa
+                # (robot.cpp:128). Entao o companheiro fica com o chute ARMADO
+                # sempre que a bola esta ao alcance: se o disparo acontecer, a
+                # bola chegou de verdade.
+                #
+                # A direcao nao importa e nao e escolhida: o corpo ja aponta para
+                # a bola porque e assim que o apoio se posiciona. O objetivo aqui
+                # e medir, nao finalizar.
+                if self._dist_ate_bola(rid) <= DIST_RECEPCAO:
+                    cmd.kick = FORCA_RECEPCAO
+                else:
+                    cmd.deactivate_kick()
                 comandos.append(cmd)
 
         # Registra o chute apenas quando a BOLA REALMENTE PARTIU.
@@ -1847,6 +2538,7 @@ class TheirFreekick(_BaseFreekick):
                     self.gk_target, self.angle,
                     ally_ids=list(self.ally_robots),
                     enemy_ids=list(self.enemy_robots),
+                    ball=self.ball,
                 )
             )
 

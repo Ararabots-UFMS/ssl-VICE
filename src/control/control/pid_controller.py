@@ -87,8 +87,8 @@ class PIDController:
         # Sem o feedforward sobra a malha fechada na posicao medida, que e o que
         # se quer aqui. O termo faz sentido quando a trajetoria e confiavel -
         # nao e o caso enquanto o time_offset zerar a cada ciclo.
-        output = proportional + integral_term + derivative
-        #ORIG# output = feedforward + proportional + integral_term + derivative
+        #AJUSTE# output = proportional + integral_term + derivative
+        output = feedforward + proportional + integral_term + derivative
         # <<< ARARABOTS_AJUSTE
 
         output = max(-self.output_limit, min(self.output_limit, output))

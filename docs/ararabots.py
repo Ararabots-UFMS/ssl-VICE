@@ -52,6 +52,10 @@ SAIDA_DIR = "/tmp/cenarios_freekick"
 # Segundos de HALT apos o teleporte, para o driver se reancorar.
 ESPERA_HALT = 8.0
 
+# Segundos de comando ao adversario ANTES do comando do arbitro, para o goleiro
+# entrar na jogada ja em movimento em vez de partir do repouso.
+PRE_VARREDURA = 5.0
+
 # Gol: bola cruzando a linha com |y| dentro da largura do gol (Division B: 1 m).
 GOL_X = 4500.0
 GOL_MEIA_LARGURA = 500.0
@@ -420,10 +424,56 @@ def _ir_para(rx, ry, ax, ay, vel=1.2, freio=400.0):
     """
     dx, dy = ax - rx, ay - ry
     d = math.hypot(dx, dy)
-    if d < 20.0:
+    # Zona morta MAIOR para o goleiro nao ficar tremendo.
+    #
+    # Com 20 mm ele microcorrigia sem parar em cima do alvo - o Felipe viu a
+    # velocidade oscilando entre 0,000 e 0,001, um tremor que nao e movimento
+    # nenhum e ainda polui o replay. 60 mm e menor que o raio do robo: parar
+    # dentro disso e estar no lugar.
+    if d < 60.0:
         return 0.0, 0.0
     v = vel * min(1.0, d / freio)
     return dx / d * v, dy / d * v
+
+
+# Varredura poste a poste do goleiro adversario, em mm no eixo y.
+#
+# 440 mm deixa so 60 mm ate a trave (o robo tem 90 de raio, entao ele encosta na
+# trave com o corpo, que e o que um goleiro faz mesmo). 600 mm/s da tempo de
+# chegar na ponta antes de inverter - com 900 mm/s o alvo fugia e ele cobria so
+# ~620 mm dos 1000 da meta.
+#
+# Triangular e nao senoidal de proposito: velocidade constante faz ele passar o
+# mesmo tempo em cada y, entao o resultado do teste e interpretavel.
+# O ALVO PASSA DO POSTE DE PROPOSITO - senao ele nao chega la.
+#
+# MEDIDO (um_so_cobrador, modo padrao): com o alvo em +-440 mm o goleiro
+# alcancou +-380. A diferenca e o atraso do seguidor somado a zona morta de
+# 60 mm do _ir_para: contra um alvo que anda a 600 mm/s ele nunca fecha os
+# ultimos milimetros, entao o que se pede NAO e o que se cobre.
+#
+# 520 mm passa 20 mm do poste (meia-largura 500). Com o atraso medido isso
+# coloca o CENTRO do goleiro por volta de +-460, e como ele tem 90 mm de raio o
+# corpo cobre o poste inteiro - que e o que um goleiro faz ao encostar na trave.
+# Pedir menos que o poste era deixar os cantos abertos por construcao.
+#
+# CONFIRMADO em 6 execucoes: ele varreu -473..+466 (antes +-380). Cobre a meta
+# de 1000 mm inteira, e nas 4 execucoes sem gol a bola parou com o goleiro a
+# menos de 55 mm dela em y - foram DEFESAS, nao erros de pontaria.
+VARREDURA_ALCANCE = GOL_MEIA_LARGURA + 20.0
+VARREDURA_VEL = 600.0
+
+# Acima disto a bola foi chutada/empurrada e o goleiro para de varrer para
+# interceptar. Empurrao fica em ~1500 mm/s e chute em 5000+; 400 mm/s so filtra
+# o ruido da visao (~3 mm por quadro).
+VEL_BOLA_EM_JOGO = 400.0
+
+
+def _varredura_y():
+    a = VARREDURA_ALCANCE
+    periodo = 4.0 * a / VARREDURA_VEL          # ida e volta completa
+    f = (time.time() % periodo) / periodo
+    return (-a + 4.0 * a * f) if f < 0.5 else (3.0 * a - 4.0 * a * f)
 
 
 def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=None):
@@ -455,10 +505,68 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
                 alvo_y = by + bvy * t
         alvo_y = max(-GOL_MEIA_LARGURA + 60.0, min(GOL_MEIA_LARGURA - 60.0, alvo_y))
 
-        vx, vy = _ir_para(gx, gy, alvo_x, alvo_y, vel=2.5, freio=120.0)
+        # O GOLEIRO VARRE ENQUANTO A BOLA ESTA PARADA - nos DOIS modos.
+        #
+        # BUG QUE ISTO CORRIGE (relatado pelo Felipe): no modo padrao ("segue a
+        # bola") o alvo do goleiro e o y da bola. Numa cobranca de falta a bola
+        # fica parada por toda a fase de aproximacao, entao o alvo nao muda e o
+        # goleiro fica IMOVEL ate o chute. O que se via no replay era ele
+        # "so comecar a se mexer depois do chute" - e literalmente o que o
+        # codigo mandava.
+        #
+        # Consequencia para a medicao: o canto estava SEMPRE aberto no instante
+        # do disparo, e o goleiro partia do repouso (o grSim zera a velocidade
+        # sem comando novo), entao ele nem tinha inercia para chegar. O numero
+        # de gol contra esse goleiro e otimista por construcao - o mesmo tipo de
+        # vies que o §9-0001 descreve para o goleiro imovel.
+        #
+        # Agora: bola parada -> varre poste a poste; bola em jogo -> intercepta,
+        # que e a logica de reflexo que ja existia acima.
+        #
+        # A letra 'k' (GOLEIRO_PATRULHA) continua valendo e agora significa
+        # "varre SEMPRE, mesmo com a bola em movimento" - util para medir chute
+        # no canto sem que o goleiro corrija a rota atras da bola.
+        vel_bola = math.hypot(bvx, bvy)
+        if os.environ.get("GOLEIRO_PATRULHA") or vel_bola < VEL_BOLA_EM_JOGO:
+            alvo_y = _varredura_y()
+
+        # Mais velocidade e freio MAIS CURTO para o goleiro.
+        #
+        # freio=120 fazia ele desacelerar a 12 cm do alvo - com o alvo em
+        # movimento, isso e uma frenagem permanente. Com 60 mm ele so alivia
+        # ao encostar no ponto, e cobre a meta inteira.
+        # Velocidade PROPORCIONAL ao alvo, e freio longo o bastante para nao
+        # ultrapassar.
+        #
+        # Com vel=3,0 e freio=60 o goleiro perseguia um alvo que anda a
+        # 600 mm/s indo a 3 m/s: passava direto toda vez e oscilava de -937 a
+        # +709, ou seja 1849 mm num gol de 1000. Cobria "um lado" porque estava
+        # sempre fora da meta, nao dentro dela.
+        #
+        # 1,2 m/s tem folga sobre os 600 mm/s do alvo, e frear a partir de
+        # 250 mm faz ele chegar sem passar.
+        vx, vy = _ir_para(gx, gy, alvo_x, alvo_y, vel=1.2, freio=250.0)
         _cmd_amarelo(c, 0, gori, vx, vy)
 
     linha = [r for r in ids if r != 0]
+
+    # SO O GOLEIRO EM CAMPO: envia agora e sai.
+    #
+    # BUG QUE ISTO CORRIGE: todos os ramos de modo abaixo sao guardados por
+    # 'and linha', e o _enviar_agora mora DENTRO deles. Quando o unico
+    # adversario e o goleiro - que e exatamente o cenario 12,
+    # 'um_so_cobrador' - a lista fica vazia, nenhum ramo casa, e o pacote que
+    # acabamos de montar para o goleiro e simplesmente descartado.
+    #
+    # O goleiro nunca recebeu comando nenhum nesses cenarios. Media-se a
+    # cobranca contra um obstaculo imovel achando que era um goleiro, e tanto
+    # "segue a bola" quanto a patrulha eram inuteis pelo mesmo motivo.
+    #
+    # MEDIDO: com a patrulha ligada, a amplitude do goleiro em y foi de 11 mm em
+    # 1005 amostras - ou seja, zero movimento.
+    if not linha:
+        _enviar_agora(pacote)
+        return
 
     # ------------------------------------------------------------- nosso KICKOFF (falta azul)
     if modo == "nosso_kickoff" and linha:
@@ -849,6 +957,7 @@ def _criar_gravador():
             self.sock_visao, self._WrapperPacket = _abrir_escuta_visao_crua()
             self.visao_crua = []
             self.robos_crus = []
+            self.amarelos_crus = []
             # Todas as transicoes do pedido de chute, nao so a primeira.
             self.janelas_kick = []
             self._kick_anterior = {}
@@ -938,6 +1047,15 @@ def _criar_gravador():
                 for r in pkt.detection.robots_blue:
                     self.robos_crus.append((tc, int(r.robot_id), float(r.x),
                                             float(r.y), float(r.orientation)))
+                # OS ADVERSARIOS TAMBEM, crus.
+                #
+                # Sem isto o replay nao tinha como desenhar o goleiro deles: os
+                # quadros so carregavam robots_blue. Era por isso que o goleiro
+                # "nao aparecia" - nao era estilo de desenho, o dado nunca foi
+                # gravado.
+                for r in pkt.detection.robots_yellow:
+                    self.amarelos_crus.append((tc, int(r.robot_id), float(r.x),
+                                               float(r.y), float(r.orientation)))
 
         def _drenar_status(self):
             """Le tudo que o grSim mandou desde a ultima vez, sem bloquear."""
@@ -1355,6 +1473,13 @@ for(const s of [-1,1]){
   svg.appendChild(el('rect',{x:s>0?4500:-4680,y:-500,width:180,height:1000,fill:'none',stroke:'#5b8f74','stroke-width':16}));
   svg.appendChild(el('rect',{x:s>0?3500:-4500,y:-1000,width:1000,height:2000,fill:'none',stroke:'#3a6b52','stroke-width':12}));
 }
+// TRILHA DO GOLEIRO ADVERSARIO.
+// O replay so desenhava a bola e UM robo nosso: o goleiro deles nunca apareceu
+// porque o dado nem era gravado. Agora ele tem trilha propria, grossa, porque e
+// ele que decide se o gol sai.
+const trilhaGK = el('path',{fill:'none',stroke:'#ffd166','stroke-width':22,opacity:.75}); svg.appendChild(trilhaGK);
+const gAmarelos = el('g'); svg.appendChild(gAmarelos);
+const gCompanheiros = el('g'); svg.appendChild(gCompanheiros);
 const trilhaB = el('path',{fill:'none',stroke:'#ff9f1c','stroke-width':16,opacity:.45}); svg.appendChild(trilhaB);
 const trilhaR = el('path',{fill:'none',stroke:'#4da3ff','stroke-width':14,opacity:.35}); svg.appendChild(trilhaR);
 const linhaErro = el('line',{stroke:'var(--alvo)','stroke-width':12,'stroke-dasharray':'40 30',opacity:.9}); svg.appendChild(linhaErro);
@@ -1392,6 +1517,7 @@ const db=document.getElementById('disp');
 db.textContent = D.disparou ? 'chutador DISPAROU' : 'nao disparou';
 db.className = 'badge ' + (D.disparou ? 'g-sim':'g-nao');
 
+let pGK = '';
 const Q = D.quadros;
 const sl = document.getElementById('sl'); sl.max = Q.length-1;
 let pB='', pR='';
@@ -1415,6 +1541,42 @@ function desenha(i){
     ee.textContent = e.toFixed(0);
     ee.style.color = e>200 ? 'var(--ruim)' : 'var(--ok)';
   } else { alvo.style.display='none'; linhaErro.style.display='none'; }
+  // ADVERSARIOS: todos em amarelo; o mais proximo da meta e o goleiro e ganha
+  // circulo maior, rotulo e trilha.
+  gAmarelos.textContent = '';
+  const ams = q.y || [];
+  let gk = null;
+  for (const a of ams){ if (!gk || Math.abs(a[1]-4500) < Math.abs(gk[1]-4500)) gk = a; }
+  for (const a of ams){
+    const ehGK = gk && a[0]===gk[0];
+    gAmarelos.appendChild(el('circle',{cx:a[1],cy:a[2],r:ehGK?110:90,
+      fill:'#ffd166',opacity:ehGK?.95:.55,stroke:'#1c1c1c','stroke-width':ehGK?16:0}));
+    if (ehGK){
+      gAmarelos.appendChild(el('line',{x1:a[1],y1:a[2],
+        x2:a[1]+150*Math.cos(a[3]),y2:a[2]+150*Math.sin(a[3]),
+        stroke:'#1c1c1c','stroke-width':18}));
+      const tx = el('text',{x:a[1],y:a[2]-190,'text-anchor':'middle','font-size':150,fill:'#ffd166'});
+      tx.textContent = 'GK adv';
+      gAmarelos.appendChild(tx);
+      pGK += (pGK===''?'M':'L') + a[1] + ' ' + a[2] + ' ';
+      trilhaGK.setAttribute('d', pGK);
+    }
+  }
+  // COMPANHEIROS: todo robo nosso que nao e o cobrador, e se a bola chegou perto
+  // dele (raio de recepcao) o circulo fica verde - e a leitura de "recebeu".
+  gCompanheiros.textContent = '';
+  for (let k=1; k<(q.r||[]).length; k++){
+    const c = q.r[k];
+    const d = Math.hypot(q.b[0]-c[1], q.b[1]-c[2]);
+    const recebeu = d <= 250;
+    gCompanheiros.appendChild(el('circle',{cx:c[1],cy:c[2],r:100,
+      fill: recebeu ? 'var(--ok)' : '#4da3ff', opacity: recebeu ? .95 : .5,
+      stroke:'#1c1c1c','stroke-width': recebeu ? 16 : 0}));
+    const tc = el('text',{x:c[1],y:c[2]-180,'text-anchor':'middle','font-size':140,
+                          fill: recebeu ? 'var(--ok)' : '#4da3ff'});
+    tc.textContent = recebeu ? ('RECEBEU (' + d.toFixed(0) + ')') : ('#' + c[0]);
+    gCompanheiros.appendChild(tc);
+  }
   const ev = D.eventos.find(x => x.flat_kick && Math.abs(x.t - q.t) < 0.25);
   marcaChute.setAttribute('r', ev ? 260 : 0);
   if (ev){ marcaChute.setAttribute('cx', q.b[0]); marcaChute.setAttribute('cy', q.b[1]); }
@@ -1525,6 +1687,7 @@ def gerar_replay(resultado, destino):
         _vistos.add(r[0])
         vc.append(r)
     rc = sorted(resultado.get("robos_crus") or [])
+    ac = sorted(resultado.get("amarelos_crus") or [])
     if not vc:
         return None
 
@@ -1547,6 +1710,30 @@ def gerar_replay(resultado, destino):
     rob_por_t = {}
     for t, rid, x, y, ori in rc:
         rob_por_t.setdefault(t, []).append([rid, round(x), round(y), round(ori, 4)])
+
+    # mesma indexacao por instante, para os adversarios
+    am_t = sorted({t for t, _, _, _, _ in ac})
+    am_por_t = {}
+    for t, rid, x, y, ori in ac:
+        am_por_t.setdefault(t, []).append([rid, round(x), round(y), round(ori, 4)])
+
+    def _perto(t, chaves, mapa, tol=0.03):
+        if not chaves:
+            return []
+        i = bisect.bisect_left(chaves, t)
+        cand = [chaves[j] for j in (i - 1, i) if 0 <= j < len(chaves)]
+        if not cand:
+            return []
+        melhor = min(cand, key=lambda x: abs(x - t))
+        if abs(melhor - t) > tol:
+            return []
+        unicos = {}
+        for r in mapa[melhor]:
+            unicos.setdefault(r[0], r)
+        return list(unicos.values())
+
+    def amarelos_perto(t):
+        return _perto(t, am_t, am_por_t)
 
     def robos_perto(t, tol=0.03):
         # (o mesmo robo pode vir em mais de uma camera; um por id basta)
@@ -1580,6 +1767,7 @@ def gerar_replay(resultado, destino):
             "t": round(t - t0, 4),
             "b": [round(x), round(y)],
             "r": robos_perto(t),
+            "y": amarelos_perto(t),
             "a": ultimo_alvo,
         })
 
@@ -1811,27 +1999,9 @@ def rodar(nome, duracao=12.0):
 
         print(f"   bola confirmada em ({no.bola[0]:.0f}, {no.bola[1]:.0f})")
 
-        # 1. Transição inicial obrigatória para STOP
-        enviar_comando_arbitro("STOP")
-        _girar(no, 1.5)
-
         tipo, cor = cen["comando"]
         tipo_cen = tipo.upper()
         cor_cen = cor.upper()
-
-        # 2. SEÇÃO MODIFICADA: Envio do comando de arbitragem conforme a regra
-        if tipo_cen in ("KICKOFF", "PREPARE_KICKOFF"):
-            print(f"   comando do arbitro: PREPARE_KICKOFF {cor_cen} -> NORMAL_START")
-            enviar_comando_arbitro("PREPARE_KICKOFF", cor_cen)
-            _girar(no, 2.0)  # Tempo para o posicionamento de kickoff
-            enviar_comando_arbitro("NORMAL_START")
-        else:
-            print(f"   comando do arbitro: {tipo} {cor}")
-            enviar_comando_arbitro(tipo, cor)
-
-        print(f"   gravando por {duracao:.0f}s (olhe a janela do grSim)...")
-        no.t0 = time.monotonic()
-        no.gravando = True
 
         # 3. SEÇÃO MODIFICADA: Mapeamento do comportamento do adversário
         if tipo_cen in ("DIRECT", "INDIRECT"):
@@ -1844,12 +2014,114 @@ def rodar(nome, duracao=12.0):
         adversario_ligado = os.environ.get("ADVERSARIO", "1") != "0"
         print(f"   adversario: {'ativo (' + modo_adv + ')' if adversario_ligado else 'desligado'}")
 
+        # AQUECIMENTO DO ADVERSARIO - o goleiro ja entra varrendo.
+        #
+        # Pedido do Felipe: "o goleiro deve se mover 5 segundos antes e
+        # continuar movendo". Antes, o laco que comanda os amarelos so comecava
+        # junto com a gravacao, e o grSim ZERA a velocidade do robo em todo
+        # passo de fisica sem comando novo (§9-0000000, item 4): o goleiro
+        # partia parado exatamente no instante em que a jogada comecava.
+        #
+        # Aqui ele recebe comando a ~50 Hz durante PRE_VARREDURA segundos ANTES
+        # do comando do arbitro. Quando a cobranca comeca ele ja esta em
+        # movimento, no meio do percurso, com inercia - que e a condicao contra
+        # a qual o numero de gol precisa ser medido.
+        #
+        # O AQUECIMENTO ACONTECE SOB HALT, NAO SOB STOP - e isto NAO e detalhe.
+        #
+        # BUG QUE EU MESMO CRIEI E MEDI: na primeira versao o aquecimento vinha
+        # DEPOIS do STOP. Sob STOP a arvore roda a tatica Stop, que manda todos
+        # os robos para um alvo FIXO em (2000,1400) (o defeito do HANDOVER §6.5,
+        # que continua la). Cinco segundos extras de STOP e tempo de sobra para
+        # o time inteiro sair do lugar em que o cenario o colocou.
+        #
+        # MEDIDO no cenario 'passe': no instante t=0 da gravacao o cobrador ja
+        # estava em (852,976) em vez de (-400,0) e o receptor em (1996,1366) em
+        # vez de (1600,400), os dois a caminho de (2000,1400). A bola nao saiu
+        # do lugar em 6 de 6 execucoes - nao porque o passe falhasse, mas porque
+        # nao havia cobranca nenhuma acontecendo.
+        #
+        # Sob HALT, halt.py manda cada robo para a PROPRIA posicao lida da
+        # visao, ou seja, os segura parados (HANDOVER §7). O goleiro adversario
+        # e comandado por nos, por fora da arvore, entao ele varre normalmente.
+        # Depois do aquecimento vem o STOP curto de sempre, tambem comandando os
+        # amarelos, e so entao o comando da falta.
+        if adversario_ligado:
+            print(f"   aquecendo o adversario por {PRE_VARREDURA:.0f}s "
+                  f"(goleiro ja varrendo quando a jogada comecar)...")
+        fim_pre = time.time() + (PRE_VARREDURA if adversario_ligado else 0.0)
+        while time.time() < fim_pre:
+            _girar(no, 0.02)
+            if adversario_ligado and no.bola:
+                comandar_amarelos(no.bola, no.amarelos,
+                                  getattr(no, "azuis_pos", {}), modo_adv,
+                                  getattr(no, "bola_vel", (0.0, 0.0)))
+
+        # Transicao obrigatoria para STOP, curta como sempre foi, ja com os
+        # amarelos sendo comandados para o goleiro nao parar entre as fases.
+        enviar_comando_arbitro("STOP")
+        fim_stop = time.time() + 1.5
+        while time.time() < fim_stop:
+            _girar(no, 0.02)
+            if adversario_ligado and no.bola:
+                comandar_amarelos(no.bola, no.amarelos,
+                                  getattr(no, "azuis_pos", {}), modo_adv,
+                                  getattr(no, "bola_vel", (0.0, 0.0)))
+
+        # 2. SEÇÃO MODIFICADA: Envio do comando de arbitragem conforme a regra
+        if tipo_cen in ("KICKOFF", "PREPARE_KICKOFF"):
+            print(f"   comando do arbitro: PREPARE_KICKOFF {cor_cen} -> NORMAL_START")
+            enviar_comando_arbitro("PREPARE_KICKOFF", cor_cen)
+            # Comandando os amarelos tambem AQUI: um _girar seco deixaria o
+            # goleiro parado por 2 s bem na vespera do NORMAL_START, desfazendo
+            # o aquecimento que acabou de acontecer.
+            fim_pk = time.time() + 2.0   # tempo para o posicionamento de kickoff
+            while time.time() < fim_pk:
+                _girar(no, 0.02)
+                if adversario_ligado and no.bola:
+                    comandar_amarelos(no.bola, no.amarelos,
+                                      getattr(no, "azuis_pos", {}), modo_adv,
+                                      getattr(no, "bola_vel", (0.0, 0.0)))
+            enviar_comando_arbitro("NORMAL_START")
+        else:
+            print(f"   comando do arbitro: {tipo} {cor}")
+            enviar_comando_arbitro(tipo, cor)
+
+        print(f"   gravando por {duracao:.0f}s (olhe a janela do grSim)...")
+        no.t0 = time.monotonic()
+        no.gravando = True
+
         fim = time.time() + duracao
         proximo_cmd = 0.0
         while time.time() < fim:
-            _girar(no, 0.1)
-            if adversario_ligado and no.bola and time.time() >= proximo_cmd:
-                proximo_cmd = time.time() + 0.1
+            # 0,02 s, e nao 0,1: a CADENCIA DO LACO e quem manda na taxa de
+            # comando do adversario, nao o portao que existia embaixo.
+            #
+            # Eu tinha tirado o portao de 10 Hz achando que resolvia, e nao
+            # mudou nada - porque _girar(0,1) bloqueia 100 ms por volta e o
+            # laco continuava a 10 Hz. Com 0,02 o laco vai a ~50 Hz.
+            _girar(no, 0.02)
+            # COMANDA A CADA VOLTA.
+            #
+            # O grSim ZERA a velocidade do robo no passo de fisica em que nao
+            # chega comando novo. A 10 Hz o adversario andava um passo e ficava
+            # parado os outros 90 ms: o resultado e o tremor de 0,000-0,001 que
+            # o Felipe viu, e nao movimento.
+            #
+            # MEDIDO, com o mesmo codigo nos dois casos: comandando a 10 Hz o
+            # goleiro deslocou 7 mm em 5 s; um laco enviando a ~50 Hz moveu o
+            # mesmo robo 250 mm em 3 s.
+            #
+            # Enviar todo ciclo custa um datagrama de ~30 bytes por volta -
+            # nada perto de mandar o teste inteiro por agua abaixo.
+            if adversario_ligado and no.bola:
+                # DIAGNOSTICO temporario: quantos amarelos o gravador enxerga e
+                # se a patrulha esta ligada AQUI DENTRO. Ja perdemos horas com o
+                # goleiro parado por a variavel nao atravessar o docker exec.
+                if os.environ.get("DIAG_ADV") and int(time.time() * 2) % 4 == 0:
+                    print("   [diag] amarelos=%d patrulha=%r bola=%s"
+                          % (len(no.amarelos), os.environ.get("GOLEIRO_PATRULHA"),
+                             tuple(round(v) for v in no.bola)), flush=True)
                 comandar_amarelos(no.bola, no.amarelos,
                                   getattr(no, "azuis_pos", {}), modo_adv,
                                   getattr(no, "bola_vel", (0.0, 0.0)))
@@ -1862,6 +2134,7 @@ def rodar(nome, duracao=12.0):
         visao_crua = list(no.visao_crua)
         alvos = list(no.alvos)
         robos_crus = list(no.robos_crus)
+        amarelos_crus = list(no.amarelos_crus)
         janelas_kick = list(no.janelas_kick)
         for sk in (no.sock_status, no.sock_visao):
             if sk is not None:
@@ -1911,6 +2184,7 @@ def rodar(nome, duracao=12.0):
         "eventos_chutador": eventos_chutador,
         "visao_crua": visao_crua,
         "robos_crus": robos_crus,
+        "amarelos_crus": amarelos_crus,
         "alvos": alvos,
         "janela_chutador": janela,
         "janelas_kick": janelas_kick,
@@ -2479,6 +2753,102 @@ def _ferramenta_decisao():
               % (nome, tipo.upper(), x, y, fk._forca_do_chute(1), fk._tem_alvo_valido()))
 
 
+def _ferramenta_sonda():
+    """Tabula as linhas [FK] que a tatica emite com DIAG_FK=1.
+
+    POR QUE ISTO MORA AQUI, e nao num script solto: a regra da ferramenta unica.
+    Ja tivemos a receita duplicada em tres arquivos que divergiram em silencio.
+
+    O QUE ELA RESPONDE. O setpoint do cobrador saia para um ponto que nao
+    correspondia a nenhum alvo calculavel de fora - nem o ponto de encaixe
+    (250 mm atras da bola) nem o raio de contorno (700 mm). Inferir qual ramo
+    pedia aquilo falhou tres vezes seguidas. Esta sonda faz o ramo se
+    identificar: cada acao da tatica registra o alvo que pediu, e aqui se ve a
+    sequencia de fases, de ramos e a distancia ate a bola ao longo do tempo.
+
+    Uso:
+        DIAG_FK=1 ./ararabots.sh validar 1 passe
+        ./ararabots.sh sonda
+    """
+    import collections
+    saida = subprocess.run(
+        ["docker", "exec", "vice", "cat", "/tmp/strategy.log"],
+        capture_output=True, text=True).stdout
+    linhas = [l for l in saida.split("\n") if l.startswith("[FK]")]
+    if not linhas:
+        print("Nenhuma linha [FK] no /tmp/strategy.log.")
+        print("A sonda so emite com DIAG_FK=1 - e a variavel precisa atravessar")
+        print("o ros_d, que e quem sobe o strategyNode (ver HANDOVER, o item da")
+        print("variavel que nao atravessa o docker exec).")
+        print("   DIAG_FK=1 ./ararabots.sh validar 1 <cenario>")
+        return 1
+
+    def campos(l):
+        d = {}
+        for par in l[5:].split():
+            if "=" in par:
+                k, v = par.split("=", 1)
+                d[k] = v
+        return d
+
+    regs = [campos(l) for l in linhas]
+    print("linhas [FK]: %d" % len(regs))
+
+    # quanto tempo em cada (fase, ramo), e a distancia tipica ali
+    conta = collections.Counter()
+    dist = collections.defaultdict(list)
+    for r in regs:
+        ch = (r.get("fase", "?"), r.get("ramo", "?"))
+        conta[ch] += 1
+        try:
+            dist[ch].append(float(r.get("d", "0")))
+        except ValueError:
+            pass
+    print("\nCICLOS POR FASE E RAMO (o ramo e quem PEDIU o alvo):")
+    print("  %-12s %-14s %7s  %s" % ("fase", "ramo", "ciclos", "dist ate a bola"))
+    for ch, n in conta.most_common():
+        ds = dist[ch]
+        faixa = "%5.0f a %5.0f mm" % (min(ds), max(ds)) if ds else ""
+        print("  %-12s %-14s %7d  %s" % (ch[0], ch[1], n, faixa))
+
+    # trocas de fase: e o vaivem que queremos ver
+    trocas = 0
+    ant = None
+    for r in regs:
+        f = r.get("fase")
+        if ant is not None and f != ant:
+            trocas += 1
+        ant = f
+    print("\ntrocas de fase: %d em %d ciclos" % (trocas, len(regs)))
+
+    # o momento em que o robo mais se afasta, com o ramo que mandou
+    pior = None
+    for r in regs:
+        try:
+            d = float(r.get("d", "0"))
+        except ValueError:
+            continue
+        if pior is None or d > pior[0]:
+            pior = (d, r)
+    if pior:
+        r = pior[1]
+        print("\nMAIOR AFASTAMENTO DA BOLA: %.0f mm" % pior[0])
+        print("  fase=%s  ramo=%s  pedido=%s  robo=%s  tipo=%s  alvo=%s"
+              % (r.get("fase"), r.get("ramo"), r.get("pedido"),
+                 r.get("robo"), r.get("tipo"), r.get("alvo")))
+        print("  Este e o ramo a investigar: foi ele que pediu o ponto.")
+
+    # amostra cronologica, para ver a sequencia
+    print("\nSEQUENCIA (1 a cada %d linhas):" % max(1, len(regs) // 25))
+    passo = max(1, len(regs) // 25)
+    for r in regs[::passo]:
+        print("  t=%-8s fase=%-10s ramo=%-13s d=%-6s pedido=%-16s alvo=%s"
+              % (r.get("t"), r.get("fase"), r.get("ramo"), r.get("d"),
+                 r.get("pedido"), r.get("alvo")))
+    return 0
+
+
+
 if __name__ == "__main__":
     acao = sys.argv[1] if len(sys.argv) > 1 else ""
 
@@ -2512,5 +2882,6 @@ if __name__ == "__main__":
     elif acao == "resumo":   _ferramenta_resumo()
     elif acao == "atrito":   _ferramenta_atrito()
     elif acao == "decisao":  _ferramenta_decisao()
+    elif acao == "sonda":    sys.exit(_ferramenta_sonda())
     else:
         print(__doc__); sys.exit(2)

@@ -10,6 +10,12 @@
 #      ./ararabots.sh validar [n]     roda todos os cenarios n vezes -> validacao.csv
 #      ./ararabots.sh ajustes on|off|status [tracker|filtro|tudo]
 #                                     correcoes fora de src/strategy/
+#      MIRA_CANTO=1 ./ararabots.sh ...  mira no canto em vez do centro
+#                                     (no menu e a letra 'm'; o padrao CENTRAL
+#                                      vem de medicao: 5 gols em 6 contra 1/12)
+#      ./ararabots.sh sonda           le as linhas [FK] do ultimo teste
+#                                     (emitidas com DIAG_FK=1; diz QUAL ramo da
+#                                      tatica pediu cada alvo)
 #      ./ararabots.sh limpar          mata os nodes ROS orfaos
 #      ./ararabots.sh grsim           sobe so o simulador
 #      ./ararabots.sh parar           derruba tudo
@@ -110,8 +116,30 @@ PY="$SCRIPT_DIR/ararabots.py"
 # Nao afeta a visao do grSim (224.5.23.2:10020) nem o arbitro
 # (224.5.23.1:10003): esses sao sockets da aplicacao, nao do DDS.
 DDS_ENV="export ROS_LOCALHOST_ONLY=1 &&"
-ros_d()   { docker exec -d vice bash -c "$DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
-ros_run() { docker exec vice bash -c "$DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+# O ros_d sobe o strategyNode, entao QUALQUER variavel que a estrategia leia
+# precisa ser exportada AQUI tambem - nao basta estar no ros_run. E o mesmo
+# defeito do §9-0000000 item 1: a variavel existe do lado de fora, o processo
+# nasce sem ela, e o efeito medido e atribuido a uma mudanca que nunca chegou
+# a valer. Com 'export' antes do encadeamento ela vale para todo o resto da
+# linha (item 5 do mesmo paragrafo: o prefixo VAR=x so vale para um comando
+# simples e nao atravessa o &&).
+ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+# GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
+#
+# O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
+# o python que roda via 'docker exec' - e docker exec NAO herda o ambiente do
+# shell de fora. A variavel ficava ligada aqui e desligada onde importa, entao a
+# patrulha simplesmente nunca acontecia.
+# ATENCAO ao passar variavel para dentro do container.
+#
+# A primeira tentativa foi 'VAR=valor source ... && ... && python3 ...'. NAO
+# FUNCIONA: o prefixo VAR=valor so vale para um COMANDO SIMPLES, entao ele se
+# aplicava ao 'source' e nao atravessava o '&&' ate o python. A variavel existia
+# no docker exec e sumia antes de chegar em quem precisava dela - o goleiro
+# adversario ficava parado e parecia bug da logica.
+#
+# Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -181,6 +209,28 @@ portao_medicao() {
 
     # 1. grSim de pe e em headless. Em modo janela a fisica so avanca quando a
     #    janela e redesenhada (glwidget.cpp:392): coberta = mundo parado.
+    # GRSIM EM MODO JANELA E RESULTADO INVALIDO - conferido ANTES de gravar.
+    #
+    # O aviso existia, mas so depois da execucao e sem invalidar nada. Isso me
+    # custou DOIS lotes inteiros: o grSim caiu, subiu de novo em modo janela
+    # (porque /tmp/ararabots_modo_grsim tinha 'janela' guardado), a janela nao
+    # estava visivel, a fisica ficou congelada - e as execucoes sairam com
+    # 'disparou=NAO' e ZERO linhas [FK], que eu quase atribui a estrategia.
+    #
+    # Ver §5.1: glwidget.cpp:392 chama step() dentro de paintGL, entao janela
+    # coberta ou minimizada = mundo parado, e ele segue reenviando o ultimo
+    # quadro de visao. Nada no sistema acusa erro.
+    #
+    # Agora: se ele estiver em modo janela, derruba e sobe headless. Para
+    # assistir de proposito, use GRSIM_JANELA=1.
+    if pgrep -x grSim >/dev/null && [ -z "${GRSIM_JANELA:-}" ] \
+       && ! ps -o args= -C grSim 2>/dev/null | grep -q headless; then
+        echo "   ! grSim estava em modo JANELA - subindo headless (fisica congela"
+        echo "     com a janela coberta; use GRSIM_JANELA=1 para assistir)"
+        pkill -x grSim; sleep 2
+        cmd_grsim --headless >/dev/null 2>&1
+    fi
+
     if ! pgrep -x grSim >/dev/null; then
         motivo="o grSim nao esta rodando"
     elif ! ps -o args= -C grSim 2>/dev/null | grep -q -- --headless; then
@@ -726,7 +776,13 @@ cmd_cenario() {
         # janela, porque a variavel que ela consultava nunca era definida - e
         # uma janela que ninguem esta olhando congela a fisica. Era isso que
         # fazia os robos "travarem" sem explicacao no meio de um lote.
-        modo_antes="$(cat /tmp/ararabots_modo_grsim 2>/dev/null || echo headless)"
+        # HEADLESS por padrao, e nao "o que estava guardado".
+        #
+        # Confiar no arquivo foi o que reergueu o simulador em modo janela sem
+        # ninguem pedir: bastou um 'janela' velho ficar la. O modo com janela
+        # agora exige um pedido EXPLICITO nesta execucao.
+        modo_antes="headless"
+        [ -n "${GRSIM_JANELA:-}" ] && modo_antes="janela"
         echo "      (grSim caiu - subindo de novo em modo $modo_antes)"
         if [ "$modo_antes" = "headless" ]; then
             cmd_grsim --headless >/dev/null 2>&1
@@ -1014,6 +1070,8 @@ cmd_menu() {
         echo "   t) rodar TODOS em sequencia"
         echo "   d) rodar UM cenario N vezes e medir a DISPERSAO  <- e esta que vale"
             echo "   s) mudar a duracao da gravacao"
+        echo "   k) goleiro adversario: VARRE + INTERCEPTA <-> VARRE SEMPRE (canto)"
+        echo "   m) mira da falta direta: CENTRAL <-> CANTO   (atual: ${MIRA_ROTULO:-CENTRAL})"
         echo "   a) estado dos ajustes fora da estrategia"
         echo "   q) sair (desliga os ajustes)"
         echo
@@ -1021,6 +1079,41 @@ cmd_menu() {
 
         case "$opcao" in
             q|Q) break ;;
+            k|K)
+                # Ver o bloco do goleiro em ararabots.py (comandar_amarelos).
+                #
+                # Nos DOIS modos ele agora varre poste a poste enquanto a bola
+                # esta parada - antes, "segue a bola" o deixava imovel durante
+                # toda a aproximacao, porque o y da bola nao muda.
+                #
+                # A diferenca entre os modos e o que acontece DEPOIS do chute:
+                # padrao, ele larga a varredura e vai interceptar; PATRULHA, ele
+                # segue varrendo, o que mede chute no canto sem correcao de
+                # rota do goleiro.
+                if [ -n "${GOLEIRO_PATRULHA:-}" ]; then
+                    unset GOLEIRO_PATRULHA
+                    echo "   goleiro adversario: VARRE ate o chute, depois INTERCEPTA"
+                else
+                    export GOLEIRO_PATRULHA=1
+                    echo "   goleiro adversario: VARRE SEMPRE (poste a poste, 600 mm/s)"
+                fi
+                read -rp "[enter] " _ ;;
+            m|M)
+                # Ver _ponto_de_mira em tatics/freekick.py.
+                #
+                # CENTRAL e o padrao POR MEDICAO, nao por gosto: 5 gols em 6
+                # (disparo 6/6) contra 1 em 12 do canto, nas mesmas condicoes.
+                # O canto tem geometria melhor no contato (yy de 3 a 26 mm
+                # contra 9 a 39) e mesmo assim converte menos - fica aqui para
+                # quem retomar a ideia com o goleiro varrendo.
+                if [ -n "${MIRA_CANTO:-}" ]; then
+                    unset MIRA_CANTO; MIRA_ROTULO="CENTRAL"
+                    echo "   mira da falta direta: CENTRAL (padrao; 5 gols em 6)"
+                else
+                    export MIRA_CANTO=1; MIRA_ROTULO="CANTO"
+                    echo "   mira da falta direta: CANTO (mais longe do goleiro; 1 em 12)"
+                fi
+                read -rp "[enter] " _ ;;
             a|A) cmd_ajustes status; read -rp "[enter] " _ ;;
             s|S) read -rp "duracao em segundos: " nova
                  [[ "$nova" =~ ^[0-9]+$ ]] && DURACAO="$nova" || echo "   valor invalido" ;;
@@ -1371,6 +1464,7 @@ case "${1:-menu}" in
     grsim)     shift; cmd_grsim    "$@" ;;
     parar)     shift; cmd_parar    "$@" ;;
     ajustes)   shift; cmd_ajustes "$@" ;;
+    sonda)     shift; python3 "$PY" sonda "$@" ;;
     menu)      cmd_menu ;;
     -h|--help) uso ;;
     # sem subcomando reconhecido: e o menu, e os argumentos sao dele
