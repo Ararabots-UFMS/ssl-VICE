@@ -4,7 +4,10 @@
 # ==============================================================================
 #
 #      ./ararabots.sh                 menu de cenarios (sobe o ambiente antes)
-#      ./ararabots.sh --headless      idem, sem janela do grSim (mais estavel)
+#      ./ararabots.sh --headless      sem janela - USE ISTO PARA MEDIR EM LOTE
+#      ./ararabots.sh --janela        com janela (JA E O PADRAO), para assistir
+#                                     ATENCAO: janela coberta ou minimizada =
+#                                     fisica congelada e resultado invalido.
 #      ./ararabots.sh preparar        so monta o ambiente e confere a cadeia
 #      ./ararabots.sh cenario <nome>  monta UM cenario e deixa pronto para gravar
 #      ./ararabots.sh validar [n]     roda todos os cenarios n vezes -> validacao.csv
@@ -13,6 +16,10 @@
 #      MIRA_CANTO=1 ./ararabots.sh ...  mira no canto em vez do centro
 #                                     (no menu e a letra 'm'; o padrao CENTRAL
 #                                      vem de medicao: 5 gols em 6 contra 1/12)
+#      ./ararabots.sh mov-bruto [x y] comanda SO a movimentacao, sem estrategia
+#                                     (foi ela que provou que a cadeia da dev
+#                                      seguia a referencia e o erro era nosso)
+#      MOVIMENTO_ANTIGO=1 ./ararabots.sh ...   volta ao driver (letra 'v')
 #      ./ararabots.sh sonda           le as linhas [FK] do ultimo teste
 #                                     (emitidas com DIAG_FK=1; diz QUAL ramo da
 #                                      tatica pediu cada alvo)
@@ -114,8 +121,35 @@ PY="$SCRIPT_DIR/ararabots.py"
 # "XX A BOLA NAO CHEGOU AO LUGAR PEDIDO / nenhuma leitura".
 #
 # Nao afeta a visao do grSim (224.5.23.2:10020) nem o arbitro
-# (224.5.23.1:10003): esses sao sockets da aplicacao, nao do DDS.
-DDS_ENV="export ROS_LOCALHOST_ONLY=1 &&"
+# (224.5.23.1:11003): esses sao sockets da aplicacao, nao do DDS.
+#
+# PORTA 11003, e nao 10003, DESDE O MERGE DA DEV.
+# O referee_node antigo escutava 10003 e por isso subiamos o Game Controller
+# com -publishAddress ...:10003, contrariando o padrao dele (11003). A dev
+# refatorou o pacote referee e adotou 11003 - que ja era o padrao do GC. Os dois
+# lados agora concordam, e a divergencia que o HANDOVER §3 registrava acabou.
+# SINTOMA se isto sair de sincronia: /refereeTopic a 0 Hz e comando vazio, com
+# tudo o mais no ar. Nenhuma jogada roda, porque a arvore nunca sai do HALT.
+# ROS_LOCALHOST_ONLY: TODO MUNDO NO MESMO VALOR, OU NINGUEM SE ENXERGA.
+#
+# Este era o unico ponto que forcava =1, e so para as ferramentas - os nodes
+# subiam sem ele (conferido lendo /proc/<pid>/environ). Com os dois lados
+# divergindo, uma ferramenta com =1 nao ve um node com =0: o participante
+# restrito ignora a interface da bridge do Docker por onde o outro anuncia.
+#
+# SINTOMA, e ele mente feio: o painel [10/10] mostrava a cadeia inteira verde
+# (visao 60 Hz, arbitro 39 Hz) porque usava 'docker exec' cru, e logo em seguida
+# o 'pronto tudo' - que passa por ros_run - reprovava TUDO de uma vez
+# ("faltou: servicos arbitro estrategia-comandando"). Parecia a cadeia caindo
+# entre um passo e outro; era so a lente diferente.
+#
+# O menu escondia isso ha muito tempo porque redefinia ros_run localmente, sem
+# esta variavel. Ao remover aquela copia (que quebrava MOVIMENTO_NOVO), o
+# desalinhamento veio a tona.
+#
+# Vazio = todos usam o padrao do ROS. E maquina unica, tudo em loopback pela
+# bridge do container; nao ha ganho em restringir, e ha este custo.
+DDS_ENV=""
 # O ros_d sobe o strategyNode, entao QUALQUER variavel que a estrategia leia
 # precisa ser exportada AQUI tambem - nao basta estar no ros_run. E o mesmo
 # defeito do §9-0000000 item 1: a variavel existe do lado de fora, o processo
@@ -123,7 +157,17 @@ DDS_ENV="export ROS_LOCALHOST_ONLY=1 &&"
 # a valer. Com 'export' antes do encadeamento ela vale para todo o resto da
 # linha (item 5 do mesmo paragrafo: o prefixo VAR=x so vale para um comando
 # simples e nao atravessa o &&).
-ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+# MOVIMENTACAO NOVA E O PADRAO desde a rev. 19 (merge da dev).
+#
+# MEDIDO: passe de 1/6 para 6/6 saindo e 0/6 para 6/6 chegando ao companheiro;
+# gol igual dentro do ruido (4/6 contra 5/6). Para voltar a antiga (driver):
+#     MOVIMENTO_ANTIGO=1 ./ararabots.sh ...
+# ou a letra 'v' no menu.
+: "${MOVIMENTO_NOVO:=1}"
+[ -n "${MOVIMENTO_ANTIGO:-}" ] && MOVIMENTO_NOVO=""
+export MOVIMENTO_NOVO
+
+ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 # GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
 #
 # O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
@@ -139,7 +183,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -223,7 +267,16 @@ portao_medicao() {
     #
     # Agora: se ele estiver em modo janela, derruba e sobe headless. Para
     # assistir de proposito, use GRSIM_JANELA=1.
-    if pgrep -x grSim >/dev/null && [ -z "${GRSIM_JANELA:-}" ] \
+    # SO troca para headless se o modo ATUAL nao foi pedido de proposito.
+    #
+    # O modo salvo em /tmp/ararabots_modo_grsim registra o que foi PEDIDO na
+    # ultima subida. Se ali estiver 'janela', quem esta rodando quer assistir e
+    # nao cabe a ferramenta derrubar a janela dele no meio do teste. A guarda
+    # existe para o caso em que o grSim CAIU e voltou sozinho em janela - aí o
+    # pedido era headless e a divergencia e acidental.
+    modo_pedido="$(cat /tmp/ararabots_modo_grsim 2>/dev/null || echo headless)"
+    if pgrep -x grSim >/dev/null && [ "$modo_pedido" = "headless" ] \
+       && [ -z "${GRSIM_JANELA:-}" ] \
        && ! ps -o args= -C grSim 2>/dev/null | grep -q headless; then
         echo "   ! grSim estava em modo JANELA - subindo headless (fisica congela"
         echo "     com a janela coberta; use GRSIM_JANELA=1 para assistir)"
@@ -276,13 +329,21 @@ portao_medicao() {
     # 4. As taxas que importam, medidas de verdade.
     local relatorio hz_ctl fps
     relatorio="$(ros_run "python3 /tmp/ararabots.py cadeia" 2>/dev/null)"
-    hz_ctl="$(printf '%s' "$relatorio" | grep -oE "/control_command +[0-9.]+" | grep -oE "[0-9.]+$" | cut -d. -f1)"
+    # O NOME DO TOPICO DEPENDE DO CAMINHO DE MOVIMENTO.
+    #
+    # Antigo: /control_command (driver). Novo: /movement_tracker/control_reference
+    # (tracker_node). Procurando so o antigo, em modo novo o grep nao casa,
+    # hz_ctl fica vazio e o portao deixa passar qualquer coisa - inclusive uma
+    # cadeia parada. Um portao que nao sabe o que medir nao e portao.
+    topico_ctl="/control_command"
+    [ -n "${MOVIMENTO_NOVO:-}" ] && topico_ctl="/movement_tracker/control_reference"
+    hz_ctl="$(printf '%s' "$relatorio" | grep -oE "${topico_ctl} +[0-9.]+" | grep -oE "[0-9.]+$" | cut -d. -f1)"
     fps="$(ros_run "python3 /tmp/ararabots.py fps" 2>/dev/null | grep -oE "[0-9]+ Hz" | grep -oE "^[0-9]+")"
 
     [ -n "$fps" ] && [ "$fps" -lt "$FPS_MIN_GRSIM" ] 2>/dev/null && \
         motivo="grSim a ${fps} Hz (minimo ${FPS_MIN_GRSIM})"
     [ -n "$hz_ctl" ] && [ "$hz_ctl" -lt "$HZ_MIN_CONTROLE" ] 2>/dev/null && \
-        motivo="/control_command a ${hz_ctl} Hz (minimo ${HZ_MIN_CONTROLE})"
+        motivo="${topico_ctl} a ${hz_ctl} Hz (minimo ${HZ_MIN_CONTROLE})"
     printf '%s' "$relatorio" | grep -q "SEM DADOS" && motivo="algum topico sem dados"
 
     if [ -n "$motivo" ]; then
@@ -300,7 +361,7 @@ portao_medicao() {
         echo "        ARARABOTS_MIN_HZ=0 ARARABOTS_MIN_FPS=0 ./ararabots.sh ..."
         return 1
     fi
-    [ -n "$hz_ctl" ] && echo "   portao ok: /control_command ${hz_ctl} Hz, grSim ${fps:-?} Hz"
+    [ -n "$hz_ctl" ] && echo "   portao ok: ${topico_ctl} ${hz_ctl} Hz, grSim ${fps:-?} Hz"
     return 0
 }
 
@@ -339,6 +400,14 @@ cmd_limpar() {
         "lib/grsim_messenger/grsim_publisher_node"
         "lib/vision/visionNode"
         "lib/new_movement/driver"
+        # Nos da movimentacao NOVA (dev). Precisam estar aqui pelo CAMINHO DO
+        # EXECUTAVEL, nao como "ros2 run new_movement planner": aquilo mata so o
+        # wrapper e o filho sobrevive. Medido depois do merge: 6 copias de cada
+        # um de planner/manager/tracker acumuladas, com load 14,9 e o
+        # strategyNode a 106% de CPU. E o §5.9-A de novo, com nomes novos.
+        "lib/new_movement/planner"
+        "lib/new_movement/manager"
+        "lib/new_movement/tracker"
         "lib/strategy/strategyNode"
         "lib/referee/referee_node"
         "lib/manual_command/manual_node"
@@ -464,11 +533,27 @@ cmd_parar() {
 
 # ============================================================================
 cmd_preparar() {
+    # JANELA E O PADRAO - o Felipe roda para ASSISTIR o resultado.
+    #
+    # Era o contrario, e custou caro: em modo janela a fisica so avanca quando a
+    # janela e redesenhada (glwidget.cpp:392 chama step() dentro de paintGL).
+    # Coberta ou minimizada = mundo congelado, e o grSim segue reenviando o
+    # ultimo quadro de visao. Nada acusa erro.
+    #
+    # MEDIDO nesta sessao: lotes inteiros saindo com 'disparou=NAO' e ZERO
+    # linhas [FK] - a jogada nunca rodava - e /visionTopic a 0 Hz com todos os
+    # nodes de pe. Duas vezes o simulador voltou sozinho para janela e duas
+    # vezes eu quase atribui o resultado a estrategia.
+    #
+    # Quem roda em LOTE (validar, ou qualquer execucao automatizada) deve usar
+    # --headless: a fisica congela com a janela coberta e o resultado nao vale.
+    # Assistindo, a janela na frente, o modo janela e o certo - e e o padrao.
     MODO_GRSIM="janela"
     SUBIR_ESTRATEGIA=1
     for arg in "$@"; do
         case "$arg" in
-            --headless)        MODO_GRSIM="headless" ;;
+            --headless)        MODO_GRSIM="headless" ;;   # ja e o padrao; aceito por compatibilidade
+            --janela|--window) MODO_GRSIM="janela" ;;
             --sem-estrategia)  SUBIR_ESTRATEGIA=0 ;;
             -h|--help)         uso; return 0 ;;
         esac
@@ -479,11 +564,25 @@ cmd_preparar() {
     ok()     { echo "      ✓ $1"; }
     falha()  { echo "      ✗ $1"; FALHAS=$((FALHAS+1)); }
 
-    ros_d() {
-        docker exec -d vice bash -c \
-            "source /opt/ros/humble/setup.bash && \
-             source /root/ssl-VICE/install/local_setup.bash && $*"
-    }
+    # NAO redefina ros_d nem ros_run aqui - use os globais (topo do arquivo).
+    #
+    # BUG QUE ISTO CORRIGE, e ele e irmao gemeo do que havia no cmd_menu: esta
+    # copia local nao exportava variavel nenhuma, e em bash a local vence a
+    # global. Como e o 'preparar' que sobe o strategyNode (passo 9), TODO node
+    # do ambiente nascia sem MOVIMENTO_NOVO.
+    #
+    # Consequencia, conferida lendo /proc/<pid>/environ do strategyNode
+    # ("NENHUMA VARIAVEL"): a estrategia entrava no ramo da movimentacao ANTIGA
+    # e ficava presa em wait_for_service('strategy_command') - servico que nao
+    # existe, porque o driver nao sobe mais. Ela nunca comandava.
+    #
+    # O que se via: painel [10/10] inteiro verde, e logo depois
+    # "faltou: estrategia-comandando" com o robo andando 2 mm em 25 s. O
+    # strategy.log terminava em RCLError "context is invalid" - era o
+    # cmd_limpar matando o node enquanto ele esperava um servico eterno.
+    #
+    # Ja existiam DUAS copias locais assim (esta e a do cmd_menu). Se for
+    # preciso mudar o jeito de chamar o container, mude no topo do arquivo.
     vivo()  { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
     echo "==============================================================="
@@ -505,7 +604,12 @@ cmd_preparar() {
     # movimento que se confirmou. A/B de 4 contra 12 execucoes, so ele mudando:
     # o yy caiu de 82,0 para 28,5 mm de mediana e passou a ficar dentro do
     # limite do grSim em 7 de 12 execucoes (era 0 de 4). Ver HANDOVER §42.
-    cmd_ajustes on tracker
+    #
+    # O ajuste do TRACKER saiu daqui na rev. 19: a dev reescreveu o update() do
+    # tracker.py sem passar dt, entao os marcadores ARARABOTS_AJUSTE daquele
+    # arquivo deixaram de existir e a chamada so produzia um erro vermelho a
+    # cada subida ("nenhum arquivo com marcador"). O defeito que ele corrigia
+    # tambem deixou de existir - quem for reavaliar, olhe o codigo novo antes.
     cmd_ajustes on controle
 
     passo 1 "Verificando pré-requisitos"
@@ -566,11 +670,11 @@ cmd_preparar() {
     docker run -d --name ssl-gc --network host \
         robocupssl/ssl-game-controller:latest \
         -address :8081 \
-        -publishAddress 224.5.23.1:10003 \
+        -publishAddress 224.5.23.1:11003 \
         -visionAddress 224.5.23.2:10020 >/dev/null 2>&1
     esperar_por 25 "arbitro responder na 8081" curl -sf -o /dev/null http://localhost:8081/
     if curl -sf -o /dev/null http://localhost:8081/; then
-        ok "UI em http://localhost:8081 (publica em 224.5.23.1:10003)"
+        ok "UI em http://localhost:8081 (publica em 224.5.23.1:11003)"
     else
         falha "não responde na porta 8081"
     fi
@@ -679,13 +783,40 @@ except OSError: sys.exit(1)
     ok "fora de cena (ele disputaria /commandTopic com o controlador)"
 
     # ---------------------------------------------------------------- 7
-    passo 7 "new_movement/driver"
-    if ! vivo "new_movement/driver"; then
-        ros_d "ros2 run new_movement driver > /tmp/driver.log 2>&1"
-        esperar_por 30 "driver subir" vivo "new_movement/driver"
+    # MOVIMENTACAO: a NOVA (planner+manager+tracker) ou a ANTIGA (driver).
+    #
+    # A nova ja vem no launch sim_one.py da dev - subir de novo cria DUPLICATAS
+    # (medimos 6 copias de cada, load 14,9). O driver, sim, precisa ser subido a
+    # mao, porque a dev o tirou do launch.
+    #
+    # BUG QUE ISTO CORRIGE: este passo esperava o DRIVER em qualquer caso. Com a
+    # movimentacao nova, que nao sobe driver nenhum, ele estourava os 30 s e
+    # dizia "nao subiu" - e o ambiente inteiro era declarado quebrado com tudo
+    # funcionando. O sintoma enganava porque a linha seguinte, /control_command a
+    # 0 Hz, e ESPERADA no caminho novo (o control.py passou a escutar
+    # movement_tracker/control_reference).
+    if [ -n "${MOVIMENTO_NOVO:-}" ]; then
+        passo 7 "movimentacao nova (planner+manager+tracker)"
+        esperar_por 30 "planner subir" vivo "new_movement/planner"
+        faltando=""
+        for n in planner manager tracker; do
+            vivo "new_movement/$n" || faltando="$faltando $n"
+        done
+        if [ -z "$faltando" ]; then
+            ok "no ar (replaneja a partir da visao; vem do launch)"
+        else
+            falha "faltou:$faltando (docker exec vice cat /tmp/sim.log)"
+        fi
+    else
+        passo 7 "new_movement/driver"
+        if ! vivo "new_movement/driver"; then
+            ros_d "ros2 run new_movement driver > /tmp/driver.log 2>&1"
+            esperar_por 30 "driver subir" vivo "new_movement/driver"
+        fi
+        vivo "new_movement/driver" \
+            && ok "no ar (fornece strategy_command e update_obstacles)" \
+            || falha "não subiu (docker exec vice cat /tmp/driver.log)"
     fi
-    vivo "new_movement/driver" && ok "no ar (fornece strategy_command e update_obstacles)" \
-                               || falha "não subiu (docker exec vice cat /tmp/driver.log)"
 
     # ---------------------------------------------------------------- 8
     passo 8 "referee_node"
@@ -693,7 +824,7 @@ except OSError: sys.exit(1)
         ros_d "ros2 run referee referee_node > /tmp/ref.log 2>&1"
         esperar_por 25 "referee_node subir" vivo "referee/referee_node"
     fi
-    vivo "referee/referee_node" && ok "escutando 224.5.23.1:10003" \
+    vivo "referee/referee_node" && ok "escutando 224.5.23.1:11003" \
                                 || falha "não subiu (docker exec vice cat /tmp/ref.log)"
 
     # ---------------------------------------------------------------- 9
@@ -725,8 +856,32 @@ except OSError: sys.exit(1)
     docker cp "$PY" vice:/tmp/ararabots.py >/dev/null 2>&1
     # Se o campo nao vier com 9000 mm, a estrategia calcula gol e limiar de chute
     # errados e nada funciona - por isso isto e verificado explicitamente.
-        docker exec vice bash -c \
-        "source /opt/ros/humble/setup.bash && \
+    # ros_run, e NAO 'docker exec' cru.
+    #
+    # Este era o ultimo lugar com a montagem feita a mao, e ele nao passava
+    # variavel nenhuma nem o ROS_LOCALHOST_ONLY. Sintoma: o painel rotulava a
+    # linha do setpoint como /control_command mesmo com a movimentacao NOVA, e
+    # entao mostrava 0,0 Hz num topico que e mudo por design - fazendo o
+    # ambiente parecer quebrado com tudo funcionando.
+    #
+    # E a mesma armadilha do HANDOVER (a variavel que nao atravessa o docker
+    # exec), agora num ponto que ninguem tinha olhado. Toda chamada ao container
+    # deve passar por ros_run/ros_d.
+    # docker exec CRU DE PROPOSITO, com as variaveis exportadas a mao.
+    #
+    # NAO troque por ros_run: o ros_run tras o DDS_ENV (ROS_LOCALHOST_ONLY=1) e
+    # os nodes deste ambiente rodam com ROS_LOCALHOST_ONLY=0 - conferido lendo
+    # /proc/<pid>/environ do visionNode. Com os dois lados divergindo, o
+    # verificador enxerga so /rosout e /parameter_events e declara a cadeia
+    # inteira parada com tudo funcionando. Ja fiz essa troca e ela quebrou o
+    # painel; esta anotada aqui para nao acontecer de novo.
+    #
+    # O que precisa atravessar e MOVIMENTO_NOVO, para o painel rotular a linha
+    # do setpoint com o topico certo (/control_command no caminho antigo,
+    # /movement_tracker/control_reference no novo).
+    docker exec vice bash -c \
+        "export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; \
+         source /opt/ros/humble/setup.bash && \
          source /root/ssl-VICE/install/local_setup.bash && \
          python3 /tmp/ararabots.py cadeia" 2>/dev/null || falha "verificação não rodou"
 
@@ -830,7 +985,24 @@ cmd_cenario() {
 
     # Os tres sobem JUNTOS: nenhum depende do outro para iniciar (a estrategia
     # espera os servicos por conta propria, no seu wait_for_service).
-    ros_d "ros2 run new_movement driver > /tmp/driver.log 2>&1"
+    # MOVIMENTACAO: a nova (planner + manager + tracker) ou a antiga (driver).
+    #
+    # MOVIMENTO_NOVO=1 sobe os tres nos que a dev passou a usar no launch dela.
+    # Sem a variavel, sobe o driver de sempre. Os dois convivem porque a dev
+    # manteve o driver.py e o executavel registrado - so tirou do launch.
+    #
+    # Isto existe para MEDIR a diferenca da movimentacao no mesmo lote, sem
+    # trocar de branch no meio. A estrategia escolhe o caminho pela mesma
+    # variavel (ver strategy.py).
+    if [ -n "${MOVIMENTO_NOVO:-}" ]; then
+        # NAO subimos planner/manager/tracker aqui: o launch sim_one.py da dev
+        # JA os inclui. Subir de novo cria DUPLICATAS - medimos 6 copias de cada,
+        # com load 14,9 e o strategyNode a 106% de CPU, e o teste vira lixo.
+        # O driver, sim, precisa ser subido a mao: a dev o tirou do launch.
+        :
+    else
+        ros_d "ros2 run new_movement driver > /tmp/driver.log 2>&1"
+    fi
     ros_d "ros2 run referee referee_node > /tmp/ref.log 2>&1"
     ros_d "ros2 run strategy strategyNode > /tmp/strategy.log 2>&1"
 
@@ -937,7 +1109,10 @@ cmd_validar() {
             # Sem elas, uma execucao sem gol nao distingue "chegou torto",
             # "nao chegou" e "chutou mas nao teve alcance".
             DP=$(echo "$OUT" | grep -oE "DISPARO \(grSim\): (SIM|NAO)" | grep -oE "(SIM|NAO)")
-            HZ=$(echo "$OUT" | grep -oE "laco do driver a [0-9]+ Hz" | grep -oE "[0-9]+" | head -1)
+            # "laco a N Hz por robo" desde a rev. 20 - antes era "laco do driver
+            # a N Hz", e a taxa somava todos os robos (3 robos = "300 Hz" com o
+            # timer em 100). Sem atualizar este grep o CSV sai com "laco=?Hz".
+            HZ=$(echo "$OUT" | grep -oE "laco a [0-9]+ Hz" | grep -oE "[0-9]+" | head -1)
             RM=$(echo "$OUT" | grep -oE "mediana [0-9]+ mm" | head -1 | grep -oE "[0-9]+")
             RP=$(echo "$OUT" | grep -oE "p90 [0-9]+" | head -1 | grep -oE "[0-9]+$")
             JA=$(echo "$OUT" | grep -oE "abriu em [0-9]+ quadros" | grep -oE "[0-9]+")
@@ -966,16 +1141,29 @@ cmd_menu() {
     for arg in "$@"; do
         case "$arg" in
             --headless) MODO="headless" ;;
+            --janela|--window) MODO="janela" ;;   # ja e o padrao; aceito explicito
             --so-menu)  MONTAR=0 ;;
             -h|--help)         uso; return 0 ;;
         esac
     done
 
-    ros_run() {
-        docker exec vice bash -c \
-            "source /opt/ros/humble/setup.bash && \
-             source /root/ssl-VICE/install/local_setup.bash && $*"
-    }
+    # NAO redefina ros_run aqui. A definicao global (topo do arquivo) e a que
+    # exporta GOLEIRO_PATRULHA, MIRA_CANTO, DIAG_FK e MOVIMENTO_NOVO, alem do
+    # ROS_LOCALHOST_ONLY.
+    #
+    # BUG QUE ISTO CORRIGE: havia uma copia local aqui, sem nenhuma dessas
+    # variaveis, e em bash a copia local vence a global. Consequencia no menu -
+    # e SO no menu, por isso demorou a aparecer:
+    #   - 'pronto tudo' exigia os servicos do DRIVER, que nao existem no
+    #     caminho novo, e reprovava com "faltou: estrategia-comandando";
+    #   - o strategyNode ficava esperando 'strategy_command' e
+    #     'update_obstacles' para sempre e NUNCA comandava.
+    # O robo ficava parado (medido: andou 1 mm em 25 s) e nada no log dizia por
+    # que. O mesmo teste rodado por './ararabots.sh validar' funcionava, porque
+    # aquele caminho nao passa por aqui.
+    #
+    # O HANDOVER ja registrava esta armadilha para o cmd_cenario; a copia do
+    # menu tinha sobrevivido.
 
     # ---------------------------------------------------------------- montagem
     if [ "$MONTAR" = "1" ]; then
@@ -1034,7 +1222,7 @@ cmd_menu() {
             [ $st -eq 3 ] && { echo "   XX bloqueado pelo portao de medicao"; BLOQ=$((BLOQ+1)); continue; }
             [ $st -eq 2 ] && echo "   !! a estrategia nao comandou - resultado suspeito"
             ros_run "BRANCH=disp_$i python3 /tmp/ararabots.py rodar $nome $DURACAO" \
-                | grep -E "GOL|sem gol|DISPARO|RASTREIO|acima de 200|laco do driver|abriu em|nunca abriu|robo [0-9]:|BOLA:" | sed 's/^/   /'
+                | grep -E "GOL|sem gol|DISPARO|RASTREIO|acima de 200|laco a |abriu em|nunca abriu|robo [0-9]:|BOLA:" | sed 's/^/   /'
             grsim_sobreviveu
             copiar_replays
         done
@@ -1070,8 +1258,9 @@ cmd_menu() {
         echo "   t) rodar TODOS em sequencia"
         echo "   d) rodar UM cenario N vezes e medir a DISPERSAO  <- e esta que vale"
             echo "   s) mudar a duracao da gravacao"
-        echo "   k) goleiro adversario: VARRE + INTERCEPTA <-> VARRE SEMPRE (canto)"
+        echo "   k) goleiro adversario: INTERCEPTA <-> VARRE SEMPRE  (atual: ${GK_ROTULO:-INTERCEPTA})"
         echo "   m) mira da falta direta: CENTRAL <-> CANTO   (atual: ${MIRA_ROTULO:-CENTRAL})"
+        echo "   v) movimentacao: NOVA <-> ANTIGA (driver)     (atual: ${MOV_ROTULO:-NOVA})"
         echo "   a) estado dos ajustes fora da estrategia"
         echo "   q) sair (desliga os ajustes)"
         echo
@@ -1091,10 +1280,10 @@ cmd_menu() {
                 # segue varrendo, o que mede chute no canto sem correcao de
                 # rota do goleiro.
                 if [ -n "${GOLEIRO_PATRULHA:-}" ]; then
-                    unset GOLEIRO_PATRULHA
+                    unset GOLEIRO_PATRULHA; GK_ROTULO="INTERCEPTA"
                     echo "   goleiro adversario: VARRE ate o chute, depois INTERCEPTA"
                 else
-                    export GOLEIRO_PATRULHA=1
+                    export GOLEIRO_PATRULHA=1; GK_ROTULO="VARRE SEMPRE"
                     echo "   goleiro adversario: VARRE SEMPRE (poste a poste, 600 mm/s)"
                 fi
                 read -rp "[enter] " _ ;;
@@ -1112,6 +1301,23 @@ cmd_menu() {
                 else
                     export MIRA_CANTO=1; MIRA_ROTULO="CANTO"
                     echo "   mira da falta direta: CANTO (mais longe do goleiro; 1 em 12)"
+                fi
+                read -rp "[enter] " _ ;;
+            v|V)
+                # A NOVA e o padrao por medicao (ver rev. 19 do HANDOVER).
+                # A antiga fica para comparar - mas atencao: depois do merge o
+                # control.py so escuta o topico novo, entao com o driver os
+                # robos NAO se movem. Serve para reproduzir o problema, nao para
+                # medir estrategia.
+                if [ -n "${MOVIMENTO_NOVO:-}" ]; then
+                    MOVIMENTO_NOVO=""; export MOVIMENTO_NOVO
+                    MOV_ROTULO="ANTIGA"
+                    echo "   movimentacao: ANTIGA (driver) - os robos nao se movem"
+                    echo "   pos-merge; o control.py so escuta o topico novo."
+                else
+                    MOVIMENTO_NOVO=1; export MOVIMENTO_NOVO
+                    MOV_ROTULO="NOVA"
+                    echo "   movimentacao: NOVA (planner+manager+tracker)"
                 fi
                 read -rp "[enter] " _ ;;
             a|A) cmd_ajustes status; read -rp "[enter] " _ ;;
@@ -1417,8 +1623,34 @@ for arq in arqs:
   if acao in ("on", "off"):
     open(arq, "w", encoding="utf-8").write("\n".join(linhas))
 if acao in ("on", "off"):
-    print("   ajustes %s (%d linhas em %d arquivos)"
-          % (acao.upper(), mudou, len(arqs)))
+    # MENSAGEM INEQUIVOCA - a antiga enganava.
+    #
+    # Ela dizia so "(N linhas em M arquivos)". Com a idempotencia, N=0 significa
+    # DUAS coisas opostas: "ja estava no estado pedido" (tudo certo) ou "nao
+    # encontrei marcador nenhum" (o liga FALHOU). O HANDOVER manda desconfiar de
+    # "0 linhas" justamente por isso, e a duvida ja custou lotes inteiros.
+    #
+    # Agora contamos quantos arquivos TERMINARAM no estado pedido, conferindo o
+    # arquivo em vez de contar o que mexemos. 'ja estavam' separa os dois casos.
+    conferidos, no_estado = 0, 0
+    for arq in arqs:
+        txt = open(arq, encoding="utf-8").read()
+        if "ARARABOTS_AJUSTE" not in txt:
+            continue                      # sem marcadores: nao e um alvo valido
+        conferidos += 1
+        ligado = any(l.strip().startswith("#ORIG#") for l in txt.split("\n"))
+        if (acao == "on") == ligado:
+            no_estado += 1
+    if conferidos == 0:
+        print("   XX ajustes %s NAO teve efeito: nenhum arquivo com marcador"
+              " ARARABOTS_AJUSTE." % acao.upper())
+    elif no_estado == conferidos:
+        print("   ajustes %s em %d/%d arquivos (%d linhas trocadas%s)"
+              % (acao.upper(), no_estado, conferidos, mudou,
+                 ", ja estavam" if mudou == 0 else ""))
+    else:
+        print("   XX ajustes %s INCOMPLETO: so %d de %d arquivos ficaram no"
+              " estado pedido." % (acao.upper(), no_estado, conferidos))
     # o shell precisa saber se mexeu em arquivo: se mexeu, os nodes que ja
     # carregaram o modulo antigo tem de cair.
     open("/tmp/ararabots_ajuste_mudou", "w").write("1" if mudou else "0")
@@ -1465,6 +1697,8 @@ case "${1:-menu}" in
     parar)     shift; cmd_parar    "$@" ;;
     ajustes)   shift; cmd_ajustes "$@" ;;
     sonda)     shift; python3 "$PY" sonda "$@" ;;
+    mov-bruto) shift; docker cp "$PY" vice:/tmp/ararabots.py >/dev/null 2>&1
+               MOVIMENTO_NOVO=1 ros_run "python3 /tmp/ararabots.py mov-bruto $*" ;;
     menu)      cmd_menu ;;
     -h|--help) uso ;;
     # sem subcomando reconhecido: e o menu, e os argumentos sao dele

@@ -1,0 +1,3 @@
+cenario,rep,gol,chute_pedido,disparou,hz_controle,rastreio_med,rastreio_p90,janela_abriu,janela_armada,v_saida_mms,xx,yy,percorreu,bola_ini_x,bola_ini_y,bola_fim_x,bola_fim_y,andou,load
+ataque,1,sem gol,nao ativado,NAO,,24,192,46,0,747,6722.6,36.3,198,,,,,,5.74
+ataque,1,sem gol,nao ativado,NAO,100,103,271,404,0,640,5079.0,893.9,2052,,,,,,7.12

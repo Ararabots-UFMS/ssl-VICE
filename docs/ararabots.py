@@ -250,6 +250,35 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
+    # ------------------------------------------------------------------
+    #  BURACO DE COBERTURA que ficou visivel na rev. 19.
+    #
+    #  Os 14 cenarios anteriores colocam o cobrador SEMPRE ATRAS da bola, entao
+    #  a fase de 'contornar' nunca era exercitada a partir da pior geometria. Ela
+    #  e a unica que depende da bola ser OBSTACULO - e o caminho novo perdeu o
+    #  avoid_ball (o MovementManager nunca o define e o MovementCommand nao tem
+    #  campo por robo).
+    #
+    #  Sem este cenario, "o resultado esta positivo" nao diz nada sobre essa
+    #  perda: nao ha teste que a toque.
+    # ------------------------------------------------------------------
+    "cobrador_na_frente": {
+        "titulo": "Cobrador do LADO ERRADO: exige contornar a bola",
+        "descricao": (
+            "O cobrador nasce ENTRE a bola e o gol adversario, que e a pior "
+            "geometria possivel: para chutar ele precisa dar a volta sem passar "
+            "por cima da bola. E o unico cenario que exercita a fase de "
+            "contorno desde o inicio, e portanto o unico que mede a perda do "
+            "avoid_ball na movimentacao nova. Esperado: ele contorna por fora e "
+            "chuta; se empurrar a bola para o nosso campo durante a volta, a "
+            "perda do obstaculo e grave."
+        ),
+        "bola": (2500.0, 0.0),
+        "azuis": [(1, 3100.0, 0.0, 3.14)],
+        "amarelos": [(0, 4300, 0, 180)],
+        "comando": ("DIRECT", "BLUE"),
+    },
+
     "um_so_goleiro": {
         "titulo": "Um em campo: apenas o goleiro",
         "descricao": (
@@ -314,11 +343,23 @@ CENARIOS = {
 #  grSim - teleporte de bola e robos
 # ==========================================================================
 def _carregar_protobuf():
-    """Importa o grSim_Packet_pb2 que ja vem gerado no ssl-VICE."""
-    base = "/root/ssl-VICE/install/grsim_messenger/lib/python3.10/site-packages"
-    caminho = os.path.join(base, "grsim_messenger", "protobuf")
-    if caminho not in sys.path:
-        sys.path.insert(0, caminho)
+    """Importa o grSim_Packet_pb2 que ja vem gerado no ssl-VICE.
+
+    DOIS CAMINHOS, e isto nao e paranoia: com 'colcon build --symlink-install' o
+    pacote vira um egg-link e o diretorio dentro de install/ NAO existe. O
+    caminho de install so vale para um build copiado. Depois de uma
+    reconstrucao limpa (rm -rf build install log), a versao antiga quebrava com
+    ModuleNotFoundError no meio do 'posicionar' - e o sintoma no lote e apenas
+    "cenario nao montou", sem dizer por que.
+    """
+    candidatos = [
+        "/root/ssl-VICE/install/grsim_messenger/lib/python3.10/site-packages/"
+        "grsim_messenger/protobuf",
+        "/root/ssl-VICE/src/grsim_messenger/grsim_messenger/protobuf",
+    ]
+    for caminho in candidatos:
+        if os.path.isdir(caminho) and caminho not in sys.path:
+            sys.path.insert(0, caminho)
     import grSim_Packet_pb2
 
     return grSim_Packet_pb2
@@ -968,8 +1009,23 @@ def _criar_gravador():
             # ancora dele ja voltou a coincidir com a realidade.
             self.setpoints = {}
             self.alvos = []
-            self.create_subscription(ControlCommand, "control_command",
-                                     self._setpoint, 10)
+            # SETPOINT: topico diferente em cada caminho de movimento.
+            #
+            # ANTIGO: /control_command (ControlCommand, com lista .command e
+            #         posicoes em METROS).
+            # NOVO:   /movement_tracker/control_reference (TrajectoryPoint, UM
+            #         ponto por mensagem, ja com robot_id).
+            #
+            # Sem isto, em modo novo o gravador nao capta setpoint nenhum: o
+            # relatorio sai com 'laco=?Hz' e 'rastreio=?/?mm' e a analise de
+            # seguimento (que foi o que derrubou a hipotese do driver) fica cega.
+            if os.environ.get("MOVIMENTO_NOVO"):
+                from movement_interfaces.msg import TrajectoryPoint as _TP
+                self.create_subscription(_TP, "movement_tracker/control_reference",
+                                         self._setpoint_novo, 10)
+            else:
+                self.create_subscription(ControlCommand, "control_command",
+                                         self._setpoint, 10)
 
         def _contato(self, msg):
             """Mede a geometria do CHUTADOR no ponto de maior aproximacao.
@@ -993,6 +1049,23 @@ def _criar_gravador():
                 xx = abs(ex * dx + ey * dy)
                 yy = abs(-ex * dy + ey * dx)
                 self.contato[r.id] = (d, xx, yy)
+
+        def _setpoint_novo(self, msg):
+            """Mesma serie temporal, vinda do tracker_node da movimentacao nova.
+
+            O TrajectoryPoint ja vem em MILIMETROS - ao contrario do
+            ControlCommand do driver, que vem em metros e por isso e multiplicado
+            por 1000 no _setpoint. Confundir os dois da erro de rastreio na casa
+            de 2.186.200 mm, que foi exatamente o que apareceu na primeira
+            medicao.
+            """
+            rid = int(getattr(msg, "robot_id", 0))
+            alvo = (float(msg.pos.x), float(msg.pos.y))
+            self.setpoints[rid] = alvo
+            if self.gravando:
+                self.alvos.append((round(time.monotonic() - self.t0, 4), rid,
+                                   alvo[0], alvo[1],
+                                   float(msg.vel.x), float(msg.vel.y)))
 
         def _setpoint(self, msg):
             for c in msg.command:
@@ -1648,15 +1721,55 @@ def erro_de_rastreio(resultado):
     # souber a que taxa o laco estava rodando quando ele foi medido. O timer do
     # driver e 100 Hz; ja medimos 19 Hz com a maquina carregada e 93 Hz com ela
     # livre, e comparar numeros dessas duas situacoes nao significa nada.
+    # TAXA POR ROBO, nao a soma de todos.
+    #
+    # O driver antigo publicava UMA ControlCommand com a lista de todos os
+    # robos: uma mensagem por ciclo. O tracker novo publica um TrajectoryPoint
+    # POR ROBO. Contando mensagens, um cenario com 3 robos aparecia como
+    # "300 Hz" com o timer em 100 - e o relatorio ainda avisava "(timer e 100)",
+    # como se a maquina estivesse acelerada. Era so aritmetica errada.
     ts = [x[0] for x in alvos]
-    hz = (len(ts) / (ts[-1] - ts[0])) if len(ts) > 2 and ts[-1] > ts[0] else 0.0
+    n_robos = len({x[1] for x in alvos}) or 1
+    hz = (len(ts) / (ts[-1] - ts[0]) / n_robos) if len(ts) > 2 and ts[-1] > ts[0] else 0.0
+
+    # ERRO POR ROBO, e nao um numero so.
+    #
+    # A mediana agregada mistura quem importa com quem nao importa: o cobrador
+    # faz passos curtos perto da bola, enquanto apoio e goleiro atravessam o
+    # campo - e um robo em trajetoria longa fica naturalmente atras do seu
+    # setpoint, sem que isso seja defeito. Medido no cenario 'ataque': agregado
+    # 41 mm, mas o cobrador sozinho fica bem abaixo e o apoio (que anda 2426 mm)
+    # e quem carrega a cauda.
+    #
+    # Julgar a cobranca pelo numero agregado e olhar o robo errado.
+    por_robo = {}
+    for reg in alvos:
+        tn, rid, ax, ay = reg[0], reg[1], reg[2], reg[3]
+        serie = por_tc.get(rid)
+        if not serie:
+            continue
+        tc = min(pares, key=lambda p: abs(p[0] - tn))[1]
+        _t, rx, ry = min(serie, key=lambda r: abs(r[0] - tc))
+        por_robo.setdefault(rid, []).append(math.hypot(ax - rx, ay - ry))
+    detalhe = {}
+    for rid, lista in por_robo.items():
+        lista.sort()
+        detalhe[rid] = {
+            "mediana": round(lista[len(lista) // 2], 1),
+            "p90": round(lista[int(0.9 * len(lista))], 1),
+            "maximo": round(lista[-1], 1),
+            "n": len(lista),
+        }
+
     return {
         "hz_controle": round(hz, 1),
+        "n_robos": n_robos,
         "n": len(erros),
         "mediana": round(erros[len(erros) // 2], 1),
         "p90": round(erros[int(0.9 * len(erros))], 1),
         "maximo": round(erros[-1], 1),
         "pct_acima_200": round(100.0 * sum(1 for e in erros if e > 200) / len(erros), 1),
+        "por_robo": detalhe,
     }
 
 
@@ -2231,13 +2344,34 @@ def rodar(nome, duracao=12.0):
         print("   DISPARO (grSim): NAO - a estrategia pediu, o chutador nao disparou")
 
     rastreio = rastreio_calc
+    # Quem foi o cobrador NESTA execucao: o robo que mais se aproximou da bola.
+    # E uma inferencia do resultado, nao um palpite - serve so para o relatorio
+    # apontar qual linha olhar.
+    cobrador_medido = None
+    _cont = getattr(no, "contato", None)
+    if _cont:
+        cobrador_medido = min(_cont, key=lambda r: _cont[r][0])
     if rastreio:
-        print("   RASTREIO (robo x setpoint do driver): mediana %.0f mm  p90 %.0f  max %.0f"
+        print("   RASTREIO (robo x setpoint): agregado mediana %.0f mm  p90 %.0f  max %.0f"
               % (rastreio["mediana"], rastreio["p90"], rastreio["maximo"]))
-        print("      acima de 200 mm em %.0f%% do tempo  (alvo: mediana <100, p90 <250)"
-              % rastreio["pct_acima_200"])
-        print("      laco do driver a %.0f Hz durante esta execucao (timer e 100)"
-              % rastreio["hz_controle"])
+        # POR ROBO, com o cobrador destacado.
+        #
+        # O agregado mistura o cobrador (passos curtos junto da bola) com apoio
+        # e goleiro (travessias de campo inteiro, que ficam naturalmente atras
+        # do setpoint). Julgar a cobranca pelo agregado e olhar o robo errado.
+        det = rastreio.get("por_robo") or {}
+        if det:
+            for rid in sorted(det):
+                d = det[rid]
+                marca = ""
+                if cobrador_medido is not None and rid == cobrador_medido:
+                    marca = "  <- COBRADOR (e este que decide a jogada)"
+                print("      robo %d: mediana %4.0f  p90 %4.0f  max %5.0f%s"
+                      % (rid, d["mediana"], d["p90"], d["maximo"], marca))
+        print("      acima de 200 mm em %.0f%% do tempo, agregado  (alvo p/ o cobrador:"
+              " mediana <100, p90 <250)" % rastreio["pct_acima_200"])
+        print("      laco a %.0f Hz por robo, %d robos (timer do controle e 100)"
+              % (rastreio["hz_controle"], rastreio.get("n_robos", 1)))
     imprimir_janela(janela)
     imprimir_energia(energia)
 
@@ -2294,7 +2428,7 @@ def _ferramenta_cadeia():
                 self.create_subscription(VisionMessage, "visionTopic", self._visao, 10),
                 self.create_subscription(GameState, "game_state", self._estado, 10),
                 self.create_subscription(RefereeMessage, "refereeTopic", self._arbitro, 10),
-                self.create_subscription(ControlCommand, "control_command", self._controle, 10),
+                _assinar_setpoint(self, self._controle_novo),
                 self.create_subscription(TeamCommand, "commandTopic", self._time, 10),
             ]
 
@@ -2312,6 +2446,11 @@ def _ferramenta_cadeia():
             self.n["arbitro"] += 1
 
         def _controle(self, m):
+            self.n["controle"] += 1
+
+        def _controle_novo(self):
+            # _assinar_setpoint entrega um callback SEM argumento (ele ja
+            # aplicou o filtro de 'command' quando o topico e o antigo).
             self.n["controle"] += 1
 
         def _time(self, m):
@@ -2367,7 +2506,10 @@ def _ferramenta_cadeia():
             linha("/game_state", "estado", "SEM DADOS")
 
         linha("/refereeTopic", "arbitro", f"comando={no.comando_arbitro!r}")
-        linha("/control_command", "controle", "(alvos da estrategia -> driver)")
+        _nome_setpoint = ("/movement_tracker/control_reference"
+                          if os.environ.get("MOVIMENTO_NOVO") else "/control_command")
+        _dono = "planner+tracker" if os.environ.get("MOVIMENTO_NOVO") else "driver"
+        linha(_nome_setpoint, "controle", "(alvos da estrategia -> %s)" % _dono)
         linha("/commandTopic", "time", "(velocidades -> grSim)")
 
         print()
@@ -2398,11 +2540,10 @@ def _ferramenta_esperar():
         def __init__(self):
             super().__init__("espera_estrategia")
             self.comandos = 0
-            self.create_subscription(ControlCommand, "control_command", self._cb, 10)
+            _assinar_setpoint(self, self._contar)
 
-        def _cb(self, m):
-            if m.command:
-                self.comandos += 1
+        def _contar(self):
+            self.comandos += 1
 
 
     rclpy.init()
@@ -2645,7 +2786,7 @@ def _ferramenta_pronto():
         if alvo == "servicos":
             # Sem estes tres a estrategia fica presa esperando o driver, e o
             # sintoma e mudo: nenhum comando e gerado, os robos nao se mexem.
-            precisa = {"/strategy_command", "/update_obstacles", "/set_orientation"}
+            precisa = _servicos_exigidos()
             while time.time() - t0 < limite:
                 nomes = {n for n, _ in no.get_service_names_and_types()}
                 if precisa.issubset(nomes):
@@ -2678,13 +2819,12 @@ def _ferramenta_pronto():
             # Cada 'docker exec' com rclpy custa ~4 s so para subir. Fazendo uma
             # chamada por elo, esse custo passaria a dominar justamente o tempo
             # que estamos tentando economizar. Aqui pagamos uma vez.
-            precisa = {"/strategy_command", "/update_obstacles", "/set_orientation"}
+            precisa = _servicos_exigidos()
             estado = {"arbitro": False, "comandos": 0}
             no.create_subscription(RefereeMessage, "refereeTopic",
                                    lambda _m: estado.__setitem__("arbitro", True), 10)
-            no.create_subscription(
-                ControlCommand, "control_command",
-                lambda m: estado.__setitem__("comandos", estado["comandos"] + 1) if m.command else None, 10)
+            _assinar_setpoint(
+                no, lambda: estado.__setitem__("comandos", estado["comandos"] + 1))
             servicos = False
             while time.time() - t0 < limite:
                 rclpy.spin_once(no, timeout_sec=0.05)
@@ -2751,6 +2891,191 @@ def _ferramenta_decisao():
         x, y, tipo = fk._alvo_da_jogada(1)
         print("%-38s -> %-5s alvo=(%7.0f,%6.0f)  forca=%.2f m/s  arma=%s"
               % (nome, tipo.upper(), x, y, fk._forca_do_chute(1), fk._tem_alvo_valido()))
+
+
+def _assinar_setpoint(no, ao_receber):
+    """Assina o topico de setpoint do caminho de movimento em uso.
+
+    ANTIGO: /control_command, publicado pelo driver.
+    NOVO:   /movement_tracker/control_reference, publicado pelo tracker_node.
+
+    Isto NAO e cosmetico. Depois do merge da dev o control.py passou a escutar
+    'movement_tracker/control_reference' e o 'control_command' fica MUDO no
+    caminho novo. Todos os portoes que perguntam "a estrategia esta comandando?"
+    olhavam so o topico antigo - em modo novo eles reprovariam sempre, e o lote
+    inteiro seria bloqueado por um teste do instrumento, nao por falha da
+    estrategia.
+    """
+    if os.environ.get("MOVIMENTO_NOVO"):
+        # DOIS topicos, e o segundo e o que importa para o portao.
+        #
+        # 'movement_tracker/control_reference' so existe quando ha uma
+        # TRAJETORIA valida - ou seja, depois de a estrategia comandar E o
+        # planner planejar. O driver antigo, ao contrario, publicava
+        # /control_command continuamente, mesmo parado.
+        #
+        # Por isso o portao "a estrategia esta comandando?" passou a reprovar no
+        # caminho novo: ele exigia o produto FINAL da cadeia como prova de que o
+        # primeiro elo estava vivo. Sintoma: "faltou: estrategia-comandando" com
+        # a cadeia inteira verde no painel logo acima.
+        #
+        # 'movement_manager/commands' e a saida da PROPRIA estrategia - e a
+        # prova certa, e e o equivalente honesto do que /control_command era
+        # antes.
+        from movement_interfaces.msg import TrajectoryPoint as _TP
+        from movement_interfaces.msg import MovementCommandArray as _MCA
+        no.create_subscription(
+            _TP, "movement_tracker/control_reference",
+            lambda _m: ao_receber(), 10)
+        return no.create_subscription(
+            _MCA, "movement_manager/commands",
+            lambda m: ao_receber() if m.commands else None, 10)
+    return no.create_subscription(
+        ControlCommand, "control_command",
+        lambda m: ao_receber() if m.command else None, 10)
+
+
+def _servicos_exigidos():
+    """Servicos sem os quais a estrategia fica presa, por caminho de movimento.
+
+    MOVIMENTO ANTIGO: 'strategy_command' e 'update_obstacles' sao do driver.
+    MOVIMENTO NOVO: o driver nao sobe; quem recebe alvo e o MovementManager, e
+    ele SO publica depois de SetStaticObstacles e SetGoalKeeper - se faltarem, o
+    manager recebe comando e nao publica alvo nenhum, sem erro e sem log.
+    'set_orientation' vale nos dois: orientacao e do pacote control, que a dev
+    nao mexeu.
+    """
+    if os.environ.get("MOVIMENTO_NOVO"):
+        return {"/SetStaticObstacles", "/SetGoalKeeper", "/set_orientation"}
+    return {"/strategy_command", "/update_obstacles", "/set_orientation"}
+
+
+def _ferramenta_mov_bruto():
+    """Comanda a movimentacao NOVA sozinha, sem estrategia nenhuma.
+
+    POR QUE ISTO EXISTE
+    -------------------
+    Depois do merge da dev o robo saia do campo em linha reta enquanto o
+    setpoint publicado era sao (oscilando junto da bola). Havia duas
+    explicacoes possiveis e nenhuma forma de escolher entre elas:
+        a) a cadeia planner -> tracker -> control da dev nao segue a referencia;
+        b) a NOSSA estrategia manda alvo de um jeito que ela nao aceita.
+
+    Aqui a estrategia nao participa. Este processo faz o minimo que o
+    MovementManager exige - SetStaticObstacles, SetGoalKeeper e um
+    MovementCommandArray com UM alvo fixo - e mede se o robo chega la.
+
+    Se o robo chegar, o defeito e nosso (b). Se sair do campo do mesmo jeito, o
+    defeito e da cadeia deles (a), e nenhum conserto no nosso lado adianta.
+
+    Uso:  ./ararabots.sh mov-bruto [x] [y]
+    """
+    import rclpy
+    from rclpy.node import Node
+    from movement_interfaces.msg import MovementCommandArray, MovementCommand
+    from movement_interfaces.srv import SetStaticObstacles, SetGoalKeeper
+    from system_interfaces.msg import GameState
+
+    alvo_x = float(sys.argv[2]) if len(sys.argv) > 2 else 2250.0
+    alvo_y = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
+    robo = int(sys.argv[4]) if len(sys.argv) > 4 else 1
+    dur = float(sys.argv[5]) if len(sys.argv) > 5 else 12.0
+
+    rclpy.init()
+    no = Node("mov_bruto")
+    pub = no.create_publisher(MovementCommandArray, "movement_manager/commands", 10)
+    est_cli = no.create_client(SetStaticObstacles, "SetStaticObstacles")
+    gk_cli = no.create_client(SetGoalKeeper, "SetGoalKeeper")
+
+    pos = {}
+    ref = {}
+    no.create_subscription(
+        GameState, "game_state",
+        lambda m: pos.update({r.id: (r.position_x, r.position_y,
+                                     r.velocity_x, r.velocity_y)
+                              for r in m.ally_robots}), 10)
+    try:
+        from movement_interfaces.msg import TrajectoryPoint
+        no.create_subscription(
+            TrajectoryPoint, "movement_tracker/control_reference",
+            lambda m: ref.update({int(m.robot_id): (m.pos.x, m.pos.y,
+                                                    m.vel.x, m.vel.y)}), 10)
+    except Exception:
+        pass
+
+    # TIRAR DO HALT - senao o teste mede o nada.
+    #
+    # control.py zera o comando quando is_halt (o 'if self.is_halt: vel_cmd =
+    # Vector2D(0,0)'), e o ambiente fica em HALT depois do preparar. A primeira
+    # versao desta sonda nao mandava comando de arbitro nenhum: o robo ficava
+    # parado e eu quase registrei isso como defeito da cadeia da dev.
+    print("   tirando do HALT (STOP -> FORCE_START)...")
+    try:
+        enviar_comando_arbitro("STOP")
+        time.sleep(1.0)
+        enviar_comando_arbitro("FORCE_START")
+        time.sleep(0.5)
+    except Exception as e:
+        print("   !! nao consegui falar com o arbitro: %s" % e)
+
+    print("   esperando os servicos do MovementManager...")
+    for cli, nome in ((est_cli, "SetStaticObstacles"), (gk_cli, "SetGoalKeeper")):
+        if not cli.wait_for_service(timeout_sec=15.0):
+            print("   XX servico %s ausente - o manager nao esta no ar" % nome)
+            no.destroy_node(); rclpy.shutdown(); return 2
+
+    r1 = SetStaticObstacles.Request(); r1.border_area = True; r1.center_area = False
+    est_cli.call_async(r1)
+    r2 = SetGoalKeeper.Request(); r2.robot_id = 0
+    gk_cli.call_async(r2)
+    for _ in range(20):
+        rclpy.spin_once(no, timeout_sec=0.05)
+
+    msg = MovementCommandArray()
+    cmd = MovementCommand()
+    cmd.robot_id = robo
+    cmd.target_pos.x = alvo_x
+    cmd.target_pos.y = alvo_y
+    msg.commands = [cmd]
+
+    print("   alvo do robo %d: (%.0f, %.0f)   gravando %.0fs" % (robo, alvo_x, alvo_y, dur))
+    inicio = time.time()
+    amostras = []
+    while time.time() - inicio < dur:
+        pub.publish(msg)                     # republica: o manager guarda o ultimo
+        rclpy.spin_once(no, timeout_sec=0.02)
+        if robo in pos:
+            amostras.append((time.time() - inicio, pos[robo], ref.get(robo)))
+
+    no.destroy_node(); rclpy.shutdown()
+
+    if not amostras:
+        print("   XX nenhuma leitura de game_state para o robo %d" % robo)
+        return 3
+
+    print()
+    print("   %-6s %-22s %-22s %s" % ("t", "robo (x,y)", "referencia (x,y)", "dist ao alvo"))
+    passo = max(1, len(amostras) // 12)
+    for t, p, r in amostras[::passo]:
+        dist = math.hypot(alvo_x - p[0], alvo_y - p[1])
+        sref = "(%8.0f,%8.0f)" % (r[0], r[1]) if r else "        --        "
+        print("   %5.1f  (%8.0f,%8.0f)  %s  %7.0f mm" % (t, p[0], p[1], sref, dist))
+
+    t_fim, p_fim, _ = amostras[-1]
+    d0 = math.hypot(alvo_x - amostras[0][1][0], alvo_y - amostras[0][1][1])
+    df = math.hypot(alvo_x - p_fim[0], alvo_y - p_fim[1])
+    print()
+    print("   distancia ao alvo: %.0f mm -> %.0f mm" % (d0, df))
+    if df < 150.0:
+        print("   >> CHEGOU. A cadeia da dev segue a referencia; o defeito e do")
+        print("      nosso lado (como a estrategia manda o alvo).")
+    elif df > d0:
+        print("   >> AFASTOU-SE. A cadeia planner->tracker->control da dev nao")
+        print("      segue a referencia nem sem estrategia nenhuma.")
+    else:
+        print("   >> aproximou mas nao chegou - veja a serie acima.")
+    return 0
+
 
 
 def _ferramenta_sonda():
@@ -2883,5 +3208,6 @@ if __name__ == "__main__":
     elif acao == "atrito":   _ferramenta_atrito()
     elif acao == "decisao":  _ferramenta_decisao()
     elif acao == "sonda":    sys.exit(_ferramenta_sonda())
+    elif acao == "mov-bruto": sys.exit(_ferramenta_mov_bruto())
     else:
         print(__doc__); sys.exit(2)
