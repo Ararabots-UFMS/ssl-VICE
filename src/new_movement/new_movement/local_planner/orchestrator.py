@@ -1,33 +1,25 @@
-from dataclasses import dataclass
+
 from typing import List, Optional, Tuple
 
-from new_movement.entities.Trajectory import Trajectory
-from new_movement.entities.States import State, Vector2D, MoveConstraints
-from new_movement.entities.obstacles import Obstacle
-from new_movement.entities.StaticObstacle import StaticObstacle
-from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
+from new_movement.entities.trajectory.trajectory import Trajectory
+from new_movement.entities.motion.motion_state import MotionState
+from new_movement.entities.motion.motion_constraints import MotionConstraints
+from new_movement.entities.obstacle.obstacle import Obstacle
+from new_movement.entities.obstacle.static_obstacle import StaticObstacle
+from new_movement.local_planner.collision_engine import CollisionEngine
+from new_movement.local_planner.informed_sampler import InformedSampler
+from new_movement.local_planner.trajectory_generator import TrajectoryGenerator
+from new_movement.local_planner.solver import BypassSolver, PlanningStatus, SolverConfig
 
-from .collision import CollisionEngine
-from .solvers import BypassSolver, PlanningStatus
-from .sampler import InformedSampler
+from utils.math_util import Vector2D 
 
-@dataclass
-class SolverConfig:
-    """Configuration for planning algorithms."""
-    max_iterations: int = 20
-    field_length: float = 12000.0
-    field_width: float = 9000.0
-    max_velocity: Vector2D = Vector2D(2000.0, -2000.0)  # mm/s
-    max_acceleration: Vector2D = Vector2D(1500.0, -1500.0) # mm/s
-    continuity_threshold: float = 1e-3
-    collision_time_step: float = 0.2
 
-class Planner:
+class Orchestrator:
     """High-level Orchestrator for Robot Planning."""
 
     def __init__(self, config: Optional[SolverConfig] = None):
         self.config = config or SolverConfig()
-        self.generator = TrajectoryGenerator(MoveConstraints(self.config.max_velocity, self.config.max_acceleration))
+        self.generator = TrajectoryGenerator(MotionConstraints(self.config.max_velocity, self.config.max_acceleration))
         
         # Initialize Sampler and Solver
         self.sampler = InformedSampler(
@@ -43,7 +35,7 @@ class Planner:
         
         self.status = PlanningStatus.FAILED
 
-    def find(self, start: State, goal: State, obstacles: List[Obstacle]) -> Trajectory:
+    def find(self, start: MotionState, goal: MotionState, obstacles: List[Obstacle]) -> Trajectory:
         """Primary entry point for calculating a trajectory."""
         start, goal, safety_trajectory = self._handle_static_collisions(start, goal, obstacles)
         
@@ -67,23 +59,23 @@ class Planner:
         return self._get_recovery_trajectory(start)
 
     def _handle_static_collisions(
-        self, start: State, goal: State, obstacles: List[Obstacle]
-    ) -> Tuple[State, State, Trajectory]:
+        self, start: MotionState, goal: MotionState, obstacles: List[Obstacle]
+    ) -> Tuple[MotionState, MotionState, Trajectory]:
         traj = Trajectory()
         for obs in obstacles:
             if not isinstance(obs, StaticObstacle):
                 continue
             if obs.isCollidingAt(goal.position):
-                goal = State(obs.adaptDestination(goal.position), goal.velocity)
+                goal = MotionState(obs.adaptDestination(goal.position), goal.velocity)
             if obs.isCollidingAt(start.position):
                 exit_point = obs.adaptDestination(start.position)
-                exit_state = State(exit_point, start.velocity)
+                exit_state = MotionState(exit_point, start.velocity)
                 traj.append(self.generator.generate(start, exit_state))
                 start = exit_state
         return start, goal, traj
 
-    def _get_recovery_trajectory(self, current_state: State) -> Trajectory:
-        stop_state = State(current_state.position, Vector2D(0, 0))
+    def _get_recovery_trajectory(self, current_state: MotionState) -> Trajectory:
+        stop_state = MotionState(current_state.position, Vector2D(0, 0))
         return Trajectory(self.generator.generate(current_state, stop_state))
 
     def validate_continuity(self, trajectory: Trajectory) -> bool:

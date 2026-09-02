@@ -8,62 +8,11 @@ from movement_interfaces.msg import Trajectory as TrajectoryMsg
 from movement_interfaces.msg import TrajectoryPoint as TrajectoryPointMsg
 from movement_interfaces.msg import GUITrajectories
 
-from new_movement.entities.Trajectory import Trajectory
-from new_movement.entities.States import State
+from new_movement.entities.trajectory.trajectory import Trajectory
+from new_movement.entities.motion.motion_state import MotionState
 
 
-def build_overhead_point(
-    robot_id: int,
-    trajectory_msg: Optional[TrajectoryMsg],
-    trajectory: Trajectory,
-    time_offset: float,
-    lookahead_time: float,
-    now_sec: float,
-) -> Optional[TrajectoryPointMsg]:
-    if trajectory is None or trajectory_msg is None:
-        return None
-
-    total_duration = trajectory.get_total_duration()
-    if total_duration <= 0:
-        return None
-
-    if lookahead_time < 0:
-        lookahead_time = 0.0
-
-    sample_time = min(time_offset + lookahead_time, total_duration)
-    state = trajectory.get_state(sample_time)
-    if state is None:
-        return None
-
-    point = TrajectoryPointMsg()
-    point.robot_id = int(robot_id)
-    point.pos = state.position.to_msg()
-    point.vel = state.velocity.to_msg()
-    point.timestamp = float(sample_time)
-    point.wall_stamp = now_sec + (sample_time - time_offset)
-    point.trajectory = trajectory_msg
-    return point
-
-
-def build_control_reference_point(
-    robot_id: int,
-    trajectory_msg: Optional[TrajectoryMsg],
-    state: Optional[State],
-    time_offset: float,
-) -> Optional[TrajectoryPointMsg]:
-    if state is None or trajectory_msg is None:
-        return None
-
-    point = TrajectoryPointMsg()
-    point.robot_id = int(robot_id)
-    point.pos = state.position.to_msg()
-    point.vel = state.velocity.to_msg()
-    point.timestamp = float(time_offset)
-    point.trajectory = trajectory_msg
-    return point
-
-
-class TrackerNode(Node):
+class MovementTracker(Node):
     def __init__(self):
         super().__init__("movement_tracker")
 
@@ -255,9 +204,60 @@ class TrackerNode(Node):
         msg.time_offsets = time_offsets
         self.gui_trajectories_pub.publish(msg)
 
+
+def build_overhead_point(
+    robot_id: int,
+    trajectory_msg: Optional[TrajectoryMsg],
+    trajectory: Trajectory,
+    time_offset: float,
+    lookahead_time: float,
+    now_sec: float,
+) -> Optional[TrajectoryPointMsg]:
+    if trajectory is None or trajectory_msg is None:
+        return None
+
+    total_duration = trajectory.get_total_duration()
+    if total_duration <= 0:
+        return None
+
+    if lookahead_time < 0:
+        lookahead_time = 0.0
+
+    sample_time = min(time_offset + lookahead_time, total_duration)
+    state = trajectory.get_state(sample_time)
+    if state is None:
+        return None
+
+    point = TrajectoryPointMsg()
+    point.robot_id = int(robot_id)
+    point.pos = state.position.to_msg()
+    point.vel = state.velocity.to_msg()
+    point.timestamp = float(sample_time)
+    point.wall_stamp = now_sec + (sample_time - time_offset)
+    point.trajectory = trajectory_msg
+    return point
+
+
+def build_control_reference_point(
+    robot_id: int,
+    trajectory_msg: Optional[TrajectoryMsg],
+    state: Optional[MotionState],
+    time_offset: float,
+) -> Optional[TrajectoryPointMsg]:
+    if state is None or trajectory_msg is None:
+        return None
+
+    point = TrajectoryPointMsg()
+    point.robot_id = int(robot_id)
+    point.pos = state.position.to_msg()
+    point.vel = state.velocity.to_msg()
+    point.timestamp = float(time_offset)
+    point.trajectory = trajectory_msg
+    return point
+
 def main(args=None):
     rclpy.init(args=args)
-    node = TrackerNode()
+    node = MovementTracker()
     rclpy.spin(node)
     rclpy.shutdown()
 

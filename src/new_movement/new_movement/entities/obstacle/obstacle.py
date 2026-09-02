@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from new_movement.entities.States import Vector2D
 import numpy as np
+
+from utils.math_util import Vector2D
 
 
 class Obstacle(ABC):
@@ -20,7 +21,6 @@ class Obstacle(ABC):
         Override in subclasses for vectorized performance.
         """
         for i, t in enumerate(times):
-            from new_movement.entities.States import Vector2D
             if self.isCollidingAt(Vector2D(float(positions[i, 0]), float(positions[i, 1])), t):
                 return True
         return False

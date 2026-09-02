@@ -1,5 +1,6 @@
 import numpy as np
-from new_movement.entities.States import Vector2D
+
+from utils.math_util import Vector2D
 
 class InformedSampler:
     """Handles intelligent point sampling for bypass generation using NumPy."""

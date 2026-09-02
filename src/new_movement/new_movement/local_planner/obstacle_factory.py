@@ -1,13 +1,15 @@
-from new_movement.entities.StaticObstacle import (
-    FieldBorderObstacle,
-    PenaltyAreaObstacle,
-    GenericCircleObstacle,
-    FieldSide,
-)
-from new_movement.entities.DynamicObstacles import AllyRobotObstacle, EnemyRobotObstacle
-from new_movement.entities.States import State, Vector2D
-from typing import Dict, List, Optional
-from new_movement.entities.Trajectory import Trajectory
+from typing import Dict, Optional
+
+from new_movement.entities.obstacle.field_border_obstacle import FieldBorderObstacle
+from new_movement.entities.obstacle.penalty_area_obstacle import PenaltyAreaObstacle
+from new_movement.entities.obstacle.generic_circle_obstacle import GenericCircleObstacle
+from new_movement.entities.obstacle.ally_robot_obstacle import AllyRobotObstacle
+from new_movement.entities.obstacle.enemy_robot_obstacle import EnemyRobotObstacle
+from new_movement.entities.motion.motion_state import MotionState
+from new_movement.entities.trajectory.trajectory import Trajectory
+
+from utils.math_util import Vector2D
+from utils.field_util import FieldSide
 
 
 class ObstacleFactory:
@@ -64,7 +66,7 @@ class ObstacleFactory:
         # 5. Enemy Robots (Always on)
         for enemy in enemy_robots:
             try:
-                state = State(
+                state = MotionState(
                     Vector2D(enemy.position_x, enemy.position_y),
                     Vector2D(enemy.velocity_x, enemy.velocity_y),
                 )
@@ -74,19 +76,19 @@ class ObstacleFactory:
                 pass
 
         # 6. Ally Robots (With Trajectory Support)
-        for ally in ally_robots:
-            a_id = ally.id
-            if a_id == robot_id:
+        for ally_id in ally_robots:
+            ally_data = ally_robots[ally_id]
+            if ally_id == robot_id:
                 continue  # Self-exclusion
 
             try:
-                state = State(
-                    Vector2D(ally.position_x, ally.position_y),
-                    Vector2D(ally.velocity_x, ally.velocity_y),
+                state = MotionState(
+                    Vector2D(ally_data.position_x, ally_data.position_y),
+                    Vector2D(ally_data.velocity_x, ally_data.velocity_y),
                 )
                 
-                if a_id in ally_info:
-                    info = ally_info[a_id]
+                if ally_id in ally_info:
+                    info = ally_info[ally_id]
                     # Check if the overhead point contains a valid trajectory
                     if hasattr(info, 'trajectory') and len(info.trajectory.segments) > 0:
                         obstacles.append(

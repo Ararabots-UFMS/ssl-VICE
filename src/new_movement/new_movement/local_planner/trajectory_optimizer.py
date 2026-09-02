@@ -1,9 +1,11 @@
-from typing import List, Optional
+from typing import List
 from random import uniform, randint
-from new_movement.entities.Trajectory import Trajectory, TrajectorySegment
-from new_movement.entities.obstacles import Obstacle
-from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
-from .collision import CollisionEngine
+
+from new_movement.entities.trajectory.trajectory import Trajectory
+from new_movement.entities.trajectory.trajectory_segment import TrajectorySegment
+from new_movement.entities.obstacle.obstacle import Obstacle
+from new_movement.local_planner.collision_engine import CollisionEngine
+from new_movement.local_planner.trajectory_generator import TrajectoryGenerator
 
 class TrajectoryOptimizer:
     def __init__(self, trys: int = 50, early_stop: int = 20):

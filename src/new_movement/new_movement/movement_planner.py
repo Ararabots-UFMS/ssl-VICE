@@ -1,11 +1,15 @@
+from typing import Dict, Optional
+
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+
 from concurrent.futures import ThreadPoolExecutor
 
-from new_movement.entities.States import State, Vector2D
-from new_movement.entities.Trajectory import Trajectory
-from new_movement.local_planner import Planner, ObstacleFactory
+from new_movement.entities.motion.motion_state import MotionState
+from new_movement.local_planner.orchestrator import Orchestrator
+from new_movement.local_planner.obstacle_factory import ObstacleFactory
 
 from movement_interfaces.msg import (
     TargetArray,
@@ -14,13 +18,11 @@ from movement_interfaces.msg import (
 )
 from system_interfaces.msg import GameState
 
-from typing import Dict, Optional
-from time import time
+from utils.math_util import Vector2D
 
-
-class PlannerNode(Node):
+class MovementPlanner(Node):
     def __init__(self):
-        super().__init__('planner_node')
+        super().__init__('movement_planner')
         
         # Parameters
         self.declare_parameter('planner_freq', 50.0)
@@ -28,14 +30,14 @@ class PlannerNode(Node):
         self.declare_parameter('overhead_max_age', 0.5)
         self.declare_parameter('accept_radius', 10)
         
-        # State
+        # MotionState
         self.cur_targets: Optional[TargetArray] = None
         self.cur_overhead_points: Dict[int, TrajectoryPointMsg] = {}
         self.game_state: Optional[GameState] = None
         self.active_futures: Dict[int, any] = {} # Track running tasks per robot
         
         # Tools
-        self.planner = Planner()
+        self.planner = Orchestrator()
         self.factory = ObstacleFactory()
         self.par_executor = ThreadPoolExecutor(max_workers=self.get_parameter('max_threads').value)
         
@@ -57,7 +59,7 @@ class PlannerNode(Node):
         freq = self.get_parameter('planner_freq').value
         self.timer = self.create_timer(1.0 / freq, self.planning_loop, callback_group=cb_group)
         
-        self.get_logger().info(f"Planner Node initialized at {freq}Hz")
+        self.get_logger().info(f"movement_planner initialized at {freq}Hz")
 
     def target_callback(self, msg: TargetArray):
         self.cur_targets = msg
@@ -115,7 +117,7 @@ class PlannerNode(Node):
             age = (self.get_clock().now().nanoseconds / 1e9) - overhead_point.wall_stamp
             if age <= self.get_parameter('overhead_max_age').value:
                 # Fresh overhead point — plan from predicted future state
-                initial_state = State(
+                initial_state = MotionState(
                     Vector2D(overhead_point.pos.x, overhead_point.pos.y),
                     Vector2D(overhead_point.vel.x, overhead_point.vel.y)
                 )
@@ -126,11 +128,11 @@ class PlannerNode(Node):
                 if goal_pos.distance(init_pos) < float(self.get_parameter('accept_radius').value):
                     return None  # already there, nothing to plan
                 # Far enough to be worth replanning from vision state
-                initial_state = State(init_pos, init_vel)
+                initial_state = MotionState(init_pos, init_vel)
         else:
-            initial_state = State(init_pos, init_vel)
+            initial_state = MotionState(init_pos, init_vel)
 
-        target_state = State(
+        target_state = MotionState(
             Vector2D(target.target_pos.x, target.target_pos.y),
             Vector2D(target.target_vel.x, target.target_vel.y)
             )
@@ -158,9 +160,8 @@ class PlannerNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = PlannerNode()
+    node = MovementPlanner()
     
-    from rclpy.executors import MultiThreadedExecutor
     ros_executor = MultiThreadedExecutor()
     ros_executor.add_node(node)
     

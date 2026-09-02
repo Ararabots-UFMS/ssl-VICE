@@ -1,27 +1,27 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
+
 from concurrent.futures import ThreadPoolExecutor
 
+from time import time
+from typing import Dict, Optional
+
+from new_movement.local_planner.trajectory_generator import TrajectoryGenerator
+from new_movement.local_planner.trajectory_optimizer import TrajectoryOptimizer
+from new_movement.local_planner.obstacle_factory import ObstacleFactory
+from new_movement.entities.trajectory.trajectory import Trajectory
+
+from system_interfaces.msg import GameState
+from movement_interfaces.msg import TargetArray
 from movement_interfaces.msg import (
     Trajectory as TrajectoryMsg,
     TrajectoryPoint as TrajectoryPointMsg,
 )
 
-from time import time
-from typing import Dict, Optional
-
-
-from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
-from new_movement.local_planner.optimizer import TrajectoryOptimizer
-from new_movement.local_planner import ObstacleFactory
-from new_movement.entities.Trajectory import Trajectory
-from system_interfaces.msg import GameState
-from movement_interfaces.msg import TargetArray
-
-class OptimizerNode(Node):
+class MovementOptimizer(Node):
     def __init__(self):
-        super().__init__('optimizer_node')
+        super().__init__('movement_optimizer')
 
         self.declare_parameter('optimizer_freq', 50.0)
         self.declare_parameter('max_threads', 8)
@@ -155,7 +155,7 @@ class OptimizerNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = OptimizerNode()
+    node = MovementOptimizer()
 
     from rclpy.executors import MultiThreadedExecutor
     executor = MultiThreadedExecutor()

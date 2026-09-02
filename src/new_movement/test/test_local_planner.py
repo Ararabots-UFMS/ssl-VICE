@@ -2,18 +2,22 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
 
-from new_movement.local_planner.collision import CollisionEngine
-from new_movement.local_planner.sampler import InformedSampler
-from new_movement.local_planner.solvers import BypassSolver, PlanningStatus
-from new_movement.local_planner.optimizer import TrajectoryOptimizer
-from new_movement.local_planner.planner import Planner, SolverConfig
-from new_movement.local_planner.factory import ObstacleFactory
+from new_movement.local_planner import (
+    CollisionEngine,
+    InformedSampler,
+    TrajectoryOptimizer,
+    Orchestrator,
+    ObstacleFactory
+)
+from new_movement.local_planner.solver import BypassSolver, PlanningStatus, SolverConfig
 
-from new_movement.entities.States import State, Vector2D
-from new_movement.entities.Trajectory import Trajectory, TrajectorySegment
-from new_movement.entities.StaticObstacle import GenericCircleObstacle, StaticObstacle
-from new_movement.entities.DynamicObstacles import EnemyRobotObstacle
-from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
+from new_movement.entities.motion import MotionState
+from new_movement.entities.trajectory import Trajectory
+from new_movement.entities.obstacle import GenericCircleObstacle,EnemyRobotObstacle
+from new_movement.local_planner import TrajectoryGenerator
+
+from utils.math_util import Vector2D
+
 
 @pytest.fixture
 def generator():
@@ -30,16 +34,16 @@ def obstacles():
 
 class TestCollisionEngine:
     def test_no_collision(self, generator):
-        start = State(Vector2D(0, 0), Vector2D(0, 0))
-        goal = State(Vector2D(500, 0), Vector2D(0, 0))
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(500, 0), Vector2D(0, 0))
         traj_seg = generator.generate(start, goal)
         
         obstacles = [GenericCircleObstacle(Vector2D(1000, 1000), 100, padding=0)]
         assert not CollisionEngine.is_collision(traj_seg, obstacles)
 
     def test_static_collision(self, generator):
-        start = State(Vector2D(0, 0), Vector2D(0, 0))
-        goal = State(Vector2D(2000, 0), Vector2D(0, 0))
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(2000, 0), Vector2D(0, 0))
         traj_seg = generator.generate(start, goal)
         
         # Obstacle right in the middle
@@ -47,12 +51,12 @@ class TestCollisionEngine:
         assert CollisionEngine.is_collision(traj_seg, obstacles)
 
     def test_dynamic_collision(self, generator):
-        start = State(Vector2D(0, 0), Vector2D(0, 0))
-        goal = State(Vector2D(2000, 0), Vector2D(0, 0))
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(2000, 0), Vector2D(0, 0))
         traj_seg = generator.generate(start, goal)
         
         # Enemy robot moving towards the path
-        enemy_state = State(Vector2D(1000, 500), Vector2D(0, -1000))
+        enemy_state = MotionState(Vector2D(1000, 500), Vector2D(0, -1000))
         obstacles = [EnemyRobotObstacle(enemy_state, radius=100)]
         
         # At some point t, it should collide
@@ -81,8 +85,8 @@ class TestInformedSampler:
 class TestBypassSolver:
     def test_solve_blocked_path(self, sampler, generator):
         solver = BypassSolver(max_iterations=100, sampler=sampler, collision_time_step=0.05)
-        start = State(Vector2D(0, 0), Vector2D(0, 0))
-        goal = State(Vector2D(2000, 0), Vector2D(0, 0))
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(2000, 0), Vector2D(0, 0))
         
         # Big obstacle blocking the direct line
         obstacles = [GenericCircleObstacle(Vector2D(1000, 0), 500, padding=0)]
@@ -99,9 +103,9 @@ class TestTrajectoryOptimizer:
         optimizer = TrajectoryOptimizer(trys=10, early_stop=5)
         
         # Create a suboptimal path (two segments instead of one)
-        start = State(Vector2D(0, 0), Vector2D(0, 0))
-        mid = State(Vector2D(500, 500), Vector2D(0, 0))
-        goal = State(Vector2D(1000, 0), Vector2D(0, 0))
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        mid = MotionState(Vector2D(500, 500), Vector2D(0, 0))
+        goal = MotionState(Vector2D(1000, 0), Vector2D(0, 0))
         
         seg1 = generator.generate(start, mid)
         seg2 = generator.generate(mid, goal)
@@ -114,20 +118,20 @@ class TestTrajectoryOptimizer:
         # It should ideally be shorter or equal
         assert optimized_traj.get_total_duration() <= initial_duration + 1e-6
 
-class TestPlanner:
+class TestOrchestrator:
     def test_find_direct_path(self):
-        planner = Planner()
-        start = State(Vector2D(0, 0), Vector2D(0, 0))
-        goal = State(Vector2D(1000, 0), Vector2D(0, 0))
+        planner = Orchestrator()
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(1000, 0), Vector2D(0, 0))
         
         traj = planner.find(start, goal, [])
         assert planner.status == PlanningStatus.DIRECT_PATH
         assert traj.root is not None
 
     def test_find_bypass(self):
-        planner = Planner(SolverConfig(max_iterations=100))
-        start = State(Vector2D(0, 0), Vector2D(0, 0))
-        goal = State(Vector2D(2000, 0), Vector2D(0, 0))
+        planner = Orchestrator(SolverConfig(max_iterations=100))
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(2000, 0), Vector2D(0, 0))
         obstacles = [GenericCircleObstacle(Vector2D(1000, 0), 300, padding=0)]
         
         traj = planner.find(start, goal, obstacles)
@@ -135,10 +139,10 @@ class TestPlanner:
         assert not CollisionEngine.is_collision(traj.root, obstacles)
 
     def test_handle_static_collisions_start_inside(self):
-        planner = Planner()
+        planner = Orchestrator()
         obs = GenericCircleObstacle(Vector2D(0, 0), 200, padding=0)
-        start = State(Vector2D(50, 50), Vector2D(0, 0)) # Inside obstacle
-        goal = State(Vector2D(1000, 0), Vector2D(0, 0))
+        start = MotionState(Vector2D(50, 50), Vector2D(0, 0)) # Inside obstacle
+        goal = MotionState(Vector2D(1000, 0), Vector2D(0, 0))
         
         new_start, new_goal, safety_traj = planner._handle_static_collisions(start, goal, [obs])
         

@@ -1,25 +1,14 @@
 from typing import List, Optional
-from enum import Enum, auto
 
-from new_movement.entities.Trajectory import TrajectorySegment, Trajectory
-from new_movement.entities.States import State, Vector2D
-from new_movement.entities.obstacles import Obstacle
-from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
+from new_movement.entities.trajectory.trajectory import Trajectory
+from new_movement.entities.trajectory.trajectory_segment import TrajectorySegment
+from new_movement.entities.motion.motion_state import MotionState
+from new_movement.entities.obstacle.obstacle import Obstacle
+from new_movement.local_planner.collision_engine import CollisionEngine
+from new_movement.local_planner.informed_sampler import InformedSampler
+from new_movement.local_planner.trajectory_generator import TrajectoryGenerator
+from new_movement.local_planner.solver import BaseSolver
 
-from .collision import CollisionEngine
-from .sampler import InformedSampler
-
-class PlanningStatus(Enum):
-    SUCCESS = auto()
-    DIRECT_PATH = auto()
-    BYPASS_FOUND = auto()
-    FAILED = auto()
-    RECOVERY = auto()
-
-class BaseSolver:
-    """Interface for trajectory solvers."""
-    def solve(self, start: State, goal: State, obstacles: List[Obstacle], generator: TrajectoryGenerator) -> Optional[Trajectory]:
-        raise NotImplementedError
 
 class BypassSolver(BaseSolver):
     """RRT-inspired solver for finding collision-free bypasses."""
@@ -31,15 +20,15 @@ class BypassSolver(BaseSolver):
 
     def solve(
         self, 
-        start: State, 
-        goal: State, 
+        start: MotionState, 
+        goal: MotionState, 
         obstacles: List[Obstacle], 
         generator: TrajectoryGenerator
     ) -> Optional[Trajectory]:
         """Iteratively attempts to find a via-point that clears all obstacles."""
         found_trajectories = []
         for _ in range(self.max_iterations):
-            via_state = State(
+            via_state = MotionState(
                 self.sampler.sample_near_axis(start.position, goal.position),
                 self.sampler.sample_velocity()
             )

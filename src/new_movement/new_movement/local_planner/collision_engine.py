@@ -1,9 +1,8 @@
 import numpy as np
 from typing import List
-from new_movement.entities.Trajectory import TrajectorySegment
-from new_movement.entities.obstacles import Obstacle
-from new_movement.entities.StaticObstacle import StaticObstacle
-from new_movement.entities.States import Vector2D
+
+from new_movement.entities.trajectory.trajectory_segment import TrajectorySegment
+from new_movement.entities.obstacle.obstacle import Obstacle
 
 class CollisionEngine:
     @staticmethod

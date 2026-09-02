@@ -1,8 +1,13 @@
-from new_movement.planner import Planner
-from new_movement.entities.States import Vector2D, State
-from new_movement.entities.obstacles import Obstacle
-from new_movement.entities.StaticObstacle import StaticObstacle
-from new_movement.utilities.obstacle_factory import ObstacleFactory
+from time import sleep
+
+import rclpy
+from rclpy.node import Node
+
+from new_movement.entities.motion.motion_state import MotionState
+from new_movement.entities.obstacle.obstacle import Obstacle
+from new_movement.entities.obstacle.static_obstacle import StaticObstacle
+from new_movement.local_planner.obstacle_factory import ObstacleFactory
+from new_movement.local_planner.orchestrator import Orchestrator
 
 from system_interfaces.msg import (
     ControlCommand,
@@ -14,15 +19,12 @@ from system_interfaces.msg import (
 )
 from system_interfaces.srv import StrategyCommand, UpdateObstacle
 
-from time import sleep
-
-import rclpy
-from rclpy.node import Node
+from utils.math_util import Vector2D
 
 
-class PathDriver(Node):
+class MovementPathDriver(Node):
     def __init__(self):
-        super().__init__("path_driver")
+        super().__init__("movement_path_driver")
 
         self.ally_robots = {}
         self.enemy_robots = {}
@@ -40,7 +42,7 @@ class PathDriver(Node):
         self.trajectory_timer = self.create_timer(0.1, self.publish_trajectories_safe)
 
         # Update Target Service
-        self.planner = Planner(50, 100)
+        self.planner = Orchestrator()
         self.update_target_service = self.create_service(
             StrategyCommand, "strategy_command", self.update_target
         )
@@ -90,7 +92,7 @@ class PathDriver(Node):
             if id not in self.robot_data:
                 try:
                     cur_robot = ally_robots[id]
-                    cur_state = State(
+                    cur_state = MotionState(
                         Vector2D(cur_robot.position_x, cur_robot.position_y),
                         Vector2D(cur_robot.velocity_x, cur_robot.velocity_y),
                     )
@@ -98,7 +100,7 @@ class PathDriver(Node):
                     # Check if there is a last command for this robot
                     if id in self.last_command:
                         last_cmd = self.last_command[id]
-                        target_state = State(
+                        target_state = MotionState(
                             Vector2D(last_cmd.position_x, last_cmd.position_y),
                             Vector2D(last_cmd.velocity_x, last_cmd.velocity_y),
                         )
@@ -250,7 +252,7 @@ class PathDriver(Node):
         trajectory_message.trajectories = trajectory_list
         self.trajectory_publisher.publish(trajectory_message)
 
-    def replan(self, robot_id: int, new_destination: State) -> bool:
+    def replan(self, robot_id: int, new_destination: MotionState) -> bool:
         if robot_id not in self.robot_data:
             return False
 
@@ -292,7 +294,7 @@ class PathDriver(Node):
 
                 if need_replan is True:
                     self.replan(id, robot["trajectory"].get_destination())
-                    # self.get_logger().info(f"Replan Activated for {id}")
+                    self.get_logger().debug(f"Replan Activated for {id}")
                     break
 
                 total_time += time_step
@@ -300,9 +302,9 @@ class PathDriver(Node):
     def update_obstacles(self, request, response):
         self.driver_init()
         if request.id not in self.robot_data:
-            # self.get_logger().warn(
-            #     f"Update obstacles ignored: robot {request.id} not found"
-            # )
+            self.get_logger().debug(
+                f"Update obstacles ignored: robot {request.id} not found"
+            )
             response.success = False
             return response
 
@@ -342,7 +344,7 @@ class PathDriver(Node):
 
         self.last_command[request.id] = request
 
-        new_destination: State = State(
+        new_destination: MotionState = MotionState(
             Vector2D(request.position_x, request.position_y),
             Vector2D(request.velocity_x, request.velocity_y),
         )
@@ -355,7 +357,7 @@ class PathDriver(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = PathDriver()
+    node = MovementPathDriver()
     rclpy.spin(node)
     rclpy.shutdown()
 

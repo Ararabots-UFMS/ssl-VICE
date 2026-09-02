@@ -1,7 +1,9 @@
 import time
 from typing import Optional
 
-from new_movement.entities.States import State, Vector2D
+from new_movement.entities.motion import MotionState
+
+from utils.math_util import Vector2D
 
 
 class PIDController:
@@ -83,10 +85,10 @@ class Vector2DTrajectoryController:
         self.y_controller.reset()
 
     def compute_trajectory_following(
-        self, target_state: State, current_state: State, dt: Optional[float] = None
+        self, target_state: MotionState, current_state: MotionState, dt: Optional[float] = None
     ) -> Vector2D:
         """
-        Compute 2D trajectory following control using State objects
+        Compute 2D trajectory following control using MotionState objects
         """
         velocity_x = self.x_controller.compute_trajectory_following(
             target_state.position.x,
@@ -129,12 +131,12 @@ class RobotTrajectoryController:
     def compute_trajectory_command(
         self,
         robot_id: int,
-        target_state: State,
-        current_state: State,
+        target_state: MotionState,
+        current_state: MotionState,
         dt: Optional[float] = None,
     ) -> Vector2D:
         """
-        Compute velocity command for robot to follow trajectory using State objects
+        Compute velocity command for robot to follow trajectory using MotionState objects
         """
         controller = self.get_controller(robot_id)
 

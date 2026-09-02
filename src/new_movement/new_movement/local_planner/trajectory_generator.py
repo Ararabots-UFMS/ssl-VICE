@@ -1,10 +1,13 @@
-from new_movement.utilities.trap_steer import time_optimal_steer_2d as trap_steer
-from new_movement.entities.States import State, Vector2D, MoveConstraints
-from new_movement.entities.Motion import MotionPath, MotionPrimitive
-from new_movement.entities.Trajectory import TrajectorySegment
 from typing import Optional
-import numpy as np
 
+from new_movement.trapezoidal_steering import MultiAxisSolver
+from new_movement.entities.motion.motion_state import MotionState
+from new_movement.entities.motion.motion_constraints import MotionConstraints
+from new_movement.entities.motion.motion_path import MotionPath
+from new_movement.entities.motion.motion_primitive import MotionPrimitive
+from new_movement.entities.trajectory.trajectory_segment import TrajectorySegment
+
+from utils.math_util import Vector2D
 
 DEFAULT_VELOCITY_CONSTRAINST = Vector2D(900, 900) # mm/s
 DEFAULT_ACCELERATION_CONSTRAINST = Vector2D(450, 450) # mm/s²
@@ -12,12 +15,13 @@ DEFAULT_ACCELERATION_CONSTRAINST = Vector2D(450, 450) # mm/s²
 NEAR_ACCELERATION_CONSTRAINST = Vector2D(900, 900) # #TODO Hardcoded, needs to get the max_output from control and take a little off
 
 class TrajectoryGenerator:
-    def __init__(self, constrainsts: Optional[MoveConstraints] = None):
-        self.constrainsts = constrainsts or MoveConstraints(DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST)
+    def __init__(self, constrainsts: Optional[MotionConstraints] = None):
+        self.constrainsts = constrainsts or MotionConstraints(DEFAULT_VELOCITY_CONSTRAINST, DEFAULT_ACCELERATION_CONSTRAINST)
+        self.steering = MultiAxisSolver()
 
-    def generate(self, curState: State, tarState: State) -> TrajectorySegment:
+    def generate(self, curState: MotionState, tarState: MotionState) -> TrajectorySegment:
         """Generates a piecewise constant acceleration motion path using the Trapezoidal Steer"""
-        trap_output = trap_steer(
+        trap_output = self.steering.time_optimal_2d(
             curState.position + curState.velocity,
             tarState.position + tarState.velocity,
             umin=self.constrainsts.min_acceleration,
@@ -33,5 +37,5 @@ class TrajectoryGenerator:
 
         return TrajectorySegment(curState.position, curState.velocity, motion_path)
 
-    def update_constrainsts(self, constrainsts: MoveConstraints) -> None:
+    def update_constrainsts(self, constrainsts: MotionConstraints) -> None:
         self.constrainsts = constrainsts

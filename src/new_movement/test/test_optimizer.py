@@ -2,9 +2,10 @@ import pytest
 from unittest.mock import MagicMock, patch
 from time import time
 
-from new_movement.entities.States import State, Vector2D
-from new_movement.entities.Trajectory import Trajectory, TrajectorySegment
-from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
+from new_movement.entities.motion import MotionState
+from new_movement.entities.trajectory import Trajectory
+from new_movement.local_planner import TrajectoryGenerator
+from new_movement.movement_optimizer import MovementOptimizer
 
 from movement_interfaces.msg import (
     Trajectory as TrajectoryMsg,
@@ -15,26 +16,27 @@ from movement_interfaces.msg import (
 from movement_interfaces.msg import TargetArray
 from system_interfaces.msg import GameState
 
-from new_movement.optimizer_node import OptimizerNode
+
+from utils.math_util import Vector2D
 
 @pytest.fixture
 def optimizer_node():
     with patch('rclpy.init'), \
          patch('rclpy.node.Node.__init__', return_value=None), \
-         patch.object(OptimizerNode, 'create_subscription', return_value=MagicMock()), \
-         patch.object(OptimizerNode, 'create_publisher', return_value=MagicMock()), \
-         patch.object(OptimizerNode, 'create_timer', return_value=MagicMock()), \
-         patch.object(OptimizerNode, 'declare_parameter', return_value=MagicMock()), \
-         patch.object(OptimizerNode, 'get_parameter', return_value=MagicMock(value=50.0)), \
-         patch.object(OptimizerNode, 'get_logger', return_value=MagicMock()):
-        node = OptimizerNode()
+         patch.object(MovementOptimizer, 'create_subscription', return_value=MagicMock()), \
+         patch.object(MovementOptimizer, 'create_publisher', return_value=MagicMock()), \
+         patch.object(MovementOptimizer, 'create_timer', return_value=MagicMock()), \
+         patch.object(MovementOptimizer, 'declare_parameter', return_value=MagicMock()), \
+         patch.object(MovementOptimizer, 'get_parameter', return_value=MagicMock(value=50.0)), \
+         patch.object(MovementOptimizer, 'get_logger', return_value=MagicMock()):
+        node = MovementOptimizer()
         return node
 
 @pytest.fixture
 def trajectory_msg():
     generator = TrajectoryGenerator()
-    start = State(Vector2D(0, 0), Vector2D(0, 0))
-    goal = State(Vector2D(1000, 0), Vector2D(0, 0))
+    start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+    goal = MotionState(Vector2D(1000, 0), Vector2D(0, 0))
     segment = generator.generate(start, goal)
     trajectory = Trajectory(segment)
     return trajectory.to_msg(robot_id=0)

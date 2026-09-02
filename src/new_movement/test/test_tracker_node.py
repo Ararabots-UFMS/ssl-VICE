@@ -1,16 +1,18 @@
-from new_movement.entities.States import State, Vector2D
-from new_movement.entities.Trajectory import Trajectory
-from new_movement.utilities.trajectory_generator.TrajGenerator import TrajectoryGenerator
-from new_movement.tracker_node import (
+from new_movement.entities.motion import MotionState
+from new_movement.entities.trajectory import Trajectory
+from new_movement.local_planner import TrajectoryGenerator
+from new_movement.movement_tracker import (
     build_control_reference_point,
     build_overhead_point,
 )
 
+from utils.math_util import Vector2D
+
 
 def test_build_overhead_point():
     generator = TrajectoryGenerator()
-    start = State(Vector2D(0, 0), Vector2D(0, 0))
-    goal = State(Vector2D(1000, 0), Vector2D(0, 0))
+    start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+    goal = MotionState(Vector2D(1000, 0), Vector2D(0, 0))
     segment = generator.generate(start, goal)
     trajectory = Trajectory(segment)
 
@@ -25,13 +27,13 @@ def test_build_overhead_point():
 
 def test_build_control_reference_point():
     generator = TrajectoryGenerator()
-    start = State(Vector2D(0, 0), Vector2D(0, 0))
-    goal = State(Vector2D(1000, 0), Vector2D(0, 0))
+    start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+    goal = MotionState(Vector2D(1000, 0), Vector2D(0, 0))
     segment = generator.generate(start, goal)
     trajectory = Trajectory(segment)
     msg = trajectory.to_msg(robot_id=2)
 
-    state = State(Vector2D(1500, -500), Vector2D(300, -200))
+    state = MotionState(Vector2D(1500, -500), Vector2D(300, -200))
     point = build_control_reference_point(2, msg, state, time_offset=0.5)
 
     assert point is not None
