@@ -18,7 +18,7 @@ from system_interfaces.srv import ControlParams, SetKp, SetOrientation, Strategy
 from std_srvs.srv import SetBool
 from vision.vision_node import Vision
 from referee.referee_node import RefereeNode
-from new_movement.entities.Trajectory import Trajectory
+from new_movement.entities.trajectory import Trajectory
 
 app = Flask(__name__)
 gui_socket = SocketIO(app, cors_allowed_origins="*")
