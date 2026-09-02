@@ -332,6 +332,21 @@ class ExtendedKalmanFilterClass1D(object):
     '''
     def __init__(self, a_sd: float = 0.1, u: float = 0.0, sd_acceleration: float = 1.0, friction: float = 0.1):
         self.sd_acceleration = sd_acceleration
+        # BUG DA origin/dev, NAO DO MERGE - reportar para quem fez a movimentacao.
+        #
+        # predict() usa 'self.q_variance' na matriz de ruido de processo, e o
+        # __init__ nunca a definia. Toda predicao levantava AttributeError; o
+        # visionNode captura a excecao como "Error receiving data", entao o
+        # sintoma nao aponta para o filtro. Consequencia medida: robos saindo
+        # com coordenadas absurdas ("Robo descartado: x=27415243, y=27410945") e
+        # o campo praticamente sem robos para a estrategia agir.
+        #
+        # Confirmado em 'git show origin/dev:src/vision/vision/kalman_filter.py':
+        # a linha existe la e a atribuicao nao. Nao veio dos nossos ajustes.
+        #
+        # O valor segue a convencao das classes 2D irmas, que usam
+        # 'self.sd_acceleration ** 2' para o mesmo papel (linhas 78, 169, 272).
+        self.q_variance = sd_acceleration ** 2
         self.friction = friction
         self.u = u
         # State vector: [theta, omega]

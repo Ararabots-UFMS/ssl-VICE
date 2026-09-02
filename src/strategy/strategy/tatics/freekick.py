@@ -1657,6 +1657,21 @@ class OurFreekick(_BaseFreekick):
         ou disparar e passar mais de um metro alem. Pedindo pouco de cada vez,
         ele obedece.
         """
+        # MOVIMENTACAO NOVA: manda o alvo INTEIRO, sem picotar.
+        #
+        # O passo curto existe por causa do driver antigo, que executa a
+        # trajetoria pelo relogio e sem frenagem: alvo longe fazia o robo nao
+        # sair do lugar ou passar mais de um metro alem (ver PASSO_MAX).
+        #
+        # O planner da dev nao tem esse defeito - ele replaneja a ~50 Hz a
+        # partir do estado da VISAO. Medido com a sonda 'mov-bruto', sem
+        # estrategia nenhuma e com alvo fixo a 380 mm: o robo convergiu para
+        # 1 mm e ficou la. Contra isso, entregar um alvo que anda 150 mm por
+        # ciclo e pedir para ele replanejar para um ponto que nunca para -
+        # exatamente o vaivem que o alvo movel ja nos custou no passe.
+        if os.environ.get("MOVIMENTO_NOVO"):
+            return alvo_x, alvo_y
+
         p = self._pos(robot_id)
         if p is None:
             return alvo_x, alvo_y

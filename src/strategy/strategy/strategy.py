@@ -1,3 +1,5 @@
+import os
+
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -13,17 +15,56 @@ class Strategy(Node):
         super().__init__("strategy_node")
         self.get_logger().info("Strategy node initialized")
 
-        self.move_cli = self.create_client(StrategyCommand, "strategy_command")
+        # MOVIMENTACAO NOVA (dev) ou ANTIGA (driver), escolhida por variavel.
+        #
+        # MOVIMENTO_NOVO=1 -> publica MovementCommandArray em
+        #   'movement_manager/commands'; quem planeja e o planner_node, que
+        #   ancora no estado da VISAO (o conserto do §6.3: o driver antigo
+        #   replaneja a partir do setpoint anterior, nunca da posicao medida).
+        # sem a variavel -> servico 'strategy_command' do driver, como antes.
+        #
+        # Os dois caminhos ficam lado a lado de proposito: e a unica forma de
+        # medir a diferenca da movimentacao sem trocar de branch no meio do
+        # lote. Orientacao e chute NAO mudam - continuam nos servicos do
+        # pacote control, que a dev nao mexeu.
+        self.movimento_novo = bool(os.environ.get("MOVIMENTO_NOVO"))
+
+        self.move_cli = None
+        self.mov_pub = None
+        if self.movimento_novo:
+            from movement_interfaces.msg import MovementCommandArray, MovementCommand
+            from movement_interfaces.srv import SetStaticObstacles, SetGoalKeeper
+            self._MovementCommandArray = MovementCommandArray
+            self._MovementCommand = MovementCommand
+            self.mov_pub = self.create_publisher(
+                MovementCommandArray, "movement_manager/commands", 10)
+            self.estaticos_cli = self.create_client(
+                SetStaticObstacles, "SetStaticObstacles")
+            self.goleiro_cli = self.create_client(SetGoalKeeper, "SetGoalKeeper")
+            self._SetStaticObstacles = SetStaticObstacles
+            self._SetGoalKeeper = SetGoalKeeper
+            self._configurou_manager = False
+        else:
+            self.move_cli = self.create_client(StrategyCommand, "strategy_command")
         self.orientation_cli = self.create_client(SetOrientation, "set_orientation")
         self.obstacle_cli = self.create_client(UpdateObstacle, "update_obstacles")
         self.kick_cli = self.create_client(UpdateKick, "update_kick")
 
         if wait_for_service:
-            while not self.move_cli.wait_for_service(timeout_sec=3.0):
-                self.get_logger().info('Aguardando serviço "strategy_command"...')
+            if self.movimento_novo:
+                while not self.estaticos_cli.wait_for_service(timeout_sec=3.0):
+                    self.get_logger().info('Aguardando serviço "SetStaticObstacles"...')
+                while not self.goleiro_cli.wait_for_service(timeout_sec=3.0):
+                    self.get_logger().info('Aguardando serviço "SetGoalKeeper"...')
+            else:
+                while not self.move_cli.wait_for_service(timeout_sec=3.0):
+                    self.get_logger().info('Aguardando serviço "strategy_command"...')
             while not self.orientation_cli.wait_for_service(timeout_sec=3.0):
                 self.get_logger().info('Aguardando serviço "set_orientation"...')
-            while not self.obstacle_cli.wait_for_service(timeout_sec=3.0):
+            # 'update_obstacles' e do DRIVER, que nao sobe no caminho novo.
+            # Esperar por ele ali trava a inicializacao para sempre.
+            while not self.movimento_novo and not self.obstacle_cli.wait_for_service(
+                    timeout_sec=3.0):
                 self.get_logger().info('Aguardando serviço "update_obstacles"...')
             while not self.kick_cli.wait_for_service(timeout_sec=3.0):
                 self.get_logger().info('Aguardando serviço "kick_command"...')
@@ -50,10 +91,21 @@ class Strategy(Node):
 
         latest: dict[int, Skill] = {sk.robot_id: sk for sk in skill_list}
 
+        # No caminho NOVO, junta o ciclo inteiro num array so.
+        #
+        # O MovementManager faz 'self._movement_commands = msg.commands', ou
+        # seja, SUBSTITUI a lista inteira a cada mensagem. Publicando um robo
+        # por vez, cada publicacao apaga os alvos dos outros e so o ultimo
+        # sobrevive - com o time completo, os demais param.
+        self._lote_mov = [] if self.movimento_novo else None
+
         for sk in latest.values():
             self._send_kick(sk)
             if sk.target_x is not None and sk.target_y is not None:
-                if self._alvo_mudou(sk):
+                # No caminho novo NAO filtramos por "o alvo mudou": o manager so
+                # publica alvo para os robos presentes na ultima mensagem, entao
+                # omitir um robo estavel e o mesmo que manda-lo parar.
+                if self.movimento_novo or self._alvo_mudou(sk):
                     self._send_move(sk)
             if sk.angle is not None:
                 self._send_orientation(sk.robot_id, sk.angle)
@@ -69,6 +121,12 @@ class Strategy(Node):
                 ]
             ) and self._obstaculos_mudaram(sk):
                 self._send_obstacles(sk)
+
+        # UMA publicacao por ciclo, com o time inteiro. Ver _send_move.
+        if self.movimento_novo and self._lote_mov:
+            msg = self._MovementCommandArray()
+            msg.commands = self._lote_mov
+            self.mov_pub.publish(msg)
 
     # Quanto o alvo precisa andar para valer um novo pedido de replanejamento.
     # Abaixo disso e ruido de visao, nao intencao nova.
@@ -151,7 +209,35 @@ class Strategy(Node):
         self._ultimo_envio[rid] = agora
         return True
 
+    def _configurar_manager(self):
+        """O MovementManager so publica alvos DEPOIS destes dois servicos.
+
+        ARMADILHA REAL: _ready_to_publish() exige _static_obstacles E
+        _goal_keeper_id preenchidos. Sem estas duas chamadas o manager recebe os
+        comandos, nao publica alvo nenhum, e NADA se move - sem erro, sem log.
+        """
+        if self._configurou_manager:
+            return
+        req = self._SetStaticObstacles.Request()
+        req.border_area = True
+        req.center_area = False
+        self.estaticos_cli.call_async(req)
+        req2 = self._SetGoalKeeper.Request()
+        req2.robot_id = 0            # o robo 0 e sempre o goleiro nesta base
+        self.goleiro_cli.call_async(req2)
+        self._configurou_manager = True
+
     def _send_move(self, skill: Skill) -> None:
+        if self.movimento_novo:
+            self._configurar_manager()
+            cmd = self._MovementCommand()
+            cmd.robot_id = int(skill.robot_id)
+            cmd.target_pos.x = float(skill.target_x or 0.0)
+            cmd.target_pos.y = float(skill.target_y or 0.0)
+            if self._lote_mov is None:
+                self._lote_mov = []
+            self._lote_mov.append(cmd)
+            return
         req = StrategyCommand.Request()
         req.id = int(skill.robot_id)
         req.position_x = float(skill.target_x or 0.0)
@@ -181,6 +267,16 @@ class Strategy(Node):
         )
 
     def _send_obstacles(self, skill: Skill) -> None:
+        # No caminho NOVO nao existe obstaculo por robo: o MovementManager so
+        # aceita border_area/center_area globais (SetStaticObstacles) e deriva o
+        # resto do game_state. Os campos por robo que a tatica usa - sobretudo
+        # 'ball' - nao tem equivalente, entao nao ha o que enviar aqui.
+        #
+        # ISTO E UMA PERDA DE COMPORTAMENTO, e esta medida no HANDOVER: a fase
+        # de contorno depende da bola ser obstaculo para nao passar por cima
+        # dela. Anotado para a comparacao; nao invento equivalente.
+        if self.movimento_novo:
+            return
 
         req = UpdateObstacle.Request()
         req.id = int(skill.robot_id)
