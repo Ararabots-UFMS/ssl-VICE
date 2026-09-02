@@ -117,8 +117,109 @@ class KalmanFilterClass2D(object):
 
         self.sd_acceleration = acceleration_sd_2d if acceleration_sd_2d else self.sd_acceleration
 
-import numpy as np
-from typing import Optional
+class ExtendedKalmanFilterClass2D(object):
+    '''
+    Extended Kalman Filter for 2D (position and velocity) with non-linear motion model.
+    
+    Assumes constant acceleration model with friction (exponential decay in velocity).
+    '''
+    def __init__(self, x_sd: float = 0.1, y_sd: float = 0.1, u_x: float = 0.1, u_y: float = 0.1, sd_acceleration: float = 1, friction: float = 0.1):
+        self.sd_acceleration = sd_acceleration
+        self.friction = friction  # Friction coefficient for velocity decay
+
+        self.u = np.matrix([[u_x],[u_y]])
+
+        # State vector: [x, y, vx, vy]
+        self.x = np.matrix([[0], [0], [0], [0]])
+
+        # Measurement matrix (linear: measures position)
+        self.H = np.matrix([[1, 0, 0, 0],
+                            [0, 1, 0, 0]])
+
+        # Measurement Covariance
+        self.R = np.matrix([[x_sd**2, 0],
+                           [0, y_sd**2]])
+
+        # Error covariance matrix
+        self.P = np.eye(self.x.shape[0])
+        
+    def _transition_function(self, x, dt):
+        # Non-linear transition: constant acceleration with friction
+        x_new = np.zeros_like(x)
+        x_new[0] = x[0] + x[2] * dt + 0.5 * self.u[0] * dt**2  # posição x
+        x_new[1] = x[1] + x[3] * dt + 0.5 * self.u[1] * dt**2  # posição y
+        # Velocity with exponential decay due to friction
+        x_new[2] = x[2] * np.exp(-self.friction * dt) + self.u[0] * dt
+        x_new[3] = x[3] * np.exp(-self.friction * dt) + self.u[1] * dt
+        return x_new
+    
+    def _jacobian_F(self, x, dt):
+        # Jacobian of transition function
+        F = np.matrix([[1, 0, dt, 0],
+                       [0, 1, 0, dt],
+                       [0, 0, np.exp(-self.friction * dt), 0],
+                       [0, 0, 0, np.exp(-self.friction * dt)]])
+        return F
+    
+    def predict(self, dt):
+        # Process noise covariance
+        self.Q = np.matrix([[(dt**4)/4, 0, (dt**3)/2, 0],
+                            [0, (dt**4)/4, 0, (dt**3)/2],
+                            [(dt**3)/2, 0, dt**2, 0],
+                            [0, (dt**3)/2, 0, dt**2]]) * self.sd_acceleration ** 2
+
+        # Predict state
+        self.x = self._transition_function(self.x, dt)
+        
+        # Predict covariance
+        F = self._jacobian_F(self.x, dt)
+        self.P = F @ self.P @ F.T + self.Q
+
+        return self.x
+
+    def update(self, z: np.matrix):
+        # Measurement function (linear)
+        h = self.H @ self.x
+        
+        # Innovation
+        y = z - h
+        
+        # Innovation covariance
+        S = self.H @ self.P @ self.H.T + self.R
+        
+        # Kalman Gain
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+        
+        # Update state
+        self.x = self.x + K @ y
+        
+        # Update covariance
+        I = np.eye(self.x.shape[0])
+        self.P = (I - K @ self.H) @ self.P
+        
+        return self.x
+    
+    def set_param(self, x_sd: Optional[float] = None,
+                        y_sd: Optional[float] = None,
+                        u_x:  Optional[float] = None,
+                        u_y:  Optional[float] = None,
+                        acceleration_sd_2d: Optional[float] = None,
+                        friction: Optional[float] = None):
+
+        if x_sd is not None:
+            self.R[0, 0] = x_sd**2
+        if y_sd is not None:
+            self.R[1, 1] = y_sd**2
+        
+        if u_x is not None:
+            self.u[0] = u_x
+        if u_y is not None:
+            self.u[1] = u_y
+
+        if acceleration_sd_2d is not None:
+            self.sd_acceleration = acceleration_sd_2d
+        if friction is not None:
+            self.friction = friction
 
 class KalmanFilterClass1D(object):
     '''
@@ -163,23 +264,24 @@ class KalmanFilterClass1D(object):
         """Wraps an angle to the [-pi, pi] range."""
         return (angle + np.pi) % (2 * np.pi) - np.pi
 
-    def predict(self, dt: float):
-        # Control input matrix
-        self.B = np.matrix([[(dt**2)/2], [dt]]) 
-        # State transition matrix
-        self.A = np.matrix([[1, dt], [0, 1]])
-        # Process Covariance matrix
-        self.Q = np.matrix([[(dt**4)/4, (dt**3)/2],
-                            [(dt**3)/2, dt**2]]) * self.sd_acceleration**2
-
-        # Predict the next state
-        self.x = np.dot(self.A, self.x) + np.dot(self.B, self.u)
+    def predict(self, dt):
+        # Process noise covariance
+        self.Q = np.matrix([[(dt**4)/4, 0, (dt**3)/2, 0],
+                            [0, (dt**4)/4, 0, (dt**3)/2],
+                            [(dt**3)/2, 0, dt**2, 0],
+                            [0, (dt**3)/2, 0, dt**2]]) * self.sd_acceleration ** 2
         
-        # Wrap the predicted angle to the [-pi, pi] range
-        self.x[0, 0] = self._wrap_angle(self.x[0, 0])
+        # Cache prior state so the EKF linearization uses the pre-transition state
+        prior_x = self.x.copy()
 
-        # Update the state covariance matrix
-        self.P = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
+        # Predict covariance using the Jacobian evaluated at the prior state
+        F = self._jacobian_F(prior_x, dt)
+
+        # Predict state
+        self.x = self._transition_function(prior_x, dt)
+        
+        # Predict covariance
+        self.P = F @ self.P @ F.T + self.Q
 
         return self.x
 
@@ -221,3 +323,93 @@ class KalmanFilterClass1D(object):
             self.u = u_a
         if acceleration_sd_1d is not None:
             self.sd_acceleration = acceleration_sd_1d
+
+class ExtendedKalmanFilterClass1D(object):
+    '''
+    Extended Kalman Filter for 1D (angle and angular velocity) with non-linear motion model.
+    
+    Assumes constant angular acceleration with friction.
+    '''
+    def __init__(self, a_sd: float = 0.1, u: float = 0.0, sd_acceleration: float = 1.0, friction: float = 0.1):
+        self.sd_acceleration = sd_acceleration
+        self.friction = friction
+        self.u = u
+        # State vector: [theta, omega]
+        self.x = np.matrix([[0], [0]])
+        # Measurement matrix (linear: measures angle)
+        self.H = np.matrix([[1, 0]])
+        # Measurement Covariance
+        self.R = np.matrix([[a_sd ** 2]])
+        # State Covariance matrix
+        self.P = np.eye(self.x.shape[0])
+        
+    @staticmethod
+    def _wrap_angle(angle: float) -> float:
+        """Wraps an angle to the [-pi, pi] range."""
+        return (angle + np.pi) % (2 * np.pi) - np.pi
+
+    def _transition_function(self, x, dt):
+        # Non-linear transition: constant angular acceleration with friction
+        theta_new = x[0, 0] + x[1, 0] * dt + 0.5 * self.u * dt**2
+        omega_new = x[1, 0] * np.exp(-self.friction * dt) + self.u * dt
+        return np.matrix([[self._wrap_angle(theta_new)], [omega_new]])
+    
+    def _jacobian_F(self, x, dt):
+        # Jacobian of transition function
+        F = np.matrix([[1, dt],
+                       [0, np.exp(-self.friction * dt)]])
+        return F
+    
+    def predict(self, dt: float):
+        # Matriz de transição para 1D (posição e velocidade)
+        F = np.array([[1, dt],
+                    [0, 1]])
+
+        # Ruído de processo compatível com 2x2
+        Q = np.array([[dt**4/4, dt**3/2],
+                    [dt**3/2, dt**2]]) * self.q_variance
+
+        # Predição do estado
+        self.x = F @ self.x
+        # Predição da covariância
+        self.P = F @ self.P @ F.T + Q
+
+        return self.x
+
+
+    def update(self, z: np.matrix):
+        # Measurement function (linear)
+        h = self.H @ self.x
+        
+        # Innovation (with angle wrapping)
+        y = z - h
+        y[0, 0] = self._wrap_angle(y[0, 0])
+        
+        # Innovation covariance
+        S = self.H @ self.P @ self.H.T + self.R
+        
+        # Kalman Gain
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+        
+        # Update state
+        self.x = self.x + K @ y
+        self.x[0, 0] = self._wrap_angle(self.x[0, 0])
+        
+        # Update covariance (Joseph form for stability)
+        I = np.eye(self.x.shape[0])
+        self.P = (I - K @ self.H) @ self.P @ (I - K @ self.H).T + K @ self.R @ K.T
+        
+        return self.x
+
+    def set_param(self, a_sd: Optional[float] = None,
+                        u_a:  Optional[float] = None,
+                        acceleration_sd_1d: Optional[float] = None,
+                        friction: Optional[float] = None):
+        if a_sd is not None:
+            self.R = np.matrix([[a_sd ** 2]])
+        if u_a is not None:
+            self.u = u_a
+        if acceleration_sd_1d is not None:
+            self.sd_acceleration = acceleration_sd_1d
+        if friction is not None:
+            self.friction = friction

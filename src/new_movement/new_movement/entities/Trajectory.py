@@ -1,8 +1,13 @@
-from new_movement.utilities.BB_steer import integrate_control_2d as integrate
-from new_movement.utilities.BB_steer import integrate_control_2d_at_time as integrate_t
+from new_movement.utilities.trap_steer import integrate_control_2d as integrate
+from new_movement.utilities.trap_steer import integrate_control_2d_at_time as integrate_t
 from new_movement.entities.States import State, Vector2D
 from new_movement.entities.Motion import MotionPath
 from typing import Optional, List, Union
+
+from movement_interfaces.msg import (
+    Trajectory as TrajectoryMsg,
+    TrajectorySegment as TrajectorySegmentMsg,
+)
 
 
 class TrajectorySegment:
@@ -15,6 +20,21 @@ class TrajectorySegment:
         self.init_vel = init_vel
         self.motion_path = motion_path
         self.child: Optional[TrajectorySegment] = None
+
+    def to_msg(self) -> TrajectorySegmentMsg:
+        msg = TrajectorySegmentMsg()
+        msg.init_pos = self.init_pos.to_msg()
+        msg.init_vel = self.init_vel.to_msg()
+        msg.motion_path = self.motion_path.to_msg()
+        return msg
+
+    @classmethod
+    def from_msg(cls, msg: TrajectorySegmentMsg) -> "TrajectorySegment":
+        return cls(
+            init_pos=Vector2D.from_msg(msg.init_pos),
+            init_vel=Vector2D.from_msg(msg.init_vel),
+            motion_path=MotionPath.from_msg(msg.motion_path),
+        )
 
     @property
     def initial_state(self) -> State:
@@ -40,13 +60,13 @@ class TrajectorySegment:
         if self.get_total_duration() < t:
             return self.get_state(self.get_total_duration())
         if self.get_local_duration() >= t:
-            bb_integrate = integrate_t(
+            integrated_state = integrate_t(
                 self.init_pos + self.init_vel, self.motion_path.motion_path, t
             )
 
             return State(
-                position=Vector2D(bb_integrate[0], bb_integrate[1]),
-                velocity=Vector2D(bb_integrate[2], bb_integrate[3]),
+                position=Vector2D(integrated_state[0], integrated_state[1]),
+                velocity=Vector2D(integrated_state[2], integrated_state[3]),
             )
         else:
             return self.child.get_state(t - self.get_local_duration())
@@ -66,10 +86,10 @@ class TrajectorySegment:
             self.init_vel.x,
             self.init_vel.y,
         )
-        bb_integrate = integrate(initial_state_tuple, self.motion_path.motion_path)
+        integrated_state = integrate(initial_state_tuple, self.motion_path.motion_path)
         return State(
-            position=Vector2D(bb_integrate[0], bb_integrate[1]),
-            velocity=Vector2D(bb_integrate[2], bb_integrate[3]),
+            position=Vector2D(integrated_state[0], integrated_state[1]),
+            velocity=Vector2D(integrated_state[2], integrated_state[3]),
         )
 
     def get_acceleration(self, t: float) -> Optional[Vector2D]:
@@ -107,6 +127,24 @@ class Trajectory:
             while node.child:
                 node = node.child
             self.tail = node
+
+    def to_msg(self, robot_id: int) -> TrajectoryMsg:
+        msg = TrajectoryMsg()
+        msg.robot_id = int(robot_id)
+
+        current_segment = self.root
+        while current_segment:
+            msg.segments.append(current_segment.to_msg())
+            current_segment = current_segment.child
+
+        return msg
+
+    @classmethod
+    def from_msg(cls, msg: TrajectoryMsg) -> "Trajectory":
+        trajectory = cls()
+        for seg_msg in msg.segments:
+            trajectory.append(TrajectorySegment.from_msg(seg_msg))
+        return trajectory
 
     def append(self, segment: TrajectorySegment) -> None:
         """Anexa um TrajectorySegment ao final da trajetória."""
@@ -187,10 +225,12 @@ class Trajectory:
         self,
         time_step: Optional[float] = None,
         samples_size: Optional[int] = None,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
         output_states: bool = False,
     ) -> Union[List[Vector2D], List[State]]:
         """
-        Retorna uma lista de posições ou estados amostrados da trajetória.
+        Retorna uma lista de posições ou estados amostrados da trajetória dentro de um intervalo de tempo.
         Deve ser fornecido `time_step` OU `samples_size`.
         """
         if (time_step is not None) == (samples_size is not None):
@@ -201,22 +241,33 @@ class Trajectory:
         if self.root is None:
             return []
 
+        # Define os tempos de início e fim padrões se não forem fornecidos
+        total_duration = self.get_total_duration()
+        t_start = start_time if start_time is not None else 0.0
+        t_end = end_time if end_time is not None else total_duration
+
+        # Garante que os tempos informados estejam dentro dos limites e ordens lógicas
+        t_start = max(0.0, min(t_start, total_duration))
+        t_end = max(t_start, min(t_end, total_duration))
+        
+        interval_duration = t_end - t_start
         traj_list = []
-        total_time = self.get_total_duration()
 
-        if total_time == 0:
-            # Se a trajetória tem duração zero, retorna apenas o estado inicial
-            initial_state = self.get_state(0)
-            return [initial_state] if output_states else [initial_state.position]
+        # Caso onde o intervalo de amostragem é zero (mesmo ponto no tempo)
+        if interval_duration == 0:
+            state = self.get_state(t_start)
+            return [state] if output_states else [state.position]
 
+        # Calcula o time_step baseado na quantidade de amostras desejadas para o intervalo
         if samples_size is not None:
             time_step = (
-                total_time / (samples_size - 1) if samples_size > 1 else total_time
+                interval_duration / (samples_size - 1) if samples_size > 1 else interval_duration
             )
 
-        cur_time = 0.0
-        # REFACTOR (BUG FIX): Lógica de loop e amostragem robusta.
-        while cur_time < total_time:
+        # Varre a trajetória a partir do t_start usando o time_step
+        cur_time = t_start
+        # Usamos uma pequena tolerância para evitar problemas de precisão de ponto flutuante no loop
+        while cur_time < t_end - 1e-9:
             item = (
                 self.get_state(cur_time)
                 if output_states
@@ -225,10 +276,10 @@ class Trajectory:
             traj_list.append(item)
             cur_time += time_step
 
-        # Garante que o ponto final exato seja sempre incluído
-        destination_state = self.get_destination()
+        # Garante que o ponto final exato do intervalo seja sempre incluído
+        end_state = self.get_state(t_end)
         traj_list.append(
-            destination_state if output_states else destination_state.position
+            end_state if output_states else end_state.position
         )
 
         return traj_list

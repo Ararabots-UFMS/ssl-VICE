@@ -1,8 +1,9 @@
-from new_movement.entities.obstacles import Obstacle, ObstaclePriority
+from new_movement.entities.obstacles import Obstacle 
 from new_movement.entities.States import Vector2D
 from math import copysign
 from dataclasses import dataclass
 from system_interfaces.msg import VisionGeometry
+import numpy as np
 
 
 @dataclass
@@ -14,6 +15,13 @@ class FieldSide:
 class StaticObstacle(Obstacle):
     def velocity(self) -> float:
         return 0.0
+
+    def batch_collides(self, positions: np.ndarray, times: np.ndarray) -> bool:
+        """Static obstacles don't change over time — times is ignored."""
+        return self._check_positions(positions)
+
+    def _check_positions(self, positions: np.ndarray) -> bool:
+        raise NotImplementedError
 
 
 class FieldBorderObstacle(StaticObstacle):
@@ -132,9 +140,15 @@ class FieldBorderObstacle(StaticObstacle):
 
         return closest_corner
 
-    def getPriority(self) -> ObstaclePriority:
-        return ObstaclePriority.HIGHEST
-
+    def _check_positions(self, positions: np.ndarray) -> bool:
+        xs, ys = positions[:, 0], positions[:, 1]
+        inside = (
+            (xs > self.top_left_point.x)
+            & (xs < self.top_right_point.x)
+            & (ys > self.bot_left_point.y)
+            & (ys < self.top_left_point.y)
+        )
+        return bool(np.any(~inside))
 
 class PenaltyAreaObstacle(StaticObstacle):
     def __init__(
@@ -278,8 +292,15 @@ class PenaltyAreaObstacle(StaticObstacle):
 
         return closest_corner
 
-    def getPriority(self) -> ObstaclePriority:
-        return ObstaclePriority.LOW
+    def _check_positions(self, positions: np.ndarray) -> bool:
+        min_x = min(self.top_left_point.x, self.top_right_point.x)
+        max_x = max(self.top_left_point.x, self.top_right_point.x)
+        min_y = min(self.top_right_point.y, self.bot_right_point.y)
+        max_y = max(self.top_right_point.y, self.bot_right_point.y)
+
+        xs, ys = positions[:, 0], positions[:, 1]
+        inside = (xs > min_x) & (xs < max_x) & (ys > min_y) & (ys < max_y)
+        return bool(np.any(inside))
 
 
 class GenericCircleObstacle(StaticObstacle):
@@ -311,5 +332,9 @@ class GenericCircleObstacle(StaticObstacle):
 
         return self.center.add(center_to_target.multiplyByScalar(self.radius + margin))
 
-    def getPriority(self) -> ObstaclePriority:
-        return ObstaclePriority.LOWEST
+    def _check_positions(self, positions: np.ndarray) -> bool:
+        center = np.array([self.center.x, self.center.y])
+        diffs = positions - center
+        dists_sq = np.einsum("ij,ij->i", diffs, diffs)
+        
+        return bool(np.any(dists_sq < self.radius ** 2))
