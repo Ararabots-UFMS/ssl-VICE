@@ -121,7 +121,14 @@ class PenaltyAreaObstacle(StaticObstacle):
         closest_corner = self._findClosestCorner(tarPosition)
         new_destination = Vector2D(tarPosition.x, tarPosition.y)
 
-        x_ref = self.top_right_point.x
+        min_x, max_x, _, _ = self._bounds()
+        # Leave by the edge that faces midfield. The other one is the goal line, and it
+        # coincides with the field border, so escaping through it puts the robot off the
+        # field — whereupon the border pushes it straight back in here, and the two
+        # obstacles trade the robot back and forth. That loop walked a robot into the
+        # wall. For the left-hand area midfield is +x, which is what this already did;
+        # for the right-hand one it is -x, which it did not.
+        x_ref = min_x if self.side is FieldSide.RIGHT else max_x
 
         dx = abs(x_ref - tarPosition.x)
         dy = abs(closest_corner.y - tarPosition.y)

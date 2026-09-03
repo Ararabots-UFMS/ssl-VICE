@@ -386,16 +386,21 @@ class TestEscapingObstacles:
         planner = Orchestrator()
         enemy, start = self._pinned_against_a_robot()
 
-        escape = planner._escape_point(enemy, start.position)
+        escape, reachable = planner._clear_point(start.position, [enemy])
 
+        assert reachable
         assert escape.distance(Vector2D(0, 0)) > 190.0
         assert not enemy.isCollidingAt(escape, 0.0)
 
     def test_a_clear_robot_is_left_alone(self):
         planner = Orchestrator()
         enemy = EnemyRobotObstacle(MotionState(Vector2D(0, 0), Vector2D(0, 0)), radius=190.0)
+        clear = Vector2D(2000.0, 0.0)
 
-        assert planner._escape_point(enemy, Vector2D(2000.0, 0.0)) is None
+        resolved, reachable = planner._clear_point(clear, [enemy])
+
+        assert reachable
+        assert resolved == clear
 
     def test_the_planner_no_longer_dead_ends_when_pinned(self):
         planner = Orchestrator()

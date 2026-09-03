@@ -11,7 +11,11 @@ from new_movement.local_planner.informed_sampler import InformedSampler
 from new_movement.local_planner.trajectory_generator import TrajectoryGenerator
 from new_movement.local_planner.solver import BypassSolver, PlanningStatus, SolverConfig
 
-from utils.math_util import Vector2D 
+from utils.math_util import Vector2D
+
+# How many times to re-ask every obstacle where a point should go before accepting that
+# they cannot agree on one.
+MAX_ESCAPE_PASSES = 6
 
 
 class Orchestrator:
@@ -35,6 +39,9 @@ class Orchestrator:
         )
         
         self.status = PlanningStatus.FAILED
+        # Set when the robot sits inside obstacles with no point that satisfies them
+        # all, so the caller can say so rather than reporting a generic planning miss.
+        self.escape_failed = False
 
     def find(
         self,
@@ -77,45 +84,82 @@ class Orchestrator:
         recovery.status = PlanningStatus.RECOVERY
         return recovery
 
-    def _escape_point(self, obs: Obstacle, position: Vector2D) -> Optional[Vector2D]:
-        """
-        Where to move to get clear of this obstacle, or None if already clear.
+    def _collides_at(self, obs: Obstacle, position: Vector2D) -> bool:
+        """Whether this obstacle occupies a point, static or dynamic alike."""
+        if isinstance(obs, StaticObstacle):
+            return obs.isCollidingAt(position)
+        return obs.isCollidingAt(position, 0.0)
 
-        Placed escape_margin beyond the boundary: adaptDestination returns the boundary
-        itself, and isCollidingAt is true there (distance zero fails its <= 0 test), so
-        escaping exactly onto it leaves the next plan starting in a collision.
+    def _push_clear(self, obs: Obstacle, position: Vector2D) -> Vector2D:
+        """
+        Where one obstacle wants a point moved to, a margin past its boundary.
+
+        adaptDestination returns the boundary itself, and isCollidingAt is still true
+        there (a distance of zero fails its <= 0 test), so landing exactly on it leaves
+        the next plan starting in a collision.
         """
         if isinstance(obs, StaticObstacle):
-            if not obs.isCollidingAt(position):
-                return None
             boundary = obs.adaptDestination(position)
         else:
-            if not obs.isCollidingAt(position, 0.0):
-                return None
             boundary = obs.adaptDestination(position, 0.0)
 
         outward = boundary.subtract(position)
         if outward.size() < 1e-6:
-            return None  # touching rather than penetrating; nothing to escape
+            return boundary
         return boundary.add(outward.norm().multiplyByScalar(self.config.escape_margin))
+
+    def _clear_point(
+        self, position: Vector2D, obstacles: List[Obstacle]
+    ) -> Tuple[Vector2D, bool]:
+        """
+        Move a point until no obstacle occupies it, or report that none of them agree.
+
+        Obstacles used to be escaped one at a time, each one asked in turn where to go
+        and the answer taken without checking it against the others. Overlapping
+        obstacles then contradict each other: a robot inside the right penalty area is
+        sent to its goal-line edge, which is past the field border, and the border sends
+        it straight back inside the penalty area. That loop is stable, and its outward
+        half is what drove the robot into the wall.
+
+        Escaping is only worth doing if it lands somewhere every obstacle accepts, so
+        this reports failure rather than committing to one obstacle's opinion.
+        """
+        current = position
+        for _ in range(MAX_ESCAPE_PASSES):
+            blocking = [obs for obs in obstacles if self._collides_at(obs, current)]
+            if not blocking:
+                return current, True
+            for obs in blocking:
+                current = self._push_clear(obs, current)
+
+        if any(self._collides_at(obs, current) for obs in obstacles):
+            return position, False
+        return current, True
 
     def _handle_start_and_goal_collisions(
         self, start: MotionState, goal: MotionState, obstacles: List[Obstacle]
     ) -> Tuple[MotionState, MotionState, Trajectory]:
         traj = Trajectory()
-        for obs in obstacles:
-            # Only static obstacles move the goal: where a robot will be by the time we
-            # arrive is a different question from where it is now.
-            if isinstance(obs, StaticObstacle) and obs.isCollidingAt(goal.position):
-                goal = MotionState(obs.adaptDestination(goal.position), goal.velocity)
 
-            # Escaping applies to every obstacle. Gated to static ones, a robot pressed
-            # against another robot had every candidate path collide at t=0, so the
-            # solver fell through to a stop and it stayed stuck there.
-            exit_point = self._escape_point(obs, start.position)
-            if exit_point is None:
-                continue
+        # Only static obstacles move the goal: where a robot will be by the time we
+        # arrive is a different question from where it is now.
+        static = [obs for obs in obstacles if isinstance(obs, StaticObstacle)]
+        goal_position, _ = self._clear_point(goal.position, static)
+        goal = MotionState(goal_position, goal.velocity)
 
+        # Escaping applies to every obstacle. Gated to static ones, a robot pressed
+        # against another robot had every candidate path collide at t=0, so the solver
+        # fell through to a stop and it stayed stuck there.
+        exit_point, reachable = self._clear_point(start.position, obstacles)
+        if not reachable:
+            # Nowhere satisfies every obstacle at once. Staying put is the safe answer:
+            # driving to one obstacle's preferred exit is how the robot ended up past
+            # the field border, and the collision check will fall through to a stop.
+            self.escape_failed = True
+            return start, goal, traj
+
+        self.escape_failed = False
+        if exit_point is not start.position and not exit_point.distance(start.position) < 1e-9:
             exit_state = MotionState(exit_point, start.velocity)
             escape = self.generator.generate(start, exit_state)
             traj.append(escape)
@@ -127,6 +171,7 @@ class Orchestrator:
             # Trajectory.append rejected and the planner logged as "Solver error" while
             # dropping the plan for that cycle.
             start = escape.get_local_destination()
+
         return start, goal, traj
 
     def _get_recovery_trajectory(self, current_state: MotionState) -> Trajectory:
