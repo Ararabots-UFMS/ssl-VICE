@@ -1,15 +1,16 @@
+import rclpy
+from rclpy.node import Node
+
 from movement_interfaces.msg import MovementCommandArray, TargetArray, Target
 from movement_interfaces.srv import SetStaticObstacles, SetGoalKeeper
 from system_interfaces.msg import GameState
 
-import rclpy
-from rclpy.node import Node
 
 class MovementManager(Node):
     def __init__(self):
-        super().__init__('MovementManager')
+        super().__init__('movement_manager')
 
-        self.get_logger().info('MovementManager node has been started.')
+        self.get_logger().info('movement_manager node has been started.')
 
         self._movement_command_sub = self.create_subscription(MovementCommandArray, 'movement_manager/commands', self.movement_command_callback, 10)
         self._game_state_sub = self.create_subscription(GameState, 'game_state', self.game_state_callback, 10)

@@ -1,6 +1,20 @@
+import sys
+from unittest.mock import MagicMock
+
+# Vector2D and the controller import rosidl-generated message types for their
+# to_msg/from_msg helpers, which these tests do not exercise; stubbing them keeps the
+# suite runnable without a full ROS2 build.
+for _name in ("movement_interfaces", "system_interfaces"):
+    if _name not in sys.modules:
+        _mock = MagicMock(name=_name)
+        sys.modules[_name] = _mock
+        sys.modules[_name + ".msg"] = _mock.msg
+
 import pytest
 
-from new_movement.entities.States import State, Vector2D
+from new_movement.entities.motion import MotionState
+
+from utils.math_util import Vector2D
 
 from control.pid_controller import (
     DEFAULT_SLEW_LIMIT,
@@ -105,22 +119,22 @@ class TestRobotTrajectoryController:
 
     def test_a_target_jump_resets_without_a_command_step(self):
         robot_controller = RobotTrajectoryController()
-        current = State(Vector2D(0.0, 0.0), Vector2D(1.0, 0.0))
+        current = MotionState(Vector2D(0.0, 0.0), Vector2D(1.0, 0.0))
 
-        near = State(Vector2D(1.0, 0.0), Vector2D(1.0, 0.0))
+        near = MotionState(Vector2D(1.0, 0.0), Vector2D(1.0, 0.0))
         for _ in range(20):
             robot_controller.compute_trajectory_command(1, near, current, DT)
 
         # Well past reset_threshold, so the controller resets.
-        far = State(Vector2D(-4.0, 0.0), Vector2D(0.0, 0.0))
+        far = MotionState(Vector2D(-4.0, 0.0), Vector2D(0.0, 0.0))
         command = robot_controller.compute_trajectory_command(1, far, current, DT)
 
         assert abs(command.x - current.velocity.x) <= DEFAULT_SLEW_LIMIT * DT + 1e-9
 
     def test_axes_are_controlled_independently(self):
         controller = Vector2DTrajectoryController()
-        target = State(Vector2D(0.0, 1.0), Vector2D(0.0, 0.5))
-        current = State(Vector2D(0.0, 0.0), Vector2D(0.0, 0.0))
+        target = MotionState(Vector2D(0.0, 1.0), Vector2D(0.0, 0.5))
+        current = MotionState(Vector2D(0.0, 0.0), Vector2D(0.0, 0.0))
 
         command = controller.compute_trajectory_following(target, current, DT)
 

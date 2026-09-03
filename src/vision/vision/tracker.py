@@ -1,7 +1,7 @@
-from vision.kalman_filter import KalmanFilterClass2D, KalmanFilterClass1D
+from vision.kalman_filter import ExtendedKalmanFilterClass2D, ExtendedKalmanFilterClass1D
 from system_interfaces.msg import VisionMessage
 from vision.proto.messages_robocup_ssl_wrapper_pb2 import SSL_WrapperPacket
-
+import time
 import numpy as np
 from typing import Optional, List
 
@@ -21,7 +21,7 @@ class ID():
     # Defining hash to use ID class as dict key in merge_trackers
     def __hash__(self):
         return hash((self.id, self.is_blue))
-    
+
     def __ne__(self, other):
         return not(self == other)
 
@@ -31,16 +31,45 @@ class Object(object):
     Tracked object class, mainly robots, but ball also.
     '''
 
-    def __init__(self, detections, Id: ID, confidence: float, orientation: Optional[float] = None):
+    def __init__(self, detections, Id: ID, confidence: float, orientation: Optional[float] = None,  friction: float = 0.01):
         self.prediction = np.asarray(detections)
         self.id = Id
         self.confidence = confidence
-        self.KF = KalmanFilterClass2D()
-        self.skip_count = 0
-        # Orientation buffer, orientation needs proper processing.
+        self.friction = friction
+        self.KF = ExtendedKalmanFilterClass2D(friction=self.friction)
+        self.last_seen = time.time()
+        self.last_prediction = self.last_seen
         self.orientation = orientation
-        self.orientation_KF = KalmanFilterClass1D()
+        self.orientation_KF = ExtendedKalmanFilterClass1D(friction=self.friction)
 
+        # Init the Kalman filter with the first detection. initialize() also widens the
+        # covariance: assigning the state alone leaves P = I, which claims a 1 mm/s
+        # confidence in a velocity that has never been measured and makes the filter
+        # ignore the first several frames of real motion.
+        self.KF.initialize(detections[0][0], detections[1][0])
+        if orientation is not None and not self.id.is_ball:
+            self.orientation_KF.initialize(orientation)
+
+    def update(self, x: float, y: float, confidence: float, orientation: Optional[float] = None):
+        z = np.matrix([[x], [y]])
+        self.prediction = self.KF.update(z)
+        if not self.id.is_ball and orientation is not None:
+            z_orientation = np.matrix([[orientation]])
+            self.orientation = self.orientation_KF.update(z_orientation)[0, 0]
+        self.confidence = confidence
+        self.last_seen = time.time()
+        self.last_prediction = self.last_seen
+
+    def predict(self):
+        now = time.time()
+        dt = now - self.last_prediction
+        if dt <= 0:
+            return
+        self.KF.predict(dt)
+        if not self.id.is_ball:
+            self.orientation_KF.predict(dt)
+        self.last_prediction = now
+            
 class ObjectTracker(object):
     '''
     Object tracker class. It handles the position and velocity of all the objects being detected.
@@ -58,119 +87,64 @@ class ObjectTracker(object):
     - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
     
     '''
-    def __init__(self, max_frame_skipped: int):
-        
-        self.max_frame_skipped = max_frame_skipped
-        self.objects_id = []
-        self.objects = []
-        # None until the first packet arrives. Starting at 0 made the first dt the
-        # whole Unix epoch, which blew the state up to ~1e17 mm for one frame.
-        self.last_time_stamp = None
-        # ROS-clock instant matching last_time_stamp, so consumers can age the data.
+    def __init__(self, max_time_undetected: float, friction: float = 0.01):
+        self.max_time_undetected = max_time_undetected
+        self.friction = friction
+        self.objects = {}
+        # Instant the current estimates refer to, in the ssl-vision camera clock.
+        # None until the first packet arrives, so consumers can tell "no data yet"
+        # from "data captured at t=0".
+        self.last_capture_stamp = None
+        # The same instant read from the ROS clock at packet arrival. Downstream this
+        # is the only one that can be differenced against "now" to age the estimates;
+        # capture_stamp is only comparable against itself.
         self.last_wall_stamp = 0.0
-        self.dt = 0.0
 
-    def update_object(self, object_: Object, x: float, y: float, confidence: float, orientation: Optional[float] = None) -> None:
-        # Predict position and velocity.
-        object_.prediction = object_.KF.update([[x], [y]])
+    def delete_undetected_objects(self, received_objects_id: List[ID]) -> None:
+        now = time.time()
+        for id, obj in list(self.objects.items()):
+            if id not in received_objects_id:
+                obj.confidence = 0
+                if now - obj.last_seen > self.max_time_undetected:
+                    del self.objects[id]
 
-        # Predict orientation if not ball.
-        if not object_.id.is_ball:
-            object_.orientantion = object_.orientation_KF.update(orientation)
-
-        object_.confidence = confidence
-
-        object_.skip_count = 0
-        
-    def add_object(self, id: ID, x: float, y: float, confidence: float, orientation: Optional[float] = None) -> None:
-        object_ = Object([[x], [y]], id, confidence, orientation = orientation)
-
-        # Seed the filters with this first detection instead of letting them start at
-        # the origin — otherwise a robot that has just been picked up is published
-        # metres away from where it actually is until the estimate converges.
-        object_.KF.initialize(x, y)
-        if not id.is_ball and orientation is not None:
-            object_.orientation_KF.initialize(orientation)
-
-        self.objects_id.append(id)
-        self.objects.append(object_)
-    
-    def delete_undetected_objects(self, recieved_objects_id: List[ID]) -> None:
-        # Walked backwards so the deletions don't shift the indexes still to be
-        # visited — the forward loop raised IndexError as soon as any robot stayed
-        # occluded for longer than max_frame_skipped.
-        for i in reversed(range(len(self.objects_id))):
-            if self.objects_id[i] not in recieved_objects_id:
-                if self.objects[i].skip_count > self.max_frame_skipped:
-                    del self.objects_id[i]
-                    del self.objects[i]
-                else:
-                    self.objects[i].skip_count += 1
-                    self.objects[i].confidence = 0
-            else:
-                self.objects[i].skip_count = 0
-        
-    def predict(self) -> None:
-        for object_ in self.objects:
-            object_.KF.predict(self.dt)
-            if not object_.id.is_ball:
-                object_.orientation_KF.predict(self.dt)
-                
-    def read_object_from_message(self, object_, is_ball, is_blue = None) -> ID:
+    def read_object_from_message(self, object_, is_ball, is_blue=None) -> ID:
         if is_ball:
-            id = ID(id = 0, is_ball = is_ball)
+            id = ID(id=0, is_ball=True)
             orientation = None
         else:
-            id = ID(object_.robot_id, is_ball = is_ball, is_blue = is_blue)
+            id = ID(object_.robot_id, is_ball=False, is_blue=is_blue)
             orientation = object_.orientation
-            
-        try:
-            index = self.objects_id.index(id)
-            self.update_object(self.objects[index], object_.x, object_.y, object_.confidence, orientation)
-        except ValueError:
-            self.add_object(id, object_.x, object_.y, object_.confidence, orientation)
-        
+
+        if id in self.objects:
+            self.objects[id].update(object_.x, object_.y, object_.confidence, orientation)
+        else:
+            self.objects[id] = Object([[object_.x], [object_.y]], id, object_.confidence, orientation=orientation, friction=self.friction)
+
         return id
 
-    def update(self, message: SSL_WrapperPacket, wall_stamp: float = 0.0) -> VisionMessage:
-        '''
-        Updates the position and velocity of objects based on the detections.
+    def update(self, message: SSL_WrapperPacket, wall_stamp: float = 0.0) -> None:
+        received_objects_id = []
 
-        Every filter is propagated from the previous capture instant to this one
-        BEFORE the new detections are fused in, so each measurement is compared
-        against a prior that covers exactly the interval that just elapsed. The old
-        order (fuse first, propagate afterwards) compared each measurement against a
-        prior stretched by the *previous* interval and left the published state
-        extrapolated one frame past its own timestamp.
-
-        wall_stamp is the ROS-clock reading at packet arrival; it labels the same
-        instant as t_capture in a clock the rest of the system can compare against.
-        '''
-        # TODO Implement a Hungarian algorithm to give the balls an id?
-        recieved_objects_id, time_stamp = [], message.detection.t_capture
-
-        # First packet has no previous stamp to difference against, so it only
-        # seeds the clock and propagates nothing.
-        self.dt = 0.0 if self.last_time_stamp is None else time_stamp - self.last_time_stamp
-        self.last_time_stamp = time_stamp
+        # Recorded before any filtering so the published estimates carry the instant
+        # they describe, not the instant they happened to be published.
+        self.last_capture_stamp = message.detection.t_capture
         self.last_wall_stamp = wall_stamp
 
-        self.predict()
+        for obj in self.objects.values():
+            obj.predict()
 
-        if message.detection.robots_yellow:
-            for yellow_robot in message.detection.robots_yellow:
-                robot_id = self.read_object_from_message(yellow_robot, is_ball = False, is_blue = False)
-                recieved_objects_id.append(robot_id)
-        
-        if message.detection.robots_blue:
-            for blue_robot in message.detection.robots_blue:
-                robot_id = self.read_object_from_message(blue_robot, is_ball = False, is_blue = True)
-                recieved_objects_id.append(robot_id)
-        
-        # Balls dont have ids, so will consider the first ball as the main ball and ignore the rest
-        # TODO Implement a way to consider the ball with highest confidence to be the main ball.
+        for yellow_robot in message.detection.robots_yellow:
+            robot_id = self.read_object_from_message(yellow_robot, is_ball=False, is_blue=False)
+            received_objects_id.append(robot_id)
+
+        for blue_robot in message.detection.robots_blue:
+            robot_id = self.read_object_from_message(blue_robot, is_ball=False, is_blue=True)
+            received_objects_id.append(robot_id)
+
         if message.detection.balls:
-            ball_id = self.read_object_from_message(message.detection.balls[0], is_ball = True)
-            recieved_objects_id.append(ball_id)
-                
-        self.delete_undetected_objects(recieved_objects_id)
+            best_ball = max(message.detection.balls, key=lambda b: b.confidence)
+            ball_id = self.read_object_from_message(best_ball, is_ball=True)
+            received_objects_id.append(ball_id)
+
+        self.delete_undetected_objects(received_objects_id)
