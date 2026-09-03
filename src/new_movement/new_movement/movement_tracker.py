@@ -111,7 +111,7 @@ class MovementTracker(Node):
         # Derived from the measured handoff latency (p95 ~50ms, max ~130ms) rather than
         # guessed: it has to cover the latency, and everything above that is extra
         # extrapolation the robot has to make good on.
-        self.declare_parameter("lookahead_time", 0.15)
+        self.declare_parameter("lookahead_time", 0.3)
         self.declare_parameter("improvement_threshold", 0.1)
         self.declare_parameter(
             "control_reference_topic", "movement_tracker/control_reference"
