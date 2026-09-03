@@ -40,3 +40,26 @@ class GenericCircleObstacle(StaticObstacle):
         dists_sq = np.einsum("ij,ij->i", diffs, diffs)
         
         return bool(np.any(dists_sq < self.radius ** 2))
+
+    def _check_segments(self, starts: np.ndarray, ends: np.ndarray) -> bool:
+        """
+        Exact segment-versus-disc test: the closest point of each segment to the centre
+        is within the radius. Closed form, so no subdivision is needed.
+        """
+        center = np.array([self.center.x, self.center.y])
+        direction = ends - starts                       # (N, 2)
+        to_start = starts - center                      # (N, 2)
+
+        length_sq = np.einsum("ij,ij->i", direction, direction)
+        projection = -np.einsum("ij,ij->i", to_start, direction)
+        # A zero-length segment is just its start point; the clip keeps the closest
+        # point on the segment rather than on the infinite line through it.
+        param = np.divide(
+            projection, length_sq, out=np.zeros_like(projection), where=length_sq > 0
+        )
+        np.clip(param, 0.0, 1.0, out=param)
+
+        offset = to_start + param[:, np.newaxis] * direction
+        dists_sq = np.einsum("ij,ij->i", offset, offset)
+
+        return bool(np.any(dists_sq < self.radius ** 2))

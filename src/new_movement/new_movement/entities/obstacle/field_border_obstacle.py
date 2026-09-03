@@ -133,3 +133,12 @@ class FieldBorderObstacle(StaticObstacle):
             & (ys < self.top_left_point.y)
         )
         return bool(np.any(~inside))
+
+    def _check_segments(self, starts: np.ndarray, ends: np.ndarray) -> bool:
+        """
+        Colliding here means leaving the field, and the playable area is a convex
+        rectangle: a segment stays inside exactly when both of its endpoints do. So
+        checking the two endpoints is already an exact sweep — unlike every other
+        obstacle, this shape never needed subdivision.
+        """
+        return self._check_positions(starts) or self._check_positions(ends)

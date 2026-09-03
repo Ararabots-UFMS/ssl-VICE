@@ -3,6 +3,7 @@ import numpy as np
 from new_movement.entities.obstacle.obstacle import Obstacle
 from new_movement.entities.motion.motion_state import MotionState
 from new_movement.entities.trajectory.trajectory import Trajectory
+from new_movement.entities.trajectory.trajectory_sampler import TrajectorySampler
 
 from utils.math_util import Vector2D
 
@@ -35,16 +36,70 @@ class AllyRobotObstacle(Obstacle):
 
         return False
 
+    def _ally_positions(self, times: np.ndarray) -> np.ndarray:
+        """
+        Where the ally is at each of ``times``, in one pass where possible.
+
+        A real Trajectory is flattened once and evaluated as arrays; anything else that
+        merely offers get_position (the documented contract for this class) still works
+        one instant at a time.
+        """
+        offsets = self.time_offset + np.asarray(times, dtype=float)
+        if offsets.size == 0:
+            return np.empty((0, 2))
+
+        root = getattr(self.trajectory, "root", None)
+        if root is not None:
+            return TrajectorySampler(root).positions(offsets)
+
+        points = [self.trajectory.get_position(float(t)) for t in offsets]
+        if any(p is None for p in points):
+            return np.empty((0, 2))
+        return np.array([[p.x, p.y] for p in points], dtype=float)
+
     def batch_collides(self, positions: np.ndarray, times: np.ndarray) -> bool:
-        r2 = self.radius ** 2
-        for i, t in enumerate(times):
-            p = self.trajectory.get_position(self.time_offset + float(t))
-            dx = positions[i, 0] - p.x
-            dy = positions[i, 1] - p.y
-            if dx * dx + dy * dy < r2:
-                return True
-        
-        return False
+        ally = self._ally_positions(times)
+        if ally.size == 0:
+            return False
+
+        offset = positions - ally
+        return bool(np.any(np.einsum("ij,ij->i", offset, offset) < self.radius ** 2))
+
+    def batch_collides_segments(
+        self,
+        starts: np.ndarray,
+        ends: np.ndarray,
+        t_starts: np.ndarray,
+        t_ends: np.ndarray,
+    ) -> bool:
+        """
+        Swept test against a moving ally.
+
+        Both bodies move over the interval, so neither endpoint alone says whether they
+        met: the pair can be apart at both ends and still cross in between. Taking both
+        as travelling in a straight line across the interval makes the separation linear
+        in time, and the closest approach is then the minimum of a quadratic, which is
+        the standard moving-circle test.
+        """
+        ally_start = self._ally_positions(t_starts)
+        ally_end = self._ally_positions(t_ends)
+        if ally_start.size == 0:
+            return False
+
+        initial = starts - ally_start                      # separation at t_start
+        relative = (ends - starts) - (ally_end - ally_start)  # closing motion over the step
+
+        speed_sq = np.einsum("ij,ij->i", relative, relative)
+        approach = -np.einsum("ij,ij->i", initial, relative)
+        # speed_sq == 0 means they hold station relative to each other; the separation is
+        # constant, so the start of the interval already answers it.
+        param = np.divide(
+            approach, speed_sq, out=np.zeros_like(approach), where=speed_sq > 0
+        )
+        np.clip(param, 0.0, 1.0, out=param)
+
+        closest = initial + param[:, np.newaxis] * relative
+        return bool(np.any(np.einsum("ij,ij->i", closest, closest) < self.radius ** 2))
 
     def adaptDestination(self, tarPosition: Vector2D, t: float) -> Vector2D:
         if not self.isCollidingAt(tarPosition, t):

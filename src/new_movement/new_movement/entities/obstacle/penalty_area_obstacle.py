@@ -150,13 +150,51 @@ class PenaltyAreaObstacle(StaticObstacle):
 
         return closest_corner
 
+    def _bounds(self) -> tuple:
+        return (
+            min(self.top_left_point.x, self.top_right_point.x),
+            max(self.top_left_point.x, self.top_right_point.x),
+            min(self.top_right_point.y, self.bot_right_point.y),
+            max(self.top_right_point.y, self.bot_right_point.y),
+        )
+
     def _check_positions(self, positions: np.ndarray) -> bool:
-        min_x = min(self.top_left_point.x, self.top_right_point.x)
-        max_x = max(self.top_left_point.x, self.top_right_point.x)
-        min_y = min(self.top_right_point.y, self.bot_right_point.y)
-        max_y = max(self.top_right_point.y, self.bot_right_point.y)
+        min_x, max_x, min_y, max_y = self._bounds()
 
         xs, ys = positions[:, 0], positions[:, 1]
         inside = (xs > min_x) & (xs < max_x) & (ys > min_y) & (ys < max_y)
         return bool(np.any(inside))
+
+    def _check_segments(self, starts: np.ndarray, ends: np.ndarray) -> bool:
+        """
+        Exact segment-versus-rectangle test by the slab method: clip the segment against
+        the x band and the y band, and it enters the area when the two surviving
+        parameter intervals overlap. Catches the corner clips that point sampling walks
+        straight over.
+        """
+        min_x, max_x, min_y, max_y = self._bounds()
+        direction = ends - starts
+
+        enter = np.zeros(len(starts))
+        exit_ = np.ones(len(starts))
+        misses = np.zeros(len(starts), dtype=bool)
+
+        for axis, low, high in ((0, min_x, max_x), (1, min_y, max_y)):
+            origin = starts[:, axis]
+            delta = direction[:, axis]
+            parallel = delta == 0.0
+
+            # Parallel to this slab: it can only ever enter if it already lies within it.
+            misses |= parallel & ((origin <= low) | (origin >= high))
+
+            safe = np.where(parallel, 1.0, delta)
+            t_low = (low - origin) / safe
+            t_high = (high - origin) / safe
+            near = np.where(parallel, 0.0, np.minimum(t_low, t_high))
+            far = np.where(parallel, 1.0, np.maximum(t_low, t_high))
+
+            enter = np.maximum(enter, near)
+            exit_ = np.minimum(exit_, far)
+
+        return bool(np.any(~misses & (enter < exit_)))
 

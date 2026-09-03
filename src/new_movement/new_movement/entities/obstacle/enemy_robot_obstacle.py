@@ -65,6 +65,64 @@ class EnemyRobotObstacle(Obstacle):
         
         return bool(np.any(dists_sq < self.radius ** 2))
 
+    def batch_collides_segments(
+        self,
+        starts: np.ndarray,
+        ends: np.ndarray,
+        t_starts: np.ndarray,
+        t_ends: np.ndarray,
+    ) -> bool:
+        """
+        Exact sweep of each path segment against the enemy tube.
+
+        The tube only grows with time, so the tube at the end of an interval contains
+        the tube at every instant within it; testing against that one is both correct
+        and conservative. What is left is the shortest distance between two segments —
+        ours and the tube's spine — compared against the radius.
+        """
+        start = np.array([self.robotState.position.x, self.robotState.position.y])
+        velocity = np.array([self.robotState.velocity.x, self.robotState.velocity.y])
+
+        horizon = np.minimum(t_ends, self.max_lookahead)
+        spine_ends = start + velocity * horizon[:, np.newaxis]
+
+        distances_sq = self._segment_distance_sq(
+            starts, ends, np.broadcast_to(start, spine_ends.shape), spine_ends
+        )
+        return bool(np.any(distances_sq < self.radius ** 2))
+
+    @staticmethod
+    def _segment_distance_sq(p0, p1, q0, q1) -> np.ndarray:
+        """Squared shortest distance between segments p0->p1 and q0->q1, elementwise."""
+        d1 = p1 - p0
+        d2 = q1 - q0
+        r = p0 - q0
+
+        a = np.einsum("ij,ij->i", d1, d1)
+        e = np.einsum("ij,ij->i", d2, d2)
+        f = np.einsum("ij,ij->i", d2, r)
+        b = np.einsum("ij,ij->i", d1, d2)
+        c = np.einsum("ij,ij->i", d1, r)
+
+        denominator = a * e - b * b
+        # Parallel or degenerate segments leave s free; anchoring it at 0 and letting the
+        # clamp below place t is the standard resolution and stays exact.
+        s = np.divide(
+            b * f - c * e, denominator, out=np.zeros_like(a), where=denominator > 1e-12
+        )
+        np.clip(s, 0.0, 1.0, out=s)
+
+        t = np.divide(b * s + f, e, out=np.zeros_like(a), where=e > 1e-12)
+        np.clip(t, 0.0, 1.0, out=t)
+
+        # Re-solve s for the clamped t so a clamped endpoint still gets its true closest
+        # point rather than the unconstrained one.
+        s = np.divide(b * t - c, a, out=np.zeros_like(a), where=a > 1e-12)
+        np.clip(s, 0.0, 1.0, out=s)
+
+        closest = (p0 + s[:, np.newaxis] * d1) - (q0 + t[:, np.newaxis] * d2)
+        return np.einsum("ij,ij->i", closest, closest)
+
     def adaptDestination(self, tarPosition: Vector2D, t: float) -> Vector2D:
         start_point = self._getPos()
         end_point = self._getPredictedPos(t)
