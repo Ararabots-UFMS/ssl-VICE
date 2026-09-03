@@ -1,3 +1,4 @@
+import pytest
 from new_movement.local_planner import Orchestrator, CollisionEngine
 from new_movement.local_planner.solver import PlanningStatus, SolverConfig
 from new_movement.entities.motion import MotionState
@@ -67,8 +68,11 @@ class TestOrchestrator:
             # current position.
             assert traj.root is not None
             dest = traj.get_destination()
-            assert dest.velocity.x == 0
-            assert dest.velocity.y == 0
+            # Approximate rather than exact: the recovery starts from where the escape
+            # segment actually ended, which is an integrated value, so the residual
+            # velocity is floating-point dust rather than a literal zero.
+            assert dest.velocity.x == pytest.approx(0.0, abs=1e-9)
+            assert dest.velocity.y == pytest.approx(0.0, abs=1e-9)
 
     def test_validate_continuity_empty_trajectory(self):
         planner = Orchestrator()

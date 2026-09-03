@@ -117,8 +117,16 @@ class Orchestrator:
                 continue
 
             exit_state = MotionState(exit_point, start.velocity)
-            traj.append(self.generator.generate(start, exit_state))
-            start = exit_state
+            escape = self.generator.generate(start, exit_state)
+            traj.append(escape)
+            # Carry on from where the escape actually ended, not from where it was
+            # aimed. Reaching a point a few centimetres away while still carrying the
+            # robot's current velocity is often not solvable, and the steering solver
+            # returns its nearest attempt. Chaining the next segment onto the requested
+            # state instead of the achieved one left a gap of a few centimetres, which
+            # Trajectory.append rejected and the planner logged as "Solver error" while
+            # dropping the plan for that cycle.
+            start = escape.get_local_destination()
         return start, goal, traj
 
     def _get_recovery_trajectory(self, current_state: MotionState) -> Trajectory:

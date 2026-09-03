@@ -26,6 +26,15 @@ from utils.math_util import Vector2D
 # velocity is worse than planning from it as it stands.
 MAX_VISION_AGE = 0.2
 
+# Leaving the goal takes more than arriving at it. accept_radius sits close to the
+# vision noise, so a bare threshold flips between arrived and not from one frame to the
+# next and replans on every flip; the robot has to drift this much further out before
+# planning resumes.
+PARK_RELEASE_FACTOR = 2.0
+
+# Two goals closer together than this are the same goal.
+GOAL_MOVED_EPSILON = 1.0
+
 
 class MovementPlanner(Node):
     def __init__(self):
@@ -38,7 +47,9 @@ class MovementPlanner(Node):
         # fresh one is always stamped in the future: any positive age is already stale.
         # At 0.5s the planner kept trusting a cache the tracker had stopped refreshing.
         self.declare_parameter('overhead_max_age', 0.05)
-        self.declare_parameter('accept_radius', 10)
+        # How close counts as arrived. 10mm was below the vision noise itself, so it
+        # was never satisfied and the planner kept issuing plans at the goal forever.
+        self.declare_parameter('accept_radius', 50.0)
         
         # MotionState
         self.cur_targets: Optional[TargetArray] = None
@@ -49,6 +60,9 @@ class MovementPlanner(Node):
         # than in Planner so the solver stays reentrant across the worker threads.
         self.last_vias: Dict[int, MotionState] = {}
         self._last_warned: Dict[str, float] = {}
+        # Goal each robot is currently parked at, so arrival can be latched instead of
+        # re-tested against a noisy measurement every cycle.
+        self._parked: Dict[int, Vector2D] = {}
         
         # Tools
         self.planner = Orchestrator()
@@ -142,6 +156,38 @@ class MovementPlanner(Node):
         )
         return MotionState(carried, velocity), now_sec
 
+    def _is_parked(self, robot_id: int, goal_pos: Vector2D, measured_pos: Vector2D) -> bool:
+        """
+        Whether the robot has arrived and should be left alone.
+
+        Nothing used to stop the planner at the goal. It kept producing plans, each one
+        a few centimetres long, and a plan that short is older than its own duration by
+        the time it reaches the tracker — so it was activated at its end, snapped the
+        reference, and pushed the robot off the point it had already reached. Then the
+        next cycle planned it back. That is the oscillation: the robot never settles
+        because arriving is what triggers the next plan.
+
+        Arrival is latched rather than re-tested each cycle, and released only once the
+        robot has drifted well clear, so a measurement sitting on the threshold cannot
+        start the cycle up again on its own.
+        """
+        radius = float(self.get_parameter('accept_radius').value)
+        parked_at = self._parked.get(robot_id)
+
+        if parked_at is not None and parked_at.distance(goal_pos) < GOAL_MOVED_EPSILON:
+            if measured_pos.distance(goal_pos) <= radius * PARK_RELEASE_FACTOR:
+                return True
+            # Drifted out far enough to be worth correcting.
+            del self._parked[robot_id]
+            return False
+
+        # A different goal than the one it parked at, so this is a new move.
+        self._parked.pop(robot_id, None)
+        if measured_pos.distance(goal_pos) <= radius:
+            self._parked[robot_id] = goal_pos
+            return True
+        return False
+
     def _warn_throttled(self, key: str, message: str, period: float = 2.0) -> None:
         """One line per key per period: this repeats at the planning rate while it lasts."""
         now_sec = self.get_clock().now().nanoseconds / 1e9
@@ -157,6 +203,15 @@ class MovementPlanner(Node):
         init_pos = Vector2D(target.initial_pos.x, target.initial_pos.y)
         init_vel = Vector2D(target.initial_vel.x, target.initial_vel.y)
 
+        goal_pos = Vector2D(target.target_pos.x, target.target_pos.y)
+
+        # Checked before anything else, and against the measured pose rather than the
+        # predicted one. The old test lived in the stale-overhead branch alone, so while
+        # the tracker kept the cache fresh — which is exactly what happens on arrival —
+        # the planner never asked whether it was already there.
+        if self._is_parked(robot_id, goal_pos, init_pos):
+            return None
+
         # handoff_stamp is the instant initial_state refers to, so the tracker starts the
         # plan at the right offset rather than at t=0 whenever it happens to arrive.
         if robot_id in self.cur_overhead_points:
@@ -170,11 +225,8 @@ class MovementPlanner(Node):
                 )
                 handoff_stamp = overhead_point.wall_stamp
             else:
-                # Stale overhead — check if robot is already at the goal
-                goal_pos = Vector2D(target.target_pos.x, target.target_pos.y)
-                if goal_pos.distance(init_pos) < float(self.get_parameter('accept_radius').value):
-                    return None  # already there, nothing to plan
-                # Far enough to be worth replanning from vision state
+                # Stale overhead: the cached prediction has aged out, so go back to what
+                # vision actually measured. Arrival was already ruled out above.
                 initial_state, handoff_stamp = self._state_from_vision(target)
         else:
             initial_state, handoff_stamp = self._state_from_vision(target)

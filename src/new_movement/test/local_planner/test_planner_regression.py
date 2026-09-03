@@ -542,3 +542,62 @@ class TestSamplerSpread:
 
         assert abs(point.x) <= 6000
         assert abs(point.y) <= 4500
+
+
+class TestEscapingDoesNotBreakContinuity:
+    """
+    Escaping an obstacle asks the steering solver to reach a point a few centimetres
+    away while still carrying the robot's current velocity, which is often not solvable.
+    It returns its nearest attempt, and chaining the next segment onto the requested
+    exit state rather than the achieved one left a gap Trajectory.append rejected. On
+    the field that surfaced as a burst of
+
+        Solver error for robot 1: Attempting to add a non continuous trajectory
+        (position gap 62.4, velocity gap 0.0)
+
+    with the plan dropped for every one of those cycles.
+    """
+
+    def _planner(self):
+        return Orchestrator()
+
+    def test_a_moving_robot_inside_an_obstacle_still_gets_a_plan(self):
+        planner = self._planner()
+        obstacle = GenericCircleObstacle(Vector2D(0, 0), 300, padding=0)
+        start = MotionState(Vector2D(50.0, 0.0), Vector2D(1200.0, 400.0))
+        goal = MotionState(Vector2D(3000.0, 1000.0), Vector2D(0.0, 0.0))
+
+        trajectory = planner.find(start, goal, [obstacle])
+
+        assert trajectory is not None
+        assert trajectory.root is not None
+
+    def test_the_safety_segments_stay_continuous(self):
+        """The precondition add_child enforces, checked directly along the chain."""
+        planner = self._planner()
+        obstacle = GenericCircleObstacle(Vector2D(0, 0), 300, padding=0)
+        start = MotionState(Vector2D(80.0, 40.0), Vector2D(900.0, -700.0))
+        goal = MotionState(Vector2D(2500.0, 0.0), Vector2D(0.0, 0.0))
+
+        trajectory = planner.find(start, goal, [obstacle])
+
+        node = trajectory.root
+        while node is not None and node.child is not None:
+            destination = node.get_local_destination()
+            assert destination.position.distance(node.child.init_pos) < 1e-3
+            assert destination.velocity.distance(node.child.init_vel) < 1e-3
+            node = node.child
+
+    def test_many_moving_starts_inside_an_obstacle_never_raise(self):
+        planner = self._planner()
+        obstacle = GenericCircleObstacle(Vector2D(0, 0), 400, padding=0)
+        goal = MotionState(Vector2D(3000.0, 0.0), Vector2D(0.0, 0.0))
+        rng = random.Random(17)
+
+        for _ in range(150):
+            start = MotionState(
+                Vector2D(rng.uniform(-350, 350), rng.uniform(-350, 350)),
+                Vector2D(rng.uniform(-1500, 1500), rng.uniform(-1500, 1500)),
+            )
+            trajectory = planner.find(start, goal, [obstacle])
+            assert trajectory is not None
