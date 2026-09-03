@@ -5,7 +5,7 @@ package_name = "new_movement"
 setup(
     name=package_name,
     version="0.0.0",
-    packages=find_packages(exclude=["test"]),
+    packages=find_packages(where=".", include=["new_movement", "new_movement.*"], exclude=["test"]),
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
@@ -20,9 +20,9 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            'driver = new_movement.driver:main',
-            'planner = new_movement.planner_node:main',
-            'tracker = new_movement.tracker_node:main',
+            'driver = new_movement.movement_path_driver:main',
+            'planner = new_movement.movement_planner:main',
+            'tracker = new_movement.movement_tracker:main',
             'manager = new_movement.movement_manager:main',
         ],
     },

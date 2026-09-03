@@ -1,4 +1,4 @@
-from new_movement.entities.States import Vector2D
+from utils.math_util import Vector2D
 from system_interfaces.msg._game_state import GameState
 from strategy.skills.skills import Skills
 from math import atan2, hypot

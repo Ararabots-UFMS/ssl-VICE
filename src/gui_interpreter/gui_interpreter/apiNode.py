@@ -10,6 +10,8 @@ from movement_interfaces.msg import GUITrajectories
 from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, RefereeMessage
 from system_interfaces.srv import ControlParams, SetKp, SetOrientation, StrategyCommand, UpdateObstacle
 from std_srvs.srv import SetBool
+from vision.vision_node import Vision
+from referee.referee_node import RefereeNode
 from new_movement.entities.trajectory import Trajectory
 
 app = Flask(__name__)

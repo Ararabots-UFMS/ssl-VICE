@@ -5,7 +5,7 @@ BLUE = "blue"
 YELLOW = "yellow"
 
 
-class MessageWrapping:
+class RefereeMessageWrapper:
     """Converts Referee protobuf message into a RefereeMessage ROS message."""
 
     def __init__(self, referee_message):
