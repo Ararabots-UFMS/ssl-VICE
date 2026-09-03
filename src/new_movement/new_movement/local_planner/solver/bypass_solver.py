@@ -92,6 +92,15 @@ class BypassSolver(BaseSolver):
         segment_1 = generator.generate(start, via_state)
         segment_2 = generator.generate(via_state, goal)
 
+        # The steering solver cannot produce a profile for every pair of states, and
+        # when it gives up it returns a zero-duration path parked at its own start.
+        # Chaining that raises out of add_child, and the exception travels all the way
+        # up to the planner node, which logs it and leaves the robot with no plan for
+        # the cycle. A via point we cannot actually steer to is just a candidate that
+        # did not work out, so drop it and let the search try the next sample.
+        if not self._reaches(segment_1, via_state):
+            return None
+
         if not self._is_safe(segment_1, obstacles) or not self._is_safe(segment_2, obstacles):
             return None
 
@@ -99,6 +108,20 @@ class BypassSolver(BaseSolver):
         trajectory = Trajectory(segment_1)
         trajectory.via_state = via_state
         return trajectory
+
+    @staticmethod
+    def _reaches(segment: TrajectorySegment, target: MotionState, tolerance: float = 1e-3) -> bool:
+        """
+        Whether a generated segment actually ends on the state it was asked for.
+
+        Deliberately the same comparison add_child makes, so a segment that passes here
+        is one it will accept.
+        """
+        destination = segment.get_local_destination()
+        return (
+            destination.position.distance(target.position) < tolerance
+            and destination.velocity.distance(target.velocity) < tolerance
+        )
 
     def _is_safe(self, segment: TrajectorySegment, obstacles: List[Obstacle]) -> bool:
         return not CollisionEngine.is_collision(

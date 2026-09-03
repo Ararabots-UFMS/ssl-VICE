@@ -67,19 +67,6 @@ class TestTrajectoryGeneratorRegression:
             ),
         )
 
-    @pytest.mark.xfail(
-        reason=(
-            "Known bug in trapezoidal_steering, not in the constraint signs this class "
-            "guards. When one axis finishes a hair short of the other, MultiAxisSolver "
-            "stretches it with TrapezoidalSolver.scaled and then hard_stop_wait; for "
-            "sub-millisecond shortfalls both return [], the empty control propagates "
-            "through ControlMerger.scalar_axes, and generate() yields a zero-duration "
-            "path that never leaves the start. Affects ~8% of random start/goal pairs. "
-            "Fixing it means reworking the bang-bang stretch, so it is tracked "
-            "separately rather than in this merge."
-        ),
-        strict=False,
-    )
     def test_generated_trajectories_reach_the_goal(self, planner_generator):
         generator, config = planner_generator
         rng = random.Random(0)

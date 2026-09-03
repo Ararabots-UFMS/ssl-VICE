@@ -7,6 +7,12 @@ from new_movement.trapezoidal_steering import BangBangSolver
 class TrapezoidalSolver:
     """Builds bounded profiles from bang-bang primitives."""
 
+    # How far a stretched profile may sit from the duration it was asked for. The axes
+    # are merged at their shared boundaries and clipped to the shortest, so anything
+    # looser than this quietly trims the end off the longer axis. At 2000 mm/s this is
+    # two microns of travel.
+    duration_tolerance = 1.0e-6
+
     def __init__(self, bang_bang=None, time_epsilon=1.0e-7):
         self.bang_bang = bang_bang or BangBangSolver(time_epsilon)
         self.time_epsilon = time_epsilon
@@ -67,3 +73,51 @@ class TrapezoidalSolver:
         if scaled and vmin - self.time_epsilon <= iv + scaled[0][0] * scaled[0][1] <= vmax + self.time_epsilon:
             return scaled
         return self.hard_stop_wait(ix, iv, gx, gv, final_time, umin, umax, vmin, vmax)
+
+    def stretched(self, ix, iv, gx, gv, final_time, umin=-1.0, umax=1.0, vmin=-1.0, vmax=1.0, iterations=60):
+        """
+        Make a profile last exactly final_time by using less of the acceleration
+        available, keeping its shape.
+
+        Neither of the other two stretches can lengthen a velocity-limited profile by a
+        small amount. A two-phase bang-bang that covers the same distance in the same
+        time has to peak above the velocity cap, so scaled() throws it out; hard_stop_wait
+        brakes to a standstill and re-accelerates from rest, which costs more time than
+        was on offer. Both then return nothing, and an axis with no control at all
+        collapses the whole merged path to zero duration.
+
+        Duration falls as the acceleration authority rises, so bisecting on that
+        authority converges on final_time. The profile is still built by optimal(), so
+        the velocity bounds keep being enforced.
+
+        Duration is not continuous in the authority everywhere: optimal() switches
+        between a bounded trapezoid and a plain bang-bang, and the duration steps across
+        that switch, so for some inputs no authority gives exactly final_time. Returning
+        the closest one would be worse than returning nothing, because ControlMerger
+        truncates every axis to the shortest and a profile that runs long silently loses
+        its tail — the robot would be handed a path that stops short of the goal instead
+        of no path at all. So an unconverged search reports failure and leaves the
+        caller with the empty result it would have had anyway.
+        """
+        low, high = 0.0, 1.0
+        best = []
+        for _ in range(iterations):
+            authority = 0.5 * (low + high)
+            profile = self.optimal(ix, iv, gx, gv, umin * authority, umax * authority, vmin, vmax)
+            if not profile:
+                # Too little authority to reach the goal at all; the answer is above this.
+                low = authority
+                continue
+            duration = self.duration(profile)
+            if fabs(duration - final_time) <= self.duration_tolerance:
+                return profile
+            if duration >= final_time:
+                # Slow enough, so it is a usable answer and more authority is affordable.
+                best = profile
+                low = authority
+            else:
+                high = authority
+
+        if best and fabs(self.duration(best) - final_time) <= self.duration_tolerance:
+            return best
+        return []

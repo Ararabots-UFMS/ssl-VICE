@@ -29,8 +29,30 @@ class MultiAxisSolver:
             duration = self.merger.duration(control)
             if duration >= target_time - self.time_epsilon:
                 continue
-            stretched = self.planner.scaled(xinit[index], xinit[dimension + index], xgoal[index], xgoal[dimension + index], target_time, umin[index], umax[index], vmin[index], vmax[index])
-            controls[index] = stretched or self.planner.hard_stop_wait(xinit[index], xinit[dimension + index], xgoal[index], xgoal[dimension + index], target_time, umin[index], umax[index], vmin[index], vmax[index])
+            arguments = (
+                xinit[index],
+                xinit[dimension + index],
+                xgoal[index],
+                xgoal[dimension + index],
+                target_time,
+                umin[index],
+                umax[index],
+                vmin[index],
+                vmax[index],
+            )
+            stretched = self.planner.scaled(*arguments)
+            if not stretched:
+                stretched = self.planner.hard_stop_wait(*arguments)
+            if not stretched:
+                # Neither of those can lengthen a velocity-limited profile by a small
+                # amount: one has to break the velocity cap to do it, the other brakes to
+                # a standstill and cannot make the time back up. Easing off the
+                # acceleration instead keeps the profile and costs only the milliseconds
+                # asked for. Without this the axis ends up with no control at all, which
+                # takes the merged path to zero duration and leaves the robot with
+                # nothing to follow on ~8% of goals.
+                stretched = self.planner.stretched(*arguments)
+            controls[index] = stretched
         return self.merger.scalar_axes(controls)
 
     def time_optimal_2d(self, xinit, xgoal, umin=(-1, -1), umax=(1, 1), vmin=(-1, -1), vmax=(1, 1)):
