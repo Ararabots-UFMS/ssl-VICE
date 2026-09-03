@@ -1,7 +1,9 @@
 import rclpy
-from movement_interfaces.msg import TrajectoryPoint as TrajectoryPointMsg
-from new_movement.entities.States import State, Vector2D
 from rclpy.node import Node
+
+from new_movement.entities.motion import MotionState
+
+from utils.math_util import Vector2D
 
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
@@ -13,6 +15,7 @@ from system_interfaces.srv import (
     SetOrientation,
     UpdateKick,
 )
+from movement_interfaces.msg import TrajectoryPoint as TrajectoryPointMsg
 
 
 class Controller(Node):
@@ -126,11 +129,11 @@ class Controller(Node):
                 continue
 
             cur = self.ally_robots[rid]
-            cur_state = State(
+            cur_state = MotionState(
                 Vector2D(cur.position_x / 1000.0, cur.position_y / 1000.0),
                 Vector2D(cur.velocity_x / 1000.0, cur.velocity_y / 1000.0),
             )
-            tgt_state = State(
+            tgt_state = MotionState(
                 Vector2D(ref.pos.x / 1000.0, ref.pos.y / 1000.0),
                 Vector2D(ref.vel.x / 1000.0, ref.vel.y / 1000.0),
             )

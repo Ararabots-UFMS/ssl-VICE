@@ -8,7 +8,7 @@ def generate_launch_description():
             Node(
                package="vision",
                executable="visionNode",
-               parameters=[{"ip": "224.5.23.2", "port": 10020, "verbose": False}],
+               parameters=[{"ip": "224.5.23.2", "port": 10020}],
             ),
             Node(
                 package="control_unit",
@@ -17,6 +17,10 @@ def generate_launch_description():
             Node(
                 package="control",
                 executable="controller",
+            ),
+            Node(
+                package="new_movement",
+                executable="driver",
             ),
             Node(
                 package="new_movement",
@@ -34,30 +38,17 @@ def generate_launch_description():
                 package="grsim_messenger",
                 executable="grsim_publisher_node",
             ),
-            #Node(
-            #    package="strategy",
-            #    executable="strategyNode",
-            #),
+            Node(
+               package="strategy",
+               executable="strategyNode",
+            ),
             Node(
                 package="gui_interpreter",
                 executable="apiNode",
             ),
-            # Node(
-            #      package="referee",
-            #      executable="referee_node",
-            #      parameters=[{"forward_port": 10003, "verbose": False}],
-            #  ),
-            # Node(
-            #      package="strategy_command_gui",
-            #      executable="strategy_gui"
-            # ),
-            #Node(
-            #    package="manual_command",
-            #    executable="manual_node",
-            #),
-            #Node(
-            #     package="hardware_messenger",
-            #     executable="hardware"
-            #)
+            Node(
+                 package="referee",
+                 executable="referee_node",
+             )
         ]
     )
