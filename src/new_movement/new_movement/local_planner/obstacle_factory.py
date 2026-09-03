@@ -22,6 +22,22 @@ class ObstacleFactory:
         if self.logger is not None:
             self.logger.warn(message)
 
+    @staticmethod
+    def _as_robot_list(robots) -> list:
+        """
+        Accept either a Robots[] sequence or an {id: Robots} mapping.
+
+        movement_planner and movement_optimizer forward GameState's lists straight
+        through, while movement_path_driver keeps its own dicts keyed by id. Both call
+        shapes are live in the tree and neither failed loudly: indexing a list by a
+        Robots message raised TypeError out of the factory and cost the robot its plan,
+        and iterating a dict handed the enemy loop bare integer keys, so every enemy was
+        logged away and the robot planned as though the field were empty.
+        """
+        if isinstance(robots, dict):
+            return list(robots.values())
+        return list(robots or [])
+
     def create_obstacles(
         self,
         robot_id: int,
@@ -68,7 +84,7 @@ class ObstacleFactory:
                 self._warn(f"Could not build the ball obstacle: {e}")
 
         # 5. Enemy Robots (Always on)
-        for enemy in enemy_robots:
+        for enemy in self._as_robot_list(enemy_robots):
             try:
                 state = MotionState(
                     Vector2D(enemy.position_x, enemy.position_y),
@@ -80,8 +96,8 @@ class ObstacleFactory:
                 self._warn(f"Could not build the obstacle for enemy robot: {e}")
 
         # 6. Ally Robots (With Trajectory Support)
-        for ally_id in ally_robots:
-            ally_data = ally_robots[ally_id]
+        for ally_data in self._as_robot_list(ally_robots):
+            ally_id = ally_data.id
             if ally_id == robot_id:
                 continue  # Self-exclusion
 
@@ -110,6 +126,6 @@ class ObstacleFactory:
                     # Fallback if no tracker info available
                     obstacles.append(EnemyRobotObstacle(state, radius=200))
             except Exception as e:
-                self._warn(f"Could not build the obstacle for ally robot {a_id}: {e}")
+                self._warn(f"Could not build the obstacle for ally robot {ally_id}: {e}")
 
         return obstacles
