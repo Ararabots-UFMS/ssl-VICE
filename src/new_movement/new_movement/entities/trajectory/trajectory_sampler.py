@@ -95,3 +95,36 @@ class TrajectorySampler:
         return np.column_stack(
             (self._vx[idx] + self._ax[idx] * dt, self._vy[idx] + self._ay[idx] * dt)
         )
+
+    def position_bounds(self) -> tuple:
+        """
+        Exact axis-aligned box the trajectory stays inside, as (min_x, min_y, max_x,
+        max_y).
+
+        Sampling to find the extent would only bound the samples; each primitive is a
+        parabola, so its extremes on an axis are at the two endpoints or at the vertex
+        where that axis' velocity crosses zero, and the vertex only counts when it
+        falls inside the primitive. ``positions`` clamps out-of-range times onto the
+        endpoints, so this bounds every query the sampler can answer.
+        """
+        starts = self._t0
+        durations = np.empty_like(starts)
+        durations[:-1] = np.diff(starts)
+        durations[-1] = max(self.duration - starts[-1], 0.0)
+
+        def axis_extent(p, v, a):
+            end = p + v * durations + 0.5 * a * durations ** 2
+            low = np.minimum(p, end)
+            high = np.maximum(p, end)
+
+            # Vertex of the parabola, kept only where it lies within the primitive.
+            vertex_time = np.divide(-v, a, out=np.full_like(v, -1.0), where=a != 0.0)
+            inside = (vertex_time > 0.0) & (vertex_time < durations)
+            vertex = p + v * vertex_time + 0.5 * a * vertex_time ** 2
+            low = np.where(inside, np.minimum(low, vertex), low)
+            high = np.where(inside, np.maximum(high, vertex), high)
+            return float(low.min()), float(high.max())
+
+        min_x, max_x = axis_extent(self._px, self._vx, self._ax)
+        min_y, max_y = axis_extent(self._py, self._vy, self._ay)
+        return (min_x, min_y, max_x, max_y)

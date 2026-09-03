@@ -91,6 +91,15 @@ class EnemyRobotObstacle(Obstacle):
         )
         return bool(np.any(distances_sq < self.radius ** 2))
 
+    def bounds(self) -> tuple:
+        """The swept tube over the full lookahead, grown by the radius."""
+        x0 = self.robotState.position.x
+        y0 = self.robotState.position.y
+        x1 = x0 + self.robotState.velocity.x * self.max_lookahead
+        y1 = y0 + self.robotState.velocity.y * self.max_lookahead
+        r = self.radius
+        return (min(x0, x1) - r, min(y0, y1) - r, max(x0, x1) + r, max(y0, y1) + r)
+
     @staticmethod
     def _segment_distance_sq(p0, p1, q0, q1) -> np.ndarray:
         """Squared shortest distance between segments p0->p1 and q0->q1, elementwise."""

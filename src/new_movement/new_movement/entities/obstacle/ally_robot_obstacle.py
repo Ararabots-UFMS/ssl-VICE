@@ -57,6 +57,21 @@ class AllyRobotObstacle(Obstacle):
             return np.empty((0, 2))
         return np.array([[p.x, p.y] for p in points], dtype=float)
 
+    def bounds(self) -> tuple | None:
+        """
+        The box the ally's own trajectory stays inside, grown by the radius.
+
+        Only a real Trajectory can answer this; anything merely offering get_position
+        declines to be bounded and keeps being tested the long way.
+        """
+        root = getattr(self.trajectory, "root", None)
+        if root is None:
+            return None
+
+        min_x, min_y, max_x, max_y = TrajectorySampler(root).position_bounds()
+        r = self.radius
+        return (min_x - r, min_y - r, max_x + r, max_y + r)
+
     def batch_collides(self, positions: np.ndarray, times: np.ndarray) -> bool:
         ally = self._ally_positions(times)
         if ally.size == 0:

@@ -60,6 +60,19 @@ class Obstacle(ABC):
                 return True
         return False
 
+    def bounds(self) -> tuple | None:
+        """
+        Conservative axis-aligned box holding everything this obstacle can occupy over
+        its whole horizon, as (min_x, min_y, max_x, max_y), or None when the occupied
+        region cannot be bounded (the field border occupies the outside of a rectangle,
+        which no finite box contains).
+
+        Used only as a broad-phase reject: a path whose own box misses this one cannot
+        touch the obstacle, so the swept test is skipped. Returning None costs nothing
+        but the check. Being too generous is safe; being too tight is not.
+        """
+        return None
+
     @abstractmethod
     def adaptDestination(self, tarPosition: Vector2D) -> Vector2D:
         """

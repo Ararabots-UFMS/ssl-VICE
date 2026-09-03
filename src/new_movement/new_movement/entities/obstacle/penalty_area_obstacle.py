@@ -165,6 +165,10 @@ class PenaltyAreaObstacle(StaticObstacle):
             max(self.top_right_point.y, self.bot_right_point.y),
         )
 
+    def bounds(self) -> tuple:
+        min_x, max_x, min_y, max_y = self._bounds()
+        return (min_x, min_y, max_x, max_y)
+
     def _check_positions(self, positions: np.ndarray) -> bool:
         min_x, max_x, min_y, max_y = self._bounds()
 

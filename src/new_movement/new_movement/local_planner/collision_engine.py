@@ -5,6 +5,12 @@ from new_movement.entities.trajectory.trajectory_segment import TrajectorySegmen
 from new_movement.entities.trajectory.trajectory_sampler import TrajectorySampler
 from new_movement.entities.obstacle.obstacle import Obstacle
 
+# Slack on the broad-phase box comparison, in mm. A box is computed by different
+# arithmetic than the sweep it stands in for, so the two can disagree in the last bit
+# or so on a path that grazes a boundary. Rejections are the only irreversible answer
+# the broad phase gives, so ties resolve toward running the sweep.
+BROAD_PHASE_MARGIN = 1.0e-6
+
 
 class CollisionEngine:
     @staticmethod
@@ -43,10 +49,30 @@ class CollisionEngine:
         starts, ends = positions[:-1], positions[1:]
         t_starts, t_ends = times[:-1], times[1:]
 
-        return any(
-            obs.batch_collides_segments(starts, ends, t_starts, t_ends)
-            for obs in obstacles
-        )
+        # Broad phase. Most obstacles on a full 11v11 field are nowhere near any given
+        # candidate path, and the swept test still costs a handful of numpy passes over
+        # every segment to establish that. Comparing two axis-aligned boxes first is a
+        # few float comparisons and rejects the great majority of them. A box that
+        # contains the obstacle and misses the box containing the path proves there is
+        # no collision, so this only skips work, never a real hit; an obstacle that
+        # cannot bound itself returns None and is always tested.
+        path_min_x, path_min_y = positions.min(axis=0)
+        path_max_x, path_max_y = positions.max(axis=0)
+
+        for obs in obstacles:
+            box = obs.bounds()
+            if box is not None:
+                min_x, min_y, max_x, max_y = box
+                if (
+                    max_x < path_min_x - BROAD_PHASE_MARGIN
+                    or min_x > path_max_x + BROAD_PHASE_MARGIN
+                    or max_y < path_min_y - BROAD_PHASE_MARGIN
+                    or min_y > path_max_y + BROAD_PHASE_MARGIN
+                ):
+                    continue
+            if obs.batch_collides_segments(starts, ends, t_starts, t_ends):
+                return True
+        return False
 
     @staticmethod
     def _sample_positions(trajectory, times):

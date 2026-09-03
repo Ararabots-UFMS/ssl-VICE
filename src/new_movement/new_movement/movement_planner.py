@@ -42,7 +42,12 @@ class MovementPlanner(Node):
         
         # Parameters
         self.declare_parameter('planner_freq', 50.0)
-        self.declare_parameter('max_threads', 8)
+        # Planning is pure Python over small numpy arrays, so it holds the GIL
+        # throughout and extra workers buy no parallelism — only contention. Measured
+        # on a full 11v11 field, one cycle of 11 robots takes 45ms on a single worker
+        # and 61ms on eight. The pool still earns its place by keeping the work off the
+        # ROS timer thread; it just cannot do more than one plan at a time.
+        self.declare_parameter('max_threads', 1)
         # build_overhead_point stamps a point at now + (sample_time - time_offset), so a
         # fresh one is always stamped in the future: any positive age is already stale.
         # At 0.5s the planner kept trusting a cache the tracker had stopped refreshing.

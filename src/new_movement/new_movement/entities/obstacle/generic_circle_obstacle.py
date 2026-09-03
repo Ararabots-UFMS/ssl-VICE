@@ -34,6 +34,14 @@ class GenericCircleObstacle(StaticObstacle):
 
         return self.center.add(center_to_target.multiplyByScalar(self.radius + margin))
 
+    def bounds(self) -> tuple:
+        return (
+            self.center.x - self.radius,
+            self.center.y - self.radius,
+            self.center.x + self.radius,
+            self.center.y + self.radius,
+        )
+
     def _check_positions(self, positions: np.ndarray) -> bool:
         center = np.array([self.center.x, self.center.y])
         diffs = positions - center
