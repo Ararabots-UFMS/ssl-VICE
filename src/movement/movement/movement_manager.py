@@ -23,8 +23,6 @@ class MovementManager(Node):
 
         self._robots = None
         self._vision_stamp = 0.0
-        # Global overrides, both optional. Each command carries its own planning
-        # options; these only force a choice on top of them.
         self._static_obstacles = None
         self._goal_keeper_id = None
 

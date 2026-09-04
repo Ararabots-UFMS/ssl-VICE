@@ -55,14 +55,7 @@ def tracking_error(
     measured_pos: Vector2D,
     measurement_age: float,
 ) -> Optional[Tuple[float, float]]:
-    """
-    Along- and cross-track error at the instant the measurement was taken.
-
-    The reference is evaluated measurement_age seconds back so the vision delay is not
-    counted as tracking error. Along-track is signed: negative means the robot is behind
-    its reference. The instant is clamped into the trajectory, not rejected: a plan
-    stamped from vision activates at an offset equal to that measurement's own age.
-    """
+    """ Along- and cross-track error at the instant the measurement was taken. """
     duration = trajectory.get_total_duration()
     t_meas = min(max(time_offset - measurement_age, 0.0), duration)
 
@@ -104,17 +97,12 @@ class MovementTracker(Node):
     def __init__(self):
         super().__init__("movement_tracker")
 
-        # Covers the measured handoff latency (p95 ~50ms, max ~130ms); anything above
-        # that is extrapolation the robot has to make good on.
         self.declare_parameter("lookahead_time", 0.3)
         self.declare_parameter("improvement_threshold", 0.1)
         self.declare_parameter(
             "control_reference_topic", "movement_tracker/control_reference"
         )
         self.declare_parameter('change_radius', 10)
-        # Healthy tracking transients reach ~350mm, so 400mm is a real departure rather
-        # than a bad frame. Entry and exit are asymmetric: quick to distrust the
-        # prediction, slow to trust it again.
         self.declare_parameter('divergence_radius', 400.0)
         self.declare_parameter('divergence_frames', 3)
         self.declare_parameter('recovery_frames', 10)
@@ -144,8 +132,6 @@ class MovementTracker(Node):
         self.get_logger().info("TrackerNode ONLINE")
 
     def game_state_callback(self, msg: GameState):
-        # Sampled here rather than in the timer so there is one measurement per vision
-        # frame, not one per tracker tick over the same stale frame.
         now_sec = self.get_clock().now().nanoseconds / 1e9
         measurement_age = now_sec - msg.vision_wall_stamp
 
@@ -170,14 +156,7 @@ class MovementTracker(Node):
                 self._update_divergence(robot.id, error)
 
     def _update_divergence(self, robot_id: int, error: Tuple[float, float]) -> None:
-        """
-        Flags a robot that is no longer on the path it was given.
-
-        The plan it follows was built from a prediction that has stopped describing it,
-        so every plan built on top of that one is wrong too. Suppressing the overhead
-        point (see _update_active_trajectory) breaks the cycle: the planner's cached
-        point ages out and it falls back to the measured state.
-        """
+        """ Flags a robot that is no longer on the path it was given. """
         radius = float(self.get_parameter('divergence_radius').value)
         enter_after = int(self.get_parameter('divergence_frames').value)
         leave_after = int(self.get_parameter('recovery_frames').value)
@@ -300,14 +279,12 @@ class MovementTracker(Node):
         if control_ref is not None:
             self.control_reference_pub.publish(control_ref)
 
-        # Already at the goal: the reference above still had to go out, but there is
-        # nothing left to predict or advance.
+        # Already at the goal
         if total_duration <= 0:
             return
 
-        # Publish Overhead Point, unless the robot is off its path — then the planner's
-        # cached point ages out and it replans from the measured state. Only the point
-        # is withheld; the offset below keeps advancing either way.
+        # Publish Overhead Point, unless the robot is off its path, then the planner's
+        # cached point ages out and it replans from the measured state.
         diverged = self._diverged.get(robot_id, False)
         if time_offset < total_duration and not diverged:
             overhead_point = build_overhead_point(
@@ -345,27 +322,6 @@ class MovementTracker(Node):
             return
 
         pending_traj = pending["trajectory"]
-        duration = pending_traj.get_total_duration()
-
-        # Clamped, not discarded: a late plan still ends at the current goal, while the
-        # one it replaces ends at the old one.
-        if new_offset >= duration:
-            # A plan shorter than the planning latency always arrives past its own end.
-            # That is what the clamp is for, not a fault, so only longer plans warn.
-            if duration > lookahead:
-                self._warn_throttled(
-                    f"elapsed-{robot_id}",
-                    f"Handoff for robot {robot_id} arrived {dt_late:.3f}s late, past its "
-                    f"{duration:.3f}s duration — activating at the goal",
-                    now_sec,
-                )
-        elif handoff_stamp != 0.0 and dt_late > lookahead:
-            self._warn_throttled(
-                f"late-{robot_id}",
-                f"Late handoff for robot {robot_id}: {dt_late:.3f}s "
-                f"(lookahead was {lookahead:.3f}s)",
-                now_sec,
-            )
 
         data["trajectory"] = pending_traj
         data["trajectory_msg"] = pending["trajectory_msg"]
@@ -374,22 +330,8 @@ class MovementTracker(Node):
         )
         data["pending"] = None
 
-        # Deliberately leaves the divergence streaks alone: while diverged, plans
-        # arrive faster than the recovery streak can accumulate, so resetting them here
-        # latched the flag on. The error is recomputed every frame regardless.
-
     def _reprojected_offset(self, robot_id, trajectory, dt_late, now_sec):
-        """
-        The offset along this plan whose reference best matches where the robot is.
-
-        dt_late alone assumes the robot spent that long following this plan, which only
-        holds for a plan built from its own prediction. For one built from a measured
-        state, or a recovery stop, the opening stretch describes motion the robot never
-        made, and starting dt_late in puts the reference up to half a metre off.
-
-        Searched over [0, dt_late] only: past that is the future of a plan that has not
-        run yet, and the reference must never lead the robot by more than elapsed time.
-        """
+        """ The offset along this plan whose reference best matches where the robot is. """
         duration = trajectory.get_total_duration()
         upper = min(max(dt_late, 0.0), duration)
         if upper <= 0.0:
@@ -417,13 +359,6 @@ class MovementTracker(Node):
                 best_offset, best_distance = offset, distance
 
         return best_offset
-
-    def _warn_throttled(self, key: str, message: str, now_sec: float, period: float = 2.0):
-        """One line per key per period: these conditions repeat at the planning rate."""
-        if now_sec - self._last_warned.get(key, float("-inf")) < period:
-            return
-        self._last_warned[key] = now_sec
-        self.get_logger().warn(message)
 
     def _update_gui_trajectories(self):
         msg = GUITrajectories()

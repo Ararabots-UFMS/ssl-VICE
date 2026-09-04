@@ -22,13 +22,7 @@ class CollisionEngine:
         Swept collision check against the sampled trajectory.
 
         The trajectory is reduced to a polyline and obstacles are asked about the
-        connecting segments, not the sample points: checking points alone missed ~5% of
-        grazing collisions at the step sizes this planner uses.
-
-        time_step therefore sets how closely the polyline follows the real curve. The
-        residual is the chord-to-parabola gap, acceleration * dt^2 / 8; past ~0.04s that
-        starts producing misses and false alarms, and cost per check is flat in the step
-        count anyway.
+        connecting segments, time_step therefore sets how closely the polyline follows the real curve.
         """
         sampler = TrajectorySampler(trajectory)
         duration = sampler.duration
@@ -45,9 +39,7 @@ class CollisionEngine:
         t_starts, t_ends = times[:-1], times[1:]
 
         # Broad phase: most obstacles on a full field are nowhere near a given path,
-        # and two box comparisons reject them for a fraction of the swept test. A box
-        # that misses cannot contain a hit, so this only ever skips work; an obstacle
-        # that cannot bound itself returns None and is always tested.
+        # and two box comparisons reject them for a fraction of the swept test.
         path_min_x, path_min_y = positions.min(axis=0)
         path_max_x, path_max_y = positions.max(axis=0)
 

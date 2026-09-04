@@ -21,17 +21,9 @@ from system_interfaces.msg import GameState
 
 from utils.math_util import Vector2D
 
-# Beyond this, vision has stopped arriving and carrying the pose forward on its last
-# velocity is worse than planning from it as it stands.
-MAX_VISION_AGE = 0.2
-
-# Leaving the goal takes more than arriving at it: accept_radius sits close to the
-# vision noise, so a bare threshold would flip between arrived and not every frame.
 PARK_RELEASE_FACTOR = 2.0
-
-# Two goals closer together than this are the same goal.
 GOAL_MOVED_EPSILON = 1.0
-
+MAX_VISION_AGE = 0.2
 
 class MovementPlanner(Node):
     def __init__(self):
@@ -39,13 +31,8 @@ class MovementPlanner(Node):
         
         # Parameters
         self.declare_parameter('planner_freq', 50.0)
-        # Planning holds the GIL throughout, so extra workers buy contention rather
-        # than parallelism: 11 robots take 45ms on one worker and 61ms on eight. The
-        # pool earns its place only by keeping the work off the ROS timer thread.
         self.declare_parameter('max_threads', 1)
-        # Overhead points are stamped ahead of now, so any positive age is stale.
         self.declare_parameter('overhead_max_age', 0.05)
-        # How close counts as arrived. Has to sit above the vision noise.
         self.declare_parameter('accept_radius', 50.0)
         
         # MotionState
@@ -53,12 +40,8 @@ class MovementPlanner(Node):
         self.cur_overhead_points: Dict[int, TrajectoryPointMsg] = {}
         self.game_state: Optional[GameState] = None
         self.active_futures: Dict[int, any] = {} # Track running tasks per robot
-        # Last via point per robot, warm-starting the bypass solver. Held here rather
-        # than in the Orchestrator so it stays reentrant across the worker threads.
         self.last_vias: Dict[int, MotionState] = {}
         self._last_warned: Dict[str, float] = {}
-        # Goal each robot is parked at, so arrival is latched rather than re-tested
-        # against a noisy measurement every cycle.
         self._parked: Dict[int, Vector2D] = {}
         
         # Tools
@@ -130,13 +113,6 @@ class MovementPlanner(Node):
         return callback
 
     def _state_from_vision(self, target):
-        """
-        The measured state carried forward to now, with the stamp to match.
-
-        Vision is ~60ms old on arrival and planning adds more, so a plan left on the raw
-        stamp describes an instant 150-280ms before the tracker sees it. For a braking
-        plan that names a stop point the robot can no longer reach.
-        """
         position = Vector2D(target.initial_pos.x, target.initial_pos.y)
         velocity = Vector2D(target.initial_vel.x, target.initial_vel.y)
         stamp = float(target.vision_stamp)
@@ -152,16 +128,6 @@ class MovementPlanner(Node):
         return MotionState(carried, velocity), now_sec
 
     def _is_parked(self, robot_id: int, goal_pos: Vector2D, measured_pos: Vector2D) -> bool:
-        """
-        Whether the robot has arrived and should be left alone.
-
-        Without this the planner keeps issuing plans a few centimetres long, which are
-        older than their own duration by the time they reach the tracker: each is
-        activated at its end and pushes the robot off the point it just reached.
-
-        Arrival is latched and released only once the robot has drifted well clear, so a
-        measurement sitting on the threshold cannot restart the cycle on its own.
-        """
         radius = float(self.get_parameter('accept_radius').value)
         parked_at = self._parked.get(robot_id)
 
@@ -179,33 +145,20 @@ class MovementPlanner(Node):
             return True
         return False
 
-    def _warn_throttled(self, key: str, message: str, period: float = 2.0) -> None:
-        """One line per key per period: this repeats at the planning rate while it lasts."""
-        now_sec = self.get_clock().now().nanoseconds / 1e9
-        if now_sec - self._last_warned.get(key, float("-inf")) < period:
-            return
-        self._last_warned[key] = now_sec
-        self.get_logger().warn(message)
-
     def plan_for_robot(self, target):
         robot_id = target.robot_id
         
-        # As vision measured it, before any carrying forward.
         init_pos = Vector2D(target.initial_pos.x, target.initial_pos.y)
         goal_pos = Vector2D(target.target_pos.x, target.target_pos.y)
 
-        # Checked before anything else, and against the measured pose rather than the
-        # predicted one, which the tracker keeps fresh for as long as a plan is running.
         if self._is_parked(robot_id, goal_pos, init_pos):
             return None
 
-        # handoff_stamp is the instant initial_state refers to, so the tracker starts the
-        # plan at the right offset rather than at t=0 whenever it happens to arrive.
         if robot_id in self.cur_overhead_points:
             overhead_point = self.cur_overhead_points[robot_id]
             age = (self.get_clock().now().nanoseconds / 1e9) - overhead_point.wall_stamp
             if age <= self.get_parameter('overhead_max_age').value:
-                # Fresh overhead point — plan from predicted future state
+                # Plan from predicted future state
                 initial_state = MotionState(
                     Vector2D(overhead_point.pos.x, overhead_point.pos.y),
                     Vector2D(overhead_point.vel.x, overhead_point.vel.y)
@@ -222,10 +175,6 @@ class MovementPlanner(Node):
             Vector2D(target.target_vel.x, target.target_vel.y)
             )
 
-        # Generate Obstacles
-        # A safety-critical obstacle (field border, penalty area) that fails to build
-        # aborts the plan: driving with an incomplete obstacle set is worse than not
-        # issuing a new trajectory at all.
         try:
             obstacles = self.factory.create_obstacles(
                 robot_id=robot_id,
@@ -250,15 +199,7 @@ class MovementPlanner(Node):
             )
             if trajectory and trajectory.root:
                 if trajectory.status == PlanningStatus.RECOVERY:
-                    # Neither a direct path nor a bypass cleared the obstacles, so this
-                    # is a stop, not a route.
-                    self._warn_throttled(
-                        f"recovery-{robot_id}",
-                        f"No path for robot {robot_id}; stopping instead",
-                    )
-                # Kept across direct paths rather than cleared with them, so an obstacle
-                # stepping on and off the line does not re-roll the route each time. A
-                # stale via is self-correcting: a sampled route beats it when it is worse.
+                    self.get_logger().warn(f"Recovery for robot {robot_id}")
                 if trajectory.via_state is not None:
                     self.last_vias[robot_id] = trajectory.via_state
                 return robot_id, trajectory, handoff_stamp
@@ -285,3 +226,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
