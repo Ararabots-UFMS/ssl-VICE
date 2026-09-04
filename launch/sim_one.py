@@ -34,10 +34,10 @@ def generate_launch_description():
                 package="grsim_messenger",
                 executable="grsim_publisher_node",
             ),
-            Node(
-               package="strategy",
-               executable="strategyNode",
-            ),
+            #Node(
+            #   package="strategy",
+            #   executable="strategyNode",
+            #),
             Node(
                 package="gui_interpreter",
                 executable="apiNode",

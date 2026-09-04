@@ -79,14 +79,26 @@ class MovementManager(Node):
             target.vision_stamp = self._vision_stamp
             target.target_pos = cmd.target_pos
             target.target_vel = cmd.target_vel
-            target.planning_options = cmd.planning_options
+
+            # Copied field by field rather than assigned. Assigning shares the nested
+            # message with the stored command, so the overrides below write through to
+            # it and outlive the cycle: a robot that stops being the goalkeeper keeps
+            # the exemption until its command is republished.
+            options = target.planning_options
+            options.avoid_ball = cmd.planning_options.avoid_ball
+            options.aggressiveness = cmd.planning_options.aggressiveness
+            options.avoid_center_area = cmd.planning_options.avoid_center_area
 
             if self._static_obstacles is not None:
-                target.planning_options.avoid_center_area = self._static_obstacles['center_area']
+                options.avoid_center_area = self._static_obstacles['center_area']
 
-            # The goalkeeper is the one robot allowed inside its own penalty area.
-            if self._goal_keeper_id is not None and robot.id == self._goal_keeper_id:
-                target.planning_options.avoid_penalty_area = False
+            # Decided here rather than inherited from the command. Entering the penalty
+            # area is a foul, and the field defaults to False when a publisher leaves it
+            # unset, so avoidance has to be the answer this node forces. The goalkeeper
+            # is the one robot allowed inside.
+            options.avoid_penalty_area = (
+                self._goal_keeper_id is None or robot.id != self._goal_keeper_id
+            )
 
             normal_targets.append(target)
 

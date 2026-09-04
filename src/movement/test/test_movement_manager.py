@@ -229,14 +229,52 @@ def test_build_target_array_goalkeeper_last(manager, test_robot1, test_robot2, t
 def test_the_command_carries_its_own_planning_options(manager, test_robot1):
     """Per-robot options replace the driver's UpdateObstacle service."""
     manager._movement_commands = [
-        _make_command(1, (100.0, 200.0), avoid_penalty_area=True, avoid_ball=True)
+        _make_command(1, (100.0, 200.0), avoid_ball=True)
     ]
     manager._robots = [test_robot1]
 
     options = manager._build_target_array().targets[0].planning_options
 
-    assert options.avoid_penalty_area is True
     assert options.avoid_ball is True
+
+
+def test_penalty_avoidance_is_not_inherited_from_the_command(manager, test_robot1):
+    """
+    avoid_penalty_area defaults to False on an unset message field, and the GUI's
+    position panel never sets it, so a robot that was only ever told where to go
+    arrived here asking to be allowed into the penalty area. Entering it is a foul,
+    so the manager decides this for every robot that is not the goalkeeper.
+    """
+    manager._movement_commands = [
+        _make_command(1, (100.0, 200.0), avoid_penalty_area=False)
+    ]
+    manager._robots = [test_robot1]
+    manager._goal_keeper_id = 0
+
+    options = manager._build_target_array().targets[0].planning_options
+
+    assert options.avoid_penalty_area is True
+
+
+def test_the_goalkeeper_exemption_does_not_outlive_the_handover(
+    manager, test_robot1, test_robot2, test_command1, test_command2
+):
+    """
+    The target's options used to be the command's own nested message rather than a
+    copy, so clearing avoid_penalty_area for the goalkeeper wrote through to the
+    stored command. Commands are only republished when the GUI sends one, so the
+    previous goalkeeper kept the exemption for every cycle after losing the role.
+    """
+    manager._movement_commands = [test_command1, test_command2]
+    manager._robots = [test_robot1, test_robot2]
+
+    manager._goal_keeper_id = 1
+    assert manager._build_target_array().targets[0].planning_options.avoid_penalty_area is False
+
+    manager._goal_keeper_id = 2
+    targets = manager._build_target_array().targets
+    assert targets[0].planning_options.avoid_penalty_area is True
+    assert targets[1].planning_options.avoid_penalty_area is False
 
 
 def test_the_static_obstacle_override_wins_over_the_command(manager, test_robot1):
