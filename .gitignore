@@ -3,6 +3,10 @@
 .vscode/
 .venv/
 
+.env
+.env.*
+!.env.example
+
 build/
 install/
 log/

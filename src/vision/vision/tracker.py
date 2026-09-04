@@ -42,11 +42,11 @@ class Object(object):
         self.orientation = orientation
         self.orientation_KF = ExtendedKalmanFilterClass1D(friction=self.friction)
 
-        # Init the Kalman filter state with the first detection
-        self.KF.x[0, 0] = detections[0][0]
-        self.KF.x[1, 0] = detections[1][0]
+        # initialize() seeds the state and widens the covariance; assigning the state
+        # alone leaves P = I, which the filter reads as near-certainty.
+        self.KF.initialize(detections[0][0], detections[1][0])
         if orientation is not None and not self.id.is_ball:
-            self.orientation_KF.x[0, 0] = orientation
+            self.orientation_KF.initialize(orientation)
 
     def update(self, x: float, y: float, confidence: float, orientation: Optional[float] = None):
         z = np.matrix([[x], [y]])
@@ -89,6 +89,12 @@ class ObjectTracker(object):
         self.max_time_undetected = max_time_undetected
         self.friction = friction
         self.objects = {}
+        # Instant the current estimates refer to, in the ssl-vision camera clock. None
+        # until the first packet arrives, so "no data yet" is distinguishable from t=0.
+        self.last_capture_stamp = None
+        # The same instant on the ROS clock. Only this one can be differenced against
+        # "now" to age the estimates; capture_stamp is comparable only against itself.
+        self.last_wall_stamp = 0.0
 
     def delete_undetected_objects(self, received_objects_id: List[ID]) -> None:
         now = time.time()
@@ -113,8 +119,13 @@ class ObjectTracker(object):
 
         return id
 
-    def update(self, message: SSL_WrapperPacket) -> None:
+    def update(self, message: SSL_WrapperPacket, wall_stamp: float = 0.0) -> None:
         received_objects_id = []
+
+        # Recorded before any filtering so the published estimates carry the instant
+        # they describe, not the instant they happened to be published.
+        self.last_capture_stamp = message.detection.t_capture
+        self.last_wall_stamp = wall_stamp
 
         for obj in self.objects.values():
             obj.predict()

@@ -4,7 +4,8 @@ from rclpy.executors import MultiThreadedExecutor
 
 from strategy.root import RootTree
 from typing import Iterable
-from system_interfaces.srv import StrategyCommand, SetOrientation, UpdateObstacle, UpdateKick
+from movement_interfaces.msg import MovementCommand, MovementCommandArray
+from system_interfaces.srv import SetOrientation, UpdateKick
 from strategy.skills.skills import Skill
 
 
@@ -13,18 +14,18 @@ class Strategy(Node):
         super().__init__("strategy_node")
         self.get_logger().info("Strategy node initialized")
 
-        self.move_cli = self.create_client(StrategyCommand, "strategy_command")
+        # Movement goes out as one command array per tick. The planner needs every
+        # robot's target in the same message to plan them against each other, and a
+        # per-robot service call could not express that.
+        self.movement_pub = self.create_publisher(
+            MovementCommandArray, "movement_manager/commands", 10
+        )
         self.orientation_cli = self.create_client(SetOrientation, "set_orientation")
-        self.obstacle_cli = self.create_client(UpdateObstacle, "update_obstacles")
         self.kick_cli = self.create_client(UpdateKick, "update_kick")
 
         if wait_for_service:
-            while not self.move_cli.wait_for_service(timeout_sec=3.0):
-                self.get_logger().info('Aguardando serviço "strategy_command"...')
             while not self.orientation_cli.wait_for_service(timeout_sec=3.0):
                 self.get_logger().info('Aguardando serviço "set_orientation"...')
-            while not self.obstacle_cli.wait_for_service(timeout_sec=3.0):
-                self.get_logger().info('Aguardando serviço "update_obstacles"...')
             while not self.kick_cli.wait_for_service(timeout_sec=3.0):
                 self.get_logger().info('Aguardando serviço "kick_command"...')
 
@@ -44,34 +45,40 @@ class Strategy(Node):
 
         latest: dict[int, Skill] = {sk.robot_id: sk for sk in skill_list}
 
+        commands = []
         for sk in latest.values():
             self._send_kick(sk)
             if sk.target_x is not None and sk.target_y is not None:
-                self._send_move(sk)
+                commands.append(self._movement_command(sk))
             if sk.angle is not None:
                 self._send_orientation(sk.robot_id, sk.angle)
-            if any(
-                field
-                for field in [
-                    sk.field_border,
-                    sk.penalty_area,
-                    sk.center_area,
-                    sk.ball,
-                    sk.enemy_ids,
-                    sk.ally_ids,
-                ]
-            ):
-                self._send_obstacles(sk)
 
-    def _send_move(self, skill: Skill) -> None:
-        req = StrategyCommand.Request()
-        req.id = int(skill.robot_id)
-        req.position_x = float(skill.target_x or 0.0)
-        req.position_y = float(skill.target_y or 0.0)
-        req.velocity_x = float(skill.vel_x)
-        req.velocity_y = float(skill.vel_y)
-        fut = self.move_cli.call_async(req)
-        fut.add_done_callback(lambda f, rid=req.id: self._handle_move_response(f, rid))
+        self._send_movement(commands)
+
+    def _movement_command(self, skill: Skill) -> MovementCommand:
+        """
+        One robot's target, with the obstacles it is allowed to ignore.
+
+        The skill's enemy_ids/ally_ids are not carried over: the obstacle factory always
+        builds an obstacle for every robot on the field, so there was never a way to
+        opt out of one. field_border is likewise not optional — leaving the field is
+        never legal.
+        """
+        cmd = MovementCommand()
+        cmd.robot_id = int(skill.robot_id)
+        cmd.target_pos.x = float(skill.target_x or 0.0)
+        cmd.target_pos.y = float(skill.target_y or 0.0)
+        cmd.target_vel.x = float(skill.vel_x)
+        cmd.target_vel.y = float(skill.vel_y)
+        cmd.planning_options.avoid_penalty_area = bool(skill.penalty_area)
+        cmd.planning_options.avoid_center_area = bool(skill.center_area)
+        cmd.planning_options.avoid_ball = bool(skill.ball)
+        return cmd
+
+    def _send_movement(self, commands: list[MovementCommand]) -> None:
+        msg = MovementCommandArray()
+        msg.commands = commands
+        self.movement_pub.publish(msg)
 
     def _send_kick(self, skill: Skill) -> None:
         req = UpdateKick.Request()
@@ -92,32 +99,11 @@ class Strategy(Node):
             lambda f, rid=robot_id: self._handle_orientation_response(f, rid)
         )
 
-    def _send_obstacles(self, skill: Skill) -> None:
-
-        req = UpdateObstacle.Request()
-        req.id = int(skill.robot_id)
-        req.field_border = bool(skill.field_border)
-        req.penalty_area = bool(skill.penalty_area)
-        req.center_area = bool(skill.center_area)
-        req.ball = bool(skill.ball)
-        req.enemy_ids = list(skill.enemy_ids or [])
-        req.ally_ids = list(skill.ally_ids or [])
-        fut = self.obstacle_cli.call_async(req)
-        fut.add_done_callback(
-            lambda f, rid=req.id: self._handle_obstacle_response(f, rid, skill)
-        )
-
     def _handle_kick_response(self, future, robot_id: int) -> None:
         try:
             future.result()
         except Exception as e:
             self.get_logger().error(f"Kick service failed for robot {robot_id}: {e}")
-
-    def _handle_move_response(self, future, robot_id: int) -> None:
-        try:
-            future.result()
-        except Exception as e:
-            self.get_logger().error(f"Move service failed for robot {robot_id}: {e}")
 
     def _handle_orientation_response(self, future, robot_id: int) -> None:
         try:
@@ -125,14 +111,6 @@ class Strategy(Node):
         except Exception as e:
             self.get_logger().error(
                 f"Orientation service failed for robot {robot_id}: {e}"
-            )
-
-    def _handle_obstacle_response(self, future, robot_id: int, skill: Skill) -> None:
-        try:
-            future.result()
-        except Exception as e:
-            self.get_logger().error(
-                f"Obstacle service failed for robot {robot_id}: {e}"
             )
 
 

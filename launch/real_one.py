@@ -19,8 +19,16 @@ def generate_launch_description():
                 executable="controller",
             ),
             Node(
-                package="new_movement",
-                executable="driver",
+                package="movement",
+                executable="planner",
+            ),
+            Node(
+                package="movement",
+                executable="manager",
+            ),
+            Node(
+                package="movement",
+                executable="tracker",
             ),
             # Node(
             #     package="strategy",
@@ -38,10 +46,6 @@ def generate_launch_description():
             Node(
                 package="hardware_messenger",
                 executable="hardware"
-            ),
-             Node(
-                package="strategy_command_gui",
-                executable="strategy_gui",
             ),
         ]
     )

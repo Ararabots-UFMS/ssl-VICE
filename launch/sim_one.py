@@ -19,29 +19,25 @@ def generate_launch_description():
                 executable="controller",
             ),
             Node(
-                package="new_movement",
-                executable="driver",
-            ),
-            Node(
-                package="new_movement",
+                package="movement",
                 executable="planner",
             ),
             Node(
-                package="new_movement",
+                package="movement",
                 executable="manager",
             ),
             Node(
-                package="new_movement",
+                package="movement",
                 executable="tracker",
             ),
             Node(
                 package="grsim_messenger",
                 executable="grsim_publisher_node",
             ),
-            Node(
-               package="strategy",
-               executable="strategyNode",
-            ),
+            #Node(
+            #   package="strategy",
+            #   executable="strategyNode",
+            #),
             Node(
                 package="gui_interpreter",
                 executable="apiNode",
