@@ -1,7 +1,7 @@
 import time
 from typing import Optional
 
-from new_movement.entities.motion import MotionState
+from movement.entities.motion import MotionState
 
 from utils.math_util import Vector2D
 

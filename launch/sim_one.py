@@ -19,19 +19,15 @@ def generate_launch_description():
                 executable="controller",
             ),
             Node(
-                package="new_movement",
-                executable="driver",
-            ),
-            Node(
-                package="new_movement",
+                package="movement",
                 executable="planner",
             ),
             Node(
-                package="new_movement",
+                package="movement",
                 executable="manager",
             ),
             Node(
-                package="new_movement",
+                package="movement",
                 executable="tracker",
             ),
             Node(

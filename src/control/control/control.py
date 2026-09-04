@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 
-from new_movement.entities.motion import MotionState
+from movement.entities.motion import MotionState
 
 from utils.math_util import Vector2D
 
@@ -26,7 +26,7 @@ MAX_MEASUREMENT_AGE = 0.2
 class Controller(Node):
     """Simplified controller node.
 
-    Consumes high-frequency GameState and ControlCommand messages, publishes TeamCommand.
+    Consumes high-frequency GameState and control-reference messages, publishes TeamCommand.
     Fetches low-frequency configuration (team color) once via GetGameConfig service.
     """
 

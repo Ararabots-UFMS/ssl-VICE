@@ -12,7 +12,7 @@ for _name in ("movement_interfaces", "system_interfaces"):
 
 import pytest
 
-from new_movement.entities.motion import MotionState
+from movement.entities.motion import MotionState
 
 from utils.math_util import Vector2D
 
