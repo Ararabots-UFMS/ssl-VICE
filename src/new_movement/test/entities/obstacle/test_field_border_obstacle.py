@@ -159,3 +159,31 @@ class TestCheckPositions:
         assert obstacle.batch_collides(positions, times) == obstacle._check_positions(
             positions
         )
+
+
+def _default_field():
+    """Geometry with no field_lines, so the obstacle falls back to the dimensions."""
+    return _geometry([], field_length=12000.0, field_width=9000.0)
+
+
+class TestSweptSegments:
+    def test_endpoints_decide_a_convex_region(self):
+        """
+        Leaving a convex rectangle cannot happen strictly between two interior points,
+        so the endpoint check is already exact and needs no subdivision.
+        """
+        border = FieldBorderObstacle(_default_field(), padding=0.0)
+
+        assert not border._check_segments(
+            np.array([[0.0, 0.0]]), np.array([[1000.0, 500.0]])
+        )
+        assert border._check_segments(
+            np.array([[0.0, 0.0]]), np.array([[100000.0, 0.0]])
+        )
+
+    def test_it_declines_to_bound_itself(self):
+        """
+        It occupies everything outside a rectangle, which no finite box contains.
+        Returning a box here would be the one way to break the broad phase.
+        """
+        assert FieldBorderObstacle(_default_field()).bounds() is None

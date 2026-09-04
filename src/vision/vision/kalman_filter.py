@@ -18,14 +18,9 @@ class KalmanFilterClass2D(object):
     - "https://github.com/mabhisharma/Multi-Object-Tracking-with-Kalman-Filter/blob/master/kalmanFilter.py"
     - "https://cookierobotics.com/071/"
     '''
-    # Defaults are in millimetres, matched to SSL hardware at ~60 Hz:
-    # - sd_acceleration is the process noise. Robots accelerate at 3000-5000 mm/s²;
-    #   the old value of 1 mm/s² made the filter distrust motion and lag the true
-    #   velocity by up to 900 mm/s during an acceleration ramp.
-    # - x_sd / y_sd is the SSL-Vision measurement noise, realistically 5-20 mm,
-    #   not the 0.1 mm the filter used to assume.
-    # - u is the control input. The vision node has no access to the commanded
-    #   acceleration, so it must be zero — a constant bias just drifts the estimate.
+    # Defaults in millimetres, matched to SSL hardware at ~60 Hz: robots accelerate at
+    # 3000-5000 mm/s², ssl-vision measures position to 5-20 mm, and u stays zero because
+    # the vision node never sees the commanded acceleration.
     def __init__(self, x_sd: float = 15.0, y_sd: float = 15.0, u_x: float = 0.0, u_y: float = 0.0, sd_acceleration: float = 3000.0):
         self.sd_acceleration = sd_acceleration
 
@@ -49,14 +44,11 @@ class KalmanFilterClass2D(object):
         '''
         Seeds the filter with the first detection of an object.
 
-        Without this the state starts at the origin with P = I, which claims a 1 mm
-        confidence in a position the filter has never measured: the initial gain comes
-        out at ~R^-1 and the estimate crawls to the real position over ~1 s, publishing
-        metres of error in the meantime.
-
         Position starts at the measurement with the sensor's own variance. A single
         frame carries no velocity information, so velocity starts at zero with a
-        variance wide enough to cover a robot at full speed.
+        variance wide enough to cover a robot at full speed. Leaving P = I instead
+        claims a 1 mm confidence in a position never measured, and the estimate then
+        crawls to the real one over ~1 s.
         '''
         self.x = np.matrix([[x], [y], [0.0], [0.0]])
         self.P = np.matrix([[self.R[0, 0], 0.0, 0.0, 0.0],
@@ -134,14 +126,9 @@ class ExtendedKalmanFilterClass2D(object):
     
     Assumes constant acceleration model with friction (exponential decay in velocity).
     '''
-    # Defaults are in millimetres, matched to SSL hardware at ~60 Hz:
-    # - sd_acceleration is the process noise. Robots accelerate at 3000-5000 mm/s²;
-    #   a value of 1 mm/s² makes the filter distrust motion and lag the true
-    #   velocity by up to 900 mm/s during an acceleration ramp.
-    # - x_sd / y_sd is the SSL-Vision measurement noise, realistically 5-20 mm,
-    #   not the 0.1 mm the filter used to assume.
-    # - u is the control input. The vision node has no access to the commanded
-    #   acceleration, so it must be zero — a constant bias just drifts the estimate.
+    # Defaults in millimetres, matched to SSL hardware at ~60 Hz: robots accelerate at
+    # 3000-5000 mm/s², ssl-vision measures position to 5-20 mm, and u stays zero because
+    # the vision node never sees the commanded acceleration.
     def __init__(self, x_sd: float = 15.0, y_sd: float = 15.0, u_x: float = 0.0, u_y: float = 0.0, sd_acceleration: float = 3000.0, friction: float = 0.1):
         self.sd_acceleration = sd_acceleration
         self.friction = friction  # Friction coefficient for velocity decay
@@ -166,14 +153,11 @@ class ExtendedKalmanFilterClass2D(object):
         '''
         Seeds the filter with the first detection of an object.
 
-        Seeding the state alone is not enough: leaving P = I claims a 1 mm confidence
-        in position and a 1 mm/s confidence in a velocity that has never been measured,
-        so the filter ignores the next several frames of real motion before the
-        estimate catches up.
-
         Position starts at the measurement with the sensor's own variance. A single
         frame carries no velocity information, so velocity starts at zero with a
-        variance wide enough to cover a robot at full speed.
+        variance wide enough to cover a robot at full speed. Leaving P = I instead
+        claims a 1 mm confidence in a position never measured, and the estimate then
+        crawls to the real one over ~1 s.
         '''
         self.x = np.matrix([[x], [y], [0.0], [0.0]])
         self.P = np.matrix([[self.R[0, 0], 0.0, 0.0, 0.0],
@@ -268,8 +252,7 @@ class KalmanFilterClass1D(object):
     and uses a numerically stable covariance update to prevent divergence.
     '''
     # a_sd is ssl-vision's orientation noise (~0.02 rad), sd_acceleration the angular
-    # acceleration the robot can actually reach. At 0.1/1.0 the filter trusted a
-    # constant-rate model over the measurements and lagged badly through every turn.
+    # acceleration the robot can actually reach.
     def __init__(self, a_sd: float = 0.02, u: float = 0.0, sd_acceleration: float = 50.0):
         self.sd_acceleration = sd_acceleration
         self.u = u
@@ -362,9 +345,8 @@ class ExtendedKalmanFilterClass1D(object):
     
     Assumes constant angular acceleration with friction.
     '''
-    # a_sd is the orientation measurement noise in radians (~1 degree) and
-    # sd_acceleration the angular process noise; a robot can spin up far faster than
-    # the 1 rad/s² the original default assumed, which smeared heading through a turn.
+    # a_sd is ssl-vision's orientation noise (~0.02 rad), sd_acceleration the angular
+    # acceleration the robot can actually reach.
     def __init__(self, a_sd: float = 0.02, u: float = 0.0, sd_acceleration: float = 50.0, friction: float = 0.1):
         self.sd_acceleration = sd_acceleration
         self.friction = friction

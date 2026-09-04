@@ -5,9 +5,8 @@ from new_movement.entities.motion import MotionState
 
 from utils.math_util import Vector2D
 
-# Everything here is in metres and m/s. kp=1 meant a 1m error bought a 1m/s correction
-# and kd=0 meant no velocity feedback at all, which left the controller as feedforward
-# replay with a weak trim. Tune these against the real robots.
+# Metres and m/s. Placeholders until they are tuned against the real robots; the
+# previous kp=1, kd=0 left the controller as feedforward replay with a weak trim.
 DEFAULT_KP = 4.0
 DEFAULT_KI = 0.0
 DEFAULT_KD = 0.4
@@ -79,7 +78,7 @@ class PIDController:
 
         # A reference discontinuity — a replan, a handoff, the goal moving — would
         # otherwise reach the wheels as a step. Seeded from the measurement so a fresh
-        # or just-reset controller resumes from where the robot actually is.
+        # controller resumes from where the robot actually is.
         if self.previous_output is None:
             self.previous_output = current_velocity
 

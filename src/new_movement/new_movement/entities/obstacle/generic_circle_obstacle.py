@@ -50,10 +50,7 @@ class GenericCircleObstacle(StaticObstacle):
         return bool(np.any(dists_sq < self.radius ** 2))
 
     def _check_segments(self, starts: np.ndarray, ends: np.ndarray) -> bool:
-        """
-        Exact segment-versus-disc test: the closest point of each segment to the centre
-        is within the radius. Closed form, so no subdivision is needed.
-        """
+        """Exact segment-versus-disc test, closed form: no subdivision needed."""
         center = np.array([self.center.x, self.center.y])
         direction = ends - starts                       # (N, 2)
         to_start = starts - center                      # (N, 2)

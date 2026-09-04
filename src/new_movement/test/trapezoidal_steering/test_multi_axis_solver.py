@@ -107,3 +107,61 @@ class TestTimeOptimal2D:
         via_2d = solver.time_optimal_2d(xinit, xgoal)
         via_generic = solver.time_optimal(xinit, xgoal, (-1, -1), (1, 1), (-1, -1), (1, 1))
         assert via_2d == via_generic
+
+
+class TestNoGoalIsLeftWithoutATrajectory:
+    """
+    A velocity-limited axis that neither stretch could lengthen came back empty, and
+    ControlMerger drops the whole path if any axis is — so the robot was handed a
+    zero-duration trajectory, which then raised out of add_child.
+    """
+
+    UMIN, UMAX = -1500.0, 1500.0
+    VMIN, VMAX = -2000.0, 2000.0
+
+    def _solve(self, solver, start, goal):
+        return solver.time_optimal_2d(
+            start, goal,
+            umin=[self.UMIN, self.UMIN], umax=[self.UMAX, self.UMAX],
+            vmin=[self.VMIN, self.VMIN], vmax=[self.VMAX, self.VMAX],
+        )
+
+    def test_the_axis_that_used_to_die_now_solves(self):
+        assert self._solve(
+            MultiAxisSolver(),
+            [-3350.0487442041917, 1322.3314785179027, -598.8241304138708, -1278.7283938812486],
+            [43.63806251864662, -4145.591636237768, 0.0, 0.0],
+        )
+
+    def test_random_goals_all_produce_a_path(self):
+        """The population measure: 8.1% of these used to come back with nothing."""
+        import random
+
+        solver = MultiAxisSolver()
+        rng = random.Random(0)
+        empty = 0
+        worst_position = worst_velocity = 0.0
+
+        for _ in range(600):
+            ix, iy = rng.uniform(-6000, 6000), rng.uniform(-4500, 4500)
+            ivx, ivy = rng.uniform(-2000, 2000), rng.uniform(-2000, 2000)
+            gx, gy = rng.uniform(-6000, 6000), rng.uniform(-4500, 4500)
+
+            control = self._solve(solver, [ix, iy, ivx, ivy], [gx, gy, 0.0, 0.0])
+            if not control:
+                empty += 1
+                continue
+
+            x, y, vx, vy = ix, iy, ivx, ivy
+            for acceleration, duration in control:
+                x += vx * duration + 0.5 * acceleration[0] * duration ** 2
+                y += vy * duration + 0.5 * acceleration[1] * duration ** 2
+                vx += acceleration[0] * duration
+                vy += acceleration[1] * duration
+
+            worst_position = max(worst_position, abs(x - gx), abs(y - gy))
+            worst_velocity = max(worst_velocity, abs(vx), abs(vy))
+
+        assert empty == 0, f"{empty}/600 goals produced no trajectory"
+        assert worst_position < 1.0
+        assert worst_velocity < 1.0

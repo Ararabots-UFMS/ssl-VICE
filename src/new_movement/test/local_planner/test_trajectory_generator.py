@@ -1,6 +1,11 @@
 import pytest
 
+import random
+
+import numpy as np
+
 from new_movement.local_planner import TrajectoryGenerator
+from new_movement.local_planner.solver import SolverConfig
 from new_movement.entities.motion import MotionState, MotionConstraints
 from new_movement.entities.trajectory.trajectory_segment import TrajectorySegment
 
@@ -50,3 +55,63 @@ class TestTrajectoryGenerator:
         new_constraints = MotionConstraints(Vector2D(100, 100), Vector2D(50, 50))
         generator.update_constrainsts(new_constraints)
         assert generator.constrainsts is new_constraints
+
+
+class TestGeneratedTrajectoriesHoldTheirConstraints:
+    """
+    Guards the constraint signs at the level that matters: with a bad bound the steer
+    silently returns trajectories that stop short of their goal rather than raising.
+    """
+
+    FIELD_HALF_LENGTH = 6000.0
+    FIELD_HALF_WIDTH = 4500.0
+
+    @pytest.fixture
+    def planner_generator(self):
+        config = SolverConfig()
+        return TrajectoryGenerator(
+            MotionConstraints(config.max_velocity, config.max_acceleration)
+        ), config
+
+    def _random_state(self, rng, max_velocity):
+        return MotionState(
+            Vector2D(
+                rng.uniform(-self.FIELD_HALF_LENGTH, self.FIELD_HALF_LENGTH),
+                rng.uniform(-self.FIELD_HALF_WIDTH, self.FIELD_HALF_WIDTH),
+            ),
+            Vector2D(
+                rng.uniform(-max_velocity.x, max_velocity.x),
+                rng.uniform(-max_velocity.y, max_velocity.y),
+            ),
+        )
+
+    def test_they_reach_the_goal(self, planner_generator):
+        generator, config = planner_generator
+        rng = random.Random(0)
+
+        for _ in range(500):
+            start = self._random_state(rng, config.max_velocity)
+            goal = MotionState(
+                self._random_state(rng, config.max_velocity).position, Vector2D(0.0, 0.0)
+            )
+
+            destination = generator.generate(start, goal).get_local_destination()
+
+            assert destination.position.distance(goal.position) < 1.0, (
+                f"start={start} goal={goal} reached={destination}"
+            )
+            assert destination.velocity.distance(goal.velocity) < 1.0, (
+                f"start={start} goal={goal} reached={destination}"
+            )
+
+    def test_the_velocity_limit_is_enforced(self, planner_generator):
+        generator, config = planner_generator
+        start = MotionState(Vector2D(0.0, 0.0), Vector2D(0.0, 0.0))
+        goal = MotionState(Vector2D(4000.0, 4000.0), Vector2D(0.0, 0.0))
+
+        segment = generator.generate(start, goal)
+
+        for t in np.arange(0.0, segment.get_total_duration(), 0.01):
+            velocity = segment.get_state(float(t)).velocity
+            assert abs(velocity.x) <= config.max_velocity.x + 1.0
+            assert abs(velocity.y) <= config.max_velocity.y + 1.0

@@ -1,7 +1,11 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from new_movement.movement_planner import MovementPlanner
+from new_movement.movement_planner import (
+    GOAL_MOVED_EPSILON,
+    PARK_RELEASE_FACTOR,
+    MovementPlanner,
+)
 from new_movement.entities.motion import MotionState
 
 from utils.math_util import Vector2D
@@ -14,11 +18,16 @@ class FakeTime:
         self.nanoseconds = int(seconds * 1e9)
 
 
+def _clock(seconds: float) -> MagicMock:
+    """A stand-in for Node.get_clock, so get_clock().now().nanoseconds works."""
+    return MagicMock(return_value=MagicMock(now=MagicMock(return_value=FakeTime(seconds))))
+
+
 DEFAULT_PARAMS = {
     "planner_freq": 50.0,
     "max_threads": 8,
     "overhead_max_age": 0.5,
-    "accept_radius": 10,
+    "accept_radius": 50.0,
 }
 
 
@@ -37,7 +46,7 @@ def planner_node():
          patch.object(MovementPlanner, 'declare_parameter', return_value=MagicMock()), \
          patch.object(MovementPlanner, 'get_parameter', side_effect=fake_get_parameter), \
          patch.object(MovementPlanner, 'get_logger', return_value=MagicMock()), \
-         patch.object(MovementPlanner, 'get_clock', return_value=MagicMock(now=MagicMock(return_value=FakeTime(0.0)))):
+         patch.object(MovementPlanner, 'get_clock', _clock(0.0)):
         node = MovementPlanner()
 
     # Re-bind as plain instance attributes: the node's own methods
@@ -46,7 +55,7 @@ def planner_node():
     # above (and its class-level patches) has already exited.
     node.get_parameter = MagicMock(side_effect=fake_get_parameter)
     node.get_logger = MagicMock()
-    node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(0.0)))
+    node.get_clock = _clock(0.0)
     node._test_params = params
 
     # Isolate node-level tests from the real planner/factory implementations
@@ -59,13 +68,14 @@ def planner_node():
 
 
 def _make_target(robot_id=1, initial_pos=(0, 0), initial_vel=(0, 0),
-                  target_pos=(1000, 0), target_vel=(0, 0)):
+                  target_pos=(1000, 0), target_vel=(0, 0), vision_stamp=0.0):
     target = MagicMock()
     target.robot_id = robot_id
     target.initial_pos = MagicMock(x=initial_pos[0], y=initial_pos[1])
     target.initial_vel = MagicMock(x=initial_vel[0], y=initial_vel[1])
     target.target_pos = MagicMock(x=target_pos[0], y=target_pos[1])
     target.target_vel = MagicMock(x=target_vel[0], y=target_vel[1])
+    target.vision_stamp = vision_stamp
     return target
 
 
@@ -88,19 +98,13 @@ class TestCallbacks:
 
 
 class TestPlanningLoop:
-    def test_noop_when_no_targets(self, planner_node):
-        planner_node.cur_targets = None
-        planner_node.game_state = MagicMock()
-
-        planner_node.planning_loop()
-
-        planner_node.par_executor.submit.assert_not_called()
-
-    def test_noop_when_no_game_state(self, planner_node):
+    @pytest.mark.parametrize("missing", ["cur_targets", "game_state"])
+    def test_noop_until_both_inputs_have_arrived(self, planner_node, missing):
         targets = MagicMock()
         targets.targets = [_make_target(robot_id=1)]
         planner_node.cur_targets = targets
-        planner_node.game_state = None
+        planner_node.game_state = MagicMock()
+        setattr(planner_node, missing, None)
 
         planner_node.planning_loop()
 
@@ -203,22 +207,23 @@ class TestMakePublishCallback:
 
 
 class TestPlanForRobot:
-    def test_no_overhead_point_plans_from_vision_state(self, planner_node):
-        target = _make_target(robot_id=1, initial_pos=(0, 0), initial_vel=(0, 0),
-                               target_pos=(1000, 0), target_vel=(0, 0))
-        planner_node.cur_overhead_points = {}
-        planner_node.game_state = MagicMock()
-        planner_node.factory.create_obstacles.return_value = []
-
+    def _solves_to(self, planner_node, via_state=None):
         trajectory = MagicMock()
         trajectory.root = MagicMock()
+        trajectory.via_state = via_state
         planner_node.planner.find.return_value = trajectory
+        planner_node.factory.create_obstacles.return_value = []
+        return trajectory
+
+    def test_no_overhead_point_plans_from_vision_state(self, planner_node):
+        target = _make_target(robot_id=1, target_pos=(1000, 0))
+        planner_node.game_state = MagicMock()
+        trajectory = self._solves_to(planner_node)
 
         result = planner_node.plan_for_robot(target)
 
         assert result == (1, trajectory, 0.0)
-        args, _ = planner_node.planner.find.call_args
-        start_state, goal_state, obstacles = args
+        start_state, goal_state, obstacles, _previous_via = planner_node.planner.find.call_args[0]
         assert isinstance(start_state, MotionState)
         assert start_state.position == Vector2D(0, 0)
         assert goal_state.position == Vector2D(1000, 0)
@@ -226,104 +231,99 @@ class TestPlanForRobot:
 
     def test_fresh_overhead_point_used_as_start_state(self, planner_node):
         target = _make_target(robot_id=1, target_pos=(1000, 0))
-        overhead = MagicMock()
+        overhead = MagicMock(wall_stamp=100.0)
         overhead.pos = MagicMock(x=500, y=50)
         overhead.vel = MagicMock(x=10, y=20)
-        overhead.wall_stamp = 100.0
         planner_node.cur_overhead_points = {1: overhead}
         planner_node.game_state = MagicMock()
-        planner_node.factory.create_obstacles.return_value = []
         # now_sec == wall_stamp -> age == 0, well within overhead_max_age
-        planner_node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(100.0)))
-
-        trajectory = MagicMock()
-        trajectory.root = MagicMock()
-        planner_node.planner.find.return_value = trajectory
+        planner_node.get_clock = _clock(100.0)
+        trajectory = self._solves_to(planner_node)
 
         result = planner_node.plan_for_robot(target)
 
         assert result == (1, trajectory, 100.0)
-        args, _ = planner_node.planner.find.call_args
-        start_state = args[0]
+        start_state = planner_node.planner.find.call_args[0][0]
         assert start_state.position == Vector2D(500, 50)
         assert start_state.velocity == Vector2D(10, 20)
 
-    def test_stale_overhead_point_near_goal_returns_none(self, planner_node):
-        target = _make_target(robot_id=1, initial_pos=(995, 0), target_pos=(1000, 0))
-        overhead = MagicMock()
+    def test_stale_overhead_point_replans_from_vision(self, planner_node):
+        """A fresh point is always stamped ahead of now, so any positive age is stale."""
+        target = _make_target(robot_id=1, initial_pos=(0, 0), initial_vel=(1, 2),
+                              target_pos=(1000, 0))
+        overhead = MagicMock(wall_stamp=0.0)
         overhead.pos = MagicMock(x=500, y=0)
         overhead.vel = MagicMock(x=0, y=0)
-        overhead.wall_stamp = 0.0
         planner_node.cur_overhead_points = {1: overhead}
         planner_node.game_state = MagicMock()
-        # now_sec - wall_stamp = 100.0 >> overhead_max_age(0.5) -> stale
-        planner_node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(100.0)))
-
-        result = planner_node.plan_for_robot(target)
-
-        assert result is None
-        planner_node.planner.find.assert_not_called()
-
-    def test_stale_overhead_point_far_from_goal_replans_from_vision(self, planner_node):
-        target = _make_target(robot_id=1, initial_pos=(0, 0), initial_vel=(1, 2), target_pos=(1000, 0))
-        overhead = MagicMock()
-        overhead.pos = MagicMock(x=500, y=0)
-        overhead.vel = MagicMock(x=0, y=0)
-        overhead.wall_stamp = 0.0
-        planner_node.cur_overhead_points = {1: overhead}
-        planner_node.game_state = MagicMock()
-        planner_node.factory.create_obstacles.return_value = []
-        planner_node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(100.0)))
-
-        trajectory = MagicMock()
-        trajectory.root = MagicMock()
-        planner_node.planner.find.return_value = trajectory
+        planner_node.get_clock = _clock(100.0)
+        trajectory = self._solves_to(planner_node)
 
         result = planner_node.plan_for_robot(target)
 
         assert result == (1, trajectory, 0.0)
-        args, _ = planner_node.planner.find.call_args
-        start_state = args[0]
-        # Falls back to the target's vision-reported initial pos/vel.
+        start_state = planner_node.planner.find.call_args[0][0]
         assert start_state.position == Vector2D(0, 0)
         assert start_state.velocity == Vector2D(1, 2)
 
+    def test_a_robot_already_at_its_goal_is_left_alone(self, planner_node):
+        """
+        Checked against the measured pose and before anything else. The old test sat in
+        the stale-overhead branch alone, so while the tracker kept the cache fresh —
+        which is what happens on arrival — the planner never asked whether it was there.
+        """
+        target = _make_target(robot_id=1, initial_pos=(995, 0), target_pos=(1000, 0))
+        overhead = MagicMock(wall_stamp=100.0)
+        planner_node.cur_overhead_points = {1: overhead}
+        planner_node.game_state = MagicMock()
+        planner_node.get_clock = _clock(100.0)
+
+        assert planner_node.plan_for_robot(target) is None
+        planner_node.planner.find.assert_not_called()
+
+    def test_the_via_point_is_kept_to_warm_start_the_next_cycle(self, planner_node):
+        target = _make_target(robot_id=1, target_pos=(1000, 0))
+        planner_node.game_state = MagicMock()
+        via = MotionState(Vector2D(400, 300), Vector2D(0, 0))
+        self._solves_to(planner_node, via_state=via)
+
+        planner_node.plan_for_robot(target)
+
+        assert planner_node.last_vias[1] is via
+        assert planner_node.planner.find.call_args[0][3] is None  # none on the first cycle
+
+    def test_a_failed_obstacle_set_aborts_the_plan(self, planner_node):
+        """Driving with an incomplete obstacle set is worse than not replanning."""
+        target = _make_target(robot_id=1)
+        planner_node.game_state = MagicMock()
+        planner_node.factory.create_obstacles.side_effect = RuntimeError("no geometry")
+
+        assert planner_node.plan_for_robot(target) is None
+        planner_node.planner.find.assert_not_called()
+        planner_node.get_logger().warn.assert_called()
+
     def test_solver_exception_is_logged_and_returns_none(self, planner_node):
         target = _make_target(robot_id=1)
-        planner_node.cur_overhead_points = {}
         planner_node.game_state = MagicMock()
         planner_node.factory.create_obstacles.return_value = []
         planner_node.planner.find.side_effect = RuntimeError("solver exploded")
 
-        result = planner_node.plan_for_robot(target)
-
-        assert result is None
+        assert planner_node.plan_for_robot(target) is None
         planner_node.get_logger().warn.assert_called()
 
     def test_trajectory_without_root_returns_none(self, planner_node):
         target = _make_target(robot_id=1)
-        planner_node.cur_overhead_points = {}
         planner_node.game_state = MagicMock()
         planner_node.factory.create_obstacles.return_value = []
+        planner_node.planner.find.return_value = MagicMock(root=None)
 
-        trajectory = MagicMock()
-        trajectory.root = None
-        planner_node.planner.find.return_value = trajectory
-
-        result = planner_node.plan_for_robot(target)
-
-        assert result is None
+        assert planner_node.plan_for_robot(target) is None
 
     def test_obstacles_built_from_game_state_when_present(self, planner_node):
         target = _make_target(robot_id=1)
-        planner_node.cur_overhead_points = {}
         game_state = MagicMock()
         planner_node.game_state = game_state
-        planner_node.factory.create_obstacles.return_value = ["obstacle"]
-
-        trajectory = MagicMock()
-        trajectory.root = MagicMock()
-        planner_node.planner.find.return_value = trajectory
+        self._solves_to(planner_node)
 
         planner_node.plan_for_robot(target)
 
@@ -336,3 +336,101 @@ class TestPlanForRobot:
             ally_robots=game_state.ally_robots,
             ally_info=planner_node.cur_overhead_points,
         )
+
+
+class TestArrivalLatch:
+    """
+    Nothing used to stop the planner at the goal. Every cycle produced another plan a
+    few centimetres long, and a plan that short is older than its own duration by the
+    time it reaches the tracker: it was activated at its end, snapped the reference, and
+    pushed the robot off the point it had just reached. On the field the robot reached
+    its goal and then oscillated across it without settling.
+    """
+
+    GOAL = Vector2D(0.0, 0.0)
+    RADIUS = DEFAULT_PARAMS["accept_radius"]
+
+    def test_a_robot_far_away_is_not_parked(self, planner_node):
+        assert not planner_node._is_parked(1, self.GOAL, Vector2D(2000.0, 0.0))
+
+    def test_arrival_survives_noise_just_outside_the_radius(self, planner_node):
+        """
+        The reason for the latch: accept_radius is close to the vision noise, so a bare
+        threshold would flip back to planning on the next frame and restart the cycle.
+        """
+        assert planner_node._is_parked(1, self.GOAL, Vector2D(self.RADIUS - 1, 0.0))
+        assert planner_node._is_parked(1, self.GOAL, Vector2D(self.RADIUS * 1.5, 0.0))
+
+    def test_drifting_well_clear_resumes_planning_then_parks_again(self, planner_node):
+        planner_node._is_parked(1, self.GOAL, Vector2D(self.RADIUS - 1, 0.0))
+
+        drifted = self.RADIUS * PARK_RELEASE_FACTOR + 10.0
+        assert not planner_node._is_parked(1, self.GOAL, Vector2D(drifted, 0.0))
+        assert planner_node._is_parked(1, self.GOAL, Vector2D(1.0, 0.0))
+
+    def test_a_new_goal_always_plans_but_a_nudged_one_does_not(self, planner_node):
+        """Parking at one point must not swallow the command to go somewhere else."""
+        assert planner_node._is_parked(1, self.GOAL, Vector2D(0.0, 0.0))
+
+        assert not planner_node._is_parked(1, Vector2D(3000.0, 0.0), Vector2D(0.0, 0.0))
+        assert planner_node._is_parked(
+            1, Vector2D(GOAL_MOVED_EPSILON / 2.0, 0.0), Vector2D(0.0, 0.0)
+        )
+
+    def test_robots_park_independently(self, planner_node):
+        assert planner_node._is_parked(1, self.GOAL, Vector2D(0.0, 0.0))
+        assert not planner_node._is_parked(2, self.GOAL, Vector2D(2000.0, 0.0))
+        assert planner_node._is_parked(1, self.GOAL, Vector2D(0.0, 0.0))
+
+
+class TestPlanningFromVision:
+    """
+    A plan left on the raw vision stamp reaches the tracker 150-280ms after the instant
+    it describes. For a braking plan that means naming a stop point the robot can no
+    longer reach, which it runs past and is then dragged back to.
+    """
+
+    def _at(self, planner_node, now_sec):
+        planner_node.get_clock = _clock(now_sec)
+        return planner_node
+
+    def test_the_pose_is_carried_forward_and_restamped(self, planner_node):
+        node = self._at(planner_node, 100.08)
+        target = _make_target(initial_pos=(0.0, 0.0), initial_vel=(2000.0, 0.0),
+                              vision_stamp=100.0)
+
+        state, stamp = node._state_from_vision(target)
+
+        assert state.position.x == pytest.approx(160.0)
+        assert state.velocity.x == pytest.approx(2000.0)
+        # The stamp has to match the state, or the tracker starts the plan at an offset
+        # the robot never drove.
+        assert stamp == pytest.approx(100.08)
+
+    def test_a_stale_measurement_is_not_extrapolated(self, planner_node):
+        node = self._at(planner_node, 101.0)
+        target = _make_target(initial_pos=(0.0, 0.0), initial_vel=(2000.0, 0.0),
+                              vision_stamp=100.0)
+
+        state, stamp = node._state_from_vision(target)
+
+        assert state.position.x == pytest.approx(0.0)
+        assert stamp == pytest.approx(100.0)
+
+    def test_an_unstamped_target_is_left_alone(self, planner_node):
+        node = self._at(planner_node, 100.08)
+        target = _make_target(initial_pos=(500.0, 0.0), vision_stamp=0.0)
+
+        state, stamp = node._state_from_vision(target)
+
+        assert state.position.x == pytest.approx(500.0)
+        assert stamp == 0.0
+
+    def test_a_stationary_robot_is_unchanged(self, planner_node):
+        node = self._at(planner_node, 100.08)
+        target = _make_target(initial_pos=(500.0, -200.0), vision_stamp=100.0)
+
+        state, _ = node._state_from_vision(target)
+
+        assert state.position.x == pytest.approx(500.0)
+        assert state.position.y == pytest.approx(-200.0)

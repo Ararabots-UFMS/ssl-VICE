@@ -122,12 +122,9 @@ class PenaltyAreaObstacle(StaticObstacle):
         new_destination = Vector2D(tarPosition.x, tarPosition.y)
 
         min_x, max_x, _, _ = self._bounds()
-        # Leave by the edge that faces midfield. The other one is the goal line, and it
+        # Leave by the edge facing midfield. The other one is the goal line, which
         # coincides with the field border, so escaping through it puts the robot off the
-        # field — whereupon the border pushes it straight back in here, and the two
-        # obstacles trade the robot back and forth. That loop walked a robot into the
-        # wall. For the left-hand area midfield is +x, which is what this already did;
-        # for the right-hand one it is -x, which it did not.
+        # field and the border pushes it straight back in here.
         x_ref = min_x if self.side is FieldSide.RIGHT else max_x
 
         dx = abs(x_ref - tarPosition.x)
@@ -179,9 +176,8 @@ class PenaltyAreaObstacle(StaticObstacle):
     def _check_segments(self, starts: np.ndarray, ends: np.ndarray) -> bool:
         """
         Exact segment-versus-rectangle test by the slab method: clip the segment against
-        the x band and the y band, and it enters the area when the two surviving
-        parameter intervals overlap. Catches the corner clips that point sampling walks
-        straight over.
+        the x band and the y band; it enters the area when the two surviving parameter
+        intervals overlap.
         """
         min_x, max_x, min_y, max_y = self._bounds()
         direction = ends - starts

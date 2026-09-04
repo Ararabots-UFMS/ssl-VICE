@@ -75,10 +75,9 @@ class EnemyRobotObstacle(Obstacle):
         """
         Exact sweep of each path segment against the enemy tube.
 
-        The tube only grows with time, so the tube at the end of an interval contains
-        the tube at every instant within it; testing against that one is both correct
-        and conservative. What is left is the shortest distance between two segments —
-        ours and the tube's spine — compared against the radius.
+        The tube only grows with time, so the one at the end of an interval contains
+        every instant within it. What is left is the shortest distance between two
+        segments — ours and the tube's spine — against the radius.
         """
         start = np.array([self.robotState.position.x, self.robotState.position.y])
         velocity = np.array([self.robotState.velocity.x, self.robotState.velocity.y])

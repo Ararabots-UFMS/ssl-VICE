@@ -155,3 +155,45 @@ class TestVelocity:
         state = MotionState(Vector2D(0, 0), Vector2D(42, -7))
         obs = EnemyRobotObstacle(state)
         assert obs.velocity() == Vector2D(42, -7)
+
+
+class TestSweptSegments:
+    def test_a_tube_clipped_between_samples_is_caught(self):
+        enemy = EnemyRobotObstacle(
+            MotionState(Vector2D(500.0, -300.0), Vector2D(0.0, 600.0)), radius=90.0
+        )
+
+        assert enemy.batch_collides_segments(
+            np.array([[0.0, 0.0]]), np.array([[1000.0, 0.0]]),
+            np.array([0.0]), np.array([1.0]),
+        )
+
+    def test_an_enemy_well_clear_is_not_flagged(self):
+        enemy = EnemyRobotObstacle(
+            MotionState(Vector2D(500.0, 3000.0), Vector2D(0.0, 10.0)), radius=90.0
+        )
+
+        assert not enemy.batch_collides_segments(
+            np.array([[0.0, 0.0]]), np.array([[1000.0, 0.0]]),
+            np.array([0.0]), np.array([1.0]),
+        )
+
+
+class TestBounds:
+    def test_the_tube_box_holds_every_colliding_point(self):
+        import random
+
+        rng = random.Random(3)
+        for _ in range(200):
+            state = MotionState(
+                Vector2D(rng.uniform(-3000, 3000), rng.uniform(-2000, 2000)),
+                Vector2D(rng.uniform(-3000, 3000), rng.uniform(-3000, 3000)),
+            )
+            obstacle = EnemyRobotObstacle(state, radius=200)
+            min_x, min_y, max_x, max_y = obstacle.bounds()
+
+            for _ in range(40):
+                point = Vector2D(rng.uniform(-6000, 6000), rng.uniform(-4500, 4500))
+                if obstacle.isCollidingAt(point, rng.uniform(0.0, 2.0)):
+                    assert min_x <= point.x <= max_x
+                    assert min_y <= point.y <= max_y

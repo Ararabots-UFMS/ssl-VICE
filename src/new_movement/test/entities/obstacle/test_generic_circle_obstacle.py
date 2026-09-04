@@ -114,3 +114,56 @@ class TestCheckPositions:
         positions = np.array([[10.0, 0.0]])
         times = np.array([0.0])
         assert obs.batch_collides(positions, times) == obs._check_positions(positions)
+
+
+class TestSweptSegments:
+    """
+    Sampling positions alone misses any encounter that begins and ends between two
+    samples — about 5% of grazing collisions at the step size the planner runs at.
+    The segment between two samples is tested, not just its endpoints.
+    """
+
+    def test_a_clip_between_two_samples_is_caught(self):
+        obstacle = GenericCircleObstacle(Vector2D(500.0, 0.0), 60.0, padding=0)
+        starts = np.array([[0.0, 0.0]])
+        ends = np.array([[1000.0, 0.0]])
+
+        assert not obstacle._check_positions(np.vstack([starts, ends]))
+        assert obstacle.batch_collides_segments(
+            starts, ends, np.array([0.0]), np.array([0.5])
+        )
+
+    def test_a_segment_passing_wide_is_still_clear(self):
+        obstacle = GenericCircleObstacle(Vector2D(500.0, 400.0), 60.0, padding=0)
+
+        assert not obstacle.batch_collides_segments(
+            np.array([[0.0, 0.0]]), np.array([[1000.0, 0.0]]),
+            np.array([0.0]), np.array([0.5]),
+        )
+
+    def test_a_zero_length_segment_behaves_like_its_point(self):
+        obstacle = GenericCircleObstacle(Vector2D(0.0, 0.0), 100.0, padding=0)
+        inside = np.array([[50.0, 0.0]])
+        outside = np.array([[500.0, 0.0]])
+
+        assert obstacle.batch_collides_segments(inside, inside, np.array([0.0]), np.array([0.0]))
+        assert not obstacle.batch_collides_segments(outside, outside, np.array([0.0]), np.array([0.0]))
+
+
+class TestBounds:
+    def test_the_box_holds_every_colliding_point(self):
+        """
+        A box too tight makes the broad phase skip a real hit, which is the worst
+        failure this planner has — so the box is attacked from that direction.
+        """
+        import random
+
+        rng = random.Random(5)
+        obstacle = GenericCircleObstacle(Vector2D(300.0, -450.0), 500.0)
+        min_x, min_y, max_x, max_y = obstacle.bounds()
+
+        for _ in range(2000):
+            point = Vector2D(rng.uniform(-3000, 3000), rng.uniform(-3000, 3000))
+            if obstacle.isCollidingAt(point):
+                assert min_x <= point.x <= max_x
+                assert min_y <= point.y <= max_y

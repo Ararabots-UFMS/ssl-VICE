@@ -42,10 +42,8 @@ class Object(object):
         self.orientation = orientation
         self.orientation_KF = ExtendedKalmanFilterClass1D(friction=self.friction)
 
-        # Init the Kalman filter with the first detection. initialize() also widens the
-        # covariance: assigning the state alone leaves P = I, which claims a 1 mm/s
-        # confidence in a velocity that has never been measured and makes the filter
-        # ignore the first several frames of real motion.
+        # initialize() seeds the state and widens the covariance; assigning the state
+        # alone leaves P = I, which the filter reads as near-certainty.
         self.KF.initialize(detections[0][0], detections[1][0])
         if orientation is not None and not self.id.is_ball:
             self.orientation_KF.initialize(orientation)
@@ -91,13 +89,11 @@ class ObjectTracker(object):
         self.max_time_undetected = max_time_undetected
         self.friction = friction
         self.objects = {}
-        # Instant the current estimates refer to, in the ssl-vision camera clock.
-        # None until the first packet arrives, so consumers can tell "no data yet"
-        # from "data captured at t=0".
+        # Instant the current estimates refer to, in the ssl-vision camera clock. None
+        # until the first packet arrives, so "no data yet" is distinguishable from t=0.
         self.last_capture_stamp = None
-        # The same instant read from the ROS clock at packet arrival. Downstream this
-        # is the only one that can be differenced against "now" to age the estimates;
-        # capture_stamp is only comparable against itself.
+        # The same instant on the ROS clock. Only this one can be differenced against
+        # "now" to age the estimates; capture_stamp is comparable only against itself.
         self.last_wall_stamp = 0.0
 
     def delete_undetected_objects(self, received_objects_id: List[ID]) -> None:

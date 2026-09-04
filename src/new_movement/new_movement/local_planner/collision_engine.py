@@ -5,10 +5,9 @@ from new_movement.entities.trajectory.trajectory_segment import TrajectorySegmen
 from new_movement.entities.trajectory.trajectory_sampler import TrajectorySampler
 from new_movement.entities.obstacle.obstacle import Obstacle
 
-# Slack on the broad-phase box comparison, in mm. A box is computed by different
-# arithmetic than the sweep it stands in for, so the two can disagree in the last bit
-# or so on a path that grazes a boundary. Rejections are the only irreversible answer
-# the broad phase gives, so ties resolve toward running the sweep.
+# Slack on the broad-phase box comparison, in mm. A box and the sweep it stands in for
+# are computed by different arithmetic and can disagree in the last bit on a grazing
+# path, and a rejection is irreversible, so ties resolve toward running the sweep.
 BROAD_PHASE_MARGIN = 1.0e-6
 
 
@@ -22,18 +21,14 @@ class CollisionEngine:
         """
         Swept collision check against the sampled trajectory.
 
-        The trajectory is reduced to a polyline and every obstacle is asked about the
-        connecting segments rather than the sample points. Checking points alone lets a
-        path clip an obstacle between two samples, which cost ~5% of grazing collisions
-        at the step sizes this planner uses, and could only be improved by paying for a
-        finer step.
+        The trajectory is reduced to a polyline and obstacles are asked about the
+        connecting segments, not the sample points: checking points alone missed ~5% of
+        grazing collisions at the step sizes this planner uses.
 
-        time_step now controls how closely the polyline follows the real curve rather
-        than how far the robot may travel between samples. The remaining error is the
-        chord-to-parabola gap, acceleration * dt^2 / 8. Loosening it past ~0.04 s is not
-        worth it: measured cost per check is flat in the step count (the fixed numpy and
-        flattening overhead dominates), while the chord error starts producing misses
-        and false alarms in both directions.
+        time_step therefore sets how closely the polyline follows the real curve. The
+        residual is the chord-to-parabola gap, acceleration * dt^2 / 8; past ~0.04s that
+        starts producing misses and false alarms, and cost per check is flat in the step
+        count anyway.
         """
         sampler = TrajectorySampler(trajectory)
         duration = sampler.duration
@@ -49,13 +44,10 @@ class CollisionEngine:
         starts, ends = positions[:-1], positions[1:]
         t_starts, t_ends = times[:-1], times[1:]
 
-        # Broad phase. Most obstacles on a full 11v11 field are nowhere near any given
-        # candidate path, and the swept test still costs a handful of numpy passes over
-        # every segment to establish that. Comparing two axis-aligned boxes first is a
-        # few float comparisons and rejects the great majority of them. A box that
-        # contains the obstacle and misses the box containing the path proves there is
-        # no collision, so this only skips work, never a real hit; an obstacle that
-        # cannot bound itself returns None and is always tested.
+        # Broad phase: most obstacles on a full field are nowhere near a given path,
+        # and two box comparisons reject them for a fraction of the swept test. A box
+        # that misses cannot contain a hit, so this only ever skips work; an obstacle
+        # that cannot bound itself returns None and is always tested.
         path_min_x, path_min_y = positions.min(axis=0)
         path_max_x, path_max_y = positions.max(axis=0)
 
@@ -73,8 +65,3 @@ class CollisionEngine:
             if obs.batch_collides_segments(starts, ends, t_starts, t_ends):
                 return True
         return False
-
-    @staticmethod
-    def _sample_positions(trajectory, times):
-        """Positions along ``trajectory`` at ``times``, as an (N, 2) array."""
-        return TrajectorySampler(trajectory).positions(np.asarray(times, dtype=float))

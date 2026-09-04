@@ -104,3 +104,67 @@ class TestEdges:
 
     def test_an_empty_time_array_yields_no_samples(self, accelerating):
         assert TrajectorySampler(accelerating).positions(np.array([])).shape == (0, 2)
+
+
+class TestPositionBounds:
+    """
+    The box the broad phase rejects against. Too tight and the engine silently stops
+    seeing real collisions, which is the worst failure this planner has.
+    """
+
+    def _generated(self, start, goal):
+        from new_movement.entities.motion.motion_state import MotionState
+        from new_movement.local_planner.trajectory_generator import TrajectoryGenerator
+
+        return TrajectorySampler(TrajectoryGenerator().generate(
+            MotionState(*start), MotionState(*goal)
+        ))
+
+    def test_they_hold_a_densely_sampled_path(self):
+        """
+        The extremes of a parabola are not always at its endpoints, so a path that
+        overshoots and comes back escapes a box built from samples alone.
+        """
+        import random
+
+        rng = random.Random(17)
+        for _ in range(120):
+            sampler = self._generated(
+                (Vector2D(rng.uniform(-3000, 3000), rng.uniform(-2000, 2000)),
+                 Vector2D(rng.uniform(-3000, 3000), rng.uniform(-3000, 3000))),
+                (Vector2D(rng.uniform(-3000, 3000), rng.uniform(-2000, 2000)),
+                 Vector2D(0.0, 0.0)),
+            )
+            min_x, min_y, max_x, max_y = sampler.position_bounds()
+
+            dense = sampler.positions(np.linspace(0.0, sampler.duration, 4000))
+            assert dense[:, 0].min() >= min_x - 1e-6
+            assert dense[:, 0].max() <= max_x + 1e-6
+            assert dense[:, 1].min() >= min_y - 1e-6
+            assert dense[:, 1].max() <= max_y + 1e-6
+
+    def test_a_turning_path_is_bounded_past_its_endpoints(self):
+        """Driving backwards from a forward start: the far point is mid-flight."""
+        sampler = self._generated(
+            (Vector2D(0.0, 0.0), Vector2D(2000.0, 0.0)),
+            (Vector2D(-500.0, 0.0), Vector2D(0.0, 0.0)),
+        )
+        _, _, max_x, _ = sampler.position_bounds()
+
+        dense = sampler.positions(np.linspace(0.0, sampler.duration, 4000))
+        assert dense[:, 0].max() > 100.0  # it really does overshoot
+        assert max_x >= dense[:, 0].max() - 1e-6
+
+    def test_they_cover_times_past_the_end(self):
+        """``positions`` clamps out-of-range times, so the box must hold those too."""
+        sampler = self._generated(
+            (Vector2D(-1000.0, 0.0), Vector2D(500.0, 0.0)),
+            (Vector2D(1000.0, 500.0), Vector2D(0.0, 0.0)),
+        )
+        min_x, min_y, max_x, max_y = sampler.position_bounds()
+
+        beyond = sampler.positions(np.array([-5.0, sampler.duration + 5.0]))
+        assert np.all(beyond[:, 0] >= min_x - 1e-6)
+        assert np.all(beyond[:, 0] <= max_x + 1e-6)
+        assert np.all(beyond[:, 1] >= min_y - 1e-6)
+        assert np.all(beyond[:, 1] <= max_y + 1e-6)

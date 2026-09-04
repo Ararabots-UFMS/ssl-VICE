@@ -14,8 +14,6 @@ from utils.field_util import FieldSide
 
 class ObstacleFactory:
     def __init__(self, logger=None):
-        # Optional rclpy logger. Obstacle construction failures used to be swallowed
-        # silently, which let a robot plan with no field border at all.
         self.logger = logger
 
     def _warn(self, message: str) -> None:
@@ -27,12 +25,8 @@ class ObstacleFactory:
         """
         Accept either a Robots[] sequence or an {id: Robots} mapping.
 
-        movement_planner and movement_optimizer forward GameState's lists straight
-        through, while movement_path_driver keeps its own dicts keyed by id. Both call
-        shapes are live in the tree and neither failed loudly: indexing a list by a
-        Robots message raised TypeError out of the factory and cost the robot its plan,
-        and iterating a dict handed the enemy loop bare integer keys, so every enemy was
-        logged away and the robot planned as though the field were empty.
+        The planner and optimizer forward GameState's lists straight through, while
+        movement_path_driver keeps its own dicts keyed by id. Both shapes are live.
         """
         if isinstance(robots, dict):
             return list(robots.values())

@@ -160,3 +160,75 @@ class TestVelocity:
         state = MotionState(Vector2D(0, 0), Vector2D(42, -7))
         obs = AllyRobotObstacle(state, _FakeTrajectory(Vector2D(0, 0)))
         assert obs.velocity() == Vector2D(42, -7)
+
+
+class TestSweptSegments:
+    def test_an_ally_crossing_mid_step_is_caught(self):
+        """
+        Both bodies move, so the pair can be far apart at both ends of the step and
+        still pass through each other in between.
+        """
+        ally_start = Vector2D(0.0, -400.0)
+        ally_velocity = Vector2D(0.0, 800.0)
+
+        class _CrossingTrajectory:
+            def get_position(self, t):
+                return ally_start.add(ally_velocity.multiplyByScalar(t))
+
+        obstacle = AllyRobotObstacle(
+            MotionState(ally_start, ally_velocity),
+            _CrossingTrajectory(),
+            time_offset=0.0,
+            radius=100.0,
+        )
+
+        # Our robot crosses the same point going the other way, over the same second.
+        starts = np.array([[-400.0, 0.0]])
+        ends = np.array([[400.0, 0.0]])
+
+        assert not obstacle.batch_collides(np.vstack([starts, ends]), np.array([0.0, 1.0]))
+        assert obstacle.batch_collides_segments(
+            starts, ends, np.array([0.0]), np.array([1.0])
+        )
+
+
+class TestBounds:
+    def test_the_box_holds_the_whole_trajectory(self):
+        import random
+
+        from new_movement.entities.trajectory.trajectory import Trajectory
+        from new_movement.entities.trajectory.trajectory_sampler import TrajectorySampler
+        from new_movement.local_planner.trajectory_generator import TrajectoryGenerator
+
+        generator = TrajectoryGenerator()
+        rng = random.Random(13)
+        for _ in range(60):
+            start = MotionState(
+                Vector2D(rng.uniform(-3000, 3000), rng.uniform(-2000, 2000)),
+                Vector2D(rng.uniform(-2000, 2000), rng.uniform(-2000, 2000)),
+            )
+            goal = MotionState(
+                Vector2D(rng.uniform(-3000, 3000), rng.uniform(-2000, 2000)),
+                Vector2D(0.0, 0.0),
+            )
+            trajectory = Trajectory(generator.generate(start, goal))
+            obstacle = AllyRobotObstacle(start, trajectory, radius=190)
+
+            min_x, min_y, max_x, max_y = obstacle.bounds()
+            duration = TrajectorySampler(trajectory.root).duration
+            for t in np.linspace(0.0, max(duration, 1e-9), 200):
+                point = trajectory.get_position(float(t))
+                assert min_x <= point.x - obstacle.radius + 1e-6
+                assert max_x >= point.x + obstacle.radius - 1e-6
+                assert min_y <= point.y - obstacle.radius + 1e-6
+                assert max_y >= point.y + obstacle.radius - 1e-6
+
+    def test_anything_but_a_real_trajectory_declines_to_bound_itself(self):
+        """Anything that only offers get_position keeps being tested the long way."""
+
+        class DuckTyped:
+            def get_position(self, t):
+                return Vector2D(0.0, 0.0)
+
+        state = MotionState(Vector2D(0.0, 0.0), Vector2D(0.0, 0.0))
+        assert AllyRobotObstacle(state, DuckTyped()).bounds() is None

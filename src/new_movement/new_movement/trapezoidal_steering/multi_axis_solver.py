@@ -45,12 +45,8 @@ class MultiAxisSolver:
                 stretched = self.planner.hard_stop_wait(*arguments)
             if not stretched:
                 # Neither of those can lengthen a velocity-limited profile by a small
-                # amount: one has to break the velocity cap to do it, the other brakes to
-                # a standstill and cannot make the time back up. Easing off the
-                # acceleration instead keeps the profile and costs only the milliseconds
-                # asked for. Without this the axis ends up with no control at all, which
-                # takes the merged path to zero duration and leaves the robot with
-                # nothing to follow on ~8% of goals.
+                # amount, and an axis left with no control at all collapses the merged
+                # path to zero duration. Easing off the acceleration keeps the profile.
                 stretched = self.planner.stretched(*arguments)
             controls[index] = stretched
         return self.merger.scalar_axes(controls)

@@ -260,13 +260,6 @@ class TestOrientationTuning:
         # 5deg at 2000mm/s is ~175mm/s of sideways velocity through the kinematics.
         assert worst < 5.0
 
-    def test_the_old_tuning_would_not(self):
-        worst = self._worst_error(
-            ExtendedKalmanFilterClass1D(a_sd=0.1, sd_acceleration=1.0, friction=FRICTION)
-        )
-
-        assert worst > 20.0
-
     def test_a_still_robot_is_still_smoothed(self):
         rng = np.random.default_rng(5)
         kf = ExtendedKalmanFilterClass1D(friction=FRICTION)

@@ -1,3 +1,5 @@
+import pytest
+
 from unittest.mock import MagicMock
 
 from new_movement.local_planner import ObstacleFactory
@@ -124,32 +126,24 @@ class _Robot:
     Plain stand-in for a Robots message — deliberately not a MagicMock.
 
     MagicMock implements __index__, so indexing a list with one quietly succeeds and
-    hides exactly the bug these tests exist to catch. A real ROS message has no
-    __index__, which is why the field saw "list indices must be integers or slices,
-    not Robots" while the suite stayed green.
+    hides exactly the bug these tests exist to catch.
     """
 
-    def __init__(self, robot_id, x=1000.0, y=1000.0, vx=0.0, vy=0.0):
+    def __init__(self, robot_id, x=1000.0, y=1000.0):
         self.id = robot_id
         self.position_x = x
         self.position_y = y
-        self.velocity_x = vx
-        self.velocity_y = vy
-
-
-def _make_robot(robot_id, x=1000.0, y=1000.0, vx=0.0, vy=0.0):
-    return _Robot(robot_id, x, y, vx, vy)
+        self.velocity_x = 0.0
+        self.velocity_y = 0.0
 
 
 class TestRobotCollectionShapes:
     """
     movement_planner and movement_optimizer pass GameState's Robots[] lists;
-    movement_path_driver passes {id: Robots} dicts. Both shapes are live in the tree.
-
-    Every other test in this file passes ally_robots=[], so the ally loop never ran and
-    the mismatch reached the field instead: publishing a target made the planner log
-    "list indices must be integers or slices, not Robots" on every cycle, because the
-    loop indexed the list with the message it had just iterated.
+    movement_path_driver passes {id: Robots} dicts. Both shapes are live in the tree,
+    and every other test here passes ally_robots=[], so the mismatch reached the field:
+    the ally loop indexed the list with the message it had just iterated, and the enemy
+    loop iterated a dict's integer keys and logged every enemy away.
     """
 
     def _obstacles(self, ally_robots, enemy_robots, robot_id=1):
@@ -162,40 +156,29 @@ class TestRobotCollectionShapes:
             ally_robots=ally_robots,
         )
 
-    def test_allies_as_a_list_are_obstacles(self):
-        obstacles = self._obstacles([_make_robot(2), _make_robot(3)], [])
+    @staticmethod
+    def _as_list(*ids):
+        return [_Robot(i) for i in ids]
+
+    @staticmethod
+    def _as_dict(*ids):
+        return {i: _Robot(i) for i in ids}
+
+    @pytest.mark.parametrize("shape", ["_as_list", "_as_dict"])
+    def test_allies_become_obstacles_and_exclude_the_planning_robot(self, shape):
+        allies = getattr(self, shape)(1, 2, 3)
+
+        obstacles = self._obstacles(allies, [], robot_id=1)
 
         assert len(obstacles) == 2
         assert all(isinstance(o, EnemyRobotObstacle) for o in obstacles)
 
-    def test_allies_as_a_dict_are_obstacles(self):
-        allies = {2: _make_robot(2), 3: _make_robot(3)}
-
-        assert len(self._obstacles(allies, [])) == 2
-
-    def test_the_planning_robot_is_not_its_own_obstacle(self):
-        obstacles = self._obstacles([_make_robot(1), _make_robot(2)], [], robot_id=1)
-
-        assert len(obstacles) == 1
-
-    def test_self_exclusion_works_for_the_dict_shape_too(self):
-        allies = {1: _make_robot(1), 2: _make_robot(2)}
-
-        assert len(self._obstacles(allies, [], robot_id=1)) == 1
-
-    def test_enemies_as_a_list_are_obstacles(self):
-        assert len(self._obstacles([], [_make_robot(4), _make_robot(5)])) == 2
-
-    def test_enemies_as_a_dict_are_obstacles(self):
-        """A dict used to iterate its integer keys, so every enemy was logged away."""
-        enemies = {4: _make_robot(4), 5: _make_robot(5)}
-
-        assert len(self._obstacles([], enemies)) == 2
+    @pytest.mark.parametrize("shape", ["_as_list", "_as_dict"])
+    def test_enemies_become_obstacles(self, shape):
+        assert len(self._obstacles([], getattr(self, shape)(4, 5))) == 2
 
     def test_both_collections_together(self):
-        obstacles = self._obstacles(
-            [_make_robot(1), _make_robot(2)], [_make_robot(6), _make_robot(7)]
-        )
+        obstacles = self._obstacles(self._as_list(1, 2), self._as_list(6, 7))
 
         assert len(obstacles) == 3  # ally 2, plus both enemies
 

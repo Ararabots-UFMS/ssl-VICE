@@ -158,3 +158,48 @@ class TestCheckPositions:
         assert left_obstacle.batch_collides(
             positions, times
         ) == left_obstacle._check_positions(positions)
+
+
+def _default_field():
+    """Geometry with no field_lines, so the obstacle falls back to the dimensions."""
+    return _geometry([], field_length=12000.0, field_width=9000.0)
+
+
+class TestSweptSegments:
+    def test_a_corner_clip_is_caught(self):
+        """A segment cutting across a corner enters the box without either end inside."""
+        area = PenaltyAreaObstacle(_default_field(), FieldSide.LEFT, padding=0.0)
+        min_x, _, min_y, _ = area._bounds()
+
+        # A genuine triangle off the corner: inside for the middle third, outside at
+        # both ends. A symmetric pair would only touch the vertex, which is tangency.
+        start = np.array([[min_x - 100.0, min_y + 200.0]])
+        end = np.array([[min_x + 200.0, min_y - 100.0]])
+
+        assert not area._check_positions(np.vstack([start, end]))
+        assert area._check_segments(start, end)
+
+    def test_a_segment_clear_of_the_box_stays_clear(self):
+        area = PenaltyAreaObstacle(_default_field(), FieldSide.LEFT, padding=0.0)
+        _, max_x, _, max_y = area._bounds()
+
+        assert not area._check_segments(
+            np.array([[max_x + 500.0, max_y + 500.0]]),
+            np.array([[max_x + 900.0, max_y + 900.0]]),
+        )
+
+
+class TestBounds:
+    def test_the_box_holds_every_colliding_point(self):
+        import random
+
+        rng = random.Random(7)
+        for side in (FieldSide.LEFT, FieldSide.RIGHT):
+            obstacle = PenaltyAreaObstacle(_default_field(), side)
+            min_x, min_y, max_x, max_y = obstacle.bounds()
+
+            for _ in range(2000):
+                point = Vector2D(rng.uniform(-7000, 7000), rng.uniform(-5000, 5000))
+                if obstacle.isCollidingAt(point):
+                    assert min_x <= point.x <= max_x
+                    assert min_y <= point.y <= max_y

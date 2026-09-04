@@ -6,15 +6,12 @@ class TrajectorySampler:
     Flattens a TrajectorySegment chain into arrays so a whole batch of times can be
     evaluated in one numpy pass.
 
-    ``get_state`` walks the segment chain and re-sums every duration on every call, so
-    sampling N instants costs O(N x primitives) Python calls. The collision checker
-    samples the same trajectory tens of times for every candidate path it considers,
-    which made that the hot loop of the planner. Flattening is O(primitives) once; each
-    sample afterwards is an array index.
+    ``get_state`` re-sums every duration on every call, so sampling N instants costs
+    O(N x primitives) Python calls — the hot loop of the collision checker. Flattening
+    is O(primitives) once and each sample afterwards is an array index.
 
-    The flattened form is a snapshot. Trajectories are mutated in place (``truncate``,
-    ``connect``, ``relocate``), so build a sampler when you are about to sample and let
-    it go, rather than caching one on the segment.
+    The flattened form is a snapshot, and trajectories are mutated in place, so build a
+    sampler when you are about to sample rather than caching one on the segment.
     """
 
     __slots__ = ("_t0", "_px", "_py", "_vx", "_vy", "_ax", "_ay", "duration")
@@ -101,11 +98,9 @@ class TrajectorySampler:
         Exact axis-aligned box the trajectory stays inside, as (min_x, min_y, max_x,
         max_y).
 
-        Sampling to find the extent would only bound the samples; each primitive is a
-        parabola, so its extremes on an axis are at the two endpoints or at the vertex
-        where that axis' velocity crosses zero, and the vertex only counts when it
-        falls inside the primitive. ``positions`` clamps out-of-range times onto the
-        endpoints, so this bounds every query the sampler can answer.
+        Each primitive is a parabola, so its extremes on an axis are at the endpoints or
+        at the vertex where that axis' velocity crosses zero — computed, not sampled,
+        since sampling would only bound the samples.
         """
         starts = self._t0
         durations = np.empty_like(starts)

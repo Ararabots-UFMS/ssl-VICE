@@ -41,8 +41,7 @@ class AllyRobotObstacle(Obstacle):
         Where the ally is at each of ``times``, in one pass where possible.
 
         A real Trajectory is flattened once and evaluated as arrays; anything else that
-        merely offers get_position (the documented contract for this class) still works
-        one instant at a time.
+        merely offers get_position still works one instant at a time.
         """
         offsets = self.time_offset + np.asarray(times, dtype=float)
         if offsets.size == 0:
@@ -58,12 +57,7 @@ class AllyRobotObstacle(Obstacle):
         return np.array([[p.x, p.y] for p in points], dtype=float)
 
     def bounds(self) -> tuple | None:
-        """
-        The box the ally's own trajectory stays inside, grown by the radius.
-
-        Only a real Trajectory can answer this; anything merely offering get_position
-        declines to be bounded and keeps being tested the long way.
-        """
+        """The box the ally's own trajectory stays inside, grown by the radius."""
         root = getattr(self.trajectory, "root", None)
         if root is None:
             return None
@@ -90,11 +84,9 @@ class AllyRobotObstacle(Obstacle):
         """
         Swept test against a moving ally.
 
-        Both bodies move over the interval, so neither endpoint alone says whether they
-        met: the pair can be apart at both ends and still cross in between. Taking both
-        as travelling in a straight line across the interval makes the separation linear
-        in time, and the closest approach is then the minimum of a quadratic, which is
-        the standard moving-circle test.
+        Both bodies move, so they can be apart at both endpoints and still cross in
+        between. Taking each as travelling in a straight line makes the separation
+        linear in time, and the closest approach the minimum of a quadratic.
         """
         ally_start = self._ally_positions(t_starts)
         ally_end = self._ally_positions(t_ends)

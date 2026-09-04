@@ -41,9 +41,8 @@ class BypassSolver(BaseSolver):
         Attempts to find a via-point that clears all obstacles.
 
         The previous cycle's via point is re-solved from the current start and defended
-        by cost_margin. Sampling alone returns a structurally different path every cycle
-        for unchanged inputs, and the controller cannot track a reference that keeps
-        changing its mind about which side of an obstacle to pass.
+        by cost_margin, so unchanged inputs keep returning the same route. Sampling
+        alone picks a different side of an obstacle every cycle.
         """
         incumbent = None
         if previous_via is not None:
@@ -92,12 +91,9 @@ class BypassSolver(BaseSolver):
         segment_1 = generator.generate(start, via_state)
         segment_2 = generator.generate(via_state, goal)
 
-        # The steering solver cannot produce a profile for every pair of states, and
-        # when it gives up it returns a zero-duration path parked at its own start.
-        # Chaining that raises out of add_child, and the exception travels all the way
-        # up to the planner node, which logs it and leaves the robot with no plan for
-        # the cycle. A via point we cannot actually steer to is just a candidate that
-        # did not work out, so drop it and let the search try the next sample.
+        # The steering solver returns a zero-duration path parked at its own start when
+        # it cannot reach a state, and chaining that raises out of add_child. A via we
+        # cannot steer to is just a candidate that did not work out.
         if not self._reaches(segment_1, via_state):
             return None
 
@@ -114,8 +110,7 @@ class BypassSolver(BaseSolver):
         """
         Whether a generated segment actually ends on the state it was asked for.
 
-        Deliberately the same comparison add_child makes, so a segment that passes here
-        is one it will accept.
+        Deliberately the same comparison add_child makes.
         """
         destination = segment.get_local_destination()
         return (

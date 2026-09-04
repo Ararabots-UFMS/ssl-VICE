@@ -16,15 +16,10 @@ class InformedSampler:
         """
         Samples a via point offset perpendicular to the start-goal line.
 
-        spread is the perpendicular sigma in units of robot radius; the solver widens it
-        as attempts fail, so the cheap routes close to the line are tried first.
-
-        The offset is perpendicular only. Sliding a via along the line barely changes
-        the route but does change its duration, so sampling that axis mostly produces a
-        different-looking answer to the same question. The previous version sampled a 2D
-        gaussian of sigma = distance/4 around the midpoint, which for a corner-to-corner
-        move put half the samples more than 2m off the line — metres of scatter to clear
-        obstacles a couple of hundred millimetres wide.
+        spread is the perpendicular sigma as a fraction of the start-goal distance; the
+        solver widens it as attempts fail, so routes close to the line are tried first.
+        The offset is perpendicular only: sliding a via along the line barely changes
+        the route, only its duration.
         """
         axis = goal.subtract(start)
         length = axis.size()
@@ -56,9 +51,8 @@ class InformedSampler:
         """
         Samples a speed along the tangent of a smooth path through the via point.
 
-        Uniform sampling of the velocity square spends most samples on via velocities
-        pointing away from the goal, which either fail or win on duration by accident and
-        give the robot a different-looking path every cycle.
+        Uniform sampling of the velocity square spends most of its samples pointing away
+        from the goal, which either fail or win on duration by accident.
         """
         direction = None
         for leg in (via.subtract(start), goal.subtract(via)):

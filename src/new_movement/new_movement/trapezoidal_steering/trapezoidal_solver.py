@@ -8,9 +8,8 @@ class TrapezoidalSolver:
     """Builds bounded profiles from bang-bang primitives."""
 
     # How far a stretched profile may sit from the duration it was asked for. The axes
-    # are merged at their shared boundaries and clipped to the shortest, so anything
-    # looser than this quietly trims the end off the longer axis. At 2000 mm/s this is
-    # two microns of travel.
+    # are clipped to the shortest when merged, so anything looser trims the end off the
+    # longer one.
     duration_tolerance = 1.0e-6
 
     def __init__(self, bang_bang=None, time_epsilon=1.0e-7):
@@ -79,25 +78,15 @@ class TrapezoidalSolver:
         Make a profile last exactly final_time by using less of the acceleration
         available, keeping its shape.
 
-        Neither of the other two stretches can lengthen a velocity-limited profile by a
-        small amount. A two-phase bang-bang that covers the same distance in the same
-        time has to peak above the velocity cap, so scaled() throws it out; hard_stop_wait
-        brakes to a standstill and re-accelerates from rest, which costs more time than
-        was on offer. Both then return nothing, and an axis with no control at all
-        collapses the whole merged path to zero duration.
+        Duration falls as acceleration authority rises, so bisecting on that authority
+        converges on final_time. The profile is still built by optimal(), so the
+        velocity bounds keep being enforced.
 
-        Duration falls as the acceleration authority rises, so bisecting on that
-        authority converges on final_time. The profile is still built by optimal(), so
-        the velocity bounds keep being enforced.
-
-        Duration is not continuous in the authority everywhere: optimal() switches
-        between a bounded trapezoid and a plain bang-bang, and the duration steps across
-        that switch, so for some inputs no authority gives exactly final_time. Returning
-        the closest one would be worse than returning nothing, because ControlMerger
-        truncates every axis to the shortest and a profile that runs long silently loses
-        its tail — the robot would be handed a path that stops short of the goal instead
-        of no path at all. So an unconverged search reports failure and leaves the
-        caller with the empty result it would have had anyway.
+        Duration is not continuous in the authority: optimal() steps between a bounded
+        trapezoid and a plain bang-bang, so for some inputs no authority hits final_time
+        exactly. Returning the nearest would be worse than returning nothing — the merger
+        truncates every axis to the shortest, so a profile that runs long silently loses
+        its tail and the robot gets a path that stops short of the goal.
         """
         low, high = 0.0, 1.0
         best = []

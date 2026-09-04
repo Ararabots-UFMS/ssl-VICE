@@ -40,16 +40,10 @@ class Obstacle(ABC):
         Swept test: does the straight move starts[i] -> ends[i], travelled over
         [t_starts[i], t_ends[i]], touch this obstacle at any point along the way?
 
-        Sampling positions alone misses an encounter whenever the path clips the
-        obstacle between two samples. Measured against a dense reference, that loses
-        ~5% of grazing collisions at the step size the planner uses, and shrinking the
-        step only trades cost for a slowly decreasing error. Testing the connecting
-        segment removes the whole class of miss, and the remaining error is the gap
-        between the chord and the real parabola (acceleration * dt^2 / 8, a couple of
-        millimetres), which no longer depends on how fast the robot is moving.
-
-        The default subdivides and reuses the point test, which narrows the gap without
-        closing it. Subclasses should override with an exact sweep.
+        Testing the connecting segment rather than its endpoints removes the whole class
+        of miss where a path clips an obstacle between two samples. The default here
+        subdivides and reuses the point test, which narrows that gap without closing it;
+        subclasses should override with an exact sweep.
         """
         divisions = self._FALLBACK_SUBDIVISIONS
         delta_p = ends - starts
@@ -63,13 +57,11 @@ class Obstacle(ABC):
     def bounds(self) -> tuple | None:
         """
         Conservative axis-aligned box holding everything this obstacle can occupy over
-        its whole horizon, as (min_x, min_y, max_x, max_y), or None when the occupied
-        region cannot be bounded (the field border occupies the outside of a rectangle,
-        which no finite box contains).
+        its whole horizon, as (min_x, min_y, max_x, max_y), or None when the region
+        cannot be bounded — the field border occupies the outside of a rectangle.
 
-        Used only as a broad-phase reject: a path whose own box misses this one cannot
-        touch the obstacle, so the swept test is skipped. Returning None costs nothing
-        but the check. Being too generous is safe; being too tight is not.
+        Used only as a broad-phase reject, so being too generous is safe and being too
+        tight is not.
         """
         return None
 

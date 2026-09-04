@@ -1,6 +1,6 @@
 import copy
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import rclpy
 from rclpy.node import Node
@@ -58,14 +58,10 @@ def tracking_error(
     """
     Along- and cross-track error at the instant the measurement was taken.
 
-    Comparing vision against the reference at time_offset would report the vision delay
-    as tracking error, so the reference is evaluated measurement_age seconds back.
-    Along-track is signed: negative means the robot is behind its reference.
-
-    The instant is clamped into the trajectory rather than rejected. A plan stamped from
-    the vision state is activated at a time_offset equal to that measurement's own age,
-    so rejecting made this return None on every frame of exactly the situation the
-    divergence flag creates — and the flag needs these numbers to clear.
+    The reference is evaluated measurement_age seconds back so the vision delay is not
+    counted as tracking error. Along-track is signed: negative means the robot is behind
+    its reference. The instant is clamped into the trajectory, not rejected: a plan
+    stamped from vision activates at an offset equal to that measurement's own age.
     """
     duration = trajectory.get_total_duration()
     t_meas = min(max(time_offset - measurement_age, 0.0), duration)
@@ -108,37 +104,25 @@ class MovementTracker(Node):
     def __init__(self):
         super().__init__("movement_tracker")
 
-        # Derived from the measured handoff latency (p95 ~50ms, max ~130ms) rather than
-        # guessed: it has to cover the latency, and everything above that is extra
-        # extrapolation the robot has to make good on.
+        # Covers the measured handoff latency (p95 ~50ms, max ~130ms); anything above
+        # that is extrapolation the robot has to make good on.
         self.declare_parameter("lookahead_time", 0.3)
         self.declare_parameter("improvement_threshold", 0.1)
         self.declare_parameter(
             "control_reference_topic", "movement_tracker/control_reference"
         )
         self.declare_parameter('change_radius', 10)
-        # Measured transients reach ~350mm in healthy tracking, so this sits above them:
-        # 400mm is more than two robot diameters off the path, which is a real departure
-        # rather than a bad frame. Debounced so noise cannot trip it.
+        # Healthy tracking transients reach ~350mm, so 400mm is a real departure rather
+        # than a bad frame. Entry and exit are asymmetric: quick to distrust the
+        # prediction, slow to trust it again.
         self.declare_parameter('divergence_radius', 400.0)
         self.declare_parameter('divergence_frames', 3)
-        # Asymmetric on purpose: quick to distrust the prediction, slow to trust it
-        # again. A single good frame used to clear the flag, which handed planning
-        # straight back to the prediction that had just failed.
         self.declare_parameter('recovery_frames', 10)
-        # Upper bound on how long the flag may stay raised without recovering.
         self.declare_parameter('divergence_timeout_frames', 120)
-        # Seconds between handoff-latency and tracking-error summaries. Off by default;
-        # set it to 5.0 to size lookahead_time or divergence_radius against real runs.
-        self.declare_parameter('diagnostics_period', 0.0)
 
         self.robot_data: Dict[int, Dict[str, object]] = {}
         self.last_time = self.get_clock().now()
 
-        # dt_late per activated plan: the measured latency lookahead_time should follow.
-        self._handoff_latencies: List[float] = []
-        # (along, cross) per robot per vision frame, for sizing the divergence threshold.
-        self._tracking_errors: Dict[int, List[Tuple[float, float]]] = {}
         self._divergence_streak: Dict[int, int] = {}
         self._recovery_streak: Dict[int, int] = {}
         self._divergence_age: Dict[int, int] = {}
@@ -156,12 +140,6 @@ class MovementTracker(Node):
 
         self.timer = self.create_timer(0.01, self.timer_callback)
         self.gui_timer = self.create_timer(0.1, self._update_gui_trajectories)
-
-        self._diagnostics_period = float(self.get_parameter('diagnostics_period').value)
-        if self._diagnostics_period > 0.0:
-            self.diagnostics_timer = self.create_timer(
-                self._diagnostics_period, self._log_diagnostics
-            )
 
         self.get_logger().info("TrackerNode ONLINE")
 
@@ -188,22 +166,17 @@ class MovementTracker(Node):
                 Vector2D(robot.position_x, robot.position_y),
                 measurement_age,
             )
-            if error is None:
-                continue
-
-            if self._diagnostics_period > 0.0:
-                self._tracking_errors.setdefault(robot.id, []).append(error)
-            self._update_divergence(robot.id, error)
+            if error is not None:
+                self._update_divergence(robot.id, error)
 
     def _update_divergence(self, robot_id: int, error: Tuple[float, float]) -> None:
         """
         Flags a robot that is no longer on the path it was given.
 
-        The plan it is following was built from a prediction, and once the robot has
-        left the path that prediction has stopped describing it — so every plan built
-        on top of it is wrong too. Suppressing the overhead point (see
-        _update_active_trajectory) is what breaks that: the planner's cached point ages
-        out within overhead_max_age and it falls back to the measured state.
+        The plan it follows was built from a prediction that has stopped describing it,
+        so every plan built on top of that one is wrong too. Suppressing the overhead
+        point (see _update_active_trajectory) breaks the cycle: the planner's cached
+        point ages out and it falls back to the measured state.
         """
         radius = float(self.get_parameter('divergence_radius').value)
         enter_after = int(self.get_parameter('divergence_frames').value)
@@ -224,10 +197,8 @@ class MovementTracker(Node):
                 self._diverged[robot_id] = False
                 self.get_logger().info(f"Robot {robot_id} is back on its path")
             elif held >= int(self.get_parameter('divergence_timeout_frames').value):
-                # Safety valve. This flag has latched twice now, each time by stalling
-                # the evidence it needs to clear, so it is not allowed to be permanent.
-                # If the robot really is still off its path the detector re-enters
-                # within divergence_frames, and the log says which happened.
+                # Safety valve: the flag is never permanent. If the robot really is
+                # still off its path the detector re-enters within divergence_frames.
                 self._diverged[robot_id] = False
                 self._divergence_age[robot_id] = 0
                 self.get_logger().warn(
@@ -329,17 +300,14 @@ class MovementTracker(Node):
         if control_ref is not None:
             self.control_reference_pub.publish(control_ref)
 
-        # A zero-duration plan means the robot is already at the goal. Its reference
-        # still has to go out — bailing before that left the controller chasing the
-        # previous, moving one — but there is nothing to predict or advance.
+        # Already at the goal: the reference above still had to go out, but there is
+        # nothing left to predict or advance.
         if total_duration <= 0:
             return
 
-        # Publish Overhead Point
-        # Withheld while the robot is off its path, so the planner's cached point ages
-        # out and it replans from the measured state. Only the point is withheld — the
-        # offset below keeps advancing, since freezing it while replans keep arriving
-        # pinned the reference to the opening frames of each new trajectory.
+        # Publish Overhead Point, unless the robot is off its path — then the planner's
+        # cached point ages out and it replans from the measured state. Only the point
+        # is withheld; the offset below keeps advancing either way.
         diverged = self._diverged.get(robot_id, False)
         if time_offset < total_duration and not diverged:
             overhead_point = build_overhead_point(
@@ -379,16 +347,11 @@ class MovementTracker(Node):
         pending_traj = pending["trajectory"]
         duration = pending_traj.get_total_duration()
 
-        if handoff_stamp != 0.0 and self._diagnostics_period > 0.0:
-            self._handoff_latencies.append(dt_late)
-
         # Clamped, not discarded: a late plan still ends at the current goal, while the
         # one it replaces ends at the old one.
         if new_offset >= duration:
-            # Only worth a line when the plan was long enough to have been caught. A
-            # plan whose whole duration is shorter than the planning latency always
-            # arrives past its own end — that is the case the clamp exists for, not a
-            # fault, and near the goal it is most of them.
+            # A plan shorter than the planning latency always arrives past its own end.
+            # That is what the clamp is for, not a fault, so only longer plans warn.
             if duration > lookahead:
                 self._warn_throttled(
                     f"elapsed-{robot_id}",
@@ -411,26 +374,21 @@ class MovementTracker(Node):
         )
         data["pending"] = None
 
-        # Deliberately does not touch the divergence streaks. Resetting them here
-        # latched the flag on: while diverged, plans activate on arrival at roughly
-        # 42/s against vision's 60/s, so a recovery streak needing 10 consecutive
-        # frames never got past 2. The error is recomputed against the current
-        # trajectory every frame anyway, so a stale frame or two costs nothing.
+        # Deliberately leaves the divergence streaks alone: while diverged, plans
+        # arrive faster than the recovery streak can accumulate, so resetting them here
+        # latched the flag on. The error is recomputed every frame regardless.
 
     def _reprojected_offset(self, robot_id, trajectory, dt_late, now_sec):
         """
         The offset along this plan whose reference best matches where the robot is.
 
-        dt_late on its own assumes the robot spent that long following this plan. That
-        holds for a plan built from its own predicted trajectory, where dt_late is a few
-        milliseconds. It does not hold for one built from a measured state, or for a
-        recovery stop: their opening stretch describes motion the robot never made, so
-        starting dt_late into them puts the reference somewhere the robot has never
-        been — measured at up to 0.28s, which is half a metre at cruising speed.
+        dt_late alone assumes the robot spent that long following this plan, which only
+        holds for a plan built from its own prediction. For one built from a measured
+        state, or a recovery stop, the opening stretch describes motion the robot never
+        made, and starting dt_late in puts the reference up to half a metre off.
 
-        Searched over [0, dt_late] only. Past that is the future of a plan that has not
-        run yet, and the reference must never lead the robot by more than the elapsed
-        time.
+        Searched over [0, dt_late] only: past that is the future of a plan that has not
+        run yet, and the reference must never lead the robot by more than elapsed time.
         """
         duration = trajectory.get_total_duration()
         upper = min(max(dt_late, 0.0), duration)
@@ -461,49 +419,11 @@ class MovementTracker(Node):
         return best_offset
 
     def _warn_throttled(self, key: str, message: str, now_sec: float, period: float = 2.0):
-        """
-        One line per key per period. Every condition warned about here repeats at the
-        planner's rate for as long as it lasts, so an unthrottled line reports the
-        planner's frequency rather than the event.
-        """
+        """One line per key per period: these conditions repeat at the planning rate."""
         if now_sec - self._last_warned.get(key, float("-inf")) < period:
             return
         self._last_warned[key] = now_sec
         self.get_logger().warn(message)
-
-    def _log_diagnostics(self):
-        self._log_handoff_latency()
-        self._log_tracking_error()
-
-    def _log_handoff_latency(self):
-        if not self._handoff_latencies:
-            return
-
-        samples = sorted(self._handoff_latencies)
-        self._handoff_latencies = []
-        p95 = samples[min(len(samples) - 1, int(0.95 * len(samples)))]
-
-        self.get_logger().info(
-            f"Handoff latency over {len(samples)} plans: "
-            f"mean {1000 * sum(samples) / len(samples):.1f}ms, "
-            f"p95 {1000 * p95:.1f}ms, max {1000 * samples[-1]:.1f}ms"
-        )
-
-    def _log_tracking_error(self):
-        errors, self._tracking_errors = self._tracking_errors, {}
-
-        for robot_id, samples in sorted(errors.items()):
-            if not samples:
-                continue
-
-            along = [sample[0] for sample in samples]
-            cross = [abs(sample[1]) for sample in samples]
-
-            self.get_logger().info(
-                f"Robot {robot_id} tracking error over {len(samples)} frames: "
-                f"along mean {sum(along) / len(along):.1f}mm worst {min(along):.1f}mm, "
-                f"cross mean {sum(cross) / len(cross):.1f}mm worst {max(cross):.1f}mm"
-            )
 
     def _update_gui_trajectories(self):
         msg = GUITrajectories()

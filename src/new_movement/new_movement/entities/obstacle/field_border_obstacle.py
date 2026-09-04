@@ -136,9 +136,8 @@ class FieldBorderObstacle(StaticObstacle):
 
     def _check_segments(self, starts: np.ndarray, ends: np.ndarray) -> bool:
         """
-        Colliding here means leaving the field, and the playable area is a convex
-        rectangle: a segment stays inside exactly when both of its endpoints do. So
-        checking the two endpoints is already an exact sweep — unlike every other
-        obstacle, this shape never needed subdivision.
+        Colliding here means leaving the field, and the playable area is convex: a
+        segment stays inside exactly when both of its endpoints do, so this is already
+        an exact sweep.
         """
         return self._check_positions(starts) or self._check_positions(ends)

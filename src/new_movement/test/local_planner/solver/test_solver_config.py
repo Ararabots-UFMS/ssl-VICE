@@ -1,3 +1,5 @@
+import pytest
+
 from new_movement.local_planner.solver import SolverConfig
 
 from utils.math_util import Vector2D
@@ -33,3 +35,21 @@ class TestSolverConfig:
 
         assert a.max_iterations == 1
         assert b.max_iterations == 2
+        # default_factory, so the Vector2D defaults are not shared either.
+        assert a.max_velocity is not b.max_velocity
+
+    @pytest.mark.parametrize(
+        "bounds",
+        [
+            {"max_velocity": Vector2D(2000.0, -2000.0)},
+            {"max_acceleration": Vector2D(1500.0, -1500.0)},
+        ],
+    )
+    def test_a_negative_bound_is_rejected(self, bounds):
+        """
+        A negative bound inverts min = -max, and the trapezoidal steer then brakes the
+        wrong way and stops enforcing the velocity cap — which left ~65% of generated
+        trajectories short of their goal without ever raising.
+        """
+        with pytest.raises(ValueError):
+            SolverConfig(**bounds)

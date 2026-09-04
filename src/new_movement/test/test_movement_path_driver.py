@@ -21,6 +21,11 @@ class FakeTime:
         return result
 
 
+def _clock(seconds: float) -> MagicMock:
+    """A stand-in for Node.get_clock, so get_clock().now() reaches the FakeTime."""
+    return MagicMock(return_value=MagicMock(now=MagicMock(return_value=FakeTime(seconds))))
+
+
 @pytest.fixture
 def driver_node():
     with patch('rclpy.init'), \
@@ -31,14 +36,14 @@ def driver_node():
          patch.object(MovementPathDriver, 'create_timer', return_value=MagicMock()), \
          patch.object(MovementPathDriver, 'create_service', return_value=MagicMock()), \
          patch.object(MovementPathDriver, 'get_logger', return_value=MagicMock()), \
-         patch.object(MovementPathDriver, 'get_clock', return_value=MagicMock(now=MagicMock(return_value=FakeTime(0.0)))):
+         patch.object(MovementPathDriver, 'get_clock', _clock(0.0)):
         node = MovementPathDriver()
 
     # Re-bind as plain instance attributes: several methods call
     # get_logger()/get_clock() again well after __init__/the `with` block
     # above (whose class-level patches are undone on exit).
     node.get_logger = MagicMock()
-    node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(0.0)))
+    node.get_clock = _clock(0.0)
 
     # Isolate node-level tests from the real planner/obstacle-factory
     # implementations unless a test explicitly wants the real thing.
@@ -173,7 +178,7 @@ class TestPublishControl:
         trajectory.get_state.return_value = MotionState(Vector2D(1000.0, 2000.0), Vector2D(500.0, -500.0))
         trajectory.get_total_duration.return_value = 10.0
         driver_node.robot_data = {1: {"trajectory": trajectory, "time_offset": 0.0}}
-        driver_node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(1.0)))
+        driver_node.get_clock = _clock(1.0)
         driver_node.last_time = FakeTime(0.0)
 
         driver_node.publish_control()
@@ -192,7 +197,7 @@ class TestPublishControl:
     def test_skips_robots_without_trajectory(self, driver_node):
         driver_node.driver_init = MagicMock()
         driver_node.robot_data = {1: {"trajectory": None, "time_offset": 0.0}}
-        driver_node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(1.0)))
+        driver_node.get_clock = _clock(1.0)
         driver_node.last_time = FakeTime(0.0)
 
         driver_node.publish_control()
@@ -206,7 +211,7 @@ class TestPublishControl:
         trajectory.get_state.return_value = None
         trajectory.get_total_duration.return_value = 10.0
         driver_node.robot_data = {1: {"trajectory": trajectory, "time_offset": 0.0}}
-        driver_node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(1.0)))
+        driver_node.get_clock = _clock(1.0)
         driver_node.last_time = FakeTime(0.0)
 
         driver_node.publish_control()
@@ -220,7 +225,7 @@ class TestPublishControl:
         trajectory.get_state.return_value = MotionState(Vector2D(0, 0), Vector2D(0, 0))
         trajectory.get_total_duration.return_value = 1.0
         driver_node.robot_data = {1: {"trajectory": trajectory, "time_offset": 5.0}}
-        driver_node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(1.0)))
+        driver_node.get_clock = _clock(1.0)
         driver_node.last_time = FakeTime(0.0)
 
         driver_node.publish_control()
@@ -232,7 +237,7 @@ class TestPublishControl:
         bad_trajectory = MagicMock()
         bad_trajectory.get_state.side_effect = RuntimeError("boom")
         driver_node.robot_data = {1: {"trajectory": bad_trajectory, "time_offset": 0.0}}
-        driver_node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(1.0)))
+        driver_node.get_clock = _clock(1.0)
         driver_node.last_time = FakeTime(0.0)
 
         driver_node.publish_control()  # must not raise
@@ -335,7 +340,7 @@ class TestReplan:
         new_trajectory.root = MagicMock()
         new_trajectory.get_state.return_value = MotionState(Vector2D(10, 10), Vector2D(0, 0))
         driver_node.planner.find.return_value = new_trajectory
-        driver_node.get_clock = MagicMock(now=MagicMock(return_value=FakeTime(5.0)))
+        driver_node.get_clock = _clock(5.0)
 
         new_destination = MotionState(Vector2D(1000, 1000), Vector2D(0, 0))
         result = driver_node.replan(1, new_destination)

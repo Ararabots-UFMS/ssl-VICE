@@ -39,8 +39,7 @@ class Orchestrator:
         )
         
         self.status = PlanningStatus.FAILED
-        # Set when the robot sits inside obstacles with no point that satisfies them
-        # all, so the caller can say so rather than reporting a generic planning miss.
+        # Set when the robot sits inside obstacles with no point that satisfies them all.
         self.escape_failed = False
 
     def find(
@@ -94,9 +93,8 @@ class Orchestrator:
         """
         Where one obstacle wants a point moved to, a margin past its boundary.
 
-        adaptDestination returns the boundary itself, and isCollidingAt is still true
-        there (a distance of zero fails its <= 0 test), so landing exactly on it leaves
-        the next plan starting in a collision.
+        adaptDestination returns the boundary itself, where isCollidingAt is still true,
+        so landing exactly on it leaves the next plan starting in a collision.
         """
         if isinstance(obs, StaticObstacle):
             boundary = obs.adaptDestination(position)
@@ -114,15 +112,10 @@ class Orchestrator:
         """
         Move a point until no obstacle occupies it, or report that none of them agree.
 
-        Obstacles used to be escaped one at a time, each one asked in turn where to go
-        and the answer taken without checking it against the others. Overlapping
-        obstacles then contradict each other: a robot inside the right penalty area is
-        sent to its goal-line edge, which is past the field border, and the border sends
-        it straight back inside the penalty area. That loop is stable, and its outward
-        half is what drove the robot into the wall.
-
-        Escaping is only worth doing if it lands somewhere every obstacle accepts, so
-        this reports failure rather than committing to one obstacle's opinion.
+        Escaping one obstacle at a time deadlocks where they overlap: the penalty area
+        sends a robot past the field border, and the border sends it straight back. The
+        answer only counts once every obstacle accepts it, so this reports failure
+        rather than committing to one obstacle's opinion.
         """
         current = position
         for _ in range(MAX_ESCAPE_PASSES):
@@ -147,14 +140,12 @@ class Orchestrator:
         goal_position, _ = self._clear_point(goal.position, static)
         goal = MotionState(goal_position, goal.velocity)
 
-        # Escaping applies to every obstacle. Gated to static ones, a robot pressed
-        # against another robot had every candidate path collide at t=0, so the solver
-        # fell through to a stop and it stayed stuck there.
+        # Escaping applies to every obstacle: gated to static ones, a robot pressed
+        # against another robot collides at t=0 on every candidate path and stays stuck.
         exit_point, reachable = self._clear_point(start.position, obstacles)
         if not reachable:
-            # Nowhere satisfies every obstacle at once. Staying put is the safe answer:
-            # driving to one obstacle's preferred exit is how the robot ended up past
-            # the field border, and the collision check will fall through to a stop.
+            # Nowhere satisfies every obstacle at once, so stay put and let the
+            # collision check fall through to a stop.
             self.escape_failed = True
             return start, goal, traj
 
@@ -164,22 +155,18 @@ class Orchestrator:
             escape = self.generator.generate(start, exit_state)
             traj.append(escape)
             # Carry on from where the escape actually ended, not from where it was
-            # aimed. Reaching a point a few centimetres away while still carrying the
-            # robot's current velocity is often not solvable, and the steering solver
-            # returns its nearest attempt. Chaining the next segment onto the requested
-            # state instead of the achieved one left a gap of a few centimetres, which
-            # Trajectory.append rejected and the planner logged as "Solver error" while
-            # dropping the plan for that cycle.
+            # aimed: a short hop at the robot's current velocity is often unsolvable and
+            # the steering solver returns its nearest attempt instead. Chaining onto the
+            # requested state leaves a gap that Trajectory.append rejects.
             start = escape.get_local_destination()
 
         return start, goal, traj
 
     def _get_recovery_trajectory(self, current_state: MotionState) -> Trajectory:
         """
-        Brake to a stop wherever that lands, rather than returning to the position the
-        robot held when this was planned. Asking a robot at 2000mm/s to end at its
-        current position means overshooting and driving back, which is what the
-        positive along-track excursions after every recovery were.
+        Brake to a stop wherever that lands, rather than back at the position the robot
+        held when this was planned — asking a robot at 2000mm/s to end where it already
+        is means overshooting and driving back.
         """
         velocity = current_state.velocity
         acceleration = self.config.max_acceleration

@@ -8,7 +8,6 @@ from rclpy.executors import MultiThreadedExecutor
 from concurrent.futures import ThreadPoolExecutor
 
 from new_movement.entities.motion.motion_state import MotionState
-from new_movement.entities.trajectory.trajectory import Trajectory
 from new_movement.local_planner.orchestrator import Orchestrator
 from new_movement.local_planner.obstacle_factory import ObstacleFactory
 from new_movement.local_planner.solver import PlanningStatus
@@ -26,10 +25,8 @@ from utils.math_util import Vector2D
 # velocity is worse than planning from it as it stands.
 MAX_VISION_AGE = 0.2
 
-# Leaving the goal takes more than arriving at it. accept_radius sits close to the
-# vision noise, so a bare threshold flips between arrived and not from one frame to the
-# next and replans on every flip; the robot has to drift this much further out before
-# planning resumes.
+# Leaving the goal takes more than arriving at it: accept_radius sits close to the
+# vision noise, so a bare threshold would flip between arrived and not every frame.
 PARK_RELEASE_FACTOR = 2.0
 
 # Two goals closer together than this are the same goal.
@@ -42,18 +39,13 @@ class MovementPlanner(Node):
         
         # Parameters
         self.declare_parameter('planner_freq', 50.0)
-        # Planning is pure Python over small numpy arrays, so it holds the GIL
-        # throughout and extra workers buy no parallelism — only contention. Measured
-        # on a full 11v11 field, one cycle of 11 robots takes 45ms on a single worker
-        # and 61ms on eight. The pool still earns its place by keeping the work off the
-        # ROS timer thread; it just cannot do more than one plan at a time.
+        # Planning holds the GIL throughout, so extra workers buy contention rather
+        # than parallelism: 11 robots take 45ms on one worker and 61ms on eight. The
+        # pool earns its place only by keeping the work off the ROS timer thread.
         self.declare_parameter('max_threads', 1)
-        # build_overhead_point stamps a point at now + (sample_time - time_offset), so a
-        # fresh one is always stamped in the future: any positive age is already stale.
-        # At 0.5s the planner kept trusting a cache the tracker had stopped refreshing.
+        # Overhead points are stamped ahead of now, so any positive age is stale.
         self.declare_parameter('overhead_max_age', 0.05)
-        # How close counts as arrived. 10mm was below the vision noise itself, so it
-        # was never satisfied and the planner kept issuing plans at the goal forever.
+        # How close counts as arrived. Has to sit above the vision noise.
         self.declare_parameter('accept_radius', 50.0)
         
         # MotionState
@@ -62,11 +54,11 @@ class MovementPlanner(Node):
         self.game_state: Optional[GameState] = None
         self.active_futures: Dict[int, any] = {} # Track running tasks per robot
         # Last via point per robot, warm-starting the bypass solver. Held here rather
-        # than in Planner so the solver stays reentrant across the worker threads.
+        # than in the Orchestrator so it stays reentrant across the worker threads.
         self.last_vias: Dict[int, MotionState] = {}
         self._last_warned: Dict[str, float] = {}
-        # Goal each robot is currently parked at, so arrival can be latched instead of
-        # re-tested against a noisy measurement every cycle.
+        # Goal each robot is parked at, so arrival is latched rather than re-tested
+        # against a noisy measurement every cycle.
         self._parked: Dict[int, Vector2D] = {}
         
         # Tools
@@ -141,11 +133,9 @@ class MovementPlanner(Node):
         """
         The measured state carried forward to now, with the stamp to match.
 
-        Vision is already ~60ms old when it arrives and planning adds more, so a plan
-        left on the raw stamp reaches the tracker 150-280ms after the instant it
-        describes. The tracker then starts it that far in, and for a braking plan the
-        stop point it names is half a metre closer than the robot can still reach —
-        the robot runs past it and gets dragged back.
+        Vision is ~60ms old on arrival and planning adds more, so a plan left on the raw
+        stamp describes an instant 150-280ms before the tracker sees it. For a braking
+        plan that names a stop point the robot can no longer reach.
         """
         position = Vector2D(target.initial_pos.x, target.initial_pos.y)
         velocity = Vector2D(target.initial_vel.x, target.initial_vel.y)
@@ -165,16 +155,12 @@ class MovementPlanner(Node):
         """
         Whether the robot has arrived and should be left alone.
 
-        Nothing used to stop the planner at the goal. It kept producing plans, each one
-        a few centimetres long, and a plan that short is older than its own duration by
-        the time it reaches the tracker — so it was activated at its end, snapped the
-        reference, and pushed the robot off the point it had already reached. Then the
-        next cycle planned it back. That is the oscillation: the robot never settles
-        because arriving is what triggers the next plan.
+        Without this the planner keeps issuing plans a few centimetres long, which are
+        older than their own duration by the time they reach the tracker: each is
+        activated at its end and pushes the robot off the point it just reached.
 
-        Arrival is latched rather than re-tested each cycle, and released only once the
-        robot has drifted well clear, so a measurement sitting on the threshold cannot
-        start the cycle up again on its own.
+        Arrival is latched and released only once the robot has drifted well clear, so a
+        measurement sitting on the threshold cannot restart the cycle on its own.
         """
         radius = float(self.get_parameter('accept_radius').value)
         parked_at = self._parked.get(robot_id)
@@ -186,7 +172,7 @@ class MovementPlanner(Node):
             del self._parked[robot_id]
             return False
 
-        # A different goal than the one it parked at, so this is a new move.
+        # A different goal, so this is a new move.
         self._parked.pop(robot_id, None)
         if measured_pos.distance(goal_pos) <= radius:
             self._parked[robot_id] = goal_pos
@@ -204,16 +190,12 @@ class MovementPlanner(Node):
     def plan_for_robot(self, target):
         robot_id = target.robot_id
         
-        # from vision
+        # As vision measured it, before any carrying forward.
         init_pos = Vector2D(target.initial_pos.x, target.initial_pos.y)
-        init_vel = Vector2D(target.initial_vel.x, target.initial_vel.y)
-
         goal_pos = Vector2D(target.target_pos.x, target.target_pos.y)
 
         # Checked before anything else, and against the measured pose rather than the
-        # predicted one. The old test lived in the stale-overhead branch alone, so while
-        # the tracker kept the cache fresh — which is exactly what happens on arrival —
-        # the planner never asked whether it was already there.
+        # predicted one, which the tracker keeps fresh for as long as a plan is running.
         if self._is_parked(robot_id, goal_pos, init_pos):
             return None
 
@@ -230,8 +212,7 @@ class MovementPlanner(Node):
                 )
                 handoff_stamp = overhead_point.wall_stamp
             else:
-                # Stale overhead: the cached prediction has aged out, so go back to what
-                # vision actually measured. Arrival was already ruled out above.
+                # The cached prediction has aged out, so go back to what vision measured.
                 initial_state, handoff_stamp = self._state_from_vision(target)
         else:
             initial_state, handoff_stamp = self._state_from_vision(target)
@@ -270,17 +251,14 @@ class MovementPlanner(Node):
             if trajectory and trajectory.root:
                 if trajectory.status == PlanningStatus.RECOVERY:
                     # Neither a direct path nor a bypass cleared the obstacles, so this
-                    # is a stop, not a route. It arrives as a very short plan, which is
-                    # what the tracker's late-handoff warnings were reporting downstream.
+                    # is a stop, not a route.
                     self._warn_throttled(
                         f"recovery-{robot_id}",
                         f"No path for robot {robot_id}; stopping instead",
                     )
-                # Kept across direct paths rather than cleared with them. An obstacle
-                # crossing the line and stepping back off it used to re-roll the route
-                # from scratch each time it returned. A via that has gone stale is
-                # self-correcting: the solver rebuilds through it from the current start
-                # and a sampled route beats it whenever it is genuinely worse.
+                # Kept across direct paths rather than cleared with them, so an obstacle
+                # stepping on and off the line does not re-roll the route each time. A
+                # stale via is self-correcting: a sampled route beats it when it is worse.
                 if trajectory.via_state is not None:
                     self.last_vias[robot_id] = trajectory.via_state
                 return robot_id, trajectory, handoff_stamp
