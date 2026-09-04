@@ -6,13 +6,11 @@ import threading
 
 from utils.converter import todict
 
-from movement_interfaces.msg import GUITrajectories
+from movement_interfaces.msg import GUITrajectories, MovementCommand, MovementCommandArray
 from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, RefereeMessage
-from system_interfaces.srv import ControlParams, SetKp, SetOrientation, StrategyCommand, UpdateObstacle
+from system_interfaces.srv import ControlParams, SetKp, SetOrientation
 from std_srvs.srv import SetBool
-from vision.vision_node import Vision
-from referee.referee_node import RefereeNode
-from movement.entities.trajectory import Trajectory
+from movement.entities.trajectory import Trajectory 
 
 app = Flask(__name__)
 gui_socket = SocketIO(app, cors_allowed_origins="*")
