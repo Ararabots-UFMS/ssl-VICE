@@ -1,11 +1,8 @@
 from utils.math_util import Vector2D
 
 from strategy.skills.skills import Skills
+from utils.field_util import CenterGoal
 
-
-class CenterGoal:
-    GOAL_POSITIVE = Vector2D(2250.0, 0.0)
-    GOAL_NEGATIVE = Vector2D(-2250.0, 0.0)
 
 class GoalkeeperKickoff:
     def __init__(self):
