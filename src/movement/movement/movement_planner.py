@@ -31,7 +31,7 @@ class MovementPlanner(Node):
         
         # Parameters
         self.declare_parameter('planner_freq', 50.0)
-        self.declare_parameter('max_threads', 1)
+        self.declare_parameter('max_threads', 8)
         self.declare_parameter('overhead_max_age', 0.05)
         self.declare_parameter('accept_radius', 50.0)
         
