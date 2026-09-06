@@ -98,7 +98,7 @@ class MovementTracker(Node):
         super().__init__("movement_tracker")
 
         self.declare_parameter("lookahead_time", 0.3)
-        self.declare_parameter("improvement_threshold", 0.02)
+        self.declare_parameter("improvement_threshold", 0.1)
         self.declare_parameter("reprojection_enabled", True)
         self.declare_parameter("reprojection_window_before", 0.30)
         self.declare_parameter("reprojection_window_after", 0.50)
