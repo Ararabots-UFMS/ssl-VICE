@@ -1,29 +1,8 @@
 from system_interfaces.srv import GetGameConfig
 from system_interfaces.msg._game_state import GameState
-from strategy.skills.skills import Skills
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
 from strategy.tatics.stop import goAwayFromBall
-
-
-import math
-
-
-class CheckState(LeafNode):
-    def __init__(self, name, _desired_states):
-        super().__init__(name)
-        self.desired_states = _desired_states
-        self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
-
-    def game_state_callback(self, msg: GameState):
-        self.referee_command = msg.referee.command
-
-    def run(self):
-        return (
-            (TaskStatus.SUCCESS, None)
-            if self.referee_command in self.desired_states
-            else (TaskStatus.FAILURE, None)
-        )
+from strategy.commons.check_state import CheckState
 
 
 class CheckDistance(LeafNode):
