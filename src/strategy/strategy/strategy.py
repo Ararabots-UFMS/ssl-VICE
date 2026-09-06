@@ -1,10 +1,12 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
 
 from strategy.root import RootTree
 from typing import Iterable
 from movement_interfaces.msg import MovementCommand, MovementCommandArray
+from std_msgs.msg import Bool
 from system_interfaces.srv import SetOrientation, UpdateKick
 from strategy.skills.skills import Skill
 
@@ -20,6 +22,24 @@ class Strategy(Node):
         self.movement_pub = self.create_publisher(
             MovementCommandArray, "movement_manager/commands", 10
         )
+        # The GUI can hand movement over to its manual debug tool. Both publish to
+        # movement_manager/commands and the manager keeps only the last array, so this
+        # node has to actually go quiet rather than merely be ignored.
+        #
+        # Latched by the GUI, so the current mode arrives even if this node starts later.
+        # Defaults to enabled: with no GUI running, strategy is the only driver.
+        self._enabled = True
+        self._enabled_sub = self.create_subscription(
+            Bool,
+            "strategy/enabled",
+            self._enabled_callback,
+            QoSProfile(
+                depth=1,
+                durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+                history=QoSHistoryPolicy.KEEP_LAST,
+            ),
+        )
+
         self.orientation_cli = self.create_client(SetOrientation, "set_orientation")
         self.kick_cli = self.create_client(UpdateKick, "update_kick")
 
@@ -32,7 +52,20 @@ class Strategy(Node):
         self.timer = self.create_timer(0.1, self.run)
         self.root = RootTree("RootStrategy")
 
+    def _enabled_callback(self, msg: Bool) -> None:
+        if bool(msg.data) == self._enabled:
+            return
+        self._enabled = bool(msg.data)
+        self.get_logger().info(
+            f"Strategy {'enabled' if self._enabled else 'disabled (GUI manual control)'}"
+        )
+
     def run(self):
+        # Returns before the tree runs, not just before publishing: the kick and
+        # orientation service calls below would otherwise keep fighting the debug tool.
+        if not self._enabled:
+            return
+
         status, action = self.root.run()
 
         if action is None:

@@ -21,7 +21,7 @@ def _install(name):
 
 
 _install("movement_interfaces")
-_install("movement_interfaces.msg")
+movement_msg = _install("movement_interfaces.msg")
 
 system_interfaces = _install("system_interfaces")
 system_interfaces.msg = _install("system_interfaces.msg")
@@ -29,6 +29,9 @@ system_interfaces.srv = _install("system_interfaces.srv")
 
 _install("std_srvs")
 _install("std_srvs.srv")
+
+std_msgs = _install("std_msgs")
+std_msgs.msg = _install("std_msgs.msg")
 
 
 class _GUIRobot:
@@ -55,3 +58,36 @@ class _GUIMessage:
 # auto-vivifying MagicMocks.
 sys.modules["system_interfaces.msg"].GUIMessage = _GUIMessage
 sys.modules["system_interfaces.msg"].GUIRobot = _GUIRobot
+
+
+class _Vector2D:
+    def __init__(self):
+        self.x = 0.0
+        self.y = 0.0
+
+
+class _PlanningOptions:
+    def __init__(self):
+        self.avoid_penalty_area = False
+        self.avoid_center_area = False
+        self.avoid_ball = False
+        self.aggressiveness = 0.0
+
+
+class _MovementCommand:
+    def __init__(self):
+        self.robot_id = None
+        self.target_pos = _Vector2D()
+        self.target_vel = _Vector2D()
+        self.planning_options = _PlanningOptions()
+
+
+class _MovementCommandArray:
+    def __init__(self):
+        self.commands = []
+
+
+# A MagicMock class returns the *same* instance on every call, which would collapse
+# every robot's command into one object. These need distinct instances.
+movement_msg.MovementCommand = _MovementCommand
+movement_msg.MovementCommandArray = _MovementCommandArray

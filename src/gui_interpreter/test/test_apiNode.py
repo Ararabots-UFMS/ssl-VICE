@@ -29,12 +29,19 @@ def node():
     instance.is_play_pressed = False
     instance.is_simulation = True
 
-    instance.strategy_client = MagicMock()
     instance.pid_client = MagicMock()
     instance.kp_angular_client = MagicMock()
     instance.set_orientation_client = MagicMock()
-    instance.update_obstacles_client = MagicMock()
     instance.set_team_color_client = MagicMock()
+
+    # Movement is a published topic now, not a service.
+    instance.movement_pub = MagicMock()
+    instance._movement_commands = {}
+    instance.strategy_enabled_pub = MagicMock()
+    instance.control_mode = apiNode_module.MANUAL_MODE
+
+    instance.latest_geometry = None
+    instance.geometry_subscriber = MagicMock()
 
     instance.create_subscription = MagicMock(return_value=MagicMock())
     instance.create_timer = MagicMock()
@@ -385,22 +392,7 @@ class TestHandleConfigButton:
 
 
 class TestHandleStrategyCommand:
-    def test_emits_error_when_service_unavailable(self, node, emit_mock):
-        node.strategy_client.wait_for_service.return_value = False
-
-        node.handle_strategy_command({"robot_id": 1, "position_x": 0, "position_y": 0})
-
-        emit_mock.assert_called_once_with(
-            "strategy_response",
-            {"success": False, "message": "Strategy command service is not available"},
-        )
-        node.strategy_client.call_async.assert_not_called()
-
-    def test_sends_request_with_parsed_fields(self, node):
-        node.strategy_client.wait_for_service.return_value = True
-        future = MagicMock()
-        node.strategy_client.call_async.return_value = future
-
+    def test_publishes_movement_command(self, node, emit_mock):
         data = {
             "robot_id": "3",
             "position_x": "100.0",
@@ -410,68 +402,168 @@ class TestHandleStrategyCommand:
         }
         node.handle_strategy_command(data)
 
-        sent_request = node.strategy_client.call_async.call_args[0][0]
-        assert sent_request.id == 3
-        assert sent_request.position_x == 100.0
-        assert sent_request.position_y == 200.0
-        assert sent_request.velocity_x == 1.0
-        assert sent_request.velocity_y == 2.0
-        future.add_done_callback.assert_called_once_with(node.handle_strategy_response)
+        sent = node.movement_pub.publish.call_args[0][0]
+        assert len(sent.commands) == 1
+        cmd = sent.commands[0]
+        assert cmd.robot_id == 3
+        assert cmd.target_pos.x == 100.0
+        assert cmd.target_pos.y == 200.0
+        assert cmd.target_vel.x == 1.0
+        assert cmd.target_vel.y == 2.0
+        emit_mock.assert_called_once_with(
+            "strategy_response",
+            {"success": True, "message": "Command executed successfully"},
+        )
 
     def test_defaults_velocity_to_zero_when_missing(self, node):
-        node.strategy_client.wait_for_service.return_value = True
-        node.strategy_client.call_async.return_value = MagicMock()
-
         node.handle_strategy_command({"robot_id": "1", "position_x": "0", "position_y": "0"})
 
-        sent_request = node.strategy_client.call_async.call_args[0][0]
-        assert sent_request.velocity_x == 0.0
-        assert sent_request.velocity_y == 0.0
+        cmd = node.movement_pub.publish.call_args[0][0].commands[0]
+        assert cmd.target_vel.x == 0.0
+        assert cmd.target_vel.y == 0.0
+
+    def test_republishes_the_whole_set(self, node):
+        """The manager takes the full array each time, so earlier robots must survive."""
+        node.handle_strategy_command({"robot_id": 1, "position_x": 10, "position_y": 20})
+        node.handle_strategy_command({"robot_id": 2, "position_x": 30, "position_y": 40})
+
+        sent = node.movement_pub.publish.call_args[0][0]
+        assert sorted(c.robot_id for c in sent.commands) == [1, 2]
+
+    def test_refused_in_strategy_mode(self, node, emit_mock):
+        node.control_mode = apiNode_module.STRATEGY_MODE
+
+        node.handle_strategy_command({"robot_id": 1, "position_x": 0, "position_y": 0})
+
+        node.movement_pub.publish.assert_not_called()
+        emit_mock.assert_called_once_with(
+            "strategy_response",
+            {
+                "success": False,
+                "message": "Strategy is driving; switch to manual mode to command robots",
+            },
+        )
 
     def test_emits_error_on_malformed_data(self, node, emit_mock):
-        node.strategy_client.wait_for_service.return_value = True
-
         node.handle_strategy_command({})  # missing required keys -> KeyError
 
         emit_mock.assert_called_once()
         event, payload = emit_mock.call_args[0]
         assert event == "strategy_response"
         assert payload["success"] is False
-        node.strategy_client.call_async.assert_not_called()
+        node.movement_pub.publish.assert_not_called()
 
 
-class TestHandleStrategyResponse:
-    def test_success(self, node, emit_mock):
-        future = MagicMock()
-        future.result.return_value = MagicMock(success=True)
+class TestHandleControlMode:
+    def test_switching_to_manual_disables_strategy(self, node, emit_mock):
+        node.control_mode = apiNode_module.STRATEGY_MODE
 
-        node.handle_strategy_response(future)
+        node.handle_control_mode({"mode": "manual"})
 
+        assert node.control_mode == apiNode_module.MANUAL_MODE
+        assert node.strategy_enabled_pub.publish.call_args[0][0].data is False
+        emit_mock.assert_called_once_with("control_mode_update", {"mode": "manual"})
+
+    def test_switching_to_strategy_enables_and_clears_commands(self, node, emit_mock):
+        node.handle_strategy_command({"robot_id": 1, "position_x": 0, "position_y": 0})
+        emit_mock.reset_mock()
+
+        node.handle_control_mode({"mode": "strategy"})
+
+        assert node.control_mode == apiNode_module.STRATEGY_MODE
+        assert node.strategy_enabled_pub.publish.call_args[0][0].data is True
+        assert node._movement_commands == {}
+        # Publishing an empty array would strip every robot of its target for one tick.
+        node.movement_pub.publish.assert_called_once()
+        emit_mock.assert_called_once_with("control_mode_update", {"mode": "strategy"})
+
+    def test_switching_to_manual_parks_the_given_robots(self, node):
+        """Strategy's last goals stay latched in the manager, so they must be overridden."""
+        node.control_mode = apiNode_module.STRATEGY_MODE
+
+        node.handle_control_mode({"mode": "manual", "robots": [
+            {"robot_id": 1, "position_x": 100.0, "position_y": -200.0},
+            {"robot_id": 2, "position_x": 0.0, "position_y": 50.0},
+        ]})
+
+        sent = node.movement_pub.publish.call_args[0][0]
+        by_id = {c.robot_id: c for c in sent.commands}
+        assert by_id[1].target_pos.x == 100.0
+        assert by_id[1].target_vel.x == 0.0
+        assert by_id[2].target_pos.y == 50.0
+
+    def test_switching_to_manual_without_robots_publishes_nothing(self, node):
+        node.control_mode = apiNode_module.STRATEGY_MODE
+
+        node.handle_control_mode({"mode": "manual"})
+
+        node.movement_pub.publish.assert_not_called()
+
+    def test_rejects_unknown_mode(self, node, emit_mock):
+        node.control_mode = apiNode_module.MANUAL_MODE
+
+        node.handle_control_mode({"mode": "banana"})
+
+        assert node.control_mode == apiNode_module.MANUAL_MODE
+        node.strategy_enabled_pub.publish.assert_not_called()
+        event, payload = emit_mock.call_args[0]
+        assert event == "control_mode_update"
+        assert payload["mode"] == "manual"
+        assert "error" in payload
+
+
+class TestHandleStopRobots:
+    def test_parks_each_robot_at_its_current_position(self, node, emit_mock):
+        node.handle_stop_robots({"robots": [
+            {"robot_id": 1, "position_x": 100.0, "position_y": -200.0},
+            {"robot_id": 2, "position_x": 0.0, "position_y": 50.0},
+        ]})
+
+        sent = node.movement_pub.publish.call_args[0][0]
+        by_id = {c.robot_id: c for c in sent.commands}
+        assert by_id[1].target_pos.x == 100.0
+        assert by_id[1].target_pos.y == -200.0
+        assert by_id[1].target_vel.x == 0.0
+        assert by_id[1].target_vel.y == 0.0
+        assert by_id[2].target_pos.y == 50.0
         emit_mock.assert_called_once_with(
-            "strategy_response",
-            {"success": True, "message": "Command executed successfully"},
+            "strategy_response", {"success": True, "message": "Stopped 2 robot(s)"}
         )
 
-    def test_failure(self, node, emit_mock):
-        future = MagicMock()
-        future.result.return_value = MagicMock(success=False)
+    def test_overwrites_a_pending_target(self, node):
+        node.handle_strategy_command({"robot_id": 1, "position_x": 3000, "position_y": 0})
 
-        node.handle_strategy_response(future)
+        node.handle_stop_robots({"robots": [{"robot_id": 1, "position_x": 10, "position_y": 20}]})
 
-        emit_mock.assert_called_once_with(
-            "strategy_response", {"success": False, "message": "Command failed"}
-        )
+        cmd = node.movement_pub.publish.call_args[0][0].commands[0]
+        assert cmd.target_pos.x == 10.0
 
-    def test_exception(self, node, emit_mock):
-        future = MagicMock()
-        future.result.side_effect = RuntimeError("boom")
+    def test_refused_in_strategy_mode(self, node, emit_mock):
+        node.control_mode = apiNode_module.STRATEGY_MODE
 
-        node.handle_strategy_response(future)
+        node.handle_stop_robots({"robots": [{"robot_id": 1, "position_x": 0, "position_y": 0}]})
 
+        node.movement_pub.publish.assert_not_called()
         _, payload = emit_mock.call_args[0]
         assert payload["success"] is False
-        assert "boom" in payload["message"]
 
+    def test_emits_error_on_malformed_data(self, node, emit_mock):
+        node.handle_stop_robots({"robots": [{"robot_id": 1}]})  # missing position
+
+        node.movement_pub.publish.assert_not_called()
+        _, payload = emit_mock.call_args[0]
+        assert payload["success"] is False
+
+
+class TestEmitGeometryMessage:
+    def test_caches_and_emits(self, node, emit_mock):
+        msg = MagicMock()
+
+        with patch.object(apiNode_module, "todict", return_value={"field_length": 9000}):
+            node.emit_geometry_message(msg)
+
+        assert node.latest_geometry == {"field_length": 9000}
+        emit_mock.assert_called_once_with("geometry_update", {"field_length": 9000})
 
 class TestUpdatePidAndKpAngularAndOrientationRequests:
     def test_handle_update_pid_sends_request(self, node):
@@ -509,62 +601,59 @@ class TestUpdatePidAndKpAngularAndOrientationRequests:
 
 
 class TestHandleUpdateObstacles:
-    def test_parses_csv_ids(self, node):
-        node.update_obstacles_client.wait_for_service.return_value = True
-        node.update_obstacles_client.call_async.return_value = MagicMock()
-
+    def test_sets_planning_options(self, node, emit_mock):
         data = {
             "robot_id": "1",
-            "field_border": True,
             "penalty_area": False,
             "center_area": True,
             "ball": False,
-            "enemy_ids": " 2, 3 ,4",
-            "ally_ids": "5,6",
         }
         node.handle_update_obstacles(data)
 
-        req = node.update_obstacles_client.call_async.call_args[0][0]
-        assert req.enemy_ids == [2, 3, 4]
-        assert req.ally_ids == [5, 6]
-        assert req.field_border is True
-        assert req.penalty_area is False
-        assert req.center_area is True
-        assert req.ball is False
-
-    def test_accepts_list_ids_directly(self, node):
-        node.update_obstacles_client.wait_for_service.return_value = True
-        node.update_obstacles_client.call_async.return_value = MagicMock()
-
-        node.handle_update_obstacles({"robot_id": "1", "enemy_ids": [7, 8], "ally_ids": [9]})
-
-        req = node.update_obstacles_client.call_async.call_args[0][0]
-        assert req.enemy_ids == [7, 8]
-        assert req.ally_ids == [9]
-
-    def test_defaults_missing_fields(self, node):
-        node.update_obstacles_client.wait_for_service.return_value = True
-        node.update_obstacles_client.call_async.return_value = MagicMock()
-
-        node.handle_update_obstacles({"robot_id": "1"})
-
-        req = node.update_obstacles_client.call_async.call_args[0][0]
-        assert req.enemy_ids == []
-        assert req.ally_ids == []
-        assert req.field_border is False
-        assert req.penalty_area is False
-        assert req.center_area is False
-        assert req.ball is False
-
-    def test_emits_error_when_service_unavailable(self, node, emit_mock):
-        node.update_obstacles_client.wait_for_service.return_value = False
-
-        node.handle_update_obstacles({"robot_id": "1"})
-
+        cmd = node.movement_pub.publish.call_args[0][0].commands[0]
+        assert cmd.robot_id == 1
+        assert cmd.planning_options.avoid_penalty_area is False
+        assert cmd.planning_options.avoid_center_area is True
+        assert cmd.planning_options.avoid_ball is False
         emit_mock.assert_called_once_with(
             "obstacles_response",
-            {"success": False, "message": "Update obstacles service is not available"},
+            {"success": True, "message": "Obstacles updated successfully"},
         )
+
+    def test_defaults_missing_fields_to_false(self, node):
+        node.handle_update_obstacles({"robot_id": "1"})
+
+        options = node.movement_pub.publish.call_args[0][0].commands[0].planning_options
+        assert options.avoid_penalty_area is False
+        assert options.avoid_center_area is False
+        assert options.avoid_ball is False
+
+    def test_shares_the_command_with_the_position_handler(self, node):
+        """Both panels write the same MovementCommand, so neither may clear the other."""
+        node.handle_strategy_command({"robot_id": 1, "position_x": 500, "position_y": 600})
+        node.handle_update_obstacles({"robot_id": 1, "ball": True})
+
+        sent = node.movement_pub.publish.call_args[0][0]
+        assert len(sent.commands) == 1
+        cmd = sent.commands[0]
+        assert cmd.target_pos.x == 500.0
+        assert cmd.planning_options.avoid_ball is True
+
+    def test_refused_in_strategy_mode(self, node, emit_mock):
+        node.control_mode = apiNode_module.STRATEGY_MODE
+
+        node.handle_update_obstacles({"robot_id": "1"})
+
+        node.movement_pub.publish.assert_not_called()
+        _, payload = emit_mock.call_args[0]
+        assert payload["success"] is False
+
+    def test_emits_error_on_malformed_data(self, node, emit_mock):
+        node.handle_update_obstacles({})  # missing robot_id -> KeyError
+
+        node.movement_pub.publish.assert_not_called()
+        _, payload = emit_mock.call_args[0]
+        assert payload["success"] is False
 
 
 class TestHandleTeamColorService:
@@ -602,12 +691,6 @@ class TestHandleTeamColorService:
             "set_orientation_client",
             "orientation_response",
             "Set orientation service is not available",
-        ),
-        (
-            "handle_update_obstacles",
-            "update_obstacles_client",
-            "obstacles_response",
-            "Update obstacles service is not available",
         ),
         (
             "handle_team_color_service",
@@ -653,13 +736,6 @@ def test_handler_emits_error_when_service_unavailable(
             "Set orientation service call failed",
         ),
         (
-            "handle_obstacles_response",
-            "obstacles_response",
-            "Obstacles updated successfully",
-            "Update obstacles failed",
-            "Update obstacles service call failed",
-        ),
-        (
             "handle_team_color_service_response",
             "team_color_response",
             "Team color set successfully",
@@ -698,11 +774,11 @@ class TestGenericResponseHandlers:
 
 class TestCheckStrategyServicesStatus:
     def test_emits_and_returns_status_dict(self, node, emit_mock):
-        node.strategy_client.service_is_ready.return_value = True
+        # strategy and obstacles are published topics now, so they have no server to
+        # probe and are reported as always available.
         node.pid_client.service_is_ready.return_value = False
         node.kp_angular_client.service_is_ready.return_value = True
         node.set_orientation_client.service_is_ready.return_value = False
-        node.update_obstacles_client.service_is_ready.return_value = True
         node.set_team_color_client.service_is_ready.return_value = False
 
         result = node.check_strategy_services_status()

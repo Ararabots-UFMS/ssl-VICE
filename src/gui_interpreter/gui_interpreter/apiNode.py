@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
 from flask import Flask
 from flask_socketio import SocketIO
 import threading
@@ -7,10 +8,13 @@ import threading
 from utils.converter import todict
 
 from movement_interfaces.msg import GUITrajectories, MovementCommand, MovementCommandArray
-from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, RefereeMessage
+from system_interfaces.msg import (
+    VisionMessage, VisionGeometry, GUIMessage, GUIRobot, RefereeMessage,
+)
 from system_interfaces.srv import ControlParams, SetKp, SetOrientation
+from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
-from movement.entities.trajectory import Trajectory 
+from movement.entities.trajectory import Trajectory
 
 app = Flask(__name__)
 gui_socket = SocketIO(app, cors_allowed_origins="*")
@@ -19,6 +23,10 @@ VISION_NODE_NAME= "visionNode"
 SIM_COMMUNICATION_NODE_NAME = "grsim_publisher"
 REAL_COMMUNICATION_NODE_NAME = "hardware_publisher"
 REFEREE_NODE_NAME = "refereeNode"
+
+STRATEGY_MODE = "strategy"
+MANUAL_MODE = "manual"
+
 
 class APINode(Node):
     def __init__(self, name):
@@ -34,6 +42,13 @@ class APINode(Node):
         )
         self.referee_subscriber = self.create_subscription(
             RefereeMessage, "refereeTopic", self.emit_referee_message, 10
+        )
+
+        # Geometry is latched by the vision node and only changes when the field does,
+        # so the last one is kept here and replayed to every client that connects.
+        self.latest_geometry = None
+        self.geometry_subscriber = self.create_subscription(
+            VisionGeometry, "geometryTopic", self.emit_geometry_message, 10
         )
 
         self.communication_running = False
@@ -54,6 +69,26 @@ class APINode(Node):
             MovementCommandArray, "movement_manager/commands", 10
         )
         self._movement_commands: dict[int, MovementCommand] = {}
+
+        # Strategy and this node publish to the same movement topic and the manager keeps
+        # only the last array, so exactly one of them may be publishing at a time. This
+        # flag is the arbiter: strategy obeys it over strategy/enabled, and manual
+        # commands below are refused while it says strategy.
+        #
+        # Latched (transient local) so the strategy node picks up the current mode
+        # whenever it starts, not only when the mode next changes.
+        self.control_mode = STRATEGY_MODE
+        self.strategy_enabled_pub = self.create_publisher(
+            Bool,
+            "strategy/enabled",
+            QoSProfile(
+                depth=1,
+                durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+                history=QoSHistoryPolicy.KEEP_LAST,
+            ),
+        )
+        self._publish_strategy_enabled()
+
         self.pid_client = self.create_client(ControlParams, "update_pid")
         self.kp_angular_client = self.create_client(SetKp, "update_kp_angular")
         self.set_orientation_client = self.create_client(SetOrientation, "set_orientation")
@@ -69,7 +104,17 @@ class APINode(Node):
         self.vision_subscriber = self.create_subscription(
             VisionMessage, "visionTopic", self.emit_vision_message, 10
         )
-    
+        # A client that connects mid-session has missed both of these: geometry is
+        # published once at startup, and the mode only emits when it changes.
+        if self.latest_geometry is not None:
+            gui_socket.emit("geometry_update", self.latest_geometry)
+        gui_socket.emit("control_mode_update", {"mode": self.control_mode})
+
+    def emit_geometry_message(self, msg: VisionGeometry) -> None:
+        self.latest_geometry = todict(msg)
+        gui_socket.emit("geometry_update", self.latest_geometry)
+
+
     def emit_vision_message(self, msg: VisionMessage) -> None:
         data = todict(msg)
 
@@ -273,9 +318,108 @@ class APINode(Node):
         msg.commands = list(self._movement_commands.values())
         self.movement_pub.publish(msg)
 
+    def _publish_strategy_enabled(self) -> None:
+        msg = Bool()
+        msg.data = self.control_mode == STRATEGY_MODE
+        self.strategy_enabled_pub.publish(msg)
+
+    def _park_robots(self, robots) -> None:
+        """Command each robot to hold the position it is given, with zero velocity."""
+        for robot in robots:
+            cmd = self._movement_command_for(int(robot['robot_id']))
+            cmd.target_pos.x = float(robot['position_x'])
+            cmd.target_pos.y = float(robot['position_y'])
+            cmd.target_vel.x = 0.0
+            cmd.target_vel.y = 0.0
+
+    def handle_control_mode(self, data):
+        """
+        Switch between the strategy node and the GUI owning movement.
+
+        Entering strategy drops the cached manual commands without publishing them:
+        publishing an empty array would strip every robot of its target for the one tick
+        before strategy's next publish. Leaving them cached instead would resurrect a
+        stale manual target the next time an obstacle toggle republishes the set.
+
+        Entering manual parks the robots listed in `robots` (same shape as stopRobots).
+        Strategy's last goals stay latched in the manager, so without this the robots keep
+        driving to them after strategy goes quiet. It happens here rather than as a second
+        event because the two would race -- the park would be refused if it arrived first.
+        """
+        try:
+            mode = str(data['mode'] if isinstance(data, dict) else data)
+            if mode not in (STRATEGY_MODE, MANUAL_MODE):
+                raise ValueError(f"unknown control mode: {mode!r}")
+
+            self.control_mode = mode
+            if mode == STRATEGY_MODE:
+                self._movement_commands.clear()
+            else:
+                robots = (data.get('robots') or []) if isinstance(data, dict) else []
+                if robots:
+                    self._park_robots(robots)
+                    self._publish_movement_commands()
+
+            self._publish_strategy_enabled()
+            self.get_logger().info(f"Control mode set to {mode}")
+
+            gui_socket.emit("control_mode_update", {"mode": mode})
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to set control mode: {e}")
+            gui_socket.emit("control_mode_update", {
+                "mode": self.control_mode,
+                "error": f"Failed to set control mode: {e}",
+            })
+
+    def handle_stop_robots(self, data):
+        """
+        Park robots where they currently are.
+
+        Dropping a robot from the command array does not stop it -- the manager simply
+        stops issuing new targets and the tracker plays the old trajectory out. Commanding
+        its present position with zero velocity is what actually brakes it.
+
+        Positions come from the GUI because it already knows which robots are ours; this
+        node's is_team_color_yellow defaults the opposite way to game_watcher's and would
+        have to guess.
+        """
+        try:
+            if self.control_mode != MANUAL_MODE:
+                gui_socket.emit("strategy_response", {
+                    "success": False,
+                    "message": "Switch to manual mode before stopping robots",
+                })
+                return
+
+            robots = data['robots'] if isinstance(data, dict) else data
+            self._park_robots(robots)
+
+            self.get_logger().info(f"Stopping {len(robots)} robot(s) in place")
+
+            self._publish_movement_commands()
+            gui_socket.emit("strategy_response", {
+                "success": True,
+                "message": f"Stopped {len(robots)} robot(s)",
+            })
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to stop robots: {e}")
+            gui_socket.emit("strategy_response", {
+                "success": False,
+                "message": f"Failed to stop robots: {e}",
+            })
+
     def handle_strategy_command(self, data):
         """Handle strategy command from web GUI"""
         try:
+            if self.control_mode != MANUAL_MODE:
+                gui_socket.emit("strategy_response", {
+                    "success": False,
+                    "message": "Strategy is driving; switch to manual mode to command robots",
+                })
+                return
+
             robot_id = int(data['robot_id'])
             cmd = self._movement_command_for(robot_id)
             cmd.target_pos.x = float(data['position_x'])
@@ -440,6 +584,15 @@ class APINode(Node):
         was never a way to opt out of them.
         """
         try:
+            # Shares the movement topic with handle_strategy_command, so it is gated the
+            # same way.
+            if self.control_mode != MANUAL_MODE:
+                gui_socket.emit("obstacles_response", {
+                    "success": False,
+                    "message": "Strategy is driving; switch to manual mode to set obstacles",
+                })
+                return
+
             robot_id = int(data['robot_id'])
             cmd = self._movement_command_for(robot_id)
             cmd.planning_options.avoid_penalty_area = bool(data.get('penalty_area', False))
@@ -536,6 +689,8 @@ def main(args=None):
     gui_socket.on_event("configSaveButton", node.handle_config_button, namespace="")
     
     # Strategy command events
+    gui_socket.on_event("controlMode", node.handle_control_mode, namespace="")
+    gui_socket.on_event("stopRobots", node.handle_stop_robots, namespace="")
     gui_socket.on_event("strategyCommand", node.handle_strategy_command, namespace="")
     gui_socket.on_event("updatePID", node.handle_update_pid, namespace="")
     gui_socket.on_event("updateKpAngular", node.handle_update_kp_angular, namespace="")
