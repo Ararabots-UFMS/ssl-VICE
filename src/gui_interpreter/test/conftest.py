@@ -55,3 +55,37 @@ class _GUIMessage:
 # auto-vivifying MagicMocks.
 sys.modules["system_interfaces.msg"].GUIMessage = _GUIMessage
 sys.modules["system_interfaces.msg"].GUIRobot = _GUIRobot
+
+
+class _Vector2D:
+    def __init__(self):
+        self.x = 0.0
+        self.y = 0.0
+
+
+class _PlanningOptions:
+    def __init__(self):
+        self.avoid_penalty_area = False
+        self.avoid_center_area = False
+        self.avoid_ball = False
+        self.aggressiveness = 0.0
+
+
+class _MovementCommand:
+    def __init__(self):
+        self.robot_id = 0
+        self.target_pos = _Vector2D()
+        self.target_vel = _Vector2D()
+        self.planning_options = _PlanningOptions()
+
+
+class _MovementCommandArray:
+    def __init__(self):
+        self.commands = []
+
+
+# apiNode keeps one MovementCommand per robot and republishes the whole set, so
+# these need distinct mutable instances at the generated defaults -- a MagicMock
+# hands back one shared auto-vivifying object for every robot.
+sys.modules["movement_interfaces.msg"].MovementCommand = _MovementCommand
+sys.modules["movement_interfaces.msg"].MovementCommandArray = _MovementCommandArray

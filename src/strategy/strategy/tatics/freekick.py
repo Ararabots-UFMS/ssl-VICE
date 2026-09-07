@@ -3,7 +3,6 @@ from math import atan2, hypot
 from strategy.skills.skills import Skills
 from utils.math_util import Vector2D
 from utils.field_util import CenterGoal
-from system_interfaces.msg._game_state import GameState
 
 
 class GoalkeeperKickoff:

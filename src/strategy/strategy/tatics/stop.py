@@ -1,8 +1,8 @@
 from math import cos, sin, pi, atan2
 
 from strategy.skills.skills import Skills
-from utils.field_util import CenterGoal
 from utils.math_util import Vector2D
+from utils.field_util import CenterGoal
 
 
 class GoalkeeperKickoff:
