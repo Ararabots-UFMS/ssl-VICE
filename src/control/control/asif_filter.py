@@ -4,8 +4,6 @@ import cvxpy as cp
 from rclpy.node import Node
 from new_movement.entities.States import State, Vector2D
 from system_interfaces.msg import GameState, FilterCommand, TeamCommand, RobotCommand
-
-from system_interfaces.msg import GameState, FilterCommand, TeamCommand
 from system_interfaces.srv import GetGameConfig
 
 class AsifFilter(Node):
@@ -67,7 +65,7 @@ class AsifFilter(Node):
                         + self.rho * cp.sum_squares(self._delta_var)
                 )
 
-                self.qp = cp.Problem(objective, constraints)
+                self._qp = cp.Problem(objective, constraints)
 
                 self.last_time = self.get_clock().now()
                 self.create_timer(0.01, self.timer_callback)
