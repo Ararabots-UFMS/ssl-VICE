@@ -7,6 +7,9 @@
   <maintainer email="marcelo_l_filho@ufms.br">marcelo</maintainer>
   <license>Apache-2.0</license>
 
+  <exec_depend>movement_interfaces</exec_depend>
+  <exec_depend>system_interfaces</exec_depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

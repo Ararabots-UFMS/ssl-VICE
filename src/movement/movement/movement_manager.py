@@ -1,0 +1,118 @@
+import rclpy
+from rclpy.node import Node
+
+from movement_interfaces.msg import MovementCommandArray, TargetArray, Target
+from movement_interfaces.srv import SetStaticObstacles, SetGoalKeeper
+from system_interfaces.msg import GameState
+
+
+class MovementManager(Node):
+    def __init__(self):
+        super().__init__('movement_manager')
+
+        self.get_logger().info('movement_manager node has been started.')
+
+        self._movement_command_sub = self.create_subscription(MovementCommandArray, 'movement_manager/commands', self.movement_command_callback, 10)
+        self._game_state_sub = self.create_subscription(GameState, 'game_state', self.game_state_callback, 10)
+        self._static_obstacles_srv= self.create_service(SetStaticObstacles, 'SetStaticObstacles', self._set_static_obstacles)
+        self._goal_keeper_srv = self.create_service(SetGoalKeeper, 'SetGoalKeeper', self._set_goal_keeper)
+
+        self._target_array_pub = self.create_publisher(TargetArray, 'movement_manager/targets', 10)
+
+        self._movement_commands = None
+
+        self._robots = None
+        self._vision_stamp = 0.0
+        self._static_obstacles = None
+        self._goal_keeper_id = None
+
+    def movement_command_callback(self, msg):
+        self._movement_commands = msg.commands
+        self.try_publish_targets()
+
+    def game_state_callback(self, msg):
+        self._robots = msg.ally_robots
+        self._vision_stamp = msg.vision_wall_stamp
+        self.try_publish_targets()
+
+    def _set_static_obstacles(self, request, response):
+        self._static_obstacles = {
+            'border_area':bool(request.border_area),
+            'center_area':bool(request.center_area)
+        }
+        response.success = True
+        return response
+
+    def _set_goal_keeper(self, request, response):
+        self._goal_keeper_id = int(request.robot_id)
+        response.success = True
+        return response
+
+    def _ready_to_publish(self):
+        return self._movement_commands is not None and self._robots is not None
+
+    def try_publish_targets(self):
+        if not self._ready_to_publish():
+            return
+        self._target_array_pub.publish(self._build_target_array())
+
+    def _build_target_array(self):
+        robots = self._robots
+
+        cmd_by_id = {cmd.robot_id: cmd for cmd in self._movement_commands}
+
+        normal_targets = []
+
+        msg = TargetArray()
+
+        for robot in robots:
+            cmd = cmd_by_id.get(robot.id)
+            if cmd is None:
+                continue
+
+            target = Target()
+            target.robot_id = robot.id
+            target.initial_pos.x = robot.position_x
+            target.initial_pos.y = robot.position_y
+            target.initial_vel.x = robot.velocity_x
+            target.initial_vel.y = robot.velocity_y
+            target.vision_stamp = self._vision_stamp
+            target.target_pos = cmd.target_pos
+            target.target_vel = cmd.target_vel
+
+            # Copied field by field rather than assigned. Assigning shares the nested
+            # message with the stored command, so the overrides below write through to
+            # it and outlive the cycle: a robot that stops being the goalkeeper keeps
+            # the exemption until its command is republished.
+            options = target.planning_options
+            options.avoid_ball = cmd.planning_options.avoid_ball
+            options.aggressiveness = cmd.planning_options.aggressiveness
+            options.avoid_center_area = cmd.planning_options.avoid_center_area
+
+            if self._static_obstacles is not None:
+                options.avoid_center_area = self._static_obstacles['center_area']
+
+            # Decided here rather than inherited from the command. Entering the penalty
+            # area is a foul, and the field defaults to False when a publisher leaves it
+            # unset, so avoidance has to be the answer this node forces. The goalkeeper
+            # is the one robot allowed inside.
+            options.avoid_penalty_area = (
+                self._goal_keeper_id is None or robot.id != self._goal_keeper_id
+            )
+
+            normal_targets.append(target)
+
+        msg.targets = normal_targets
+
+        return msg
+
+def main(args=None):
+    rclpy.init(args=args)
+    movement_manager = MovementManager()
+    try:
+        rclpy.spin(movement_manager)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        movement_manager.destroy_node()
+        rclpy.shutdown()

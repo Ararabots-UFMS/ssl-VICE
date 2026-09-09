@@ -3,6 +3,10 @@
 .vscode/
 .venv/
 
+.env
+.env.*
+!.env.example
+
 build/
 install/
 log/
@@ -10,3 +14,7 @@ log/
 teste.*
 
 .vice_last_launch
+.venv/
+
+*coverage
+htmlcov/

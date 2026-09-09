@@ -1,89 +1,44 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
 from flask import Flask
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 import threading
-from threading import Thread
-import ctypes
 
 from utils.converter import todict
 
-from grsim_messenger.grsim_publisher import grSimPublisher
-from hardware_messenger.hardware_publisher import HardwarePublisher
-
-from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, TrajectoryMessage, RefereeMessage
-from system_interfaces.srv import ControlParams, SetKp, SetOrientation, StrategyCommand, UpdateObstacle
+from movement_interfaces.msg import GUITrajectories, MovementCommand, MovementCommandArray
+from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, RefereeMessage
+from system_interfaces.srv import ControlParams, SetKp, SetOrientation
 from std_srvs.srv import SetBool
-from vision.vision_node import Vision
-from referee.referee_node import RefereeNode
+from movement.entities.trajectory import Trajectory 
 
 app = Flask(__name__)
 gui_socket = SocketIO(app, cors_allowed_origins="*")
 
-vision_running = threading.Event()
-
-communication_running = threading.Event()
-
-referee_running = threading.Event()
-
-
-class thread_with_exception(threading.Thread):
-    def __init__(self, socket):
-        threading.Thread.__init__(self)
-        self.socket = socket
-
-    def run(self):
-
-        # target function of the thread class
-        try:
-            self.socket.run(app, allow_unsafe_werkzeug=True)
-        finally:
-            print("ended")
-
-    def get_id(self):
-
-        # returns id of the respective thread
-        if hasattr(self, "_thread_id"):
-            return self._thread_id
-        for id, thread in threading._active.items():
-            if thread is self:
-                return id
-
-    def raise_exception(self):
-        thread_id = self.get_id()
-        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
-            thread_id, ctypes.py_object(SystemExit)
-        )
-        if res > 1:
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
-            print("Exception raise failure")
-
+VISION_NODE_NAME= "visionNode"
+SIM_COMMUNICATION_NODE_NAME = "grsim_publisher"
+REAL_COMMUNICATION_NODE_NAME = "hardware_publisher"
+REFEREE_NODE_NAME = "refereeNode"
 
 class APINode(Node):
-    def __init__(
-        self, name, executor, vision_event, communication_event, referee_event
-    ):
+    def __init__(self, name):
         super().__init__(name)
 
         self.publisher = self.create_publisher(GUIMessage, "guiTopic", 10)
 
-        self.executor = executor
-
-        self.vision_running = vision_event
+        self.vision_running = False
         self.vision_subscriber = None
-        self.vision_node = Vision()
 
-        self.trajectory_subscriber = None
+        self.trajectory_subscriber = self.create_subscription(
+            GUITrajectories, "gui/trajectories", self.emit_trajectory_message, 10
+        )
         self.referee_subscriber = self.create_subscription(
             RefereeMessage, "refereeTopic", self.emit_referee_message, 10
         )
 
-        self.communication_running = communication_event
-        self.communication_node = grSimPublisher()
+        self.communication_running = False
 
-        self.referee_running = referee_event
-        self.referee_node = None
+        self.referee_running = False
 
         self.robots = []
         self.robot_count = 0
@@ -91,12 +46,17 @@ class APINode(Node):
         self.is_field_side_right = True
         self.is_team_color_yellow = True
         self.is_play_pressed = False
+        self.is_simulation = True
 
-        self.strategy_client = self.create_client(StrategyCommand, "strategy_command")
+        # Manual movement overrides. movement_manager takes the whole set of commands
+        # each time, so the latest per robot is kept here and republished together.
+        self.movement_pub = self.create_publisher(
+            MovementCommandArray, "movement_manager/commands", 10
+        )
+        self._movement_commands: dict[int, MovementCommand] = {}
         self.pid_client = self.create_client(ControlParams, "update_pid")
         self.kp_angular_client = self.create_client(SetKp, "update_kp_angular")
         self.set_orientation_client = self.create_client(SetOrientation, "set_orientation")
-        self.update_obstacles_client = self.create_client(UpdateObstacle, "update_obstacles")
         self.set_team_color_client = self.create_client(SetBool, "set_team_color")
 
         self.get_logger().info("API Node started")
@@ -109,11 +69,6 @@ class APINode(Node):
         self.vision_subscriber = self.create_subscription(
             VisionMessage, "visionTopic", self.emit_vision_message, 10
         )
-        self.trajectory_subscriber = self.create_subscription(
-            TrajectoryMessage, "trajectory_topic", self.emit_trajectory_message, 10
-        )
-        gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-        gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
     
     def emit_vision_message(self, msg: VisionMessage) -> None:
         data = todict(msg)
@@ -124,32 +79,75 @@ class APINode(Node):
             "balls":  data["balls"],
         })
 
-    def emit_trajectory_message(self, msg: TrajectoryMessage) -> None:
-        """Trajectory emission to GUI"""
+    def emit_trajectory_message(self, msg: GUITrajectories) -> None:
         trajectories_data = []
-        
-        for robot_trajectory in msg.trajectories:
-            robot_data = {
-                "robot_id": robot_trajectory.robot_id,
-                "total_duration": robot_trajectory.total_duration,
-                "points": []
-            }
-            
-            for point in robot_trajectory.points:
-                point_data = {
-                    "x": point.x,
-                    "y": point.y,
-                    "velocity_x": point.velocity_x,
-                    "velocity_y": point.velocity_y,
-                    "timestamp": point.timestamp
-                }
-                robot_data["points"].append(point_data)
-            
-            trajectories_data.append(robot_data)
-        
-        gui_socket.emit("trajectory_update", {
-            "trajectories": trajectories_data
-        })
+
+        for idx, cur_trajectory_msg in enumerate(msg.current_trajectories):
+            if not cur_trajectory_msg.segments:
+                continue
+
+            cur_trajectory = Trajectory.from_msg(cur_trajectory_msg)
+            time_offset = msg.time_offsets[idx]
+            total_duration = cur_trajectory.get_total_duration()
+
+            # time_offset → end
+            current_points = []
+            if time_offset < total_duration:
+                states = cur_trajectory.to_list(
+                    time_step=0.2,
+                    start_time=time_offset,
+                    end_time=total_duration,
+                    output_states=True,
+                )
+                current_points = [
+                    {
+                        "x": s.position.x,
+                        "y": s.position.y,
+                        "vx": s.velocity.x,
+                        "vy": s.velocity.y,
+                    }
+                    for s in states
+                ]
+
+            # Pending trajectory t=0 → end
+            pending_points = []
+            pending_handoff = None
+            pending_msg = msg.pending_trajectories[idx]
+            if pending_msg.segments:
+                pending_trajectory = Trajectory.from_msg(pending_msg)
+                pending_duration = pending_trajectory.get_total_duration()
+                if pending_duration > 1e-3:
+                    states = pending_trajectory.to_list(
+                        time_step=0.2,
+                        start_time=0.0,
+                        end_time=pending_duration,
+                        output_states=True,
+                    )
+                    pending_points = [
+                        {
+                            "x": s.position.x,
+                            "y": s.position.y,
+                            "vx": s.velocity.x,
+                            "vy": s.velocity.y,
+                        }
+                        for s in states
+                    ]
+                    pending_handoff = pending_msg.handoff_stamp
+
+            trajectories_data.append({
+                "robot_id": cur_trajectory_msg.robot_id,
+                "current": {
+                    "points": current_points,
+                    "total_duration": total_duration,
+                    "time_offset": time_offset,
+                },
+                "pending": {
+                    "points": pending_points,
+                    "handoff_stamp": pending_handoff,
+                },
+            })
+
+        gui_socket.emit("trajectory_update", {"trajectories": trajectories_data})
 
     def emit_referee_message(self, msg: RefereeMessage) -> None:
         """Forward referee messages to the GUI."""
@@ -195,90 +193,35 @@ class APINode(Node):
     def handle_simulation(self, is_simulation):
         self.get_logger().info(f"Is sumulation? {is_simulation}")
         self.is_simulation = is_simulation
-        try:
-            self.executor.remove_node(self.communication_node)
-        except:
-            pass
-        self.communication_node.destroy_node()
-        if is_simulation:
-            self.communication_node = grSimPublisher()
-        else:
-            self.communication_node = HardwarePublisher()
 
-    def handle_vision_button(self):
-        if self.vision_running.is_set():
-            self.vision_running.clear()
+    def update_vision_status(self, nodes_running):
+        is_vision_running = VISION_NODE_NAME in nodes_running
 
-            self.executor.remove_node(self.vision_node)
+        if is_vision_running == self.vision_running:
+            return
 
-            gui_socket.emit("visionOutput", {"line": "Vision node stopped"})
-            gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-            self.get_logger().info("Vision node stopped")
-        else:
-            self.vision_running.set()
+        self.vision_running = not self.vision_running
+        gui_socket.emit("visionStatus", {"status": self.vision_running})
 
-            gui_socket.emit("visionOutput", {"line": "Starting vision node"})
-            gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-            self.get_logger().info("Starting vision node")
+    def update_communication_status(self, nodes_running):
+        communication_node_name = SIM_COMMUNICATION_NODE_NAME if self.is_simulation else REAL_COMMUNICATION_NODE_NAME
+        is_communication_running = communication_node_name in nodes_running
 
-            self.executor.add_node(self.vision_node)
+        if is_communication_running == self.communication_running:
+            return
 
-    def handle_communication_button(self):
-        if self.communication_running.is_set():
-            self.communication_running.clear()
-            self.executor.remove_node(self.communication_node)
-            gui_socket.emit(
-                "communicationOutput", {"line": "Communication node stopped"}
-            )
-            gui_socket.emit(
-                "communicationStatus", {"status": self.communication_running.is_set()}
-            )
-            self.get_logger().info("Communication node stopped")
-        else:
-            self.communication_running.set()
-            gui_socket.emit(
-                "communicationOutput", {"line": "Starting communication node"}
-            )
-            gui_socket.emit(
-                "communicationStatus", {"status": self.communication_running.is_set()}
-            )
-            self.get_logger().info("Starting communication node")
-            self.executor.add_node(self.communication_node)
+        self.communication_running = not self.communication_running
+        gui_socket.emit("communicationStatus", {"status": self.communication_running})
 
-    def handle_referee_button(self):
-        if self.referee_running.is_set():
-            self.referee_running.clear()
-            if self.referee_node is not None:
-                try:
-                    self.executor.remove_node(self.referee_node)
-                except Exception:
-                    pass
-                try:
-                    self.referee_node.destroy_node()
-                except Exception:
-                    pass
-                self.referee_node = None
-            gui_socket.emit("refereeOutput", {"line": "Referee node stopped"})
-            gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
-            self.get_logger().info("Referee node stopped")
-        else:
-            self.referee_running.set()
-            gui_socket.emit("referee", {"line": "Starting referee node"})
-            gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
-            self.get_logger().info("Starting referee node")
-            try:
-                import subprocess
+    def update_referee_status(self, nodes_running):
+        referee_node_name = REFEREE_NODE_NAME
+        is_referee_running = referee_node_name in nodes_running
 
-                nodes_list = subprocess.check_output(["ros2", "node", "list"], text=True)
-                if "/refereeNode" in nodes_list.splitlines():
-                    self.get_logger().info("External /refereeNode detected; not creating embedded RefereeNode.")
-                    return
-            except Exception:
-                pass
+        if is_referee_running == self.referee_running:
+            return
 
-            if self.referee_node is None:
-                self.referee_node = RefereeNode()
-            self.executor.add_node(self.referee_node)
+        self.referee_running = not self.referee_running
+        gui_socket.emit("refereeStatus", {"status": self.referee_running})
 
     def create_message(self) -> GUIMessage:
         msg = GUIMessage()
@@ -301,6 +244,10 @@ class APINode(Node):
     def publish_gui_data(self) -> None:
         message = self.create_message()
         self.publisher.publish(message)
+        nodes_running = self.get_node_names()
+        self.update_vision_status(nodes_running)
+        self.update_communication_status(nodes_running)
+        self.update_referee_status(nodes_running)
 
     def handle_config_button(self, msg):
         self.get_logger().info("Configuration saved")
@@ -309,52 +256,50 @@ class APINode(Node):
         self.publish_gui_data()
 
     # Strategy command handlers
+    def _movement_command_for(self, robot_id: int) -> MovementCommand:
+        """
+        The command being built for a robot, so the position and obstacle panels can
+        each set their own fields without clearing the other's.
+        """
+        cmd = self._movement_commands.get(robot_id)
+        if cmd is None:
+            cmd = MovementCommand()
+            cmd.robot_id = robot_id
+            self._movement_commands[robot_id] = cmd
+        return cmd
+
+    def _publish_movement_commands(self) -> None:
+        msg = MovementCommandArray()
+        msg.commands = list(self._movement_commands.values())
+        self.movement_pub.publish(msg)
+
     def handle_strategy_command(self, data):
         """Handle strategy command from web GUI"""
-        if not self.strategy_client.wait_for_service(timeout_sec=1.0):
-            gui_socket.emit("strategy_response", {
-                "success": False, 
-                "message": "Strategy command service is not available"
-            })
-            return
-
         try:
-            request = StrategyCommand.Request()
-            request.id = int(data['robot_id'])
-            request.position_x = float(data['position_x'])
-            request.position_y = float(data['position_y'])
-            request.velocity_x = float(data.get('velocity_x', 0.0))
-            request.velocity_y = float(data.get('velocity_y', 0.0))
+            robot_id = int(data['robot_id'])
+            cmd = self._movement_command_for(robot_id)
+            cmd.target_pos.x = float(data['position_x'])
+            cmd.target_pos.y = float(data['position_y'])
+            cmd.target_vel.x = float(data.get('velocity_x', 0.0))
+            cmd.target_vel.y = float(data.get('velocity_y', 0.0))
 
             self.get_logger().info(
-                f"Sending strategy command: ID={request.id}, "
-                f"Pos=({request.position_x}, {request.position_y}), "
-                f"Vel=({request.velocity_x}, {request.velocity_y})"
+                f"Sending strategy command: ID={robot_id}, "
+                f"Pos=({cmd.target_pos.x}, {cmd.target_pos.y}), "
+                f"Vel=({cmd.target_vel.x}, {cmd.target_vel.y})"
             )
 
-            future = self.strategy_client.call_async(request)
-            future.add_done_callback(self.handle_strategy_response)
+            self._publish_movement_commands()
+            gui_socket.emit("strategy_response", {
+                "success": True,
+                "message": "Command executed successfully"
+            })
 
         except Exception as e:
             self.get_logger().error(f"Failed to send strategy command: {e}")
             gui_socket.emit("strategy_response", {
                 "success": False,
                 "message": f"Failed to send command: {e}"
-            })
-
-    def handle_strategy_response(self, future):
-        """Handle strategy command response"""
-        try:
-            response = future.result()
-            gui_socket.emit("strategy_response", {
-                "success": response.success,
-                "message": "Command executed successfully" if response.success else "Command failed"
-            })
-        except Exception as e:
-            self.get_logger().error(f"Strategy command failed: {e}")
-            gui_socket.emit("strategy_response", {
-                "success": False,
-                "message": f"Service call failed: {e}"
             })
 
     def handle_update_pid(self, data):
@@ -487,64 +432,38 @@ class APINode(Node):
             })
 
     def handle_update_obstacles(self, data):
-        """Handle update obstacles from web GUI"""
-        if not self.update_obstacles_client.wait_for_service(timeout_sec=1.0):
-            gui_socket.emit("obstacles_response", {
-                "success": False,
-                "message": "Update obstacles service is not available"
-            })
-            return
+        """
+        Handle update obstacles from web GUI.
 
+        field_border, enemy_ids and ally_ids are gone: the obstacle factory always
+        builds the field border and an obstacle for every robot on the field, so there
+        was never a way to opt out of them.
+        """
         try:
-            request = UpdateObstacle.Request()
-            request.id = int(data['robot_id'])
-            request.field_border = bool(data.get('field_border', False))
-            request.penalty_area = bool(data.get('penalty_area', False))
-            request.center_area = bool(data.get('center_area', False))
-            request.ball = bool(data.get('ball', False))
-            
-            # Parse enemy and ally IDs
-            enemy_ids = data.get('enemy_ids', [])
-            ally_ids = data.get('ally_ids', [])
-            
-            if isinstance(enemy_ids, str):
-                enemy_ids = [int(x.strip()) for x in enemy_ids.split(',') if x.strip()]
-            request.enemy_ids = enemy_ids
-            
-            if isinstance(ally_ids, str):
-                ally_ids = [int(x.strip()) for x in ally_ids.split(',') if x.strip()]
-            request.ally_ids = ally_ids
+            robot_id = int(data['robot_id'])
+            cmd = self._movement_command_for(robot_id)
+            cmd.planning_options.avoid_penalty_area = bool(data.get('penalty_area', False))
+            cmd.planning_options.avoid_center_area = bool(data.get('center_area', False))
+            cmd.planning_options.avoid_ball = bool(data.get('ball', False))
 
             self.get_logger().info(
-                f"Updating obstacles for robot {request.id}: "
-                f"field_border={request.field_border}, penalty_area={request.penalty_area}, "
-                f"center_area={request.center_area}, ball={request.ball}, "
-                f"enemy_ids={request.enemy_ids}, ally_ids={request.ally_ids}"
+                f"Updating obstacles for robot {robot_id}: "
+                f"penalty_area={cmd.planning_options.avoid_penalty_area}, "
+                f"center_area={cmd.planning_options.avoid_center_area}, "
+                f"ball={cmd.planning_options.avoid_ball}"
             )
 
-            future = self.update_obstacles_client.call_async(request)
-            future.add_done_callback(self.handle_obstacles_response)
+            self._publish_movement_commands()
+            gui_socket.emit("obstacles_response", {
+                "success": True,
+                "message": "Obstacles updated successfully"
+            })
 
         except Exception as e:
             self.get_logger().error(f"Failed to update obstacles: {e}")
             gui_socket.emit("obstacles_response", {
                 "success": False,
                 "message": f"Failed to update obstacles: {e}"
-            })
-
-    def handle_obstacles_response(self, future):
-        """Handle update obstacles response"""
-        try:
-            response = future.result()
-            gui_socket.emit("obstacles_response", {
-                "success": response.success,
-                "message": "Obstacles updated successfully" if response.success else "Update obstacles failed"
-            })
-        except Exception as e:
-            self.get_logger().error(f"Update obstacles failed: {e}")
-            gui_socket.emit("obstacles_response", {
-                "success": False,
-                "message": f"Update obstacles service call failed: {e}"
             })
 
     def handle_team_color_service(self, data):
@@ -590,34 +509,30 @@ class APINode(Node):
     def check_strategy_services_status(self):
         """Check status of all strategy services and emit to GUI"""
         services_status = {
-            "strategy": self.strategy_client.wait_for_service(timeout_sec=0.1),
-            "pid": self.pid_client.wait_for_service(timeout_sec=0.1),
-            "kp_angular": self.kp_angular_client.wait_for_service(timeout_sec=0.1),
-            "orientation": self.set_orientation_client.wait_for_service(timeout_sec=0.1),
-            "obstacles": self.update_obstacles_client.wait_for_service(timeout_sec=0.1),
-            "team_color": self.set_team_color_client.wait_for_service(timeout_sec=0.1)
+            # Movement is a published topic now, so there is no server to probe.
+            "strategy": True,
+            "pid": self.pid_client.service_is_ready(),
+            "kp_angular": self.kp_angular_client.service_is_ready(),
+            "orientation": self.set_orientation_client.service_is_ready(),
+            "obstacles": True,
+            "team_color": self.set_team_color_client.service_is_ready()
         }
-        
+
         gui_socket.emit("services_status", services_status)
         return services_status
 
+def run_socket():
+    gui_socket.run(app, allow_unsafe_werkzeug=True)
 
 def main(args=None):
     rclpy.init(args=args)
-    executor = MultiThreadedExecutor(num_threads=2)
-    node = APINode(
-        "api_node", executor, vision_running, communication_running, referee_running
-    )
+
+    node = APINode("api_node")
     gui_socket.on_event("connect", node.handle_connect, namespace="")
     gui_socket.on_event("disconnect", node.handle_disconnect, namespace="")
     gui_socket.on_event("fieldSide", node.handle_field_side, namespace="")
     gui_socket.on_event("teamColor", node.handle_team_color, namespace="")
     gui_socket.on_event("fieldMode", node.handle_simulation, namespace="")
-    gui_socket.on_event("visionButton", node.handle_vision_button, namespace="")
-    gui_socket.on_event(
-        "communicationButton", node.handle_communication_button, namespace=""
-    )
-    gui_socket.on_event("refereeButton", node.handle_referee_button, namespace="")
     gui_socket.on_event("configSaveButton", node.handle_config_button, namespace="")
     
     # Strategy command events
@@ -629,12 +544,11 @@ def main(args=None):
     gui_socket.on_event("setTeamColorService", node.handle_team_color_service, namespace="")
     gui_socket.on_event("checkServicesStatus", node.check_strategy_services_status, namespace="")
     try:
-        thread = thread_with_exception(gui_socket)
-        thread.start()
-        executor.add_node(node)
-        executor.spin()
-    except Exception:
-        thread.raise_exception()
+        socket_thread = threading.Thread(target=run_socket, daemon=True)
+        socket_thread.start()
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
         rclpy.shutdown()
 
 

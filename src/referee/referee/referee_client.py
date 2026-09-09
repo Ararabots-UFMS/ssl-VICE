@@ -1,10 +1,7 @@
 import socket
 import struct
-import signal
-import time
 
-
-class Client:
+class RefereeClient:
     """Client that handles the UDP multicast communication for SSL referee messages.
 
     Supports joining a multicast group on an explicit local interface IP when needed
@@ -44,5 +41,7 @@ class Client:
         try:
             data, addr = self.sock.recvfrom(self.buffer_size)
             return data, addr
+        except socket.timeout:
+            return None
         except Exception as e:
             raise RuntimeError(f"Error receiving multicast message: {e}")

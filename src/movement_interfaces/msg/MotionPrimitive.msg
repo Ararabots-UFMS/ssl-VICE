@@ -1,0 +1,2 @@
+Vector2D acceleration
+float64 duration

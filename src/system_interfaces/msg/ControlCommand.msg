@@ -1,1 +1,0 @@
-RobotControlCommand[] command
