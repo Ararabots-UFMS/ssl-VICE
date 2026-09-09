@@ -15,3 +15,6 @@ teste.*
 
 .vice_last_launch
 .venv/
+
+*coverage
+htmlcov/

@@ -1,181 +1,69 @@
-from system_interfaces.msg._game_state import GameState
-from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
-from system_interfaces.srv import GetGameConfig
-from strategy.tatics.kickoff import OurKickoff, TheirKickoff
+from strategy.behaviour import LeafNode, RunResult, Selector, Sequence
+from strategy.commons.check_state import CheckState
+from strategy.commons.task_status import TaskStatus
+from strategy.context import TickContext, TreeDeps
+from strategy.tatics.kickoff import OurKickoff
 
-
-class CheckState(LeafNode):
-    def __init__(self, name, _desired_states):
-        super().__init__(name)
-        self.desired_states = _desired_states
-        self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
-
-    def game_state_callback(self, msg: GameState):
-        self.referee_command = msg.referee.command
-
-    def run(self):
-        return (TaskStatus.SUCCESS, None) if self.referee_command in self.desired_states else (TaskStatus.FAILURE, None)
 
 
 class CheckIfOurKickoff(LeafNode):
-    def __init__(self, name):
-        super().__init__(name)
-        self.is_team_color_yellow = None
-        self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
-        self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
-        self._get_color_future = None
-        self._config_timer = self.create_timer(0.5, self._request_color_once)
+    def run(self, context: TickContext) -> RunResult:
+        if context.is_team_color_yellow is None:
+            return TaskStatus.RUNNING, None
 
-    def game_state_callback(self, msg: GameState):
-        self.referee_command = msg.referee.command
+        expected_cmd = (
+            "PREPARE_KICKOFF_YELLOW"
+            if context.is_team_color_yellow
+            else "PREPARE_KICKOFF_BLUE"
+        )
 
-    def _request_color_once(self):
-        if (
-            self.is_team_color_yellow is not None
-            or not self.game_config_client.service_is_ready()
-            or self._get_color_future is not None
-        ):
-            return
-        req = GetGameConfig.Request()
-        self._get_color_future = self.game_config_client.call_async(req)
-        self._get_color_future.add_done_callback(self._on_get_color_response)
-
-    def _on_get_color_response(self, future):
-        exc = future.exception()
-        if exc:
-            self.get_logger().warn(f"GetGameConfig failed: {exc}")
-        else:
-            resp = future.result()
-            self.is_team_color_yellow = resp.is_team_color_yellow
-        self._get_color_future = None
-        if self._config_timer:
-            self._config_timer.cancel()
-            self._config_timer = None
-
-    def run(self):
-
-        expected_cmd = "PREPARE_KICKOFF_YELLOW" if self.is_team_color_yellow else "PREPARE_KICKOFF_BLUE"
-
-        if self.referee_command == expected_cmd:
+        if context.referee_command == expected_cmd:
             return TaskStatus.SUCCESS, None
         return TaskStatus.FAILURE, None
 
 
 class OurKickoffAction(LeafNode):
-    def __init__(self, name):
-        super().__init__(name)
-        self.ally_robots = {}
-        self.on_positive_half = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
-        self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
-        self._get_color_future = None
-        self._config_timer = self.create_timer(0.5, self._request_color_once)
-
-    def _request_color_once(self):
-        if (
-            self.on_positive_half is not None
-            or not self.game_config_client.service_is_ready()
-            or self._get_color_future is not None
-        ):
-            return
-        req = GetGameConfig.Request()
-        self._get_color_future = self.game_config_client.call_async(req)
-        self._get_color_future.add_done_callback(self._on_get_color_response)
-
-    def _on_get_color_response(self, future):
-        exc = future.exception()
-        if exc:
-            self.get_logger().warn(f"GetGameConfig failed: {exc}")
-        else:
-            resp = future.result()
-            self.on_positive_half = resp.on_positive_half
-        self._get_color_future = None
-        if self._config_timer:
-            self._config_timer.cancel()
-            self._config_timer = None
-
-    def game_state_callback(self, msg: GameState):
-        self.ally_robots = {r.id: r for r in msg.ally_robots}
-
-    def run(self):
-
-        if not self.ally_robots or self.on_positive_half is None:
+    def run(self, context: TickContext) -> RunResult:
+        if not context.ally_robots or context.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurKickoff(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        executor = OurKickoff(
+            ally_robots=context.ally_robots, on_positive_half=context.on_positive_half
+        )
 
         return TaskStatus.SUCCESS, executor.execute()
 
+
 class TheirKickoffAction(LeafNode):
-    def __init__(self, name):
-        super().__init__(name)
-        self.ally_robots = {}
-        self.on_positive_half = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
-        self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
-        self._get_color_future = None
-        self._config_timer = self.create_timer(0.5, self._request_color_once)
-
-    def _request_color_once(self):
-        if (
-            self.on_positive_half is not None
-            or not self.game_config_client.service_is_ready()
-            or self._get_color_future is not None
-        ):
-            return
-        req = GetGameConfig.Request()
-        self._get_color_future = self.game_config_client.call_async(req)
-        self._get_color_future.add_done_callback(self._on_get_color_response)
-
-    def _on_get_color_response(self, future):
-        exc = future.exception()
-        if exc:
-            self.get_logger().warn(f"GetGameConfig failed: {exc}")
-        else:
-            resp = future.result()
-            self.on_positive_half = resp.on_positive_half
-        self._get_color_future = None
-        if self._config_timer:
-            self._config_timer.cancel()
-            self._config_timer = None
-
-    def game_state_callback(self, msg: GameState):
-        self.ally_robots = {r.id: r for r in msg.ally_robots}
-
-    def run(self):
-
-        if not self.ally_robots or self.on_positive_half is None:
+    def run(self, context: TickContext) -> RunResult:
+        if not context.ally_robots or context.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = OurKickoff(ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
+        # Carried over as-is from before this refactor: this branch builds OurKickoff,
+        # not TheirKickoff. Left alone deliberately so the refactor does not change
+        # what the robots do on the field.
+        executor = OurKickoff(
+            ally_robots=context.ally_robots, on_positive_half=context.on_positive_half
+        )
 
         return TaskStatus.SUCCESS, executor.execute()
 
 
 class Kickoff(Sequence):
-    def __init__(self, name):
-        super().__init__(name, [])
-
-        """ List with possible inputs to this state """
+    def __init__(self, name: str, deps: TreeDeps):
+        """List with possible inputs to this state"""
 
         commands = ["PREPARE_KICKOFF_BLUE", "PREPARE_KICKOFF_YELLOW"]
 
-        check_kickoff = CheckState("CheckKickoff", commands)
+        check_kickoff = CheckState("CheckKickoff", deps, commands)
 
-        is_ours = CheckIfOurKickoff("CheckIfOurKickoff")
-        action_ours = OurKickoffAction("OurKickoffAction")
+        is_ours = CheckIfOurKickoff("CheckIfOurKickoff", deps)
+        action_ours = OurKickoffAction("OurKickoffAction", deps)
 
-        ours = Sequence("OurKickoff", [is_ours, action_ours])
+        ours = Sequence("OurKickoff", deps, [is_ours, action_ours])
 
-        action_theirs = TheirKickoffAction("TheirKickoffAction")
+        action_theirs = TheirKickoffAction("TheirKickoffAction", deps)
 
-        ours_or_theirs = Selector("OursOrTheirsKickoff", [ours, action_theirs])
+        ours_or_theirs = Selector("OursOrTheirsKickoff", deps, [ours, action_theirs])
 
-        self.add_children([check_kickoff, ours_or_theirs])
-
-
-    def run(self):
-        """Access the second element in tuple"""
-        return super().run()
+        super().__init__(name, deps, [check_kickoff, ours_or_theirs])
