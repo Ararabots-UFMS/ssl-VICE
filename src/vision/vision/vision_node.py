@@ -16,6 +16,9 @@ from system_interfaces.msg import VisionMessage, VisionGeometry
 class Vision(Node):
     """VICE Vision Node, connects and receives data from ssl-vision"""
 
+    MAX_PACKETS_PER_DRAIN = 200
+    STALE_REPORT_PERIOD = 5.0
+
     def __init__(self):
         super().__init__("visionNode")
 
@@ -30,6 +33,7 @@ class Vision(Node):
             "max_time_undetected": 0.5,
             "frequency_timer_publish": 60.0,
             "frequency_tracker_update": 1000.0,
+            "frequency_tracker_process": 60.0,
             "friction": 0.01,
         }
 
@@ -46,7 +50,13 @@ class Vision(Node):
         self.max_time_undetected = self.get_parameter("max_time_undetected").value
         self.frequency_timer_publish = self.get_parameter("frequency_timer_publish").value
         self.frequency_tracker_update = self.get_parameter("frequency_tracker_update").value
+        self.frequency_tracker_process = self.get_parameter("frequency_tracker_process").value
         self.friction = self.get_parameter("friction").value
+
+        self._pending_frame = {}
+        self._last_process = 0.0
+        self._stale_packets = 0
+        self._last_stale_report = 0.0
         
         self.client = Client(
             ip=self.ip,
@@ -74,24 +84,18 @@ class Vision(Node):
         self.tracker_timer = self.create_timer(1.0/self.frequency_tracker_update, self.update_tracker)
 
     def update_tracker(self):
+        """
+        Empty the socket, then fold at most one frame per processing period into the
+        filters.
 
+        Reading a single packet per tick tied the drain rate to the cost of filtering.
+        On a full field that cost overtook the camera rate, the kernel buffer filled,
+        and every estimate arrived about a second old while still being stamped as
+        fresh — which nothing downstream could detect.
+        """
         try:
-            data = self.client.receive()
-
-            if data is None:
-                return
-
-            if data.HasField("geometry"):
-                self.publish_geometry(data.geometry)
-            else:
-                # Read the clock here, next to the packet, so the stamp labels the
-                # capture instant rather than whenever publish_vision happens to run.
-                self.tracker.update(
-                    data, wall_stamp=self.get_clock().now().nanoseconds / 1e9
-                )
-
-            if self.verbose:
-                self.get_logger().info(text_format.MessageToString(data))
+            self._drain_socket()
+            self._process_pending_frame()
 
         except KeyboardInterrupt:
             self.get_logger().info("KeyboardInterrupt received, shutting down...")
@@ -99,6 +103,69 @@ class Vision(Node):
 
         except Exception as exception:
             self.get_logger().warning(f"Error receiving data: {exception}")
+
+    def _drain_socket(self):
+        """Take every packet the socket is holding, keeping the newest per camera."""
+        for _ in range(self.MAX_PACKETS_PER_DRAIN):
+            data = self.client.receive()
+            if data is None:
+                return
+
+            if self.verbose:
+                self.get_logger().info(text_format.MessageToString(data))
+
+            if data.HasField("geometry"):
+                self.publish_geometry(data.geometry)
+                continue
+
+            if not data.HasField("detection"):
+                continue
+
+            # Stamped on arrival, not when the frame is folded in, so the estimate
+            # carries the instant it describes.
+            now_sec = self.get_clock().now().nanoseconds / 1e9
+            camera_id = data.detection.camera_id
+            if camera_id in self._pending_frame:
+                self._stale_packets += 1
+            self._pending_frame[camera_id] = (data, now_sec)
+
+    def _process_pending_frame(self):
+        if not self._pending_frame:
+            return
+
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        if now_sec - self._last_process < 1.0 / self.frequency_tracker_process:
+            return
+        self._last_process = now_sec
+
+        frame = self._pending_frame
+        self._pending_frame = {}
+        self.tracker.update_frame(
+            [packet for packet, _ in frame.values()],
+            wall_stamp=max(stamp for _, stamp in frame.values()),
+        )
+
+        self._report_stale_packets(now_sec)
+
+    def _report_stale_packets(self, now_sec):
+        """
+        Superseded packets are normal in ones and twos; a steady stream of them means
+        the cameras are outrunning the filters and the field is only partly observed.
+        """
+        if now_sec - self._last_stale_report < self.STALE_REPORT_PERIOD:
+            return
+
+        elapsed = now_sec - self._last_stale_report
+        if self._last_stale_report and self._stale_packets:
+            rate = self._stale_packets / elapsed
+            if rate > self.frequency_tracker_process:
+                self.get_logger().warning(
+                    f"Discarding {rate:.0f} superseded vision packets/s: the cameras "
+                    f"are outrunning the tracker."
+                )
+
+        self._last_stale_report = now_sec
+        self._stale_packets = 0
 
 
     def set_filter_param(
