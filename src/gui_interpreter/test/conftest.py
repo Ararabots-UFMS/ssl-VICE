@@ -76,7 +76,7 @@ class _PlanningOptions:
 
 class _MovementCommand:
     def __init__(self):
-        self.robot_id = None
+        self.robot_id = 0
         self.target_pos = _Vector2D()
         self.target_vel = _Vector2D()
         self.planning_options = _PlanningOptions()
@@ -87,7 +87,8 @@ class _MovementCommandArray:
         self.commands = []
 
 
-# A MagicMock class returns the *same* instance on every call, which would collapse
-# every robot's command into one object. These need distinct instances.
+# apiNode keeps one MovementCommand per robot and republishes the whole set, so
+# these need distinct mutable instances at the generated defaults -- a MagicMock
+# hands back one shared auto-vivifying object for every robot.
 movement_msg.MovementCommand = _MovementCommand
 movement_msg.MovementCommandArray = _MovementCommandArray

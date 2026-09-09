@@ -24,6 +24,9 @@ def node():
     instance.robots = []
     instance.robot_count = 0
 
+    instance.movement_pub = MagicMock()
+    instance._movement_commands = {}
+
     instance.is_field_side_right = True
     instance.is_team_color_yellow = True
     instance.is_play_pressed = False
@@ -65,6 +68,12 @@ def _fake_state(x, y, vx, vy):
     state.velocity.x = vx
     state.velocity.y = vy
     return state
+
+
+def _published_commands(node):
+    """The MovementCommand list carried by the most recent publish."""
+    node.movement_pub.publish.assert_called()
+    return list(node.movement_pub.publish.call_args[0][0].commands)
 
 
 def _fake_trajectory(total_duration, states=None):
@@ -392,7 +401,7 @@ class TestHandleConfigButton:
 
 
 class TestHandleStrategyCommand:
-    def test_publishes_movement_command(self, node, emit_mock):
+    def test_publishes_command_with_parsed_fields(self, node):
         data = {
             "robot_id": "3",
             "position_x": "100.0",
@@ -400,35 +409,38 @@ class TestHandleStrategyCommand:
             "velocity_x": "1.0",
             "velocity_y": "2.0",
         }
+
         node.handle_strategy_command(data)
 
-        sent = node.movement_pub.publish.call_args[0][0]
-        assert len(sent.commands) == 1
-        cmd = sent.commands[0]
-        assert cmd.robot_id == 3
-        assert cmd.target_pos.x == 100.0
-        assert cmd.target_pos.y == 200.0
-        assert cmd.target_vel.x == 1.0
-        assert cmd.target_vel.y == 2.0
-        emit_mock.assert_called_once_with(
-            "strategy_response",
-            {"success": True, "message": "Command executed successfully"},
-        )
+        (command,) = _published_commands(node)
+        assert command.robot_id == 3
+        assert command.target_pos.x == 100.0
+        assert command.target_pos.y == 200.0
+        assert command.target_vel.x == 1.0
+        assert command.target_vel.y == 2.0
 
     def test_defaults_velocity_to_zero_when_missing(self, node):
         node.handle_strategy_command({"robot_id": "1", "position_x": "0", "position_y": "0"})
 
-        cmd = node.movement_pub.publish.call_args[0][0].commands[0]
-        assert cmd.target_vel.x == 0.0
-        assert cmd.target_vel.y == 0.0
+        (command,) = _published_commands(node)
+        assert command.target_vel.x == 0.0
+        assert command.target_vel.y == 0.0
+
+    def test_reports_success(self, node, emit_mock):
+        node.handle_strategy_command({"robot_id": "1", "position_x": "0", "position_y": "0"})
+
+        emit_mock.assert_called_once_with(
+            "strategy_response",
+            {"success": True, "message": "Command executed successfully"},
+        )
 
     def test_republishes_the_whole_set(self, node):
         """The manager takes the full array each time, so earlier robots must survive."""
         node.handle_strategy_command({"robot_id": 1, "position_x": 10, "position_y": 20})
         node.handle_strategy_command({"robot_id": 2, "position_x": 30, "position_y": 40})
 
-        sent = node.movement_pub.publish.call_args[0][0]
-        assert sorted(c.robot_id for c in sent.commands) == [1, 2]
+        commands = _published_commands(node)
+        assert sorted(c.robot_id for c in commands) == [1, 2]
 
     def test_refused_in_strategy_mode(self, node, emit_mock):
         node.control_mode = apiNode_module.STRATEGY_MODE
@@ -601,43 +613,62 @@ class TestUpdatePidAndKpAngularAndOrientationRequests:
 
 
 class TestHandleUpdateObstacles:
-    def test_sets_planning_options(self, node, emit_mock):
+    def test_sets_planning_options_on_the_command(self, node):
         data = {
             "robot_id": "1",
-            "penalty_area": False,
-            "center_area": True,
-            "ball": False,
+            "penalty_area": True,
+            "center_area": False,
+            "ball": True,
         }
+
         node.handle_update_obstacles(data)
 
-        cmd = node.movement_pub.publish.call_args[0][0].commands[0]
-        assert cmd.robot_id == 1
-        assert cmd.planning_options.avoid_penalty_area is False
-        assert cmd.planning_options.avoid_center_area is True
-        assert cmd.planning_options.avoid_ball is False
+        (command,) = _published_commands(node)
+        assert command.robot_id == 1
+        assert command.planning_options.avoid_penalty_area is True
+        assert command.planning_options.avoid_center_area is False
+        assert command.planning_options.avoid_ball is True
+
+    def test_defaults_every_option_to_false(self, node):
+        node.handle_update_obstacles({"robot_id": "1"})
+
+        (command,) = _published_commands(node)
+        assert command.planning_options.avoid_penalty_area is False
+        assert command.planning_options.avoid_center_area is False
+        assert command.planning_options.avoid_ball is False
+
+    def test_ignores_the_retired_id_and_border_fields(self, node):
+        # The obstacle factory always builds the field border and an obstacle
+        # per robot, so these were never opt-out and the GUI may still send them.
+        data = {
+            "robot_id": "1",
+            "field_border": True,
+            "enemy_ids": " 2, 3 ,4",
+            "ally_ids": "5,6",
+            "ball": True,
+        }
+
+        node.handle_update_obstacles(data)  # must not raise
+
+        (command,) = _published_commands(node)
+        assert command.planning_options.avoid_ball is True
+
+    def test_reports_success(self, node, emit_mock):
+        node.handle_update_obstacles({"robot_id": "1"})
+
         emit_mock.assert_called_once_with(
             "obstacles_response",
             {"success": True, "message": "Obstacles updated successfully"},
         )
-
-    def test_defaults_missing_fields_to_false(self, node):
-        node.handle_update_obstacles({"robot_id": "1"})
-
-        options = node.movement_pub.publish.call_args[0][0].commands[0].planning_options
-        assert options.avoid_penalty_area is False
-        assert options.avoid_center_area is False
-        assert options.avoid_ball is False
 
     def test_shares_the_command_with_the_position_handler(self, node):
         """Both panels write the same MovementCommand, so neither may clear the other."""
         node.handle_strategy_command({"robot_id": 1, "position_x": 500, "position_y": 600})
         node.handle_update_obstacles({"robot_id": 1, "ball": True})
 
-        sent = node.movement_pub.publish.call_args[0][0]
-        assert len(sent.commands) == 1
-        cmd = sent.commands[0]
-        assert cmd.target_pos.x == 500.0
-        assert cmd.planning_options.avoid_ball is True
+        (command,) = _published_commands(node)
+        assert command.target_pos.x == 500.0
+        assert command.planning_options.avoid_ball is True
 
     def test_refused_in_strategy_mode(self, node, emit_mock):
         node.control_mode = apiNode_module.STRATEGY_MODE
@@ -651,9 +682,56 @@ class TestHandleUpdateObstacles:
     def test_emits_error_on_malformed_data(self, node, emit_mock):
         node.handle_update_obstacles({})  # missing robot_id -> KeyError
 
-        node.movement_pub.publish.assert_not_called()
-        _, payload = emit_mock.call_args[0]
+        emit_mock.assert_called_once()
+        event, payload = emit_mock.call_args[0]
+        assert event == "obstacles_response"
         assert payload["success"] is False
+        node.movement_pub.publish.assert_not_called()
+
+
+
+class TestMovementCommandAccumulation:
+    """The position and obstacle panels write into one command per robot.
+
+    movement_manager consumes the whole array each time, so a handler that
+    rebuilt the command from scratch would silently drop the other panel's
+    settings.
+    """
+
+    def test_obstacles_do_not_clear_the_target_position(self, node):
+        node.handle_strategy_command(
+            {"robot_id": "4", "position_x": "10.0", "position_y": "20.0"}
+        )
+        node.handle_update_obstacles({"robot_id": "4", "ball": True})
+
+        (command,) = _published_commands(node)
+        assert command.target_pos.x == 10.0
+        assert command.target_pos.y == 20.0
+        assert command.planning_options.avoid_ball is True
+
+    def test_position_does_not_clear_the_obstacle_options(self, node):
+        node.handle_update_obstacles({"robot_id": "4", "penalty_area": True})
+        node.handle_strategy_command(
+            {"robot_id": "4", "position_x": "10.0", "position_y": "20.0"}
+        )
+
+        (command,) = _published_commands(node)
+        assert command.planning_options.avoid_penalty_area is True
+        assert command.target_pos.x == 10.0
+
+    def test_publishes_every_robot_not_just_the_updated_one(self, node):
+        node.handle_strategy_command({"robot_id": "1", "position_x": "1", "position_y": "1"})
+        node.handle_strategy_command({"robot_id": "2", "position_x": "2", "position_y": "2"})
+
+        commands = _published_commands(node)
+        assert sorted(command.robot_id for command in commands) == [1, 2]
+
+    def test_reuses_one_command_per_robot(self, node):
+        first = node._movement_command_for(5)
+        second = node._movement_command_for(5)
+
+        assert first is second
+        assert node._movement_command_for(6) is not first
 
 
 class TestHandleTeamColorService:
@@ -793,3 +871,19 @@ class TestCheckStrategyServicesStatus:
         }
         assert result == expected
         emit_mock.assert_called_once_with("services_status", expected)
+
+    def test_topic_backed_panels_report_ready_without_a_server(self, node, emit_mock):
+        # Movement and obstacles go out on a topic, so there is nothing to
+        # probe -- they must not follow the service clients down.
+        for client in (
+            node.pid_client,
+            node.kp_angular_client,
+            node.set_orientation_client,
+            node.set_team_color_client,
+        ):
+            client.service_is_ready.return_value = False
+
+        result = node.check_strategy_services_status()
+
+        assert result["strategy"] is True
+        assert result["obstacles"] is True
