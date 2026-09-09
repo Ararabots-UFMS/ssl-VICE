@@ -4,8 +4,23 @@ from strategy.skills.skills import Skills
 
 
 class CenterGoal:
-    GOAL_POSITIVE = Vector2D(2250.0, 0.0)
-    GOAL_NEGATIVE = Vector2D(-2250.0, 0.0)
+    # 2250 -> 4500: o gol da Division B fica em x = +-4500, nao +-2250.
+    #
+    # 2250 e a meia-largura de um campo SSL-EL (4500 x 3000). Este projeto roda
+    # em Division B: 9000 x 6000, confirmado pelas regras oficiais (sslrules.pdf
+    # secao 2.1.1) e pelo proprio /game_state, que reporta campo=9000mm.
+    #
+    # O QUE O VALOR ERRADO CAUSAVA, e nao e sutil: o goleiro se posicionava
+    # 2250 mm A FRENTE da propria meta - ou seja, abandonava o gol e parava
+    # perto do meio-campo - e os atacantes miravam um ponto vazio no meio do
+    # campo adversario. Em jogo aberto o time inteiro converge para o centro.
+    #
+    # A mesma constante ja existia errada em tatics/freekick.py e foi corrigida
+    # la ha tempos; kickoff.py, stop.py e running.py ficaram para tras (o
+    # HANDOVER §6.2 registra as tres como "nao corrigidas"). Esta e a correcao
+    # que faltava.
+    GOAL_POSITIVE = Vector2D(4500.0, 0.0)
+    GOAL_NEGATIVE = Vector2D(-4500.0, 0.0)
 
 
 class GoalkeeperKickoff:

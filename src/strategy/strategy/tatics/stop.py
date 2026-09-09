@@ -4,8 +4,23 @@ from math import cos, sin, pi, atan2
 
 
 class CenterGoal:
-    GOAL_POSITIVE = Vector2D(2250.0, 0.0)
-    GOAL_NEGATIVE = Vector2D(-2250.0, 0.0)
+    # 2250 -> 4500: o gol da Division B fica em x = +-4500, nao +-2250.
+    #
+    # 2250 e a meia-largura de um campo SSL-EL (4500 x 3000). Este projeto roda
+    # em Division B: 9000 x 6000, confirmado pelas regras oficiais (sslrules.pdf
+    # secao 2.1.1) e pelo proprio /game_state, que reporta campo=9000mm.
+    #
+    # O QUE O VALOR ERRADO CAUSAVA, e nao e sutil: o goleiro se posicionava
+    # 2250 mm A FRENTE da propria meta - ou seja, abandonava o gol e parava
+    # perto do meio-campo - e os atacantes miravam um ponto vazio no meio do
+    # campo adversario. Em jogo aberto o time inteiro converge para o centro.
+    #
+    # A mesma constante ja existia errada em tatics/freekick.py e foi corrigida
+    # la ha tempos; kickoff.py, stop.py e running.py ficaram para tras (o
+    # HANDOVER §6.2 registra as tres como "nao corrigidas"). Esta e a correcao
+    # que faltava.
+    GOAL_POSITIVE = Vector2D(4500.0, 0.0)
+    GOAL_NEGATIVE = Vector2D(-4500.0, 0.0)
 
 
 class GoalkeeperKickoff:
@@ -99,10 +114,25 @@ class goAwayFromBall:
             # robo 0 presente nao quebrava, mas calculava o angulo do robo errado.
             angle = self._get_ball_angle(rid)
 
+            # USA O ALVO CALCULADO, nao um ponto fixo.
+            #
+            # _generate_positions distribui os robos num circulo de 600 mm em
+            # torno da bola - que e o que a regra do STOP pede (ninguem a menos
+            # de 500 mm). O resultado era calculado na linha acima e DESCARTADO:
+            # todo mundo recebia (2000, 1400).
+            #
+            # Consequencia: durante qualquer STOP o time inteiro converge para
+            # UM ponto no campo de ataque, longe da bola. Medido nesta sessao no
+            # cenario 'passe' - o cobrador nascia em (852,976) em vez de
+            # (-400,0) e o receptor em (1996,1366), os dois a caminho de
+            # (2000,1400), e a cobranca comecava com o time desmanchado.
+            #
+            # O HANDOVER §6.5 ja registrava isto como "outro problema no mesmo
+            # metodo, NAO corrigido".
             robot_command = self.skills_factory.move_with_angle(
                 robot_id=rid,
-                target_x=2000,
-                target_y=1400,
+                target_x=target.x,
+                target_y=target.y,
                 angle=angle,
             )
 

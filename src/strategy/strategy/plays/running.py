@@ -1,3 +1,5 @@
+import os
+
 from new_movement.entities.States import Vector2D
 from strategy.behaviour import Selector, Sequence, LeafNode, TaskStatus
 from system_interfaces.msg._game_state import GameState
@@ -70,18 +72,37 @@ class CheckAtack(LeafNode):
         return Vector2D(-radius, 0.0)
 
     def run(self):
+        # SONDA (DIAG_JOGO=1): qual ramo a arvore escolhe, e com que metade.
+        #
+        # POR QUE: TRES nos resolvem 'on_positive_half' de forma INDEPENDENTE
+        # (CheckAtack, AtackAction, DefenseAction), cada um com o seu cliente de
+        # get_game_config. Se discordarem, a decisao ataque/defesa fica
+        # incoerente com a tatica que executa. E o Selector devolve no primeiro
+        # filho que nao e FAILURE, RUNNING inclusive - entao um CheckAtack preso
+        # em RUNNING impede o DefenseAction de rodar, sem nenhum aviso.
+        def _diag(estado):
+            if os.environ.get("DIAG_JOGO"):
+                print("[JG] ramo=%-8s half=%s bola_x=%s"
+                      % (estado, self.on_positive_half,
+                         None if self.ball is None else round(self.ball.position_x)),
+                      flush=True)
+
         if self.ball is None or self.on_positive_half is None:
+            _diag("RUNNING")
             return TaskStatus.RUNNING, None
 
         border_circle = self._get_border_circle()
 
         if self.on_positive_half:
             if self.ball.position_x < border_circle.x:
+                _diag("ATACA")
                 return TaskStatus.SUCCESS, None
         else:
             if self.ball.position_x > border_circle.x:
+                _diag("ATACA")
                 return TaskStatus.SUCCESS, None
 
+        _diag("DEFENDE")
         return TaskStatus.FAILURE, None
 
 
@@ -197,14 +218,28 @@ class DefenseAction(LeafNode):
         ):
             return TaskStatus.RUNNING, None
 
-        atacker = Atack(
+        # Defense, e nao Atack. ERA COPY-PASTE, e apagava a defesa inteira.
+        #
+        # DefenseAction instanciava Atack: a acao de DEFESA executava a tatica
+        # de ATAQUE. A classe Defense nunca rodou - codigo morto que ninguem
+        # percebia, porque a arvore "funcionava".
+        #
+        # MEDIDO com a sonda DIAG_JOGO, 25 s do cenario 'jogo':
+        #     ramo=ATACA     155 ciclos
+        #     ramo=DEFENDE    76 ciclos
+        #     tatica=Atack   231 ciclos   <- 155 + 76, ou seja TODOS
+        #     tatica=Defense   0 ciclos
+        # A arvore decidia defender em um terco do tempo e atacava assim mesmo.
+        #
+        # Consequencia: com a bola no nosso campo o time seguia atacando,
+        # ninguem recuava, e a bola nunca saia de la.
+        defensor = Defense(
             ally_robots=self.ally_robots,
-            enemy_robots=self.enemy_robots,
             ball=self.ball,
             on_positive_half=self.on_positive_half,
         )
 
-        return TaskStatus.SUCCESS, atacker.execute()
+        return TaskStatus.SUCCESS, defensor.execute()
 
 
 class NormalStart(Sequence):
