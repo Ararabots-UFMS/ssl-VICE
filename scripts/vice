@@ -53,12 +53,59 @@ ensure_container() {
     fi
 }
 
+print_result() {
+    echo "=================================================="
+    echo "$1"
+    echo "=================================================="
+}
+
+run_tests() {
+    test_status=0
+    if [[ -n "$1" ]]; then
+        echo ":: Running tests for package '$1'..."
+        ros_exec "cd /root/ssl-VICE && colcon test --packages-select $1" || test_status=$?
+    else
+        echo ":: Running all tests..."
+        ros_exec "cd /root/ssl-VICE && colcon test" || test_status=$?
+    fi
+
+    echo ":: Generating test report..."
+    ros_exec "cd /root/ssl-VICE && colcon test-result --verbose" || test_status=$?
+
+    if [[ $test_status -ne 0 ]]; then
+        print_result "[ERROR] Tests failed."
+        exit $test_status
+    fi
+}
+
 # --- Parse command ---
 case "$1" in
     build)
         ensure_container
         echo ":: Building ROS2 workspace..."
-        ros_exec "cd /root/ssl-VICE && colcon build"
+        build_status= ros_exec "cd /root/ssl-VICE && colcon build"
+        if [[ build_status -eq 0 ]]; then
+            echo ":: Build complete. Running tests..."
+        else
+            print_result "[ERROR] Build failed."
+            exit 1
+        fi
+        run_tests
+        print_result "[✔ DONE] Build and tests succeeded."
+        ;;
+
+    test)
+        ensure_container
+        run_tests "$2"
+        echo "✔ DONE"
+        ;;
+
+    coverage)
+        ensure_container
+        echo ":: Running tests with coverage..."
+        ros_exec "cd /root/ssl-VICE && colcon test --pytest-args --cov --cov-report=html" || true
+        echo ":: Generating coverage report..."
+        ros_exec "cd /root/ssl-VICE && colcon test-result --verbose" || true
         echo "✔ DONE"
         ;;
 
@@ -217,7 +264,9 @@ case "$1" in
         echo "Usage: vice <command>"
         echo ""
         echo "Development:"
-        echo "  build              Build the ROS2 workspace"
+        echo "  build              Build and test the ROS2 workspace"
+        echo "  test <pkg>         Run tests and print the test report"
+        echo "  coverage           Run tests with coverage and generate report"
         echo "  launch             Select and run a launch file"
         echo "  reload             Rebuild + relaunch last launch file"
         echo "  run <pkg> <node>   Run a single node"

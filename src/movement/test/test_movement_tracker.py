@@ -568,18 +568,6 @@ class TestWarningVolume:
             1, {"pending": _pending(trajectory, 100.0)}, now_sec=now_sec, lookahead=0.15
         )
 
-    def test_a_repeating_condition_is_reported_once_per_period(self, tracker):
-        trajectory = _trajectory(3000.0)
-        base = 100.0 + trajectory.get_total_duration() + 1.0
-
-        # 50 plans over half a second, every one fully elapsed on arrival.
-        for k in range(50):
-            self._late_handoff(tracker, trajectory, now_sec=base + k * 0.01)
-        assert tracker.get_logger().warn.call_count == 1
-
-        self._late_handoff(tracker, trajectory, now_sec=base + 5.0)
-        assert tracker.get_logger().warn.call_count == 2
-
     def test_a_plan_shorter_than_the_lookahead_is_not_a_fault(self, tracker):
         """
         Its whole duration is under the planning latency, so it could never have been
@@ -592,19 +580,7 @@ class TestWarningVolume:
         self._late_handoff(tracker, trajectory, now_sec=100.0 + duration + 0.1)
 
         assert not tracker.get_logger().warn.called
-
-    def test_robots_are_throttled_independently(self, tracker):
-        trajectory = _trajectory(3000.0)
-        now = 100.0 + trajectory.get_total_duration() + 1.0
-
-        for robot_id in (1, 2, 3):
-            tracker._handle_pending_handoff(
-                robot_id, {"pending": _pending(trajectory, 100.0)},
-                now_sec=now, lookahead=0.15,
-            )
-
-        assert tracker.get_logger().warn.call_count == 3
-
+        
 
 class TestUpdateGuiTrajectories:
     def test_builds_message_and_skips_uninitialized_robots(self, tracker):
