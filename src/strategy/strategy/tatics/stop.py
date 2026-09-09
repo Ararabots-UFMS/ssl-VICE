@@ -1,11 +1,8 @@
-from strategy.skills.skills import Skills
-from utils.math_util import Vector2D
 from math import cos, sin, pi, atan2
 
-
-class CenterGoal:
-    GOAL_POSITIVE = Vector2D(2250.0, 0.0)
-    GOAL_NEGATIVE = Vector2D(-2250.0, 0.0)
+from strategy.skills.skills import Skills
+from utils.math_util import Vector2D
+from utils.field_util import CenterGoal
 
 
 class GoalkeeperKickoff:

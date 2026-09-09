@@ -3,11 +3,7 @@ from math import atan2, hypot
 
 from strategy.skills.skills import Skills
 from strategy.tatics.goalkeeper import Goalkeeper
-
-
-class CenterGoal:
-    GOAL_POSITIVE = Vector2D(2250.0, 0.0)
-    GOAL_NEGATIVE = Vector2D(-2250.0, 0.0)
+from utils.field_util import CenterGoal
 
 
 class Atack:
