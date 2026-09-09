@@ -211,6 +211,79 @@ class TestBallSelection:
         assert ball.KF.x[0, 0] == pytest.approx(2500.0)
 
 
+class TestMultiCameraFrames:
+    """
+    A frame is every camera's view of one instant. Folding it in as a unit is what lets
+    the node keep up: each camera sees roughly its own quadrant, so treating the packets
+    separately stepped every filter once per camera and reported the robots the other
+    cameras were carrying as unseen.
+    """
+
+    def _frame(self, groups, t=1000.0):
+        """One packet per group of robot ids, as separate cameras would deliver them."""
+        return [
+            FakePacket(FakeFrame(t, robots_blue=[FakeDetection(i, 100.0 * i, 0.0)
+                                                 for i in ids]))
+            for ids in groups
+        ]
+
+    def test_every_camera_contributes_its_robots(self):
+        tracker = ObjectTracker(max_time_undetected=5.0)
+
+        tracker.update_frame(self._frame([[0, 1], [2, 3]]), wall_stamp=1000.0)
+
+        assert len(tracker.objects) == 4
+
+    def test_a_robot_only_one_camera_can_see_is_not_marked_unseen(self):
+        """The per-packet path zeroed the confidence of every robot outside the packet."""
+        tracker = ObjectTracker(max_time_undetected=5.0)
+
+        tracker.update_frame(self._frame([[0, 1], [2, 3]]), wall_stamp=1000.0)
+
+        assert all(o.confidence > 0 for o in tracker.objects.values())
+
+    def test_the_filters_step_once_per_frame_not_once_per_camera(self):
+        tracker = ObjectTracker(max_time_undetected=5.0)
+        tracker.update_frame(self._frame([[0]]), wall_stamp=1000.0)
+        tracked = tracker.objects[ID(0, is_ball=False, is_blue=True)]
+
+        calls = []
+        original = tracked.predict
+        tracked.predict = lambda: (calls.append(1), original())[1]
+
+        tracker.update_frame(self._frame([[0], [1], [2], [3]]), wall_stamp=1000.1)
+
+        assert len(calls) == 1
+
+    def test_the_frame_carries_the_newest_capture_stamp(self):
+        tracker = ObjectTracker(max_time_undetected=5.0)
+        packets = self._frame([[0], [1]])
+        packets[0].detection.t_capture = 5.0
+        packets[1].detection.t_capture = 7.0
+
+        tracker.update_frame(packets, wall_stamp=1000.0)
+
+        assert tracker.last_capture_stamp == 7.0
+
+    def test_the_whole_frame_competes_for_the_ball(self):
+        """Not one ball per camera: the most confident sighting across the frame wins."""
+        tracker = ObjectTracker(max_time_undetected=5.0)
+        packets = [
+            FakePacket(FakeFrame(1000.0, balls=[FakeDetection(0, 0.0, 0.0, confidence=0.2)])),
+            FakePacket(FakeFrame(1000.0, balls=[FakeDetection(0, 2500.0, 0.0, confidence=0.9)])),
+        ]
+
+        tracker.update_frame(packets, wall_stamp=1000.0)
+
+        assert tracker.objects[ID(0, is_ball=True)].KF.x[0, 0] == pytest.approx(2500.0)
+
+    def test_an_empty_frame_is_ignored(self):
+        tracker = ObjectTracker(max_time_undetected=5.0)
+        tracker.update_frame([], wall_stamp=1000.0)
+
+        assert tracker.objects == {}
+
+
 class TestOrientationTuning:
     """
     The orientation filter feeds the inverse kinematics, so heading error rotates the
