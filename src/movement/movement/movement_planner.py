@@ -34,8 +34,6 @@ class MovementPlanner(Node):
         self.declare_parameter('max_threads', 8)
         self.declare_parameter('overhead_max_age', 0.05)
         self.declare_parameter('overhead_max_future', 0.35)
-        self.declare_parameter('vision_correction_gain_position', 0.75)
-        self.declare_parameter('vision_correction_gain_velocity', 0.50)
         self.declare_parameter('vision_handoff_latency', 0.03)
         self.declare_parameter('accept_radius', 50.0)
         
@@ -141,56 +139,6 @@ class MovementPlanner(Node):
             Vector2D(state.velocity.x, state.velocity.y),
         )
 
-    def _vision_state_at(self, target, stamp: float):
-        """ Return the latest vision state propagated to the requested wall time. """
-        state, vision_stamp = self._state_from_vision(target)
-
-        if vision_stamp <= 0.0:
-            return None
-
-        now_sec = self.get_clock().now().nanoseconds / 1e9
-        # _state_from_vision returns a state carried to now when the measurement is
-        # recent. For an old/invalid measurement, don't invent a future state.
-        if vision_stamp != now_sec:
-            age = now_sec - vision_stamp
-            if age < 0.0 or age > MAX_VISION_AGE:
-                return None
-
-        return self._propagate_constant_velocity(state, stamp - vision_stamp)
-
-    def _blend_predicted_with_vision(
-        self,
-        predicted_state: MotionState,
-        target,
-        prediction_stamp: float,
-    ):
-        vision_state = self._vision_state_at(target, prediction_stamp)
-        if vision_state is None:
-            return predicted_state
-
-        pos_gain = max(
-            0.0,
-            min(1.0, float(self.get_parameter('vision_correction_gain_position').value)),
-        )
-        vel_gain = max(
-            0.0,
-            min(1.0, float(self.get_parameter('vision_correction_gain_velocity').value)),
-        )
-
-        position = Vector2D(
-            predicted_state.position.x
-            + pos_gain * (vision_state.position.x - predicted_state.position.x),
-            predicted_state.position.y
-            + pos_gain * (vision_state.position.y - predicted_state.position.y),
-        )
-        velocity = Vector2D(
-            predicted_state.velocity.x
-            + vel_gain * (vision_state.velocity.x - predicted_state.velocity.x),
-            predicted_state.velocity.y
-            + vel_gain * (vision_state.velocity.y - predicted_state.velocity.y),
-        )
-        return MotionState(position, velocity)
-
     def _is_parked(self, robot_id: int, goal_pos: Vector2D, measured_pos: Vector2D) -> bool:
         radius = float(self.get_parameter('accept_radius').value)
         parked_at = self._parked.get(robot_id)
@@ -231,16 +179,13 @@ class MovementPlanner(Node):
             # The overhead point represents a predicted state at wall_stamp. Accept
             # it only while it is recent and not unreasonably far into the future.
             if -max_future <= age <= max_age:
-                predicted_state = MotionState(
+                # Taken as it stands. Correcting it toward a vision measurement
+                # carried forward to wall_stamp at constant velocity moved the start
+                # up to 149mm and added 435mm/s while the robot was braking, which is
+                # what made the plans overshoot the goal and come back.
+                initial_state = MotionState(
                     Vector2D(overhead_point.pos.x, overhead_point.pos.y),
                     Vector2D(overhead_point.vel.x, overhead_point.vel.y),
-                )
-                # Correct the predicted state toward the latest vision estimate
-                # evaluated at exactly the same wall-clock timestamp.
-                initial_state = self._blend_predicted_with_vision(
-                    predicted_state,
-                    target,
-                    overhead_point.wall_stamp,
                 )
                 handoff_stamp = overhead_point.wall_stamp
 
