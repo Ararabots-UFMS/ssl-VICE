@@ -7,7 +7,7 @@ from utils.math_util import Vector2D
 
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
-from system_interfaces.msg import ControlCommand, GameState, RobotCommand, TeamCommand, FilterCommand
+from system_interfaces.msg import GameState, RobotCommand, TeamCommand, FilterCommand
 from system_interfaces.srv import (
     ControlParams,
     GetGameConfig,
@@ -132,9 +132,9 @@ class Controller(Node):
         measurement_age = (now.nanoseconds / 1e9) - self.vision_wall_stamp
         measurement_age = min(max(measurement_age, 0.0), MAX_MEASUREMENT_AGE)
 
-        team_cmd = TeamCommand()
-        team_cmd.is_team_color_yellow = self.is_team_color_yellow
-        team_cmd.robots = []
+        filter_cmd = FilterCommand()
+        filter_cmd.is_team_color_yellow = self.is_team_color_yellow
+        filter_cmd.robots = []
 
         for rid, ref in self.control_references.items():
             if rid not in self.ally_robots:
@@ -175,12 +175,12 @@ class Controller(Node):
             out.orientation = cur.orientation
             out.kick = float(self.kick_cache.get(rid, 0.0))
 
-            team_cmd.robots.append(out)
+            filter_cmd.robots.append(out)
 
         active = set(self.control_references.keys())
         self.robot_controller.cleanup_unused_robots(active)
 
-        self.publisher.publish(team_cmd)
+        self.publisher.publish(filter_cmd)
 
     def update_parameters(self, req, resp):
         self.robot_controller.update_params(req.kp, req.ki, req.kd)

@@ -15,9 +15,18 @@ def generate_launch_description():
                 executable="gameWatcher",
             ),
             Node(
+                package="referee",
+                executable="referee_node",
+                parameters=[{"ip": "224.5.23.1", "port": 11003, "verbose": False}],
+            ),
+            Node(
                 package="control",
                 executable="controller",
             ),
+            Node(
+                package="control",
+                executable="asif_filter",
+                ),
             Node(
                 package="movement",
                 executable="planner",
@@ -34,17 +43,25 @@ def generate_launch_description():
                 package="grsim_messenger",
                 executable="grsim_publisher_node",
             ),
-            #Node(
-            #   package="strategy",
-            #   executable="strategyNode",
-            #),
             Node(
-                package="gui_interpreter",
-                executable="apiNode",
+               package="strategy",
+               executable="strategyNode",
             ),
-            Node(
-                 package="referee",
-                 executable="referee_node",
-             )
+            # Node(
+            #     package="gui_interpreter",
+            #     executable="apiNode",
+            # ),
+            # Node(
+            #      package="strategy_command_gui",
+            #      executable="strategy_gui"
+            # ),
+            #Node(
+            #    package="manual_command",
+            #    executable="manual_node",
+            #),
+            #Node(
+            #     package="hardware_messenger",
+            #     executable="hardware"
+            #)
         ]
     )
