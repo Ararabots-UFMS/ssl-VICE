@@ -14,8 +14,9 @@ import os
 import time
 import statistics
 
-from asif_filter import AsifFilter
+from control.asif_filter import AsifFilter
 from new_movement.entities.States import State, Vector2D
+from control.cbf_osqp_core import CBFOsqpCore
 import cvxpy as cp
 
 
@@ -23,8 +24,9 @@ N_WARMUP = 200
 N_ITERS = 5000
 
 
+from control.cbf_osqp_core import CBFOsqpCore
+
 def make_filter():
-    """Instancia AsifFilter pulando __init__ (sem precisar de rclpy real)."""
     node = AsifFilter.__new__(AsifFilter)
 
     node.gamma_field = 4.0
@@ -38,23 +40,15 @@ def make_filter():
     node.field_half_width = 3.0
     node.prohibited_zones = [(-4.5, -3.5, -1.0, 1.0)]
 
-    n_field = 4
-    n_prohibited = len(node.prohibited_zones)
-    node._n_constraints = n_field + n_prohibited
-
-    node._u_des_param = cp.Parameter(2)
-    node._A_param = cp.Parameter((node._n_constraints, 2))
-    node._B_param = cp.Parameter(node._n_constraints)
-
-    node._u_var = cp.Variable(2)
-    node._delta_var = cp.Variable(node._n_constraints, nonneg=True)
-
-    constraints = [node._A_param @ node._u_var <= node._B_param + node._delta_var]
-    objective = cp.Minimize(
-        cp.sum_squares(node._u_var - node._u_des_param)
-        + node.rho * cp.sum_squares(node._delta_var)
+    node._cbf_core = CBFOsqpCore(
+        gamma_field=node.gamma_field,
+        gamma_prohibited=node.gamma_prohibited,
+        robot_margin=node.robot_margin,
+        rho=node.rho,
+        field_half_length=node.field_half_length,
+        field_half_width=node.field_half_width,
+        prohibited_zones=node.prohibited_zones,
     )
-    node._qp = cp.Problem(objective, constraints)
 
     class _Logger:
         def warn(self, msg): pass
@@ -63,7 +57,6 @@ def make_filter():
     node.get_logger = lambda: _Logger()
 
     return node
-
 
 def measure(fn, n_iters=N_ITERS, n_warmup=N_WARMUP):
     """Roda fn() n_iters vezes e retorna a lista de tempos em milissegundos."""

@@ -1,6 +1,5 @@
 import rclpy
-import numpy as np
-import cvxpy as cp
+from control.cbf_osqp_core import CBFOsqpCore
 from rclpy.node import Node
 from new_movement.entities.States import State, Vector2D
 from system_interfaces.msg import GameState, FilterCommand, TeamCommand, RobotCommand
@@ -48,24 +47,15 @@ class AsifFilter(Node):
                 (-4.5, -3.5, -1.0, 1.0),
                 ]
 
-                n_field = 4
-                n_proihibited = len(self.prohibited_zones)
-                self._n_constraints = n_field + n_proihibited
-
-                self._u_des_param = cp.Parameter(2)
-                self._A_param = cp.Parameter((self._n_constraints, 2))
-                self._B_param = cp.Parameter(self._n_constraints)
-
-                self._u_var = cp.Variable(2)
-                self._delta_var = cp.Variable(self._n_constraints, nonneg=True)
-
-                constraints = [self._A_param @ self._u_var <= self._B_param + self._delta_var]
-                objective = cp.Minimize(
-                        cp.sum_squares(self._u_var - self._u_des_param)
-                        + self.rho * cp.sum_squares(self._delta_var)
+                self._cbf_core = CBFOsqpCore(
+                        gamma_field=self.gamma_field,
+                        gamma_prohibited=self.gamma_prohibited,
+                        robot_margin=self.robot_margin,
+                        rho=self.rho,
+                        field_half_length=self.field_half_length,
+                        field_half_width=self.field_half_width,
+                        prohibited_zones=self.prohibited_zones,
                 )
-
-                self._qp = cp.Problem(objective, constraints)
 
                 self.last_time = self.get_clock().now()
                 self.create_timer(0.01, self.timer_callback)
@@ -113,68 +103,12 @@ class AsifFilter(Node):
         def receive_command(self, msg:FilterCommand):
                 self._latest_command = msg
 
-        def _field_rows(self, px, py):
-                L, W, m = self.field_half_length, self.field_half_width, self.robot_margin
-                g = self.gamma_field
-                rows_A, rows_B = [], []
-
-                h = (L - m) - px
-                rows_A.append([1.0, 0.0]); rows_B.append(g * h)
-
-                h = px + (L - m)
-                rows_A.append([-1.0, 0.0]); rows_B.append(g * h)
-
-                h = (W - m) - py
-                rows_A.append([0.0, 1.0]); rows_B.append(g * h)
-
-                h = py + (W - m)
-                rows_A.append([0.0, -1.0]); rows_B.append(g * h)
-
-                return rows_A, rows_B
-
-        def _proihibited_rows(self, px, py):
-                g = self.gamma_prohibited
-                m = self.robot_margin
-                rows_A, rows_B = [], []
-
-                for(x_min, x_max, y_min, y_max) in self.prohibited_zones:
-                        cx = min(max(px, x_min), x_max)
-                        cy = min(max(py, y_min), y_max)
-                        dx, dy = px - cx, py - cy
-                        dist = (dx**2 + dy**2) ** 0.5
-
-                        if dist < 1e-6:
-                                self.get_logger().warn("Robot inside proihibited area - uncovered case")
-                                rows_A.append([0.0, 0.0]); rows_B.append(1e6)
-                                continue
-
-                        h = dist - m
-                        grad = (dx / dist, dy / dist)
-                        rows_A.append([-grad[0], -grad[1]]); rows_B.append(g * h)
-
-                return rows_A, rows_B
-
 
         def Filter(self, cur_state, u_des):
                 px, py = cur_state.position.x, cur_state.position.y
 
-                A_field, B_field = self._field_rows(px, py)
-                A_proh, B_proh = self._proihibited_rows(px, py)
-
-                A = np.array(A_field + A_proh)
-                B = np.array(B_field + B_proh)
-
-                self._A_param.value = A
-                self._B_param.value = B
-                self._u_des_param.value = np.array([u_des.x, u_des.y])
-
-                self._qp.solve(solver=cp.OSQP, warm_start=True)
-
-                if self._u_var.value is None:
-                        self.get_logger().warn("CBF QP incompatible")
-                        return Vector2D(0.0, 0.0)
-
-                return Vector2D(float(self._u_var.value[0]), float(self._u_var.value[1]))
+                safe_x, safe_y = self._cbf_core.solve(px, py, u_des.x, u_des.y)
+                return Vector2D(safe_x, safe_y)
 
         def timer_callback(self):
                 if self._latest_command is None:

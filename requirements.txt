@@ -3,6 +3,8 @@ flask-socketio
 pyserial
 protobuf==3.20.*
 numpy
+osqp
+scipy
 pytest
 pytest-mock
 pytest-cov
