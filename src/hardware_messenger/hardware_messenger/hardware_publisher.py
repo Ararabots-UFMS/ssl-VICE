@@ -8,7 +8,7 @@ from system_interfaces.msg import TeamCommand
 
 
 def auto_detect_port() -> str:
-  ports = serial.tools.list_ports.comports()
+  ports = list_ports.comports()
   for port in ports:
     if "ttyUSB" in port.device or "ttyACM" in port.device:
       return port.device
@@ -21,6 +21,8 @@ class HardwarePublisher(Node):
         # Parameters settings.
         self.declare_parameter("port", "auto")
         self.declare_parameter("baudrate", 230400)
+
+        port_param = self.get_parameter("port").get_parameter_value().string_value
 
         if port_param == "auto":
             self.port = auto_detect_port()
