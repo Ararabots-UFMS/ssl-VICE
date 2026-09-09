@@ -3,7 +3,16 @@ import rclpy
 import serial
 import math
 
+from serial.tools import list_ports
 from system_interfaces.msg import TeamCommand
+
+
+def auto_detect_port() -> str:
+    ports = list_ports.comports()
+    for port in ports:
+        if "ttyUSB" in port.device or "ttyACM" in port.device:
+            return port.device
+    return "/dev/ttyUSB0"  # Fallback default if none detected
 
 
 class HardwarePublisher(Node):
@@ -11,10 +20,17 @@ class HardwarePublisher(Node):
         super().__init__("hardware_publisher")
 
         # Parameters settings.
-        self.declare_parameter("port", "/dev/ttyUSB0")
+        self.declare_parameter("port", "auto")
         self.declare_parameter("baudrate", 230400)
 
-        self.port = self.get_parameter("port").get_parameter_value().string_value
+        port_param = self.get_parameter("port").get_parameter_value().string_value
+
+        if port_param == "auto":
+            self.port = auto_detect_port()
+            self.get_logger().info(f"Auto-detected serial port: {self.port}")
+        else:
+            self.port = port_param
+
         self.baudrate = (
             self.get_parameter("baudrate").get_parameter_value().integer_value
         )
