@@ -20,6 +20,8 @@
 #                                     (foi ela que provou que a cadeia da dev
 #                                      seguia a referencia e o erro era nosso)
 #      MOVIMENTO_ANTIGO=1 ./ararabots.sh ...   volta ao driver (letra 'v')
+#      ./ararabots.sh painel [pasta]  junta todos os validacao.csv* num HTML
+#                                     com taxa de disparo e de gol por cenario
 #      ./ararabots.sh sonda           le as linhas [FK] do ultimo teste
 #                                     (emitidas com DIAG_FK=1; diz QUAL ramo da
 #                                      tatica pediu cada alvo)
@@ -167,7 +169,7 @@ DDS_ENV=""
 [ -n "${MOVIMENTO_ANTIGO:-}" ] && MOVIMENTO_NOVO=""
 export MOVIMENTO_NOVO
 
-ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 # GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
 #
 # O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
@@ -183,7 +185,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -695,12 +697,28 @@ cmd_preparar() {
     # Numero de robos: 11 por time custam FPS a toa. Todos os cenarios cabem em
     # 3, e com a maquina apertada (2 nucleos) essa diferenca decide se o teste
     # roda ou trava. O grSim reescreve o XML ao sair, entao reforcamos aqui.
+    # QUANTOS ROBOS POR TIME. Ajustavel por ARARABOTS_ROBOS.
+    #
+    # 3 continua o padrao: 11 por time custam FPS a toa numa maquina de 2
+    # nucleos, e todos os cenarios de bola parada cabem em 3.
+    #
+    # Mas o cenario 'jogo' NAO cabe: com 3 por time sobram apenas DOIS robos de
+    # linha (o 0 e sempre goleiro), e dois robos nao permitem papeis. Medimos:
+    # dedicar um deles ao apoio ofensivo deixou o eleito sozinho e derrubou o
+    # chute de 5525 para 1536 mm/s. Sem um terceiro, os itens de posicionamento
+    # nao tem como se pagar.
+    #
+    #     ARARABOTS_ROBOS=4 ./ararabots.sh ...     (3 de linha + goleiro)
+    #
+    # ATENCAO ao subir: cada robo a mais custa FPS do grSim e CPU do controle, e
+    # ja medimos que carga alta destroi o rastreio. Confira o portao de medicao.
+    ROBOS_TIME="${ARARABOTS_ROBOS:-3}"
     if [ -f ~/.grsim.xml ] && grep -q "Robots Count" ~/.grsim.xml; then
         n_rob="$(grep -A1 'Robots Count' ~/.grsim.xml | tail -1 | tr -d ' \t')"
-        if [ "$n_rob" != "3" ]; then
+        if [ "$n_rob" != "$ROBOS_TIME" ]; then
             pgrep -x grSim >/dev/null && { pkill -x grSim; sleep 2; }
-            perl -0pi -e 's|(<Var name="Robots Count"[^>]*>\s*\n\s*)\d+|${1}3|' ~/.grsim.xml
-            ok "robos por time forcado para 3 (eram $n_rob) - alivia o FPS"
+            perl -0pi -e "s|(<Var name=\"Robots Count\"[^>]*>\s*\n\s*)\d+|\${1}$ROBOS_TIME|" ~/.grsim.xml
+            ok "robos por time: $ROBOS_TIME (eram $n_rob)"
         fi
     fi
 
@@ -1697,6 +1715,8 @@ case "${1:-menu}" in
     parar)     shift; cmd_parar    "$@" ;;
     ajustes)   shift; cmd_ajustes "$@" ;;
     sonda)     shift; python3 "$PY" sonda "$@" ;;
+    painel)    shift; python3 "$PY" painel "$@" ;;
+    jogo-analise) shift; python3 "$PY" jogo-analise "$@" ;;
     mov-bruto) shift; docker cp "$PY" vice:/tmp/ararabots.py >/dev/null 2>&1
                MOVIMENTO_NOVO=1 ros_run "python3 /tmp/ararabots.py mov-bruto $*" ;;
     menu)      cmd_menu ;;

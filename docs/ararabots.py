@@ -279,6 +279,49 @@ CENARIOS = {
         "comando": ("DIRECT", "BLUE"),
     },
 
+    # ------------------------------------------------------------------
+    #  JOGO CORRIDO - o unico cenario que NAO e uma bola parada.
+    #
+    #  Todos os outros terminam num DIRECT/KICKOFF e medem uma cobranca. Este
+    #  usa FORCE_START: a arvore cai em NormalStart (plays/running.py) e o time
+    #  joga. Serve para VER COMPORTAMENTO, nao para medir cobranca - nao ha
+    #  criterio de sucesso aqui, so observacao.
+    #
+    #  Os dois times completos, em formacao de saida, com a bola no centro.
+    # ------------------------------------------------------------------
+    "jogo": {
+        "titulo": "Jogo corrido: os dois times, bola ao centro",
+        "descricao": (
+            "FORCE_START com os dois times em campo. A arvore cai em "
+            "NormalStart e o time joga livremente. Serve para observar "
+            "comportamento - posicionamento, disputa, o goleiro na meta - e "
+            "nao para medir uma cobranca. Sem criterio de gol: o que interessa "
+            "e o replay."
+        ),
+        "bola": (0.0, 0.0),
+        # QUATRO por time (goleiro + TRES de linha).
+        #
+        # Eram tres, o que deixa so DOIS de linha - e com dois nao ha papeis:
+        # um e o eleito que vai a bola, o outro faz tudo o mais. Medimos que
+        # dedicar esse segundo ao apoio ofensivo derruba o chute de 5525 para
+        # 1536 mm/s, porque o eleito fica sozinho.
+        #
+        # O grSim so cria os robos que o "Robots Count" do ~/.grsim.xml permite,
+        # e o preparar o forcava em 3. Agora e ajustavel:
+        #     ARARABOTS_ROBOS=4 ./ararabots.sh ...
+        # Este cenario PRECISA de 4; os de bola parada cabem em 3 e continuam
+        # rodando com o padrao (cada robo a mais custa FPS e CPU do controle).
+        "azuis": [(0, -4300.0, 0.0, 0.0),
+                  (1, -1200.0, 0.0, 0.0),
+                  (2, -2200.0, 1200.0, 0.0),
+                  (3, -2200.0, -1200.0, 0.0)],
+        "amarelos": [(0, 4300, 0, 180),
+                     (1, 1200, 0, 180),
+                     (2, 2200, -1200, 180),
+                     (3, 2200, 1200, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
     "um_so_goleiro": {
         "titulo": "Um em campo: apenas o goleiro",
         "descricao": (
@@ -1106,14 +1149,35 @@ def _criar_gravador():
                     pkt.ParseFromString(dados)
                 except Exception:
                     continue
-                if not pkt.HasField("detection") or not pkt.detection.balls:
+                if not pkt.HasField("detection"):
                     continue
-                b = pkt.detection.balls[0]
                 tc = round(float(pkt.detection.t_capture), 6)
-                self.visao_crua.append((
-                    tc, float(b.x), float(b.y),
-                    round(time.monotonic() - self.t0, 4),
-                ))
+
+                # A BOLA E OPCIONAL NESTE PACOTE - os ROBOS nao sao.
+                #
+                # BUG QUE ISTO CORRIGE, e ele apagava metade do campo: o grSim
+                # manda UM PACOTE POR CAMERA. A camera que enxerga o campo de
+                # ataque nao ve a bola quando ela esta no campo de defesa, entao
+                # o pacote dela vem sem 'balls' - e a guarda antiga descartava o
+                # pacote INTEIRO, com todos os robos que estavam nele.
+                #
+                # Consequencia medida no cenario 'jogo': o goleiro adversario
+                # (amarelo id 0) aparecia em (4380, 339) no /game_state e estava
+                # AUSENTE de 'amarelos_crus' - zero amostras em 25 s. O replay,
+                # que le a visao crua, nao tinha como desenha-lo; e como ele
+                # sumia, o rotulo "GK adv" caia por engano num jogador de linha
+                # no meio do campo.
+                #
+                # Ou seja: todo robo do lado oposto ao da bola era invisivel
+                # para o replay e para qualquer analise feita sobre a visao
+                # crua. Agora os robos sao gravados sempre; so a serie da BOLA
+                # depende de o pacote traze-la.
+                if pkt.detection.balls:
+                    b = pkt.detection.balls[0]
+                    self.visao_crua.append((
+                        tc, float(b.x), float(b.y),
+                        round(time.monotonic() - self.t0, 4),
+                    ))
                 # Os NOSSOS robos, tambem crus. Sem a orientacao verdadeira nao
                 # da para saber se a janela do chutador esteve aberta - e a
                 # orientacao do topico e justamente a que atrasa 17-23 graus.
@@ -1528,10 +1592,12 @@ border-radius:5px;padding:6px 14px;cursor:pointer;font:inherit}button:hover{back
 </div>
 <div class="leg">
   <span><i style="background:#ff9f1c"></i>bola</span>
-  <span><i style="background:#4da3ff"></i>nosso robo (a seta e a direcao do chutador)</span>
-  <span><i style="background:var(--alvo)"></i>setpoint que o driver comandou</span>
+  <span><i style="background:#4da3ff"></i>nossos robos &mdash; a FACE CHANFRADA e o chutador</span>
+  <span><i style="background:#ffd166"></i>adversarios (mesma forma)</span>
+  <span><i style="background:var(--alvo)"></i>setpoint comandado &mdash; a linha tracejada e o ERRO DE RASTREIO</span>
   <span><i style="background:var(--ok)"></i>disparo do chutador (verdade do grSim)</span>
-  <span>a linha amarela e o ERRO DE RASTREIO</span>
+  <span>o risco claro saindo do robo e a VELOCIDADE (1 m/s = 200 mm)</span>
+  <span>trilhas = ultimos 3 s &middot; reproducao em tempo real da gravacao</span>
 </div>
 <script>
 const D = /*DADOS*/;
@@ -1560,6 +1626,61 @@ const alvo = el('g'); svg.appendChild(alvo);
 alvo.appendChild(el('circle',{r:70,fill:'none',stroke:'#ffd166','stroke-width':14}));
 alvo.appendChild(el('line',{x1:-110,y1:0,x2:110,y2:0,stroke:'#ffd166','stroke-width':10}));
 alvo.appendChild(el('line',{x1:0,y1:-110,x2:0,y2:110,stroke:'#ffd166','stroke-width':10}));
+// FORMA REAL DO ROBO SSL, e nao "circulo com uma seta comprida".
+//
+// O robo da SSL e um cilindro de 90 mm de raio com a FRENTE CHANFRADA: a placa
+// do chutador fica a 73 mm do centro (e o mesmo CENTRO_ATE_PLACA que a tatica
+// usa). A corda dessa face tem meia-altura sqrt(90^2 - 73^2) = 52,6 mm.
+//
+// Desenhar um circulo com uma linha branca de 170 mm saindo dele deixava a
+// orientacao ambigua (a seta apontava para longe do corpo, parecendo um vetor
+// de movimento) e nao parecia um robo. Com a face chanfrada, para onde o
+// chutador aponta e OBVIO sem precisar de seta.
+const R_ROBO = 90, FRENTE = 73, MEIA_FACE = Math.sqrt(90*90 - 73*73);
+function formaRobo(){
+  return 'M ' + FRENTE + ' ' + (-MEIA_FACE) +
+         ' A ' + R_ROBO + ' ' + R_ROBO + ' 0 1 0 ' + FRENTE + ' ' + MEIA_FACE + ' Z';
+}
+// Velocidade desenhada como vetor a partir do centro. ESCALA: 1 m/s = 200 mm de
+// seta, entao um robo a 1,5 m/s (o teto do controlador) mostra 300 mm - visivel
+// sem cobrir o campo. Sem isto nao da para distinguir um robo parado de um robo
+// cruzando o campo: os dois eram um circulo igual.
+const ESC_VEL = 0.2;
+
+// Velocidade de um robo no quadro i, em mm/s, a partir da propria gravacao.
+// Procura o quadro anterior em que o MESMO id aparece e divide pelo dt real -
+// nao pelo indice, que nao e tempo (ver a nota da reproducao).
+function velRobo(i, rid){
+  const q = Q[i]; const a = (q.r||[]).find(x=>x[0]===rid); if(!a) return null;
+  for (let k=i-1; k>=0 && k>i-40; k--){
+    const b = (Q[k].r||[]).find(x=>x[0]===rid);
+    const dt = q.t - Q[k].t;
+    if (b && dt > 0.02) return [(a[1]-b[1])/dt, (a[2]-b[2])/dt];
+  }
+  return null;
+}
+
+// ULTIMA POSICAO CONHECIDA, para o robo nao PISCAR.
+//
+// O vanishing esta em 5% por quadro (e de proposito - simula perda de deteccao
+// real). Sem memoria, o robo some e reaparece varias vezes por segundo e o
+// replay fica ilegivel; pior, da a impressao de que ele teleporta.
+//
+// Guardamos ate 0,25 s: acima disso ele SOME mesmo, porque uma ausencia longa e
+// informacao de verdade - foi a visao que o perdeu, e a estrategia tambem.
+const MEM_MS = 0.25;
+function comMemoria(i){
+  const q = Q[i]; const vistos = {}; const saida = [];
+  (q.r||[]).forEach(r => { vistos[r[0]] = true; saida.push(r); });
+  for (let k=i-1; k>=0 && (q.t - Q[k].t) <= MEM_MS; k--){
+    (Q[k].r||[]).forEach(r => {
+      if (!vistos[r[0]]) { vistos[r[0]] = true; saida.push(r); }
+    });
+  }
+  return saida;
+}
+
+const gAzuis = el('g'); svg.appendChild(gAzuis);
 const robo = el('g'); svg.appendChild(robo);
 robo.appendChild(el('circle',{r:90,fill:'#4da3ff'}));
 const seta = el('line',{x1:0,y1:0,x2:170,y2:0,stroke:'#fff','stroke-width':22,'stroke-linecap':'round'});
@@ -1568,13 +1689,37 @@ const bola = el('circle',{r:45,fill:'#ff9f1c'}); svg.appendChild(bola);
 const marcaChute = el('circle',{r:0,fill:'none',stroke:'var(--ok)','stroke-width':22}); svg.appendChild(marcaChute);
 
 document.getElementById('cen').textContent = D.cenario || 'execucao';
+// QUEM E O COBRADOR. Vem do proprio resultado; se faltar, cai no robo que mais
+// se aproximou da bola ao longo da execucao - nunca em "o primeiro da lista",
+// que era o criterio anterior e mudava de quadro em quadro.
+const COBRADOR = (D.cobrador !== null && D.cobrador !== undefined) ? D.cobrador : (function(){
+  const dist={};
+  D.quadros.forEach(q=>{ (q.r||[]).forEach(r=>{
+    const d=Math.hypot(q.b[0]-r[1], q.b[1]-r[2]);
+    if(dist[r[0]]===undefined || d<dist[r[0]]) dist[r[0]]=d;
+  });});
+  let melhor=null;
+  for(const k in dist) if(melhor===null || dist[k]<dist[melhor]) melhor=k;
+  return melhor===null?null:+melhor;
+})();
 // resumo do erro de rastreio - aparece sem precisar clicar em nada
 (function(){
   // usa D.quadros direto: este bloco roda ANTES da declaracao 'const Q',
   // e tocar em Q aqui levantava ReferenceError (zona morta temporal do
   // const) - o script abortava e o replay nunca comecava a tocar.
-  const es=D.quadros.filter(q=>q.a&&q.r.length)
-            .map(q=>Math.hypot(q.a[1]-q.r[0][1], q.a[2]-q.r[0][2])).sort((x,y)=>x-y);
+  // PAREIA CADA ROBO COM O SETPOINT DELE.
+  //
+  // A versao anterior comparava q.r[0] com q.a - o primeiro robo da lista
+  // contra o ultimo setpoint de qualquer robo. Media a distancia entre dois
+  // objetos que nao tem relacao nenhuma.
+  const es=[];
+  D.quadros.forEach(q=>{
+    if(!q.a || !q.r) return;
+    const alvo=q.a.find(a=>a[0]===COBRADOR);
+    const rb=q.r.find(r=>r[0]===COBRADOR);
+    if(alvo && rb) es.push(Math.hypot(alvo[1]-rb[1], alvo[2]-rb[2]));
+  });
+  es.sort((x,y)=>x-y);
   if(!es.length) return;
   const med=es[es.length>>1], p90=es[Math.floor(.9*es.length)];
   const acima=100*es.filter(x=>x>200).length/es.length;
@@ -1590,7 +1735,7 @@ const db=document.getElementById('disp');
 db.textContent = D.disparou ? 'chutador DISPAROU' : 'nao disparou';
 db.className = 'badge ' + (D.disparou ? 'g-sim':'g-nao');
 
-let pGK = '';
+
 const Q = D.quadros;
 const sl = document.getElementById('sl'); sl.max = Q.length-1;
 let pB='', pR='';
@@ -1599,17 +1744,67 @@ function desenha(i){
   document.getElementById('t').textContent = q.t.toFixed(2);
   bola.setAttribute('cx', q.b[0]); bola.setAttribute('cy', q.b[1]);
   pB = (i===0?'M':'L') + q.b[0] + ' ' + q.b[1] + (i===0?'':' ');
-  const meu = q.r && q.r.length ? q.r[0] : null;
-  if (meu){
-    robo.setAttribute('transform', 'translate('+meu[1]+','+meu[2]+') rotate('+(meu[3]*180/Math.PI)+')');
-    robo.style.display='';
-  } else robo.style.display='none';
-  if (q.a && meu){
-    alvo.setAttribute('transform','translate('+q.a[1]+','+q.a[2]+')'); alvo.style.display='';
+  // TODOS OS NOSSOS ROBOS, cada um com O SEU setpoint.
+  //
+  // Antes desenhava-se UM robo (q.r[0], que mudava de identidade entre quadros)
+  // e UM alvo (o ultimo de qualquer robo). Com o time completo em campo isso
+  // nao mostrava a jogada - mostrava uma colagem.
+  //
+  // O cobrador vai cheio e com seta; os companheiros vao esmaecidos e com o
+  // proprio alvo em risco fino. A linha de erro grossa e a legenda numerica
+  // seguem SO o cobrador, que e quem decide a cobranca.
+  trilhaB.setAttribute('d', trilhaDe(i, null, true));
+  trilhaR.setAttribute('d', trilhaDe(i, COBRADOR, false));
+  gAzuis.textContent = '';
+  const nossos = comMemoria(i);
+  const meu = nossos.find(r => r[0] === COBRADOR) || null;
+  nossos.forEach(r => {
+    const ehCob = (r[0] === COBRADOR);
+    const g = el('g', {transform:'translate('+r[1]+','+r[2]+') rotate('+(r[3]*180/Math.PI)+')',
+                       opacity: ehCob ? 1 : 0.55});
+    g.appendChild(el('path',{d:formaRobo(), fill:'#4da3ff',
+                             stroke: ehCob?'#dff0ff':'none','stroke-width':ehCob?14:0}));
+    // risco curto sobre a face: reforca de que lado esta o chutador
+    g.appendChild(el('line',{x1:FRENTE-6,y1:-MEIA_FACE,x2:FRENTE-6,y2:MEIA_FACE,
+                             stroke:'#0d2818','stroke-width':16}));
+    if (!ehCob){
+      gAzuis.appendChild(el('path',{fill:'none',stroke:'#4da3ff','stroke-width':8,
+                                    opacity:.25, d: trilhaDe(i, r[0], false)}));
+    }
+    gAzuis.appendChild(g);
+    // numero SEMPRE, inclusive no cobrador - "quem e quem" e a primeira
+    // pergunta ao olhar o replay, e antes so os companheiros tinham rotulo.
+    const t = el('text',{x:r[1], y:r[2]-140,'text-anchor':'middle',
+                         'font-size':160, fill: ehCob?'#dff0ff':'#4da3ff'});
+    t.textContent = r[0];
+    gAzuis.appendChild(t);
+    // VETOR DE VELOCIDADE, medido entre quadros vizinhos da visao crua.
+    const v = velRobo(i, r[0]);
+    if (v && (Math.abs(v[0])+Math.abs(v[1])) > 60){
+      gAzuis.appendChild(el('line',{x1:r[1],y1:r[2],
+        x2:r[1]+v[0]*ESC_VEL, y2:r[2]+v[1]*ESC_VEL,
+        stroke:'#dff0ff','stroke-width':ehCob?16:9,opacity:.85,
+        'stroke-linecap':'round'}));
+    }
+    // setpoint DESTE robo
+    const a = (q.a || []).find(x => x[0] === r[0]);
+    if (a){
+      gAzuis.appendChild(el('line',{x1:r[1],y1:r[2],x2:a[1],y2:a[2],
+        stroke:'#ffd166','stroke-width': ehCob?0:8, opacity: ehCob?0:0.5}));
+      if(!ehCob) gAzuis.appendChild(el('circle',{cx:a[1],cy:a[2],r:35,fill:'none',
+        stroke:'#ffd166','stroke-width':8, opacity:0.5}));
+    }
+  });
+  robo.style.display='none';   // o robo unico virou o laco acima
+
+  const alvoCob = meu ? (q.a || []).find(x => x[0] === COBRADOR) : null;
+  if (alvoCob && meu){
+    alvo.setAttribute('transform','translate('+alvoCob[1]+','+alvoCob[2]+')');
+    alvo.style.display='';
     linhaErro.setAttribute('x1',meu[1]); linhaErro.setAttribute('y1',meu[2]);
-    linhaErro.setAttribute('x2',q.a[1]); linhaErro.setAttribute('y2',q.a[2]);
+    linhaErro.setAttribute('x2',alvoCob[1]); linhaErro.setAttribute('y2',alvoCob[2]);
     linhaErro.style.display='';
-    const e = Math.hypot(q.a[1]-meu[1], q.a[2]-meu[2]);
+    const e = Math.hypot(alvoCob[1]-meu[1], alvoCob[2]-meu[2]);
     const ee = document.getElementById('err');
     ee.textContent = e.toFixed(0);
     ee.style.color = e>200 ? 'var(--ruim)' : 'var(--ok)';
@@ -1618,68 +1813,161 @@ function desenha(i){
   // circulo maior, rotulo e trilha.
   gAmarelos.textContent = '';
   const ams = q.y || [];
-  let gk = null;
-  for (const a of ams){ if (!gk || Math.abs(a[1]-4500) < Math.abs(gk[1]-4500)) gk = a; }
+  // GOLEIRO ADVERSARIO PELO ID, nao por "quem esta mais perto do gol".
+  //
+  // A regra desta base e fixa: o robo 0 e sempre o goleiro (o comandar_amarelos
+  // do proprio ararabots.py trata o id 0 como goleiro). Eleger pelo mais
+  // proximo do gol funciona numa cobranca, em que os amarelos ficam parados,
+  // mas no cenario 'jogo' eles se movem - e vimos o rotulo "GK adv" aparecer no
+  // MEIO DO CAMPO, colado num jogador de linha. Rotulo errado e pior que
+  // nenhum: quem le o replay conclui que o goleiro abandonou a meta.
+  let gk = ams.find(a => a[0] === 0) || null;
+  if (!gk) for (const a of ams){ if (!gk || Math.abs(a[1]-4500) < Math.abs(gk[1]-4500)) gk = a; }
   for (const a of ams){
     const ehGK = gk && a[0]===gk[0];
-    gAmarelos.appendChild(el('circle',{cx:a[1],cy:a[2],r:ehGK?110:90,
-      fill:'#ffd166',opacity:ehGK?.95:.55,stroke:'#1c1c1c','stroke-width':ehGK?16:0}));
+    // mesma forma dos nossos: o adversario e um robo igual, so muda a cor.
+    // Antes era um circulo liso - ficava impossivel ver para onde ele apontava,
+    // e no goleiro isso e justamente o que interessa.
+    const ga = el('g',{transform:'translate('+a[1]+','+a[2]+') rotate('+(a[3]*180/Math.PI)+')',
+                       opacity: ehGK?.95:.6});
+    ga.appendChild(el('path',{d:formaRobo(), fill:'#ffd166',
+                              stroke: ehGK?'#1c1c1c':'none','stroke-width':ehGK?14:0}));
+    ga.appendChild(el('line',{x1:FRENTE-6,y1:-MEIA_FACE,x2:FRENTE-6,y2:MEIA_FACE,
+                              stroke:'#1c1c1c','stroke-width':16}));
+    gAmarelos.appendChild(ga);
     if (ehGK){
-      gAmarelos.appendChild(el('line',{x1:a[1],y1:a[2],
-        x2:a[1]+150*Math.cos(a[3]),y2:a[2]+150*Math.sin(a[3]),
-        stroke:'#1c1c1c','stroke-width':18}));
       const tx = el('text',{x:a[1],y:a[2]-190,'text-anchor':'middle','font-size':150,fill:'#ffd166'});
       tx.textContent = 'GK adv';
       gAmarelos.appendChild(tx);
-      pGK += (pGK===''?'M':'L') + a[1] + ' ' + a[2] + ' ';
-      trilhaGK.setAttribute('d', pGK);
+      // JANELA DESLIZANTE, e nao a execucao inteira.
+      //
+      // Acumulando 25 s de varredura poste a poste, a trilha vira um bloco
+      // rabiscado que esconde o campo e nao informa nada. Com os ultimos ~2 s
+      // da para LER o movimento: para onde ele estava indo no instante do
+      // chute, que e a pergunta que importa.
+      // JANELA DE TEMPO, calculada do zero a cada quadro.
+      //
+      // Antes era um array que crescia conforme os quadros eram DESENHADOS.
+      // Arrastando a barra de tempo, ele acumulava pontos de instantes nao
+      // contiguos e a trilha virava um risco reto atravessando o campo - um
+      // caminho que o goleiro nunca fez. Agora e a mesma funcao das outras
+      // trilhas: so o que aconteceu nos ultimos JAN_TRILHA segundos.
+      const pg = [];
+      for (let k=i; k>=0 && (q.t - Q[k].t) <= JAN_TRILHA; k--){
+        const g2 = (Q[k].y||[]).find(z => z[0] === a[0]);
+        if (g2) pg.push([g2[1], g2[2]]);
+      }
+      pg.reverse();
+      trilhaGK.setAttribute('d',
+        pg.length<2 ? '' : pg.map((p,k)=>(k?'L':'M')+p[0]+' '+p[1]).join(' '));
     }
   }
   // COMPANHEIROS: todo robo nosso que nao e o cobrador, e se a bola chegou perto
   // dele (raio de recepcao) o circulo fica verde - e a leitura de "recebeu".
+  // SO O INDICADOR DE RECEPCAO - o robo em si ja foi desenhado acima.
+  //
+  // Este bloco redesenhava TODOS os companheiros como circulos lisos por cima
+  // das formas novas (dois desenhos do mesmo robo, um sobre o outro) e voltava
+  // a percorrer q.r POR INDICE, a identidade instavel que ja tinha nos
+  // enganado. Agora ele so acrescenta o anel verde de "a bola chegou nele",
+  // que e a leitura util no cenario de passe.
   gCompanheiros.textContent = '';
-  for (let k=1; k<(q.r||[]).length; k++){
-    const c = q.r[k];
+  nossos.forEach(c => {
+    if (c[0] === COBRADOR) return;
     const d = Math.hypot(q.b[0]-c[1], q.b[1]-c[2]);
-    const recebeu = d <= 250;
-    gCompanheiros.appendChild(el('circle',{cx:c[1],cy:c[2],r:100,
-      fill: recebeu ? 'var(--ok)' : '#4da3ff', opacity: recebeu ? .95 : .5,
-      stroke:'#1c1c1c','stroke-width': recebeu ? 16 : 0}));
-    const tc = el('text',{x:c[1],y:c[2]-180,'text-anchor':'middle','font-size':140,
-                          fill: recebeu ? 'var(--ok)' : '#4da3ff'});
-    tc.textContent = recebeu ? ('RECEBEU (' + d.toFixed(0) + ')') : ('#' + c[0]);
+    if (d > 250) return;
+    gCompanheiros.appendChild(el('circle',{cx:c[1],cy:c[2],r:150,fill:'none',
+      stroke:'var(--ok)','stroke-width':20,opacity:.9}));
+    const tc = el('text',{x:c[1],y:c[2]+300,'text-anchor':'middle','font-size':140,
+                          fill:'var(--ok)'});
+    tc.textContent = 'recebeu (' + d.toFixed(0) + ' mm)';
     gCompanheiros.appendChild(tc);
-  }
+  });
   const ev = D.eventos.find(x => x.flat_kick && Math.abs(x.t - q.t) < 0.25);
   marcaChute.setAttribute('r', ev ? 260 : 0);
   if (ev){ marcaChute.setAttribute('cx', q.b[0]); marcaChute.setAttribute('cy', q.b[1]); }
 }
 // trilhas completas, desenhadas de uma vez
-trilhaB.setAttribute('d', Q.map((q,i)=>(i?'L':'M')+q.b[0]+' '+q.b[1]).join(' '));
-trilhaR.setAttribute('d', Q.filter(q=>q.r&&q.r.length).map((q,i)=>(i?'L':'M')+q.r[0][1]+' '+q.r[0][2]).join(' '));
+
+// TRILHA DO COBRADOR, nao de "q.r[0]".
+//
+// q.r vem de um dicionario: QUAL robo esta na posicao 0 muda de quadro em
+// quadro. A trilha pulava entre o cobrador e o apoio e riscava o campo inteiro
+// com um leque de linhas que nao era o caminho de ninguem. Era a parte mais
+// visivel do "replay falso".
+// TRILHAS COM JANELA DE TEMPO, desenhadas a cada quadro.
+//
+// Antes eram fixas e cobriam a execucao INTEIRA. Numa cobranca de 25 s com um
+// robo isso ainda se lia; no cenario 'jogo', com tres robos nossos, tres deles
+// e a bola, virou um novelo que escondia o campo - foi o "confuso".
+//
+// JAN_TRILHA = 3 s: tempo suficiente para ver de onde o robo veio e para onde
+// vai, sem arrastar a historia toda. E a mesma ideia ja aplicada na trilha do
+// goleiro adversario.
+const JAN_TRILHA = 3.0;
+function trilhaDe(i, rid, ehBola){
+  const t1 = Q[i].t, pts = [];
+  for (let k=i; k>=0 && (t1 - Q[k].t) <= JAN_TRILHA; k--){
+    if (ehBola) pts.push(Q[k].b);
+    else { const r=(Q[k].r||[]).find(x=>x[0]===rid); if(r) pts.push([r[1],r[2]]); }
+  }
+  pts.reverse();
+  return pts.length<2 ? '' : pts.map((p,k)=>(k?'L':'M')+p[0]+' '+p[1]).join(' ');
+}
+const trilhasOutros = {};
 
 // setInterval, e nao requestAnimationFrame: o rAF nao dispara quando a pagina
 // esta em aba oculta ou num painel que a renderiza sem foco - o botao alternava
 // e nada acontecia na tela.
-let vel=1, timer=null;
+// REPRODUCAO NO TEMPO REAL DA GRAVACAO, e nao "um quadro a cada 16 ms".
+//
+// ERA ISTO O "fora da realidade". A visao crua vem de QUATRO cameras do grSim,
+// cada uma no seu ritmo: os quadros NAO sao igualmente espacados no tempo.
+// Avancando um indice a cada 16 ms, dois quadros separados por 2 ms na gravacao
+// apareciam com o mesmo intervalo de dois quadros separados por 30 ms - o
+// movimento saltava, acelerava e freava sozinho, e nada daquilo aconteceu.
+//
+// Agora o relogio manda: a cada tique calculamos o INSTANTE de reproducao e
+// escolhemos o quadro cujo q.t e o mais proximo. Um robo parado fica parado; um
+// robo a 1,5 m/s atravessa a tela no tempo que levou de verdade.
+let vel=1, timer=null, tPlay=0, tUltimo=0;
 const botao=document.getElementById('play');
-function avanca(){
-  let i=+sl.value+1; if(i>=Q.length) i=0;
-  sl.value=i; desenha(i);
+const T_FIM = Q.length ? Q[Q.length-1].t : 0;
+
+// indice do quadro mais proximo de um instante (busca binaria)
+function idxDoTempo(t){
+  let lo=0, hi=Q.length-1;
+  while (lo < hi){
+    const m = (lo+hi) >> 1;
+    if (Q[m].t < t) lo = m+1; else hi = m;
+  }
+  if (lo > 0 && Math.abs(Q[lo-1].t - t) < Math.abs(Q[lo].t - t)) lo--;
+  return lo;
+}
+
+function tique(){
+  const agora = performance.now();
+  const dt = (agora - tUltimo) / 1000;
+  tUltimo = agora;
+  tPlay += dt * vel;
+  if (tPlay > T_FIM) tPlay = 0;
+  const i = idxDoTempo(tPlay);
+  sl.value = i; desenha(i);
 }
 function toca(){
   para();
-  timer=setInterval(avanca, 16/vel);
-  botao.textContent='pausar';
+  tUltimo = performance.now();
+  timer = setInterval(tique, 33);      // 30 quadros/s de TELA; o tempo da
+  botao.textContent='pausar';          // gravacao e independente disto
 }
 function para(){ if(timer){clearInterval(timer); timer=null;} botao.textContent='reproduzir'; }
 botao.onclick = () => timer ? para() : toca();
 document.getElementById('lento').onclick = e => {
-  vel = vel===1?0.25:1; e.target.textContent = vel===1?'0,25x':'1x';
-  if(timer) toca();
+  vel = vel===1?0.25:(vel===0.25?0.1:1);
+  e.target.textContent = vel===1?'1x':(vel===0.25?'0,25x':'0,1x');
 };
 sl.onmousedown = para;
-sl.oninput = () => desenha(+sl.value);
+sl.oninput = () => { tPlay = Q[+sl.value] ? Q[+sl.value].t : 0; desenha(+sl.value); };
 desenha(0);
 toca();   // comeca tocando: nada de clicar para ver a execucao
 </script></body></html>"""
@@ -1870,18 +2158,30 @@ def gerar_replay(resultado, destino):
     eventos = [{"t": round(para_tc(e["t"]) - t0, 4), **e}
                for e in (resultado.get("eventos_chutador") or [])]
 
+    # UM SETPOINT POR ROBO, e nao "o ultimo que passou".
+    #
+    # BUG QUE ISTO CORRIGE: 'ultimo_alvo' guardava o ultimo alvo visto,
+    # QUALQUER que fosse o robo. Com 3 robos publicando setpoint, o alvo
+    # desenhado trocava de dono a cada mensagem - e a linha saia do robo A ate o
+    # setpoint do robo B. O replay mostrava um erro de rastreio que nao existia,
+    # variando a 300 Hz. Era isso o "extremamente falso".
+    #
+    # Some-se o outro defeito: o desenho usava q.r[0], "o primeiro robo da
+    # lista", e essa lista vem de um dicionario - ou seja, QUAL robo aparecia
+    # como 'o nosso' mudava de quadro em quadro.
     quadros = []
-    ia, ultimo_alvo = 0, None
+    ia, alvo_por_robo = 0, {}
     for t, x, y, _tn in vc:
         while ia < len(alvos_t) and alvos_t[ia][0] <= t:
-            ultimo_alvo = alvos_t[ia][1]
+            rid, ax, ay = alvos_t[ia][1]
+            alvo_por_robo[rid] = [rid, ax, ay]
             ia += 1
         quadros.append({
             "t": round(t - t0, 4),
             "b": [round(x), round(y)],
             "r": robos_perto(t),
             "y": amarelos_perto(t),
-            "a": ultimo_alvo,
+            "a": list(alvo_por_robo.values()),
         })
 
     dados = _json.dumps({
@@ -1892,6 +2192,8 @@ def gerar_replay(resultado, destino):
         "gol_em": resultado.get("gol_em"),
         "disparou": resultado.get("disparou"),
         "bola_inicial": resultado.get("bola_inicial"),
+        # Quem cobrou, para o replay destacar o robo certo em vez de adivinhar.
+        "cobrador": resultado.get("cobrador"),
     }, separators=(",", ":"))
 
     with open(destino, "w") as f:
@@ -2274,6 +2576,14 @@ def rodar(nome, duracao=12.0):
         "codigo": {"goal_x": 4500.0, "kick_threshold": 2250.0},
     }
     const = perfis.get(perfil, perfis["codigo"])
+    # Quem cobrou NESTA execucao: o robo que mais se aproximou da bola.
+    # Calculado aqui, antes do resultado, porque tanto o relatorio quanto o
+    # replay dependem dele. E inferencia do que aconteceu, nao palpite.
+    cobrador_medido = None
+    _cont = getattr(no, "contato", None)
+    if _cont:
+        cobrador_medido = min(_cont, key=lambda r: _cont[r][0])
+
     resultado = {
         "cenario": nome,
         "branch": os.environ.get("BRANCH", "?"),
@@ -2287,6 +2597,9 @@ def rodar(nome, duracao=12.0):
         "comando": f"{tipo} {cor}",
         "duracao": duracao,
         "kick_por_robo": {str(k): v for k, v in kicks.items()},
+        # Quem cobrou: o robo que mais se aproximou da bola. O replay usa isto
+        # para destacar o robo certo em vez de desenhar "o primeiro da lista".
+        "cobrador": cobrador_medido,
         "kick_ativado": kick_ativado,
         "disparou": bool(disparou),
         "gol": gol_final,
@@ -2347,10 +2660,6 @@ def rodar(nome, duracao=12.0):
     # Quem foi o cobrador NESTA execucao: o robo que mais se aproximou da bola.
     # E uma inferencia do resultado, nao um palpite - serve so para o relatorio
     # apontar qual linha olhar.
-    cobrador_medido = None
-    _cont = getattr(no, "contato", None)
-    if _cont:
-        cobrador_medido = min(_cont, key=lambda r: _cont[r][0])
     if rastreio:
         print("   RASTREIO (robo x setpoint): agregado mediana %.0f mm  p90 %.0f  max %.0f"
               % (rastreio["mediana"], rastreio["p90"], rastreio["maximo"]))
@@ -2950,6 +3259,333 @@ def _servicos_exigidos():
     return {"/strategy_command", "/update_obstacles", "/set_orientation"}
 
 
+def _pasta_replays_padrao():
+    """<raiz>/Replays_GrSim - a pasta que o proprio replay ja usa.
+
+    A raiz e descoberta subindo a arvore a partir deste arquivo, do mesmo jeito
+    que o ararabots.sh faz. Sem caminho fixo: mover o projeto nao quebra nada.
+    """
+    aqui = os.path.dirname(os.path.abspath(__file__))
+
+    # 1) Se ja existe uma Replays_GrSim subindo a arvore, e ela.
+    d = aqui
+    for _ in range(6):
+        cand = os.path.join(d, "Replays_GrSim")
+        if os.path.isdir(cand):
+            return cand
+        d = os.path.dirname(d)
+
+    # 2) Nao existe: CRIA no lugar certo, que e UM NIVEL ACIMA do ssl-VICE -
+    #    a mesma raiz que o ararabots.sh usa (_descobrir_raiz), onde ficam os
+    #    quatro repositorios irmaos. Achamos a raiz procurando quem contem um
+    #    diretorio 'ssl-VICE'.
+    #
+    #    POR QUE CRIAR, e nao so avisar: o lado do shell (copiar_replays) ja faz
+    #    'mkdir -p "$RAIZ/Replays_GrSim"'. Se o painel caisse na pasta do script
+    #    quando ela ainda nao existe, ele leria um lugar e o teste gravaria em
+    #    outro - e o painel apareceria vazio sem explicacao, numa maquina nova.
+    d = aqui
+    for _ in range(6):
+        if os.path.isdir(os.path.join(d, "ssl-VICE")):
+            destino = os.path.join(d, "Replays_GrSim")
+            os.makedirs(destino, exist_ok=True)
+            return destino
+        d = os.path.dirname(d)
+
+    # 3) Ultimo caso (script movido para fora da arvore): ao lado do proprio
+    #    ssl-VICE, deduzido de docs/ -> ssl-VICE/ -> raiz.
+    destino = os.path.join(os.path.dirname(os.path.dirname(aqui)), "Replays_GrSim")
+    os.makedirs(destino, exist_ok=True)
+    return destino
+
+
+def _ler_replay(caminho):
+    """Extrai o payload de um replay HTML. Devolve None se nao for um."""
+    try:
+        with open(caminho, encoding="utf-8") as fh:
+            txt = fh.read()
+        i = txt.index("const D = ")
+        j = txt.index(";\n", i)
+        return json.loads(txt[i + 10:j])
+    except Exception:
+        return None
+
+
+def _ferramenta_painel():
+    """Painel HTML com o historico de execucoes, lido dos PROPRIOS replays.
+
+    POR QUE LER OS REPLAYS, e nao so os validacao.csv
+    -------------------------------------------------
+    O CSV e sobrescrito a cada lote e so existe para os cenarios rodados por
+    'validar'. Os replays ficam TODOS em Replays_GrSim, com carimbo de hora no
+    nome, e carregam o registro completo - a serie da bola, os robos, os eventos
+    do chutador. E o unico historico que nao se perde.
+
+    Uso:
+        ./ararabots.sh painel            usa <raiz>/Replays_GrSim
+        ./ararabots.sh painel -definir   pergunta a pasta
+        ./ararabots.sh painel <pasta>    usa a pasta dada
+    """
+    import collections
+    import glob as _glob
+
+    arg = sys.argv[2] if len(sys.argv) > 2 else ""
+    if arg == "-definir":
+        padrao = _pasta_replays_padrao()
+        print("   pasta com os replays [%s]: " % padrao, end="", flush=True)
+        try:
+            digitado = sys.stdin.readline().strip()
+        except Exception:
+            digitado = ""
+        pasta = os.path.expanduser(digitado) if digitado else padrao
+    elif arg:
+        pasta = os.path.expanduser(arg)
+    else:
+        pasta = _pasta_replays_padrao()
+
+    if not os.path.isdir(pasta):
+        print("   XX pasta inexistente: %s" % pasta)
+        return 1
+
+    arquivos = sorted(_glob.glob(os.path.join(pasta, "*.html")))
+    arquivos = [a for a in arquivos if os.path.basename(a) != "painel.html"]
+    if not arquivos:
+        print("   XX nenhum replay .html em %s" % pasta)
+        print("      (rode um cenario primeiro: ./ararabots.sh validar 1 um_so_cobrador)")
+        return 1
+
+    print("   lendo %d replays de %s ..." % (len(arquivos), pasta))
+    regs = []
+    for arq in arquivos:
+        D = _ler_replay(arq)
+        if not D:
+            continue
+        base = os.path.basename(arq)[:-5]
+        partes = base.split("__")
+        cen = D.get("cenario") or (partes[0] if partes else "?")
+        quando = partes[-1] if len(partes) > 2 else ""
+        lote = partes[1] if len(partes) > 2 else "avulso"
+
+        Q = D.get("quadros") or []
+        vmax = 0.0
+        andou = 0.0
+        if len(Q) > 2:
+            b0 = Q[0]["b"]
+            for k in range(1, len(Q)):
+                dt = Q[k]["t"] - Q[k - 1]["t"]
+                if dt > 0.005:
+                    d = math.hypot(Q[k]["b"][0] - Q[k - 1]["b"][0],
+                                   Q[k]["b"][1] - Q[k - 1]["b"][1])
+                    vmax = max(vmax, d / dt)
+            andou = max(math.hypot(fr["b"][0] - b0[0], fr["b"][1] - b0[1]) for fr in Q)
+        regs.append({
+            "cen": cen, "lote": lote, "quando": quando, "arq": base + ".html",
+            "gol": D.get("gol") == "nosso",
+            "contra": D.get("gol") == "contra",
+            "disparou": bool(D.get("disparou")),
+            "vmax": vmax, "andou": andou,
+        })
+
+    if not regs:
+        print("   XX os .html existem mas nenhum tem payload de replay.")
+        return 1
+
+    por_cen = collections.OrderedDict()
+    for r in regs:
+        por_cen.setdefault(r["cen"], []).append(r)
+
+    def barra(k, n):
+        if not n:
+            return ""
+        pct = 100.0 * k / n
+        cor = "ok" if pct >= 66 else ("meio" if pct >= 33 else "ruim")
+        return ('<div class="b"><div class="f %s" style="width:%.0f%%"></div>'
+                '<span>%d/%d</span></div>' % (cor, pct, k, n))
+
+    def mediana(v):
+        v = sorted(v)
+        return v[len(v) // 2] if v else 0.0
+
+    corpo = []
+    # visao geral primeiro
+    corpo.append('<h2>visao geral</h2><table><tr><th>cenario</th>'
+                 '<th>execucoes</th><th>disparou</th><th>GOL</th>'
+                 '<th>bola andou (mediana)</th><th>pico da bola (mediana)</th></tr>')
+    for cen in sorted(por_cen):
+        L = por_cen[cen]
+        corpo.append("<tr><td><b>%s</b></td><td>%d</td><td>%s</td><td>%s</td>"
+                     "<td>%.0f mm</td><td>%.0f mm/s</td></tr>"
+                     % (cen, len(L), barra(sum(r["disparou"] for r in L), len(L)),
+                        barra(sum(r["gol"] for r in L), len(L)),
+                        mediana([r["andou"] for r in L]),
+                        mediana([r["vmax"] for r in L])))
+    corpo.append("</table>")
+
+    # depois, por lote dentro de cada cenario
+    for cen in sorted(por_cen):
+        L = por_cen[cen]
+        porlote = collections.OrderedDict()
+        for r in sorted(L, key=lambda x: x["quando"]):
+            porlote.setdefault(r["lote"], []).append(r)
+        corpo.append('<h2>%s <span class="dim">(%d execucoes)</span></h2>'
+                     '<table><tr><th>lote</th><th>quando</th><th>n</th>'
+                     '<th>disparou</th><th>GOL</th><th>bola andou</th>'
+                     '<th>pico</th></tr>' % (cen, len(L)))
+        for lote, rs in porlote.items():
+            q = rs[0]["quando"]
+            quando = ("%s:%s" % (q[:2], q[2:4])) if len(q) >= 4 else "-"
+            corpo.append("<tr><td>%s</td><td class=\"dim\">%s</td><td>%d</td>"
+                         "<td>%s</td><td>%s</td><td>%.0f mm</td><td>%.0f mm/s</td></tr>"
+                         % (lote, quando, len(rs),
+                            barra(sum(r["disparou"] for r in rs), len(rs)),
+                            barra(sum(r["gol"] for r in rs), len(rs)),
+                            mediana([r["andou"] for r in rs]),
+                            mediana([r["vmax"] for r in rs])))
+        corpo.append("</table>")
+
+    html = (_PAINEL_HTML.replace("/*CORPO*/", "\n".join(corpo))
+                        .replace("/*QTD*/", str(len(regs)))
+                        .replace("/*ARQS*/", str(len(arquivos)))
+                        .replace("/*PASTA*/", pasta))
+    destino = os.path.join(pasta, "painel.html")
+    with open(destino, "w", encoding="utf-8") as fh:
+        fh.write(html)
+    print("   painel gerado: %s" % destino)
+    print("   %d execucoes, %d cenarios" % (len(regs), len(por_cen)))
+    return 0
+
+
+_PAINEL_HTML = r"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Painel de resultados - Ararabots</title><style>
+:root{--bg:#11151a;--fg:#e8eef5;--dim:#8b98a8;--linha:#39485a;--ok:#3ddc84;--meio:#ffd166;--ruim:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;padding:20px;background:var(--bg);color:var(--fg);
+font:14px/1.6 ui-monospace,Menlo,Consolas,monospace}
+h1{font-size:19px;margin:0 0 4px}h2{font-size:15px;margin:26px 0 6px;color:var(--meio)}
+.sub{color:var(--dim);font-size:12px;margin-bottom:18px}
+table{border-collapse:collapse;width:100%;max-width:1000px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--linha);font-size:13px}
+th{color:var(--dim);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.b{position:relative;background:#1c2530;border-radius:3px;height:18px;width:120px}
+.f{height:100%;border-radius:3px}.f.ok{background:var(--ok)}.f.meio{background:var(--meio)}
+.f.ruim{background:var(--ruim)}
+.b span{position:absolute;left:8px;top:0;line-height:18px;font-size:11px;color:#0b0f14;font-weight:700}
+.alerta{color:var(--ruim);font-size:11px}.dim{color:var(--dim);font-size:11px}
+.nota{margin-top:30px;color:var(--dim);font-size:12px;max-width:760px;border-top:1px solid var(--linha);padding-top:14px}
+</style></head><body>
+<h1>Painel de resultados &mdash; cobranca de falta</h1>
+<div class="sub">/*QTD*/ execucoes lidas de /*ARQS*/ replays em <b>/*PASTA*/</b></div>
+/*CORPO*/
+<div class="nota">
+<b>Como ler.</b> <i>disparou</i> e o chutador do grSim ter disparado de verdade;
+<i>GOL</i> e a bola ter cruzado a linha. Sao coisas diferentes e a diferenca
+importa: um lote pode ter 6 de 6 disparos e 1 gol &mdash; nesse caso o problema
+esta na mira ou no goleiro, nao na aproximacao. O contrario (poucos disparos)
+aponta para a aproximacao.<br><br>
+<b>Uma execucao nao diz nada.</b> Compare lotes de 6; diferencas de 1 ou 2 em 6
+estao dentro do ruido. E confira em que configuracao cada lote rodou &mdash;
+mira, goleiro, movimentacao e ajustes mudam o resultado, e lote medido sem saber
+disso nao vale.
+</div>
+</body></html>"""
+
+
+
+def _ferramenta_jogo_analise():
+    """Mede o JOGO CORRIDO nos replays do cenario 'jogo'.
+
+    POR QUE ISTO EXISTE
+    -------------------
+    Em bola parada o criterio e simples: disparou? foi gol? Em jogo corrido nao
+    existe criterio unico, e olhar o replay "no olho" nao distingue progresso de
+    agitacao - medimos um jogo em que os robos percorreram 12 metros cada e a
+    bola nao saiu do nosso campo.
+
+    As cinco perguntas que decidem se o jogo funciona:
+      1. ALGUEM VAI A BOLA?     menor distancia de um robo nosso a bola
+      2. AMONTOAM?              tempo com DOIS nossos a menos de 600 mm dela
+      3. A BOLA ANDA PARA A FRENTE?  x maximo que ela alcancou
+      4. O TIME ATACA?          quadros com robo nosso alem de x=3500
+      5. ALGUEM CHUTA?          pico de velocidade da bola (chute = 5000+)
+
+    Uso:  ./ararabots.sh jogo-analise [n]   (n = quantos replays recentes, padrao 3)
+    """
+    import glob as _glob
+
+    quantos = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+    pasta = _pasta_replays_padrao()
+    arqs = sorted(_glob.glob(os.path.join(pasta, "jogo__*.html")),
+                  key=os.path.getmtime)[-quantos:]
+    if not arqs:
+        print("   XX nenhum replay do cenario 'jogo' em %s" % pasta)
+        print("      rode:  ./ararabots.sh validar 3 jogo")
+        return 1
+
+    print("   %d replays de 'jogo' (mais recentes)" % len(arqs))
+    print()
+    print("   %-9s %8s %8s %9s %8s %9s %8s" %
+          ("quando", "d_min", "amontoa", "x_max", "ataque", "v_pico", "posse"))
+    resumo = []
+    for arq in arqs:
+        D = _ler_replay(arq)
+        if not D:
+            continue
+        Q = D.get("quadros") or []
+        if len(Q) < 10:
+            continue
+        dmin = 1e9
+        amontoa = amostras = 0
+        xmax = -9999.0
+        ataque = 0
+        vmax = 0.0
+        posse = 0
+        for k, fr in enumerate(Q):
+            b = fr["b"]
+            nossos = fr.get("r") or []
+            xmax = max(xmax, b[0])
+            for r in nossos:
+                d = math.hypot(b[0] - r[1], b[1] - r[2])
+                dmin = min(dmin, d)
+                if r[1] > 3500:
+                    ataque += 1
+            if len(nossos) >= 2:
+                ds = sorted(math.hypot(b[0] - r[1], b[1] - r[2]) for r in nossos)
+                amostras += 1
+                if ds[1] < 600.0:
+                    amontoa += 1
+                if ds[0] < 200.0:
+                    posse += 1
+            if k:
+                dt = fr["t"] - Q[k - 1]["t"]
+                if dt > 0.005:
+                    vmax = max(vmax, math.hypot(b[0] - Q[k - 1]["b"][0],
+                                                b[1] - Q[k - 1]["b"][1]) / dt)
+        pa = (100.0 * amontoa / amostras) if amostras else 0.0
+        pp = (100.0 * posse / amostras) if amostras else 0.0
+        quando = os.path.basename(arq)[-11:-5]
+        print("   %-9s %7.0f %7.0f%% %9.0f %8d %9.0f %7.0f%%"
+              % (quando, dmin, pa, xmax, ataque, vmax, pp))
+        resumo.append((dmin, pa, xmax, ataque, vmax, pp))
+
+    if not resumo:
+        return 1
+    n = len(resumo)
+    med = lambda i: sorted(x[i] for x in resumo)[n // 2]
+    print()
+    print("   MEDIANAS e o que cada uma quer dizer")
+    print("   1. alguem vai a bola   : d_min  %6.0f mm   (contato e 111 mm)"
+          % med(0))
+    print("   2. amontoam            : %6.0f%% do tempo com DOIS a menos de 600 mm"
+          % med(1))
+    print("   3. bola avanca         : x_max  %6.0f mm   (gol deles em +4500)"
+          % med(2))
+    print("   4. time ataca          : %6.0f quadros alem de x=3500" % med(3))
+    print("   5. alguem chuta        : v_pico %6.0f mm/s  (chute real e 5000+)"
+          % med(4))
+    print("   posse (alguem a menos de 200 mm da bola): %.0f%% do tempo" % med(5))
+    return 0
+
+
+
 def _ferramenta_mov_bruto():
     """Comanda a movimentacao NOVA sozinha, sem estrategia nenhuma.
 
@@ -3209,5 +3845,7 @@ if __name__ == "__main__":
     elif acao == "decisao":  _ferramenta_decisao()
     elif acao == "sonda":    sys.exit(_ferramenta_sonda())
     elif acao == "mov-bruto": sys.exit(_ferramenta_mov_bruto())
+    elif acao == "painel":   sys.exit(_ferramenta_painel())
+    elif acao == "jogo-analise": sys.exit(_ferramenta_jogo_analise())
     else:
         print(__doc__); sys.exit(2)
