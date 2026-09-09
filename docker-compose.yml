@@ -16,6 +16,10 @@ services:
     container_name: ssl-gui
     network_mode: "host"
     volumes:
-      - ../ssl-gui:/src
+      # Must match the image's WORKDIR (/app): vite runs from there, so mounting the
+      # source anywhere else leaves it serving the snapshot baked in at build time.
+      - ../ssl-gui:/app
+      # Keeps the image's node_modules instead of letting the host's shadow it.
+      - /app/node_modules
     stdin_open: true
     tty: true

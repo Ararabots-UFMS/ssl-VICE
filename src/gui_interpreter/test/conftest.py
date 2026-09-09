@@ -21,7 +21,7 @@ def _install(name):
 
 
 _install("movement_interfaces")
-_install("movement_interfaces.msg")
+movement_msg = _install("movement_interfaces.msg")
 
 system_interfaces = _install("system_interfaces")
 system_interfaces.msg = _install("system_interfaces.msg")
@@ -29,6 +29,9 @@ system_interfaces.srv = _install("system_interfaces.srv")
 
 _install("std_srvs")
 _install("std_srvs.srv")
+
+std_msgs = _install("std_msgs")
+std_msgs.msg = _install("std_msgs.msg")
 
 
 class _GUIRobot:
@@ -87,5 +90,5 @@ class _MovementCommandArray:
 # apiNode keeps one MovementCommand per robot and republishes the whole set, so
 # these need distinct mutable instances at the generated defaults -- a MagicMock
 # hands back one shared auto-vivifying object for every robot.
-sys.modules["movement_interfaces.msg"].MovementCommand = _MovementCommand
-sys.modules["movement_interfaces.msg"].MovementCommandArray = _MovementCommandArray
+movement_msg.MovementCommand = _MovementCommand
+movement_msg.MovementCommandArray = _MovementCommandArray
