@@ -17,6 +17,7 @@ from movement.entities.motion import MotionState
 from utils.math_util import Vector2D
 
 from control.pid_controller import (
+    DEFAULT_KP,
     DEFAULT_SLEW_LIMIT,
     PIDController,
     RobotTrajectoryController,
@@ -116,6 +117,36 @@ class TestRobotTrajectoryController:
         assert controller.x_controller.kp == robot_controller.default_kp
         assert controller.y_controller.kd == robot_controller.default_kd
         assert controller.x_controller.slew_limit == robot_controller.default_slew_limit
+
+    def test_per_robot_params_only_affect_that_robot(self):
+        robot_controller = RobotTrajectoryController()
+        robot_controller.get_controller(1)
+        robot_controller.get_controller(2)
+
+        robot_controller.update_robot_params(1, 9.0, 0.5, 0.9)
+
+        assert robot_controller.trajectory_controllers[1].x_controller.kp == 9.0
+        assert robot_controller.trajectory_controllers[2].x_controller.kp == DEFAULT_KP
+
+    def test_per_robot_params_survive_cleanup(self):
+        robot_controller = RobotTrajectoryController()
+        robot_controller.update_robot_params(1, 9.0, 0.5, 0.9)
+        robot_controller.get_controller(1)
+
+        robot_controller.cleanup_unused_robots(set())
+
+        assert robot_controller.get_controller(1).x_controller.kp == 9.0
+
+    def test_defaults_do_not_overwrite_a_per_robot_override(self):
+        robot_controller = RobotTrajectoryController()
+        robot_controller.update_robot_params(1, 9.0, 0.5, 0.9)
+        robot_controller.get_controller(1)
+        robot_controller.get_controller(2)
+
+        robot_controller.update_params(2.0, 0.1, 0.2)
+
+        assert robot_controller.trajectory_controllers[1].x_controller.kp == 9.0
+        assert robot_controller.trajectory_controllers[2].x_controller.kp == 2.0
 
     def test_a_target_jump_resets_without_a_command_step(self):
         robot_controller = RobotTrajectoryController()

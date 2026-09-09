@@ -229,16 +229,22 @@ class APINode(Node):
         msg.is_team_color_yellow = self.is_team_color_yellow
         msg.is_play_pressed = self.is_play_pressed
         for gui_robot in self.robots:
-            robot = GUIRobot()
-            robot.id = gui_robot["id"]
-            robot.name = gui_robot["name"]
-            robot.address = [int(i) for i in gui_robot["address"].split(",")]
-            robot.kp = float(gui_robot["kp"])
-            robot.ki = float(gui_robot["ki"])
-            robot.kd = float(gui_robot["kd"])
+            # This runs on a timer, so a half-filled card must not raise: an
+            # uncaught exception here takes the whole node down.
+            try:
+                robot = GUIRobot()
+                robot.id = int(gui_robot["id"])
+                robot.name = gui_robot["name"]
+                robot.address = [int(i) for i in gui_robot["address"].split(",")]
+                robot.kp = float(gui_robot["kp"])
+                robot.ki = float(gui_robot["ki"])
+                robot.kd = float(gui_robot["kd"])
+            except (KeyError, TypeError, ValueError, AttributeError) as e:
+                self.get_logger().warn(f"Skipping malformed robot config {gui_robot}: {e}")
+                continue
 
             msg.robots.append(robot)
-        msg.robot_count = self.robot_count
+        msg.robot_count = len(msg.robots)
         return msg
 
     def publish_gui_data(self) -> None:
@@ -254,6 +260,29 @@ class APINode(Node):
         self.robot_count = len(msg)
         self.robots = msg
         self.publish_gui_data()
+        self.push_config_pid(msg)
+
+    def push_config_pid(self, robots):
+        """Send each card's gains to the controller. The guiTopic publish above
+        carries them too, but nothing subscribes to it."""
+        tunable = [r for r in robots if all(k in r for k in ("id", "kp", "ki", "kd"))]
+        if not tunable:
+            return
+
+        if not self.pid_client.wait_for_service(timeout_sec=1.0):
+            gui_socket.emit("pid_response", {
+                "success": False,
+                "message": "PID service is not available"
+            })
+            return
+
+        for robot in tunable:
+            self.handle_update_pid({
+                "robot_id": robot["id"],
+                "kp": robot["kp"],
+                "ki": robot["ki"],
+                "kd": robot["kd"],
+            })
 
     # Strategy command handlers
     def _movement_command_for(self, robot_id: int) -> MovementCommand:

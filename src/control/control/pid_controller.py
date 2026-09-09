@@ -148,6 +148,8 @@ class RobotTrajectoryController:
         self.last_targets = {}  # For position triggered reset
         self.reset_threshold = 0.5  # Reset if target jumps > 0.5m
 
+        self.robot_params: dict[int, tuple[float, float, float]] = {}
+
         self.default_kp = DEFAULT_KP
         self.default_ki = DEFAULT_KI
         self.default_kd = DEFAULT_KD
@@ -156,11 +158,11 @@ class RobotTrajectoryController:
     def get_controller(self, robot_id: int) -> Vector2DTrajectoryController:
         """Get or create trajectory controller for robot"""
         if robot_id not in self.trajectory_controllers:
+            kp, ki, kd = self.robot_params.get(
+                robot_id, (self.default_kp, self.default_ki, self.default_kd)
+            )
             self.trajectory_controllers[robot_id] = Vector2DTrajectoryController(
-                self.default_kp,
-                self.default_ki,
-                self.default_kd,
-                self.default_slew_limit,
+                kp, ki, kd, self.default_slew_limit
             )
         return self.trajectory_controllers[robot_id]
 
@@ -193,12 +195,21 @@ class RobotTrajectoryController:
             self.trajectory_controllers[robot_id].reset()
 
     def update_params(self, kp: float, ki: float, kd: float):
+        """Set the team-wide defaults, leaving per-robot overrides untouched."""
         self.default_kp = kp
         self.default_ki = ki
         self.default_kd = kd
 
-        for controller in self.trajectory_controllers.values():
-            controller.update_params(kp, ki, kd)
+        for robot_id, controller in self.trajectory_controllers.items():
+            if robot_id not in self.robot_params:
+                controller.update_params(kp, ki, kd)
+
+    def update_robot_params(self, robot_id: int, kp: float, ki: float, kd: float):
+        """Override the gains for a single robot."""
+        self.robot_params[robot_id] = (kp, ki, kd)
+
+        if robot_id in self.trajectory_controllers:
+            self.trajectory_controllers[robot_id].update_params(kp, ki, kd)
 
     def cleanup_unused_robots(self, active_robot_ids: set):
         inactive_robots = set(self.trajectory_controllers.keys()) - active_robot_ids

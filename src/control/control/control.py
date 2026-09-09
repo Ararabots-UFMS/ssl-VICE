@@ -183,7 +183,12 @@ class Controller(Node):
         self.publisher.publish(team_cmd)
 
     def update_parameters(self, req, resp):
-        self.robot_controller.update_params(req.kp, req.ki, req.kd)
+        self.robot_controller.update_robot_params(
+            int(req.id), req.kp, req.ki, req.kd
+        )
+        self.get_logger().info(
+            f"PID for robot {req.id}: kp={req.kp}, ki={req.ki}, kd={req.kd}"
+        )
         resp.success = True
         return resp
 

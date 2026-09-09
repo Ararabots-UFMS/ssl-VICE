@@ -352,6 +352,19 @@ class TestCreateMessage:
         assert r1.ki == 0.1
         assert r1.kd == 0.01
 
+    def test_skips_a_malformed_card_without_raising(self, node):
+        node.robot_count = 2
+        node.robots = [
+            {"id": 1, "name": "R1", "address": "1,2,3", "kp": "", "ki": "0.1", "kd": "0.01"},
+            {"id": 2, "name": "R2", "address": "4,5,6", "kp": "2.0", "ki": "0.2", "kd": "0.02"},
+        ]
+
+        msg = node.create_message()
+
+        assert len(msg.robots) == 1
+        assert msg.robots[0].id == 2
+        assert msg.robot_count == 1
+
     def test_with_no_robots(self, node):
         node.robots = []
         node.robot_count = 0
@@ -389,6 +402,44 @@ class TestHandleConfigButton:
         assert node.robot_count == 2
         assert node.robots == robots
         node.publish_gui_data.assert_called_once()
+
+    def test_pushes_each_cards_gains_to_the_pid_service(self, node):
+        node.publish_gui_data = MagicMock()
+        node.handle_update_pid = MagicMock()
+        node.pid_client.wait_for_service = MagicMock(return_value=True)
+        robots = [
+            {"id": 1, "kp": "1.5", "ki": "0.1", "kd": "0.01"},
+            {"id": 2, "kp": "2.0", "ki": "0.2", "kd": "0.02"},
+        ]
+
+        node.handle_config_button(robots)
+
+        assert node.handle_update_pid.call_count == 2
+        assert node.handle_update_pid.call_args_list[0][0][0] == {
+            "robot_id": 1, "kp": "1.5", "ki": "0.1", "kd": "0.01",
+        }
+
+    def test_skips_cards_without_gains(self, node):
+        node.publish_gui_data = MagicMock()
+        node.handle_update_pid = MagicMock()
+        node.pid_client.wait_for_service = MagicMock(return_value=True)
+
+        node.handle_config_button([{"id": 1}])
+
+        node.handle_update_pid.assert_not_called()
+
+    def test_reports_an_unavailable_pid_service(self, node, emit_mock):
+        node.publish_gui_data = MagicMock()
+        node.handle_update_pid = MagicMock()
+        node.pid_client.wait_for_service = MagicMock(return_value=False)
+
+        node.handle_config_button([{"id": 1, "kp": "1.5", "ki": "0.1", "kd": "0.01"}])
+
+        node.handle_update_pid.assert_not_called()
+        emit_mock.assert_called_once_with(
+            "pid_response",
+            {"success": False, "message": "PID service is not available"},
+        )
 
 
 class TestHandleStrategyCommand:
