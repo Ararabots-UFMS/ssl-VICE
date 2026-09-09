@@ -37,6 +37,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ControlParams.srv"
   "srv/UpdateObstacle.srv"
   "srv/SetOrientation.srv"
+  "srv/UpdateCbfParams.srv" 
   "srv/SetKp.srv"
   "srv/GetGameConfig.srv"
 )

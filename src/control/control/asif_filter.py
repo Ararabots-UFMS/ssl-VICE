@@ -3,7 +3,7 @@ from control.cbf_osqp_core import CBFOsqpCore
 from rclpy.node import Node
 from new_movement.entities.States import State, Vector2D
 from system_interfaces.msg import GameState, FilterCommand, TeamCommand, RobotCommand
-from system_interfaces.srv import GetGameConfig
+from system_interfaces.srv import GetGameConfig, UpdateCbfParams
 
 class AsifFilter(Node):
         """Simplified ASIF filter node.
@@ -41,6 +41,7 @@ class AsifFilter(Node):
 
                 self.field_half_length = 4.5
                 self.field_half_width = 3.0
+                self.n_robots_max = self.declare_parameter("n_robots_max", 16).value
 
 
                 self.prohibited_zones = [
@@ -50,15 +51,40 @@ class AsifFilter(Node):
                 self._cbf_core = CBFOsqpCore(
                         gamma_field=self.gamma_field,
                         gamma_prohibited=self.gamma_prohibited,
+                        gamma_robot=self.gamma_robot,
+                        d_min=self.d_min,
                         robot_margin=self.robot_margin,
                         rho=self.rho,
                         field_half_length=self.field_half_length,
                         field_half_width=self.field_half_width,
                         prohibited_zones=self.prohibited_zones,
+                        n_robots_max=self.n_robots_max,
                 )
+
+                self.create_service(UpdateCbfParams, "update_cbf_params", self.update_cbf_params_callback)
 
                 self.last_time = self.get_clock().now()
                 self.create_timer(0.01, self.timer_callback)
+
+        def update_cbf_params_callback(self, req, resp):
+                self.gamma_field = req.gamma_field
+                self.gamma_prohibited = req.gamma_proihibited  # nome do campo no .srv (com o typo)
+                self.gamma_robot = req.gamma_robot
+                self.d_min = req.d_min
+                self.robot_margin = req.robot_margin
+                self.rho = req.rho
+
+                self._cbf_core.update_params(
+                        gamma_field=self.gamma_field,
+                        gamma_prohibited=self.gamma_prohibited,
+                        gamma_robot=self.gamma_robot,
+                        d_min=self.d_min,
+                        robot_margin=self.robot_margin,
+                        rho=self.rho,
+                )
+
+                resp.success = True
+                return resp
 
         def game_state_callback(self, msg: GameState):
                 self.ally_robots = {r.id: r for r in msg.ally_robots}
@@ -104,10 +130,24 @@ class AsifFilter(Node):
                 self._latest_command = msg
 
 
-        def Filter(self, cur_state, u_des):
+        def Filter(self, cur_state, u_des, self_id):
                 px, py = cur_state.position.x, cur_state.position.y
 
-                safe_x, safe_y = self._cbf_core.solve(px, py, u_des.x, u_des.y)
+                other_robots = []
+                for rid, r in self.ally_robots.items():
+                        if rid == self_id:
+                                continue
+                        other_robots.append((
+                                r.position_x / 1000.0, r.position_y / 1000.0,
+                                r.velocity_x / 1000.0, r.velocity_y / 1000.0,
+                        ))
+                for r in self.enemy_robots.values():
+                        other_robots.append((
+                                r.position_x / 1000.0, r.position_y / 1000.0,
+                                r.velocity_x / 1000.0, r.velocity_y / 1000.0,
+                        ))
+
+                safe_x, safe_y = self._cbf_core.solve(px, py, u_des.x, u_des.y, other_robots)
                 return Vector2D(safe_x, safe_y)
 
         def timer_callback(self):
@@ -138,7 +178,7 @@ class AsifFilter(Node):
                         if self.is_halt:
                                 safe_vel = Vector2D(0.0, 0.0)
                         else:
-                                safe_vel = self.Filter(cur_state, u_des)
+                                safe_vel = self.Filter(cur_state, u_des, rid)
 
                         out = RobotCommand(robot_id=rid)
                         out.linear_velocity_x = safe_vel.x
