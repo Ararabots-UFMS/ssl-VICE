@@ -5,11 +5,9 @@ from movement.entities.motion import MotionState
 
 from utils.math_util import Vector2D
 
-# Metres and m/s. Placeholders until they are tuned against the real robots; the
-# previous kp=1, kd=0 left the controller as feedforward replay with a weak trim.
-DEFAULT_KP = 4.0
+DEFAULT_KP = 2.3
 DEFAULT_KI = 0.0
-DEFAULT_KD = 0.4
+DEFAULT_KD = 0.1
 DEFAULT_SLEW_LIMIT = 3.0  # m/s²
 
 

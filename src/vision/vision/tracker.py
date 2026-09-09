@@ -15,12 +15,15 @@ class ID():
 
     # Defining equivalent objects
     def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return self.__dict__ == other.__dict__
+        if not isinstance(other, ID):
+            return NotImplemented
+        return (self.id, self.is_ball, self.is_blue) == (
+            other.id, other.is_ball, other.is_blue
+        )
 
     # Defining hash to use ID class as dict key in merge_trackers
     def __hash__(self):
-        return hash((self.id, self.is_blue))
+        return hash((self.id, self.is_ball, self.is_blue))
 
     def __ne__(self, other):
         return not(self == other)
@@ -96,10 +99,13 @@ class ObjectTracker(object):
         # "now" to age the estimates; capture_stamp is comparable only against itself.
         self.last_wall_stamp = 0.0
 
-    def delete_undetected_objects(self, received_objects_id: List[ID]) -> None:
+    def delete_undetected_objects(self, received_objects_id) -> None:
         now = time.time()
+        # A set: membership is checked once per tracked object, and ID.__eq__ is not
+        # cheap enough to scan a list for every one of them.
+        received = set(received_objects_id)
         for id, obj in list(self.objects.items()):
-            if id not in received_objects_id:
+            if id not in received:
                 obj.confidence = 0
                 if now - obj.last_seen > self.max_time_undetected:
                     del self.objects[id]
@@ -120,27 +126,51 @@ class ObjectTracker(object):
         return id
 
     def update(self, message: SSL_WrapperPacket, wall_stamp: float = 0.0) -> None:
-        received_objects_id = []
+        """One packet on its own. Prefer update_frame when several cameras are in play."""
+        self.update_frame([message], wall_stamp)
+
+    def update_frame(self, messages: List[SSL_WrapperPacket], wall_stamp: float = 0.0) -> None:
+        """
+        Fold one frame — every camera's view of the same instant — into the filters.
+
+        The prediction step runs once for the whole frame rather than once per packet.
+        Each camera sees roughly its own quadrant, so predicting per packet stepped
+        every tracked object once per camera: four times the work for one frame of
+        motion, which is what stopped the node draining its socket on a full field.
+
+        Detections are also pooled before the sweep for undetected objects, so a robot
+        that only one camera can see is no longer marked unseen by the other three.
+        """
+        if not messages:
+            return
+
+        detections = [m.detection for m in messages]
 
         # Recorded before any filtering so the published estimates carry the instant
         # they describe, not the instant they happened to be published.
-        self.last_capture_stamp = message.detection.t_capture
+        self.last_capture_stamp = max(d.t_capture for d in detections)
         self.last_wall_stamp = wall_stamp
 
         for obj in self.objects.values():
             obj.predict()
 
-        for yellow_robot in message.detection.robots_yellow:
-            robot_id = self.read_object_from_message(yellow_robot, is_ball=False, is_blue=False)
-            received_objects_id.append(robot_id)
+        received_objects_id = set()
 
-        for blue_robot in message.detection.robots_blue:
-            robot_id = self.read_object_from_message(blue_robot, is_ball=False, is_blue=True)
-            received_objects_id.append(robot_id)
+        for detection in detections:
+            for yellow_robot in detection.robots_yellow:
+                received_objects_id.add(
+                    self.read_object_from_message(yellow_robot, is_ball=False, is_blue=False)
+                )
 
-        if message.detection.balls:
-            best_ball = max(message.detection.balls, key=lambda b: b.confidence)
-            ball_id = self.read_object_from_message(best_ball, is_ball=True)
-            received_objects_id.append(ball_id)
+            for blue_robot in detection.robots_blue:
+                received_objects_id.add(
+                    self.read_object_from_message(blue_robot, is_ball=False, is_blue=True)
+                )
+
+        # One ball, so the whole frame competes for it rather than each camera in turn.
+        balls = [ball for detection in detections for ball in detection.balls]
+        if balls:
+            best_ball = max(balls, key=lambda b: b.confidence)
+            received_objects_id.add(self.read_object_from_message(best_ball, is_ball=True))
 
         self.delete_undetected_objects(received_objects_id)

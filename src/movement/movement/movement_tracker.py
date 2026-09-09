@@ -97,8 +97,13 @@ class MovementTracker(Node):
     def __init__(self):
         super().__init__("movement_tracker")
 
-        self.declare_parameter("lookahead_time", 0.3)
+        self.declare_parameter("lookahead_time", 0.1)
         self.declare_parameter("improvement_threshold", 0.1)
+        self.declare_parameter("reprojection_enabled", True)
+        self.declare_parameter("reprojection_window_before", 0.30)
+        self.declare_parameter("reprojection_window_after", 0.50)
+        self.declare_parameter("reprojection_max_correction", 0.03)
+        self.declare_parameter("reprojection_min_position_error", 20.0)
         self.declare_parameter(
             "control_reference_topic", "movement_tracker/control_reference"
         )
@@ -118,6 +123,7 @@ class MovementTracker(Node):
         self._last_warned: Dict[str, float] = {}
         # Latest vision pose per robot: (position, velocity, wall stamp).
         self._measured: Dict[int, Tuple[Vector2D, Vector2D, float]] = {}
+        self._last_reprojected_stamp: Dict[int, float] = {}
 
         self.traj_sub = self.create_subscription(TrajectoryMsg, "planner/trajectories", self.trajectory_callback, 10)
         self.game_state_sub = self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
@@ -126,7 +132,7 @@ class MovementTracker(Node):
         self.control_reference_pub = self.create_publisher(TrajectoryPointMsg, "movement_tracker/control_reference", 10)
         self.gui_trajectories_pub = self.create_publisher(GUITrajectories, "gui/trajectories", 10)
 
-        self.timer = self.create_timer(0.01, self.timer_callback)
+        self.timer = self.create_timer(0.016, self.timer_callback)
         self.gui_timer = self.create_timer(0.1, self._update_gui_trajectories)
 
         self.get_logger().info("TrackerNode ONLINE")
@@ -268,13 +274,28 @@ class MovementTracker(Node):
         total_duration = trajectory.get_total_duration()
         time_offset = float(data.get("time_offset", 0.0))
 
-        # Publish Control Reference
-        current_state = trajectory.get_state(time_offset)
+        # Advance the reference in time, then use the latest measured pose to
+        # pull the trajectory clock back toward where the robot actually is.
+        if time_offset < total_duration:
+            expected_offset = min(time_offset + dt, total_duration)
+        else:
+            expected_offset = total_duration
+
+        new_offset = self._closed_loop_offset(
+            robot_id,
+            trajectory,
+            expected_offset,
+            now_sec,
+        )
+        data["time_offset"] = new_offset
+
+        # Publish Control Reference using the corrected trajectory time.
+        current_state = trajectory.get_state(new_offset)
         control_ref = build_control_reference_point(
             robot_id,
             data.get("trajectory_msg"),
             current_state,
-            time_offset,
+            new_offset,
         )
         if control_ref is not None:
             self.control_reference_pub.publish(control_ref)
@@ -286,24 +307,90 @@ class MovementTracker(Node):
         # Publish Overhead Point, unless the robot is off its path, then the planner's
         # cached point ages out and it replans from the measured state.
         diverged = self._diverged.get(robot_id, False)
-        if time_offset < total_duration and not diverged:
+        if new_offset < total_duration and not diverged:
             overhead_point = build_overhead_point(
                 robot_id,
                 data.get("trajectory_msg"),
                 trajectory,
-                time_offset,
+                new_offset,
                 lookahead,
                 now_sec,
             )
             if overhead_point is not None:
                 self.overhead_pub.publish(overhead_point)
 
-        # Update Time Offset
-        if time_offset < total_duration:
-            new_offset = min(time_offset + dt, total_duration)
-        else:
-            new_offset = total_duration
-        data["time_offset"] = new_offset
+    def _closed_loop_offset(self, robot_id, trajectory, expected_offset, now_sec):
+        """ Correct the trajectory clock from the latest measured robot pose. """
+        if not bool(self.get_parameter("reprojection_enabled").value):
+            return expected_offset
+
+        measured = self._measured.get(robot_id)
+        if measured is None:
+            return expected_offset
+
+        position, velocity, stamp = measured
+        last_stamp = self._last_reprojected_stamp.get(robot_id)
+        if last_stamp is not None and stamp <= last_stamp:
+            return expected_offset
+        self._last_reprojected_stamp[robot_id] = stamp
+
+        age = max(0.0, now_sec - stamp)
+        min_error = float(self.get_parameter("reprojection_min_position_error").value)
+
+        now_position = Vector2D(
+            position.x + velocity.x * age,
+            position.y + velocity.y * age,
+        )
+
+        reference = trajectory.get_state(expected_offset)
+        if reference is None:
+            return expected_offset
+
+        position_error = reference.position.distance(now_position)
+        if position_error < min_error:
+            return expected_offset
+
+        duration = trajectory.get_total_duration()
+        window_before = max(0.0, float(self.get_parameter("reprojection_window_before").value))
+        window_after = max(0.0, float(self.get_parameter("reprojection_window_after").value))
+
+        lower = max(0.0, expected_offset - window_before)
+        upper = min(duration, expected_offset + window_after)
+        if upper <= lower:
+            return expected_offset
+
+        projected_offset = self._project_to_trajectory(
+            trajectory,
+            now_position,
+            lower,
+            upper,
+        )
+
+        correction = projected_offset - expected_offset
+        max_correction = max(0.0, float(self.get_parameter("reprojection_max_correction").value))
+        correction = max(-max_correction, min(correction, max_correction))
+
+        return max(0.0, min(expected_offset + correction, duration))
+
+    @staticmethod
+    def _project_to_trajectory(trajectory, position, lower, upper):
+        """Return the sampled trajectory time closest to ``position``."""
+        best_offset = lower
+        best_distance = float("inf")
+
+        steps = 24
+        for k in range(steps + 1):
+            offset = lower + (upper - lower) * k / steps
+            state = trajectory.get_state(offset)
+            if state is None:
+                continue
+
+            distance = state.position.distance(position)
+            if distance < best_distance:
+                best_offset = offset
+                best_distance = distance
+
+        return best_offset
 
     def _handle_pending_handoff(self, robot_id, data, now_sec, lookahead):
         pending = data.get("pending")
@@ -393,3 +480,4 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
+
