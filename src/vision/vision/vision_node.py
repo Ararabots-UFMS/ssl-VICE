@@ -16,10 +16,7 @@ from system_interfaces.msg import VisionMessage, VisionGeometry
 class Vision(Node):
     """VICE Vision Node, connects and receives data from ssl-vision"""
 
-    # Safety valve on one drain pass, so a flood cannot hold the executor. The next
-    # tick continues where this one stopped.
     MAX_PACKETS_PER_DRAIN = 200
-    # Seconds between "cameras outrunning the tracker" warnings.
     STALE_REPORT_PERIOD = 5.0
 
     def __init__(self):
@@ -35,12 +32,7 @@ class Vision(Node):
             "num_cams": 4,
             "max_time_undetected": 0.5,
             "frequency_timer_publish": 60.0,
-            # How often the socket is drained. Draining is cheap and must outpace the
-            # cameras, or packets pile up in the kernel buffer and every estimate ages.
             "frequency_tracker_update": 1000.0,
-            # How often a drained frame is folded into the filters. Matched to the
-            # camera frame rate: filtering faster than the cameras deliver only repeats
-            # the prediction step over the same data.
             "frequency_tracker_process": 60.0,
             "friction": 0.01,
         }
@@ -61,10 +53,6 @@ class Vision(Node):
         self.frequency_tracker_process = self.get_parameter("frequency_tracker_process").value
         self.friction = self.get_parameter("friction").value
 
-        # Newest packet seen from each camera since the last time a frame was folded in,
-        # as {camera_id: (packet, wall_stamp)}. Older packets from the same camera are
-        # dropped rather than queued: a stale view of the field is worth nothing, and
-        # working through a backlog is how the estimates fall a second behind.
         self._pending_frame = {}
         self._last_process = 0.0
         self._stale_packets = 0
