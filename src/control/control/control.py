@@ -7,12 +7,14 @@ from utils.math_util import Vector2D
 
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
-from system_interfaces.msg import GameState, RobotCommand, TeamCommand, FilterCommand
+from control.cbf_osqp_core import CBFOsqpCore
+from system_interfaces.msg import GameState, RobotCommand, TeamCommand
 from system_interfaces.srv import (
     ControlParams,
     GetGameConfig,
     SetKp,
     SetOrientation,
+    UpdateCbfParams,
     UpdateKick,
 )
 from movement_interfaces.msg import TrajectoryPoint as TrajectoryPointMsg
@@ -40,6 +42,7 @@ class Controller(Node):
 
         # Caches
         self.ally_robots = {}
+        self.enemy_robots = {}
         self.vision_wall_stamp = 0.0
         self.control_references = {}
         self.is_halt = None
@@ -60,6 +63,37 @@ class Controller(Node):
         self.orientation_controller = PController(kp=1, max_output=2)
         self.target_orientations = {}
 
+        # CBF safety filter (ASIF)
+        self.gamma_field = 4.0
+        self.gamma_prohibited = 4.0
+        self.gamma_robot = 4.0
+        self.d_min = 0.20
+        self.robot_margin = 0.10
+        self.rho = 100.0
+
+        self.field_half_length = 4.5
+        self.field_half_width = 3.0
+        self.n_robots_max = self.declare_parameter("n_robots_max", 16).value
+
+        self.prohibited_zones = [
+            (-4.5, -3.5, -1.0, 1.0),
+        ]
+
+        self._cbf_core = CBFOsqpCore(
+            gamma_field=self.gamma_field,
+            gamma_prohibited=self.gamma_prohibited,
+            gamma_robot=self.gamma_robot,
+            d_min=self.d_min,
+            robot_margin=self.robot_margin,
+            rho=self.rho,
+            field_half_length=self.field_half_length,
+            field_half_width=self.field_half_width,
+            prohibited_zones=self.prohibited_zones,
+            n_robots_max=self.n_robots_max,
+        )
+
+        self.create_service(UpdateCbfParams, "update_cbf_params", self.update_cbf_params_callback)
+
         # ROS Interfaces
         self.create_subscription(
             TrajectoryPointMsg,
@@ -67,7 +101,7 @@ class Controller(Node):
             self.receive_control_reference,
             10,
         )
-        self.publisher = self.create_publisher(FilterCommand, "filter_command", 10)
+        self.publisher = self.create_publisher(TeamCommand, "commandTopic", 10)
         self.create_service(ControlParams, "update_pid", self.update_parameters)
         self.create_service(
             SetOrientation, "set_orientation", self.set_orientation_callback
@@ -78,6 +112,42 @@ class Controller(Node):
         # Timing
         self.last_time = self.get_clock().now()
         self.create_timer(0.02, self.timer_callback)
+
+    def update_cbf_params_callback(self, req, resp):
+        self.gamma_field = req.gamma_field
+        self.gamma_prohibited = req.gamma_prohibited
+        self.gamma_robot = req.gamma_robot
+        self.d_min = req.d_min
+        self.robot_margin = req.robot_margin
+        self.rho = req.rho
+
+        self._cbf_core.update_params(
+            gamma_field=self.gamma_field,
+            gamma_prohibited=self.gamma_prohibited,
+            gamma_robot=self.gamma_robot,
+            d_min=self.d_min,
+            robot_margin=self.robot_margin,
+            rho=self.rho,
+        )
+
+        resp.success = True
+        return resp
+
+    def _other_robots(self, self_id):
+        other_robots = []
+        for rid, r in self.ally_robots.items():
+            if rid == self_id:
+                continue
+            other_robots.append((
+                r.position_x / 1000.0, r.position_y / 1000.0,
+                r.velocity_x / 1000.0, r.velocity_y / 1000.0,
+            ))
+        for r in self.enemy_robots.values():
+            other_robots.append((
+                r.position_x / 1000.0, r.position_y / 1000.0,
+                r.velocity_x / 1000.0, r.velocity_y / 1000.0,
+            ))
+        return other_robots
 
     def receive_control_reference(self, msg: TrajectoryPointMsg):
         self.control_references[msg.robot_id] = msg
@@ -132,9 +202,9 @@ class Controller(Node):
         measurement_age = (now.nanoseconds / 1e9) - self.vision_wall_stamp
         measurement_age = min(max(measurement_age, 0.0), MAX_MEASUREMENT_AGE)
 
-        filter_cmd = FilterCommand()
-        filter_cmd.is_team_color_yellow = self.is_team_color_yellow
-        filter_cmd.robots = []
+        team_cmd = TeamCommand()
+        team_cmd.is_team_color_yellow = self.is_team_color_yellow
+        team_cmd.robots = []
 
         for rid, ref in self.control_references.items():
             if rid not in self.ally_robots:
@@ -165,22 +235,30 @@ class Controller(Node):
 
 
             if self.is_halt:
-                vel_cmd = Vector2D(0, 0)
+                safe_vel = Vector2D(0.0, 0.0)
                 vel_ang_cmd = 0.0
+            else:
+                other_robots = self._other_robots(rid)
+                safe_x, safe_y = self._cbf_core.solve(
+                    cur_state.position.x, cur_state.position.y,
+                    vel_cmd.x, vel_cmd.y,
+                    other_robots,
+                )
+                safe_vel = Vector2D(safe_x, safe_y)
 
             out = RobotCommand(robot_id=rid)
-            out.linear_velocity_x = float(vel_cmd.x)
-            out.linear_velocity_y = float(vel_cmd.y)
+            out.linear_velocity_x = float(safe_vel.x)
+            out.linear_velociity_y = float(safe_vel.y)
             out.angular_velocity = float(vel_ang_cmd)
             out.orientation = cur.orientation
             out.kick = float(self.kick_cache.get(rid, 0.0))
 
-            filter_cmd.robots.append(out)
+            team_cmd.robots.append(out)
 
         active = set(self.control_references.keys())
         self.robot_controller.cleanup_unused_robots(active)
 
-        self.publisher.publish(filter_cmd)
+        self.publisher.publish(team_cmd)
 
     def update_parameters(self, req, resp):
         self.robot_controller.update_params(req.kp, req.ki, req.kd)
@@ -211,6 +289,7 @@ class Controller(Node):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.enemy_robots = {r.id: r for r in msg.enemy_robots}
         self.vision_wall_stamp = msg.vision_wall_stamp
         self.referee_command = msg.referee.command
         self.is_halt = self.referee_command in self._desired_states

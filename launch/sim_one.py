@@ -19,10 +19,6 @@ def generate_launch_description():
                 executable="controller",
             ),
             Node(
-                package="control",
-                executable="asif_filter",
-            ),
-            Node(
                 package="movement",
                 executable="planner",
             ),
