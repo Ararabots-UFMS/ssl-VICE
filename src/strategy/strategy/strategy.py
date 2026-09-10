@@ -1,9 +1,11 @@
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
 
 from strategy.context import GameConfig, TickContext, TreeDeps
 from strategy.root import RootTree
 from typing import Iterable, Optional
+from std_msgs.msg import Bool
 from system_interfaces.msg import GameState
 from system_interfaces.srv import GetGameConfig
 from strategy.skills.skills import Skill
@@ -21,6 +23,24 @@ class Strategy(Node):
         super().__init__("strategy_node")
         self.get_logger().info("Strategy node initialized")
 
+        # The GUI can hand movement over to its manual debug tool. Both publish to
+        # movement_manager/commands and the manager keeps only the last array, so this
+        # node has to actually go quiet rather than merely be ignored.
+        #
+        # Latched by the GUI, so the current mode arrives even if this node starts later.
+        # Defaults to enabled: with no GUI running, strategy is the only driver.
+        self._enabled = True
+        self._enabled_sub = self.create_subscription(
+            Bool,
+            "strategy/enabled",
+            self._enabled_callback,
+            QoSProfile(
+                depth=1,
+                durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+                history=QoSHistoryPolicy.KEEP_LAST,
+            ),
+        )
+
         self._latest_game_state: Optional[GameState] = None
         self._game_config: Optional[GameConfig] = None
         self.deps = TreeDeps(logger=self.get_logger())
@@ -34,6 +54,14 @@ class Strategy(Node):
         self._game_config_poll_timer = self.create_timer(5, self._poll_game_config)
 
         self.timer = self.create_timer(0.1, self.run)
+
+    def _enabled_callback(self, msg: Bool) -> None:
+        if bool(msg.data) == self._enabled:
+            return
+        self._enabled = bool(msg.data)
+        self.get_logger().info(
+            f"Strategy {'enabled' if self._enabled else 'disabled (GUI manual control)'}"
+        )
 
     def _on_game_state(self, msg: GameState) -> None:
         """Hand the newest frame over and touch nothing else.
@@ -61,6 +89,11 @@ class Strategy(Node):
         future.add_done_callback(done)
 
     def run(self) -> None:
+        # Returns before the tree runs, not just before publishing: the movement
+        # handler's kick and orientation calls would otherwise fight the debug tool.
+        if not self._enabled:
+            return
+
         # One read of each shared name per tick. The whole BT works off these
         # locals, so nothing that arrives mid-tick can change what they see.
         msg = self._latest_game_state

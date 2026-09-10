@@ -33,6 +33,8 @@ class MovementPlanner(Node):
         self.declare_parameter('planner_freq', 50.0)
         self.declare_parameter('max_threads', 1)
         self.declare_parameter('overhead_max_age', 0.05)
+        self.declare_parameter('overhead_max_future', 0.35)
+        self.declare_parameter('vision_handoff_latency', 0.03)
         self.declare_parameter('accept_radius', 50.0)
         
         # MotionState
@@ -127,6 +129,16 @@ class MovementPlanner(Node):
         )
         return MotionState(carried, velocity), now_sec
 
+    @staticmethod
+    def _propagate_constant_velocity(state: MotionState, dt: float) -> MotionState:
+        return MotionState(
+            Vector2D(
+                state.position.x + state.velocity.x * dt,
+                state.position.y + state.velocity.y * dt,
+            ),
+            Vector2D(state.velocity.x, state.velocity.y),
+        )
+
     def _is_parked(self, robot_id: int, goal_pos: Vector2D, measured_pos: Vector2D) -> bool:
         radius = float(self.get_parameter('accept_radius').value)
         parked_at = self._parked.get(robot_id)
@@ -154,21 +166,42 @@ class MovementPlanner(Node):
         if self._is_parked(robot_id, goal_pos, init_pos):
             return None
 
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        initial_state = None
+        handoff_stamp = None
+
         if robot_id in self.cur_overhead_points:
             overhead_point = self.cur_overhead_points[robot_id]
-            age = (self.get_clock().now().nanoseconds / 1e9) - overhead_point.wall_stamp
-            if age <= self.get_parameter('overhead_max_age').value:
-                # Plan from predicted future state
+            age = now_sec - overhead_point.wall_stamp
+            max_age = float(self.get_parameter('overhead_max_age').value)
+            max_future = float(self.get_parameter('overhead_max_future').value)
+
+            # The overhead point represents a predicted state at wall_stamp. Accept
+            # it only while it is recent and not unreasonably far into the future.
+            if -max_future <= age <= max_age:
+                # Taken as it stands. Correcting it toward a vision measurement
+                # carried forward to wall_stamp at constant velocity moved the start
+                # up to 149mm and added 435mm/s while the robot was braking, which is
+                # what made the plans overshoot the goal and come back.
                 initial_state = MotionState(
                     Vector2D(overhead_point.pos.x, overhead_point.pos.y),
-                    Vector2D(overhead_point.vel.x, overhead_point.vel.y)
+                    Vector2D(overhead_point.vel.x, overhead_point.vel.y),
                 )
                 handoff_stamp = overhead_point.wall_stamp
-            else:
-                # The cached prediction has aged out, so go back to what vision measured.
-                initial_state, handoff_stamp = self._state_from_vision(target)
-        else:
-            initial_state, handoff_stamp = self._state_from_vision(target)
+
+        # If there is no usable overhead prediction, start from vision and account
+        # for the planner's measured/configured handoff latency.
+        if initial_state is None:
+            vision_state, vision_stamp = self._state_from_vision(target)
+            latency = max(
+                0.0,
+                float(self.get_parameter('vision_handoff_latency').value),
+            )
+            handoff_stamp = max(now_sec, vision_stamp) + latency
+            initial_state = self._propagate_constant_velocity(
+                vision_state,
+                handoff_stamp - now_sec,
+            )
 
         target_state = MotionState(
             Vector2D(target.target_pos.x, target.target_pos.y),
@@ -226,4 +259,5 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
 
