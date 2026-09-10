@@ -31,6 +31,9 @@ class GameWatcher(Node):
         self.can_i_start = False
         self.geometry = VisionGeometry()
         self.can_i_kick = 0.0
+        # Stamps of the vision packet the robot/ball estimates came from.
+        self.vision_capture_stamp = 0.0
+        self.vision_wall_stamp = 0.0
         self.is_team_color_yellow = None
         self.is_field_side_left = None
         self.on_positive_half = None
@@ -83,6 +86,9 @@ class GameWatcher(Node):
 
             if message.balls:
                 self.balls = message.balls
+
+            self.vision_capture_stamp = message.capture_stamp
+            self.vision_wall_stamp = message.wall_stamp
 
         self._dirty = True
 
@@ -159,6 +165,8 @@ class GameWatcher(Node):
             msg.referee = self.referee
             msg.referee_last_command = self.referee_last_command
             msg.geometry = self.geometry
+            msg.vision_capture_stamp = self.vision_capture_stamp
+            msg.vision_wall_stamp = self.vision_wall_stamp
         self.game_state_pub.publish(msg)
 
 

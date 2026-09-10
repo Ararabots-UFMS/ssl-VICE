@@ -1,80 +1,41 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
 from flask import Flask
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 import threading
-from threading import Thread
-import ctypes
 
 from utils.converter import todict
 
-from grsim_messenger.grsim_publisher import grSimPublisher
-# from hardware_messenger.hardware_publisher import HardwarePublisher
-
-from movement_interfaces.msg import GUITrajectories
-from system_interfaces.msg import VisionMessage, GUIMessage, GUIRobot, TrajectoryMessage, RefereeMessage
-from system_interfaces.srv import ControlParams, SetKp, SetOrientation, StrategyCommand, UpdateObstacle
+from movement_interfaces.msg import GUITrajectories, MovementCommand, MovementCommandArray
+from system_interfaces.msg import (
+    VisionMessage, VisionGeometry, GUIMessage, GUIRobot, RefereeMessage,
+)
+from system_interfaces.srv import ControlParams, SetKp, SetOrientation
+from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
-from vision.vision_node import Vision
-from referee.referee_node import RefereeNode
-from new_movement.entities.Trajectory import Trajectory
+from movement.entities.trajectory import Trajectory
 
 app = Flask(__name__)
 gui_socket = SocketIO(app, cors_allowed_origins="*")
 
-vision_running = threading.Event()
+VISION_NODE_NAME= "visionNode"
+SIM_COMMUNICATION_NODE_NAME = "grsim_publisher"
+REAL_COMMUNICATION_NODE_NAME = "hardware_publisher"
+REFEREE_NODE_NAME = "refereeNode"
 
-communication_running = threading.Event()
-
-referee_running = threading.Event()
-
-
-class thread_with_exception(threading.Thread):
-    def __init__(self, socket):
-        threading.Thread.__init__(self)
-        self.socket = socket
-
-    def run(self):
-
-        # target function of the thread class
-        try:
-            self.socket.run(app, allow_unsafe_werkzeug=True)
-        finally:
-            print("ended")
-
-    def get_id(self):
-
-        # returns id of the respective thread
-        if hasattr(self, "_thread_id"):
-            return self._thread_id
-        for id, thread in threading._active.items():
-            if thread is self:
-                return id
-
-    def raise_exception(self):
-        thread_id = self.get_id()
-        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
-            thread_id, ctypes.py_object(SystemExit)
-        )
-        if res > 1:
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
-            print("Exception raise failure")
+STRATEGY_MODE = "strategy"
+MANUAL_MODE = "manual"
 
 
 class APINode(Node):
-    def __init__(
-        self, name, executor, vision_event, communication_event, referee_event
-    ):
+    def __init__(self, name):
         super().__init__(name)
 
         self.publisher = self.create_publisher(GUIMessage, "guiTopic", 10)
 
-        self.executor = executor
-
-        self.vision_running = vision_event
+        self.vision_running = False
         self.vision_subscriber = None
-        self.vision_node = Vision()
 
         self.trajectory_subscriber = self.create_subscription(
             GUITrajectories, "gui/trajectories", self.emit_trajectory_message, 10
@@ -83,11 +44,16 @@ class APINode(Node):
             RefereeMessage, "refereeTopic", self.emit_referee_message, 10
         )
 
-        self.communication_running = communication_event
-        self.communication_node = grSimPublisher()
+        # Geometry is latched by the vision node and only changes when the field does,
+        # so the last one is kept here and replayed to every client that connects.
+        self.latest_geometry = None
+        self.geometry_subscriber = self.create_subscription(
+            VisionGeometry, "geometryTopic", self.emit_geometry_message, 10
+        )
 
-        self.referee_running = referee_event
-        self.referee_node = None
+        self.communication_running = False
+
+        self.referee_running = False
 
         self.robots = []
         self.robot_count = 0
@@ -95,12 +61,37 @@ class APINode(Node):
         self.is_field_side_right = True
         self.is_team_color_yellow = True
         self.is_play_pressed = False
+        self.is_simulation = True
 
-        self.strategy_client = self.create_client(StrategyCommand, "strategy_command")
+        # Manual movement overrides. movement_manager takes the whole set of commands
+        # each time, so the latest per robot is kept here and republished together.
+        self.movement_pub = self.create_publisher(
+            MovementCommandArray, "movement_manager/commands", 10
+        )
+        self._movement_commands: dict[int, MovementCommand] = {}
+
+        # Strategy and this node publish to the same movement topic and the manager keeps
+        # only the last array, so exactly one of them may be publishing at a time. This
+        # flag is the arbiter: strategy obeys it over strategy/enabled, and manual
+        # commands below are refused while it says strategy.
+        #
+        # Latched (transient local) so the strategy node picks up the current mode
+        # whenever it starts, not only when the mode next changes.
+        self.control_mode = STRATEGY_MODE
+        self.strategy_enabled_pub = self.create_publisher(
+            Bool,
+            "strategy/enabled",
+            QoSProfile(
+                depth=1,
+                durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+                history=QoSHistoryPolicy.KEEP_LAST,
+            ),
+        )
+        self._publish_strategy_enabled()
+
         self.pid_client = self.create_client(ControlParams, "update_pid")
         self.kp_angular_client = self.create_client(SetKp, "update_kp_angular")
         self.set_orientation_client = self.create_client(SetOrientation, "set_orientation")
-        self.update_obstacles_client = self.create_client(UpdateObstacle, "update_obstacles")
         self.set_team_color_client = self.create_client(SetBool, "set_team_color")
 
         self.get_logger().info("API Node started")
@@ -113,9 +104,17 @@ class APINode(Node):
         self.vision_subscriber = self.create_subscription(
             VisionMessage, "visionTopic", self.emit_vision_message, 10
         )
-        gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-        gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
-    
+        # A client that connects mid-session has missed both of these: geometry is
+        # published once at startup, and the mode only emits when it changes.
+        if self.latest_geometry is not None:
+            gui_socket.emit("geometry_update", self.latest_geometry)
+        gui_socket.emit("control_mode_update", {"mode": self.control_mode})
+
+    def emit_geometry_message(self, msg: VisionGeometry) -> None:
+        self.latest_geometry = todict(msg)
+        gui_socket.emit("geometry_update", self.latest_geometry)
+
+
     def emit_vision_message(self, msg: VisionMessage) -> None:
         data = todict(msg)
 
@@ -239,90 +238,35 @@ class APINode(Node):
     def handle_simulation(self, is_simulation):
         self.get_logger().info(f"Is sumulation? {is_simulation}")
         self.is_simulation = is_simulation
-        try:
-            self.executor.remove_node(self.communication_node)
-        except:
-            pass
-        self.communication_node.destroy_node()
-        if is_simulation:
-            self.communication_node = grSimPublisher()
-        else:
-            self.communication_node = HardwarePublisher()
 
-    def handle_vision_button(self):
-        if self.vision_running.is_set():
-            self.vision_running.clear()
+    def update_vision_status(self, nodes_running):
+        is_vision_running = VISION_NODE_NAME in nodes_running
 
-            self.executor.remove_node(self.vision_node)
+        if is_vision_running == self.vision_running:
+            return
 
-            gui_socket.emit("visionOutput", {"line": "Vision node stopped"})
-            gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-            self.get_logger().info("Vision node stopped")
-        else:
-            self.vision_running.set()
+        self.vision_running = not self.vision_running
+        gui_socket.emit("visionStatus", {"status": self.vision_running})
 
-            gui_socket.emit("visionOutput", {"line": "Starting vision node"})
-            gui_socket.emit("visionStatus", {"status": self.vision_running.is_set()})
-            self.get_logger().info("Starting vision node")
+    def update_communication_status(self, nodes_running):
+        communication_node_name = SIM_COMMUNICATION_NODE_NAME if self.is_simulation else REAL_COMMUNICATION_NODE_NAME
+        is_communication_running = communication_node_name in nodes_running
 
-            self.executor.add_node(self.vision_node)
+        if is_communication_running == self.communication_running:
+            return
 
-    def handle_communication_button(self):
-        if self.communication_running.is_set():
-            self.communication_running.clear()
-            self.executor.remove_node(self.communication_node)
-            gui_socket.emit(
-                "communicationOutput", {"line": "Communication node stopped"}
-            )
-            gui_socket.emit(
-                "communicationStatus", {"status": self.communication_running.is_set()}
-            )
-            self.get_logger().info("Communication node stopped")
-        else:
-            self.communication_running.set()
-            gui_socket.emit(
-                "communicationOutput", {"line": "Starting communication node"}
-            )
-            gui_socket.emit(
-                "communicationStatus", {"status": self.communication_running.is_set()}
-            )
-            self.get_logger().info("Starting communication node")
-            self.executor.add_node(self.communication_node)
+        self.communication_running = not self.communication_running
+        gui_socket.emit("communicationStatus", {"status": self.communication_running})
 
-    def handle_referee_button(self):
-        if self.referee_running.is_set():
-            self.referee_running.clear()
-            if self.referee_node is not None:
-                try:
-                    self.executor.remove_node(self.referee_node)
-                except Exception:
-                    pass
-                try:
-                    self.referee_node.destroy_node()
-                except Exception:
-                    pass
-                self.referee_node = None
-            gui_socket.emit("refereeOutput", {"line": "Referee node stopped"})
-            gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
-            self.get_logger().info("Referee node stopped")
-        else:
-            self.referee_running.set()
-            gui_socket.emit("referee", {"line": "Starting referee node"})
-            gui_socket.emit("refereeStatus", {"status": self.referee_running.is_set()})
-            self.get_logger().info("Starting referee node")
-            try:
-                import subprocess
+    def update_referee_status(self, nodes_running):
+        referee_node_name = REFEREE_NODE_NAME
+        is_referee_running = referee_node_name in nodes_running
 
-                nodes_list = subprocess.check_output(["ros2", "node", "list"], text=True)
-                if "/refereeNode" in nodes_list.splitlines():
-                    self.get_logger().info("External /refereeNode detected; not creating embedded RefereeNode.")
-                    return
-            except Exception:
-                pass
+        if is_referee_running == self.referee_running:
+            return
 
-            if self.referee_node is None:
-                self.referee_node = RefereeNode()
-            self.executor.add_node(self.referee_node)
+        self.referee_running = not self.referee_running
+        gui_socket.emit("refereeStatus", {"status": self.referee_running})
 
     def create_message(self) -> GUIMessage:
         msg = GUIMessage()
@@ -345,6 +289,10 @@ class APINode(Node):
     def publish_gui_data(self) -> None:
         message = self.create_message()
         self.publisher.publish(message)
+        nodes_running = self.get_node_names()
+        self.update_vision_status(nodes_running)
+        self.update_communication_status(nodes_running)
+        self.update_referee_status(nodes_running)
 
     def handle_config_button(self, msg):
         self.get_logger().info("Configuration saved")
@@ -353,52 +301,149 @@ class APINode(Node):
         self.publish_gui_data()
 
     # Strategy command handlers
+    def _movement_command_for(self, robot_id: int) -> MovementCommand:
+        """
+        The command being built for a robot, so the position and obstacle panels can
+        each set their own fields without clearing the other's.
+        """
+        cmd = self._movement_commands.get(robot_id)
+        if cmd is None:
+            cmd = MovementCommand()
+            cmd.robot_id = robot_id
+            self._movement_commands[robot_id] = cmd
+        return cmd
+
+    def _publish_movement_commands(self) -> None:
+        msg = MovementCommandArray()
+        msg.commands = list(self._movement_commands.values())
+        self.movement_pub.publish(msg)
+
+    def _publish_strategy_enabled(self) -> None:
+        msg = Bool()
+        msg.data = self.control_mode == STRATEGY_MODE
+        self.strategy_enabled_pub.publish(msg)
+
+    def _park_robots(self, robots) -> None:
+        """Command each robot to hold the position it is given, with zero velocity."""
+        for robot in robots:
+            cmd = self._movement_command_for(int(robot['robot_id']))
+            cmd.target_pos.x = float(robot['position_x'])
+            cmd.target_pos.y = float(robot['position_y'])
+            cmd.target_vel.x = 0.0
+            cmd.target_vel.y = 0.0
+
+    def handle_control_mode(self, data):
+        """
+        Switch between the strategy node and the GUI owning movement.
+
+        Entering strategy drops the cached manual commands without publishing them:
+        publishing an empty array would strip every robot of its target for the one tick
+        before strategy's next publish. Leaving them cached instead would resurrect a
+        stale manual target the next time an obstacle toggle republishes the set.
+
+        Entering manual parks the robots listed in `robots` (same shape as stopRobots).
+        Strategy's last goals stay latched in the manager, so without this the robots keep
+        driving to them after strategy goes quiet. It happens here rather than as a second
+        event because the two would race -- the park would be refused if it arrived first.
+        """
+        try:
+            mode = str(data['mode'] if isinstance(data, dict) else data)
+            if mode not in (STRATEGY_MODE, MANUAL_MODE):
+                raise ValueError(f"unknown control mode: {mode!r}")
+
+            self.control_mode = mode
+            if mode == STRATEGY_MODE:
+                self._movement_commands.clear()
+            else:
+                robots = (data.get('robots') or []) if isinstance(data, dict) else []
+                if robots:
+                    self._park_robots(robots)
+                    self._publish_movement_commands()
+
+            self._publish_strategy_enabled()
+            self.get_logger().info(f"Control mode set to {mode}")
+
+            gui_socket.emit("control_mode_update", {"mode": mode})
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to set control mode: {e}")
+            gui_socket.emit("control_mode_update", {
+                "mode": self.control_mode,
+                "error": f"Failed to set control mode: {e}",
+            })
+
+    def handle_stop_robots(self, data):
+        """
+        Park robots where they currently are.
+
+        Dropping a robot from the command array does not stop it -- the manager simply
+        stops issuing new targets and the tracker plays the old trajectory out. Commanding
+        its present position with zero velocity is what actually brakes it.
+
+        Positions come from the GUI because it already knows which robots are ours; this
+        node's is_team_color_yellow defaults the opposite way to game_watcher's and would
+        have to guess.
+        """
+        try:
+            if self.control_mode != MANUAL_MODE:
+                gui_socket.emit("strategy_response", {
+                    "success": False,
+                    "message": "Switch to manual mode before stopping robots",
+                })
+                return
+
+            robots = data['robots'] if isinstance(data, dict) else data
+            self._park_robots(robots)
+
+            self.get_logger().info(f"Stopping {len(robots)} robot(s) in place")
+
+            self._publish_movement_commands()
+            gui_socket.emit("strategy_response", {
+                "success": True,
+                "message": f"Stopped {len(robots)} robot(s)",
+            })
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to stop robots: {e}")
+            gui_socket.emit("strategy_response", {
+                "success": False,
+                "message": f"Failed to stop robots: {e}",
+            })
+
     def handle_strategy_command(self, data):
         """Handle strategy command from web GUI"""
-        if not self.strategy_client.wait_for_service(timeout_sec=1.0):
-            gui_socket.emit("strategy_response", {
-                "success": False, 
-                "message": "Strategy command service is not available"
-            })
-            return
-
         try:
-            request = StrategyCommand.Request()
-            request.id = int(data['robot_id'])
-            request.position_x = float(data['position_x'])
-            request.position_y = float(data['position_y'])
-            request.velocity_x = float(data.get('velocity_x', 0.0))
-            request.velocity_y = float(data.get('velocity_y', 0.0))
+            if self.control_mode != MANUAL_MODE:
+                gui_socket.emit("strategy_response", {
+                    "success": False,
+                    "message": "Strategy is driving; switch to manual mode to command robots",
+                })
+                return
+
+            robot_id = int(data['robot_id'])
+            cmd = self._movement_command_for(robot_id)
+            cmd.target_pos.x = float(data['position_x'])
+            cmd.target_pos.y = float(data['position_y'])
+            cmd.target_vel.x = float(data.get('velocity_x', 0.0))
+            cmd.target_vel.y = float(data.get('velocity_y', 0.0))
 
             self.get_logger().info(
-                f"Sending strategy command: ID={request.id}, "
-                f"Pos=({request.position_x}, {request.position_y}), "
-                f"Vel=({request.velocity_x}, {request.velocity_y})"
+                f"Sending strategy command: ID={robot_id}, "
+                f"Pos=({cmd.target_pos.x}, {cmd.target_pos.y}), "
+                f"Vel=({cmd.target_vel.x}, {cmd.target_vel.y})"
             )
 
-            future = self.strategy_client.call_async(request)
-            future.add_done_callback(self.handle_strategy_response)
+            self._publish_movement_commands()
+            gui_socket.emit("strategy_response", {
+                "success": True,
+                "message": "Command executed successfully"
+            })
 
         except Exception as e:
             self.get_logger().error(f"Failed to send strategy command: {e}")
             gui_socket.emit("strategy_response", {
                 "success": False,
                 "message": f"Failed to send command: {e}"
-            })
-
-    def handle_strategy_response(self, future):
-        """Handle strategy command response"""
-        try:
-            response = future.result()
-            gui_socket.emit("strategy_response", {
-                "success": response.success,
-                "message": "Command executed successfully" if response.success else "Command failed"
-            })
-        except Exception as e:
-            self.get_logger().error(f"Strategy command failed: {e}")
-            gui_socket.emit("strategy_response", {
-                "success": False,
-                "message": f"Service call failed: {e}"
             })
 
     def handle_update_pid(self, data):
@@ -531,64 +576,47 @@ class APINode(Node):
             })
 
     def handle_update_obstacles(self, data):
-        """Handle update obstacles from web GUI"""
-        if not self.update_obstacles_client.wait_for_service(timeout_sec=1.0):
-            gui_socket.emit("obstacles_response", {
-                "success": False,
-                "message": "Update obstacles service is not available"
-            })
-            return
+        """
+        Handle update obstacles from web GUI.
 
+        field_border, enemy_ids and ally_ids are gone: the obstacle factory always
+        builds the field border and an obstacle for every robot on the field, so there
+        was never a way to opt out of them.
+        """
         try:
-            request = UpdateObstacle.Request()
-            request.id = int(data['robot_id'])
-            request.field_border = bool(data.get('field_border', False))
-            request.penalty_area = bool(data.get('penalty_area', False))
-            request.center_area = bool(data.get('center_area', False))
-            request.ball = bool(data.get('ball', False))
-            
-            # Parse enemy and ally IDs
-            enemy_ids = data.get('enemy_ids', [])
-            ally_ids = data.get('ally_ids', [])
-            
-            if isinstance(enemy_ids, str):
-                enemy_ids = [int(x.strip()) for x in enemy_ids.split(',') if x.strip()]
-            request.enemy_ids = enemy_ids
-            
-            if isinstance(ally_ids, str):
-                ally_ids = [int(x.strip()) for x in ally_ids.split(',') if x.strip()]
-            request.ally_ids = ally_ids
+            # Shares the movement topic with handle_strategy_command, so it is gated the
+            # same way.
+            if self.control_mode != MANUAL_MODE:
+                gui_socket.emit("obstacles_response", {
+                    "success": False,
+                    "message": "Strategy is driving; switch to manual mode to set obstacles",
+                })
+                return
+
+            robot_id = int(data['robot_id'])
+            cmd = self._movement_command_for(robot_id)
+            cmd.planning_options.avoid_penalty_area = bool(data.get('penalty_area', False))
+            cmd.planning_options.avoid_center_area = bool(data.get('center_area', False))
+            cmd.planning_options.avoid_ball = bool(data.get('ball', False))
 
             self.get_logger().info(
-                f"Updating obstacles for robot {request.id}: "
-                f"field_border={request.field_border}, penalty_area={request.penalty_area}, "
-                f"center_area={request.center_area}, ball={request.ball}, "
-                f"enemy_ids={request.enemy_ids}, ally_ids={request.ally_ids}"
+                f"Updating obstacles for robot {robot_id}: "
+                f"penalty_area={cmd.planning_options.avoid_penalty_area}, "
+                f"center_area={cmd.planning_options.avoid_center_area}, "
+                f"ball={cmd.planning_options.avoid_ball}"
             )
 
-            future = self.update_obstacles_client.call_async(request)
-            future.add_done_callback(self.handle_obstacles_response)
+            self._publish_movement_commands()
+            gui_socket.emit("obstacles_response", {
+                "success": True,
+                "message": "Obstacles updated successfully"
+            })
 
         except Exception as e:
             self.get_logger().error(f"Failed to update obstacles: {e}")
             gui_socket.emit("obstacles_response", {
                 "success": False,
                 "message": f"Failed to update obstacles: {e}"
-            })
-
-    def handle_obstacles_response(self, future):
-        """Handle update obstacles response"""
-        try:
-            response = future.result()
-            gui_socket.emit("obstacles_response", {
-                "success": response.success,
-                "message": "Obstacles updated successfully" if response.success else "Update obstacles failed"
-            })
-        except Exception as e:
-            self.get_logger().error(f"Update obstacles failed: {e}")
-            gui_socket.emit("obstacles_response", {
-                "success": False,
-                "message": f"Update obstacles service call failed: {e}"
             })
 
     def handle_team_color_service(self, data):
@@ -634,37 +662,35 @@ class APINode(Node):
     def check_strategy_services_status(self):
         """Check status of all strategy services and emit to GUI"""
         services_status = {
-            "strategy": self.strategy_client.service_is_ready(),
+            # Movement is a published topic now, so there is no server to probe.
+            "strategy": True,
             "pid": self.pid_client.service_is_ready(),
             "kp_angular": self.kp_angular_client.service_is_ready(),
             "orientation": self.set_orientation_client.service_is_ready(),
-            "obstacles": self.update_obstacles_client.service_is_ready(),
+            "obstacles": True,
             "team_color": self.set_team_color_client.service_is_ready()
         }
 
         gui_socket.emit("services_status", services_status)
         return services_status
 
+def run_socket():
+    gui_socket.run(app, allow_unsafe_werkzeug=True)
 
 def main(args=None):
     rclpy.init(args=args)
-    executor = MultiThreadedExecutor(num_threads=4)
-    node = APINode(
-        "api_node", executor, vision_running, communication_running, referee_running
-    )
+
+    node = APINode("api_node")
     gui_socket.on_event("connect", node.handle_connect, namespace="")
     gui_socket.on_event("disconnect", node.handle_disconnect, namespace="")
     gui_socket.on_event("fieldSide", node.handle_field_side, namespace="")
     gui_socket.on_event("teamColor", node.handle_team_color, namespace="")
     gui_socket.on_event("fieldMode", node.handle_simulation, namespace="")
-    gui_socket.on_event("visionButton", node.handle_vision_button, namespace="")
-    gui_socket.on_event(
-        "communicationButton", node.handle_communication_button, namespace=""
-    )
-    gui_socket.on_event("refereeButton", node.handle_referee_button, namespace="")
     gui_socket.on_event("configSaveButton", node.handle_config_button, namespace="")
     
     # Strategy command events
+    gui_socket.on_event("controlMode", node.handle_control_mode, namespace="")
+    gui_socket.on_event("stopRobots", node.handle_stop_robots, namespace="")
     gui_socket.on_event("strategyCommand", node.handle_strategy_command, namespace="")
     gui_socket.on_event("updatePID", node.handle_update_pid, namespace="")
     gui_socket.on_event("updateKpAngular", node.handle_update_kp_angular, namespace="")
@@ -673,12 +699,11 @@ def main(args=None):
     gui_socket.on_event("setTeamColorService", node.handle_team_color_service, namespace="")
     gui_socket.on_event("checkServicesStatus", node.check_strategy_services_status, namespace="")
     try:
-        thread = thread_with_exception(gui_socket)
-        thread.start()
-        executor.add_node(node)
-        executor.spin()
-    except Exception:
-        thread.raise_exception()
+        socket_thread = threading.Thread(target=run_socket, daemon=True)
+        socket_thread.start()
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
         rclpy.shutdown()
 
 

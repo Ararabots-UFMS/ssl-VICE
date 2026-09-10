@@ -401,15 +401,14 @@ cmd_limpar() {
         "lib/control_unit/gameWatcher"
         "lib/grsim_messenger/grsim_publisher_node"
         "lib/vision/visionNode"
-        "lib/new_movement/driver"
         # Nos da movimentacao NOVA (dev). Precisam estar aqui pelo CAMINHO DO
         # EXECUTAVEL, nao como "ros2 run new_movement planner": aquilo mata so o
         # wrapper e o filho sobrevive. Medido depois do merge: 6 copias de cada
         # um de planner/manager/tracker acumuladas, com load 14,9 e o
         # strategyNode a 106% de CPU. E o §5.9-A de novo, com nomes novos.
-        "lib/new_movement/planner"
-        "lib/new_movement/manager"
-        "lib/new_movement/tracker"
+        "lib/movement/planner"
+        "lib/movement/manager"
+        "lib/movement/tracker"
         "lib/strategy/strategyNode"
         "lib/referee/referee_node"
         "lib/manual_command/manual_node"
@@ -443,13 +442,12 @@ cmd_limpar() {
     #   "processos zumbi no container: ros2 visionNode gameWatcher controller
     #    grsim_publisher" repetido NOVE vezes - nove launches deixados para tras.
     docker exec vice pkill -f "ros2 launch /root/ssl-VICE/launch" >/dev/null 2>&1 || true
-    docker exec vice pkill -f "ros2 run new_movement driver" >/dev/null 2>&1 || true
     docker exec vice pkill -f "ros2 run referee referee_node" >/dev/null 2>&1 || true
     docker exec vice pkill -f "ros2 run strategy strategyNode" >/dev/null 2>&1 || true
     sleep 1
     docker exec vice pkill -9 -f "ros2 launch /root/ssl-VICE/launch" >/dev/null 2>&1 || true
 
-    restantes=$(docker exec vice ps -eo cmd 2>/dev/null | grep -cE "lib/(control|control_unit|vision|new_movement|strategy|grsim_messenger|manual_command|referee)/" || true)
+    restantes=$(docker exec vice ps -eo cmd 2>/dev/null | grep -cE "lib/(control|control_unit|vision|movement|strategy|grsim_messenger|manual_command|referee)/" || true)
     zumbis=$(docker exec vice ps -eo stat= 2>/dev/null | grep -c "^Z" || true)
     echo "nodes ROS restantes: ${restantes:-0}   zumbis: ${zumbis:-0}"
 }
@@ -801,39 +799,23 @@ except OSError: sys.exit(1)
     ok "fora de cena (ele disputaria /commandTopic com o controlador)"
 
     # ---------------------------------------------------------------- 7
-    # MOVIMENTACAO: a NOVA (planner+manager+tracker) ou a ANTIGA (driver).
+    # A MOVIMENTACAO ANTIGA (driver) DEIXOU DE EXISTIR.
     #
-    # A nova ja vem no launch sim_one.py da dev - subir de novo cria DUPLICATAS
-    # (medimos 6 copias de cada, load 14,9). O driver, sim, precisa ser subido a
-    # mao, porque a dev o tirou do launch.
-    #
-    # BUG QUE ISTO CORRIGE: este passo esperava o DRIVER em qualquer caso. Com a
-    # movimentacao nova, que nao sobe driver nenhum, ele estourava os 30 s e
-    # dizia "nao subiu" - e o ambiente inteiro era declarado quebrado com tudo
-    # funcionando. O sintoma enganava porque a linha seguinte, /control_command a
-    # 0 Hz, e ESPERADA no caminho novo (o control.py passou a escutar
-    # movement_tracker/control_reference).
-    if [ -n "${MOVIMENTO_NOVO:-}" ]; then
-        passo 7 "movimentacao nova (planner+manager+tracker)"
-        esperar_por 30 "planner subir" vivo "new_movement/planner"
-        faltando=""
-        for n in planner manager tracker; do
-            vivo "new_movement/$n" || faltando="$faltando $n"
-        done
-        if [ -z "$faltando" ]; then
-            ok "no ar (replaneja a partir da visao; vem do launch)"
-        else
-            falha "faltou:$faltando (docker exec vice cat /tmp/sim.log)"
-        fi
+    # A dev removeu o driver.py e renomeou o pacote new_movement -> movement
+    # ("refactor: dropping the driver and renaming new_movement to movement").
+    # Nao ha mais dois caminhos: planner + manager + tracker e o unico, e ele
+    # ja vem no launch sim_one.py - subir a mao criava DUPLICATAS (medimos 6
+    # copias de cada, load 14,9).
+    passo 7 "movimentacao (planner+manager+tracker)"
+    esperar_por 30 "planner subir" vivo "movement/planner"
+    faltando=""
+    for n in planner manager tracker; do
+        vivo "movement/$n" || faltando="$faltando $n"
+    done
+    if [ -z "$faltando" ]; then
+        ok "no ar (replaneja a partir da visao; vem do launch)"
     else
-        passo 7 "new_movement/driver"
-        if ! vivo "new_movement/driver"; then
-            ros_d "ros2 run new_movement driver > /tmp/driver.log 2>&1"
-            esperar_por 30 "driver subir" vivo "new_movement/driver"
-        fi
-        vivo "new_movement/driver" \
-            && ok "no ar (fornece strategy_command e update_obstacles)" \
-            || falha "não subiu (docker exec vice cat /tmp/driver.log)"
+        falha "faltou:$faltando (docker exec vice cat /tmp/sim.log)"
     fi
 
     # ---------------------------------------------------------------- 8
@@ -1012,15 +994,8 @@ cmd_cenario() {
     # Isto existe para MEDIR a diferenca da movimentacao no mesmo lote, sem
     # trocar de branch no meio. A estrategia escolhe o caminho pela mesma
     # variavel (ver strategy.py).
-    if [ -n "${MOVIMENTO_NOVO:-}" ]; then
-        # NAO subimos planner/manager/tracker aqui: o launch sim_one.py da dev
-        # JA os inclui. Subir de novo cria DUPLICATAS - medimos 6 copias de cada,
-        # com load 14,9 e o strategyNode a 106% de CPU, e o teste vira lixo.
-        # O driver, sim, precisa ser subido a mao: a dev o tirou do launch.
-        :
-    else
-        ros_d "ros2 run new_movement driver > /tmp/driver.log 2>&1"
-    fi
+    # Nada a subir aqui: planner, manager e tracker vem do launch sim_one.py.
+    # O driver acabou (a dev o removeu junto com o rename do pacote).
     ros_d "ros2 run referee referee_node > /tmp/ref.log 2>&1"
     ros_d "ros2 run strategy strategyNode > /tmp/strategy.log 2>&1"
 
@@ -1577,11 +1552,9 @@ cmd_ajustes() {
     case "$alvo" in
         tracker) ARQS=("$VICE/src/vision/vision/tracker.py") ;;
         filtro)  ARQS=("$VICE/src/vision/vision/kalman_filter.py") ;;
-        driver)  ARQS=("$VICE/src/new_movement/new_movement/driver.py") ;;
         controle) ARQS=("$VICE/src/control/control/pid_controller.py") ;;
         tudo|*)  ARQS=("$VICE/src/vision/vision/tracker.py"
                        "$VICE/src/vision/vision/kalman_filter.py"
-                       "$VICE/src/new_movement/new_movement/driver.py"
                        "$VICE/src/control/control/pid_controller.py") ;;
     esac
     python3 - "$acao" "${ARQS[@]}" <<'PY'

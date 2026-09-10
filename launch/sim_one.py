@@ -8,7 +8,7 @@ def generate_launch_description():
             Node(
                package="vision",
                executable="visionNode",
-               parameters=[{"ip": "224.5.23.2", "port": 10020, "verbose": False}],
+               parameters=[{"ip": "224.5.23.2", "port": 10020}],
             ),
             Node(
                 package="control_unit",
@@ -19,15 +19,15 @@ def generate_launch_description():
                 executable="controller",
             ),
             Node(
-                package="new_movement",
+                package="movement",
                 executable="planner",
             ),
             Node(
-                package="new_movement",
+                package="movement",
                 executable="manager",
             ),
             Node(
-                package="new_movement",
+                package="movement",
                 executable="tracker",
             ),
             Node(
@@ -35,29 +35,16 @@ def generate_launch_description():
                 executable="grsim_publisher_node",
             ),
             #Node(
-            #    package="strategy",
-            #    executable="strategyNode",
+            #   package="strategy",
+            #   executable="strategyNode",
             #),
             Node(
                 package="gui_interpreter",
                 executable="apiNode",
             ),
-            # Node(
-            #      package="referee",
-            #      executable="referee_node",
-            #      parameters=[{"forward_port": 10003, "verbose": False}],
-            #  ),
-            # Node(
-            #      package="strategy_command_gui",
-            #      executable="strategy_gui"
-            # ),
-            #Node(
-            #    package="manual_command",
-            #    executable="manual_node",
-            #),
-            #Node(
-            #     package="hardware_messenger",
-            #     executable="hardware"
-            #)
+            Node(
+                 package="referee",
+                 executable="referee_node",
+             )
         ]
     )

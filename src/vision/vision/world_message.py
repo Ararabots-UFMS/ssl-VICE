@@ -19,8 +19,19 @@ def _is_valid_value(x: float, max_value: float = 10000.0) -> bool:
     #Verifica se o valor é numérico e dentro de limites razoáveis
     return not math.isnan(x) and not math.isinf(x) and abs(x) <= max_value
 
-def wrap_message(objects: Dict[ID, Object], logger) -> VisionMessage:
+
+def wrap_message(
+    objects: Dict[ID, Object],
+    logger,
+    capture_stamp: float = 0.0,
+    wall_stamp: float = 0.0,
+) -> VisionMessage:
     message = VisionMessage()
+
+    # The estimates below are valid at this instant, not at the moment this message is
+    # published — the two differ by however long the packet has been sitting here.
+    message.capture_stamp = float(capture_stamp)
+    message.wall_stamp = float(wall_stamp)
 
     for object_ in objects.values():
         if object_.id.is_ball:

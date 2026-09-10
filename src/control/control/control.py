@@ -1,7 +1,9 @@
 import rclpy
-from movement_interfaces.msg import TrajectoryPoint as TrajectoryPointMsg
-from new_movement.entities.States import State, Vector2D
 from rclpy.node import Node
+
+from movement.entities.motion import MotionState
+
+from utils.math_util import Vector2D
 
 from control.p_controller import PController
 from control.pid_controller import RobotTrajectoryController
@@ -13,12 +15,18 @@ from system_interfaces.srv import (
     SetOrientation,
     UpdateKick,
 )
+from movement_interfaces.msg import TrajectoryPoint as TrajectoryPointMsg
+
+
+# Cap on how far a measurement is carried forward. Beyond this vision has stopped
+# arriving, and extrapolating a stale pose is worse than acting on it as it stands.
+MAX_MEASUREMENT_AGE = 0.2
 
 
 class Controller(Node):
     """Simplified controller node.
 
-    Consumes high-frequency GameState and ControlCommand messages, publishes TeamCommand.
+    Consumes high-frequency GameState and control-reference messages, publishes TeamCommand.
     Fetches low-frequency configuration (team color) once via GetGameConfig service.
     """
 
@@ -32,6 +40,7 @@ class Controller(Node):
 
         # Caches
         self.ally_robots = {}
+        self.vision_wall_stamp = 0.0
         self.control_references = {}
         self.is_halt = None
         # Low-frequency config (polled periodically)
@@ -117,6 +126,12 @@ class Controller(Node):
         dt = (now - self.last_time).nanoseconds / 1e9
         self.last_time = now
 
+        # The reference is for right now, the measurement is from whenever vision last
+        # saw the robot. Comparing them directly reports the travel in between as
+        # position error, which always points forward and so always asks for more speed.
+        measurement_age = (now.nanoseconds / 1e9) - self.vision_wall_stamp
+        measurement_age = min(max(measurement_age, 0.0), MAX_MEASUREMENT_AGE)
+
         team_cmd = TeamCommand()
         team_cmd.is_team_color_yellow = self.is_team_color_yellow
         team_cmd.robots = []
@@ -126,11 +141,14 @@ class Controller(Node):
                 continue
 
             cur = self.ally_robots[rid]
-            cur_state = State(
-                Vector2D(cur.position_x / 1000.0, cur.position_y / 1000.0),
+            cur_state = MotionState(
+                Vector2D(
+                    (cur.position_x + cur.velocity_x * measurement_age) / 1000.0,
+                    (cur.position_y + cur.velocity_y * measurement_age) / 1000.0,
+                ),
                 Vector2D(cur.velocity_x / 1000.0, cur.velocity_y / 1000.0),
             )
-            tgt_state = State(
+            tgt_state = MotionState(
                 Vector2D(ref.pos.x / 1000.0, ref.pos.y / 1000.0),
                 Vector2D(ref.vel.x / 1000.0, ref.vel.y / 1000.0),
             )
@@ -193,6 +211,7 @@ class Controller(Node):
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
+        self.vision_wall_stamp = msg.vision_wall_stamp
         self.referee_command = msg.referee.command
         self.is_halt = self.referee_command in self._desired_states
 

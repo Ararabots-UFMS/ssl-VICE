@@ -1,24 +1,22 @@
 from strategy.behaviour import Selector
-
-
-# from strategy.coach.freekick import FreeKick  
-# from strategy.coach.kickoff import Kickoff
-# from strategy.coach.penalty import Penalty
+from strategy.context import TreeDeps
 from strategy.plays.freekick import Freekick
 from strategy.plays.halt import Halt
 from strategy.plays.kickoff import Kickoff
-# from strategy.coach.penalty import Penalty
-from strategy.plays.stop import Stop
 from strategy.plays.running import NormalStart
+from strategy.plays.stop import Stop
+
 
 class RootTree(Selector):
-    def __init__(self, name):
-        super().__init__(name, [])
-
-        #self.add_children([stop, halt, kickoff, freekick, penalty, timeout, running])
-
-        self.add_children([Stop("Stop"), Halt("Halt"), Kickoff("Kickoff"), Freekick("Freekick"), NormalStart("NormalStart")])
-
-
-    def run(self):
-        return super().run()
+    def __init__(self, name: str, deps: TreeDeps):
+        super().__init__(
+            name,
+            deps,
+            [
+                Stop("Stop", deps),
+                Halt("Halt", deps),
+                Kickoff("Kickoff", deps),
+                Freekick("Freekick", deps),
+                NormalStart("NormalStart", deps),
+            ],
+        )
