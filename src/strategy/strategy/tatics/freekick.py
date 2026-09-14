@@ -1,4 +1,4 @@
-from new_movement.entities.States import Vector2D
+from utils.math_util import Vector2D
 from strategy.skills.skills import Skills
 from strategy.behaviour import TaskStatus
 from math import atan2, hypot, cos, sin, pi, acos

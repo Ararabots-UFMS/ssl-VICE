@@ -35,7 +35,7 @@ try:
     import rclpy
     from rclpy.node import Node
     from system_interfaces.msg import (
-        VisionMessage, GameState, ControlCommand, TeamCommand, RefereeMessage,
+        VisionMessage, GameState, TeamCommand, RefereeMessage,
     )
 except ImportError:
     # Fora do container so funcionam as ferramentas que nao usam ROS ('resumo').
@@ -1052,23 +1052,32 @@ def _criar_gravador():
             # ancora dele ja voltou a coincidir com a realidade.
             self.setpoints = {}
             self.alvos = []
-            # SETPOINT: topico diferente em cada caminho de movimento.
+            # SETPOINT: /movement_tracker/control_reference (TrajectoryPoint).
             #
-            # ANTIGO: /control_command (ControlCommand, com lista .command e
-            #         posicoes em METROS).
-            # NOVO:   /movement_tracker/control_reference (TrajectoryPoint, UM
-            #         ponto por mensagem, ja com robot_id).
-            #
-            # Sem isto, em modo novo o gravador nao capta setpoint nenhum: o
-            # relatorio sai com 'laco=?Hz' e 'rastreio=?/?mm' e a analise de
-            # seguimento (que foi o que derrubou a hipotese do driver) fica cega.
-            if os.environ.get("MOVIMENTO_NOVO"):
-                from movement_interfaces.msg import TrajectoryPoint as _TP
-                self.create_subscription(_TP, "movement_tracker/control_reference",
-                                         self._setpoint_novo, 10)
-            else:
-                self.create_subscription(ControlCommand, "control_command",
-                                         self._setpoint, 10)
+            # O topico antigo (/control_command, do driver) ACABOU: a dev
+            # removeu o driver.py junto com o rename new_movement -> movement, e
+            # a mensagem ControlCommand saiu do system_interfaces. Nao existe
+            # mais caminho alternativo para tratar aqui.
+            from movement_interfaces.msg import TrajectoryPoint as _TP
+            self.create_subscription(_TP, "movement_tracker/control_reference",
+                                     self._setpoint_novo, 10)
+
+        def _setpoint_novo(self, msg):
+            """Mesma serie temporal, vinda do tracker_node da movimentacao nova.
+
+            O TrajectoryPoint ja vem em MILIMETROS - ao contrario do
+            ControlCommand do driver, que vem em metros e por isso e multiplicado
+            por 1000 no _setpoint. Confundir os dois da erro de rastreio na casa
+            de 2.186.200 mm, que foi exatamente o que apareceu na primeira
+            medicao.
+            """
+            rid = int(getattr(msg, "robot_id", 0))
+            alvo = (float(msg.pos.x), float(msg.pos.y))
+            self.setpoints[rid] = alvo
+            if self.gravando:
+                self.alvos.append((round(time.monotonic() - self.t0, 4), rid,
+                                   alvo[0], alvo[1],
+                                   float(msg.vel.x), float(msg.vel.y)))
 
         def _contato(self, msg):
             """Mede a geometria do CHUTADOR no ponto de maior aproximacao.
@@ -1109,29 +1118,6 @@ def _criar_gravador():
                 self.alvos.append((round(time.monotonic() - self.t0, 4), rid,
                                    alvo[0], alvo[1],
                                    float(msg.vel.x), float(msg.vel.y)))
-
-        def _setpoint(self, msg):
-            for c in msg.command:
-                alvo = (c.position_x * 1000.0, c.position_y * 1000.0)
-                self.setpoints[c.id] = alvo
-                # SERIE TEMPORAL DO ALVO.
-                #
-                # Sem ela nao da para separar as duas explicacoes do vai-e-vem:
-                # a estrategia mandando o robo para lugares diferentes a cada
-                # ciclo, ou o robo nao conseguindo seguir um alvo estavel. Uma
-                # e problema de estrategia, a outra da cadeia de controle - e
-                # ate agora escolhemos entre elas no palpite.
-                if self.gravando:
-                    # Guarda tambem a VELOCIDADE do setpoint. control.py usa ela
-                    # como feedforward direto (output = feedforward + kp*erro),
-                    # entao ela pode dominar o comando: se a trajetoria carrega
-                    # uma velocidade "errada", o robo anda naquela direcao
-                    # independente do erro de posicao. Sem gravar isto nao da
-                    # para separar as duas hipoteses.
-                    self.alvos.append((round(time.monotonic() - self.t0, 4),
-                                       int(c.id), alvo[0], alvo[1],
-                                       float(c.velocity_x) * 1000.0,
-                                       float(c.velocity_y) * 1000.0))
 
         def _drenar_visao_crua(self):
             """Le os quadros de visao do grSim sem passar pelo tracker."""
@@ -2815,10 +2801,9 @@ def _ferramenta_cadeia():
             linha("/game_state", "estado", "SEM DADOS")
 
         linha("/refereeTopic", "arbitro", f"comando={no.comando_arbitro!r}")
-        _nome_setpoint = ("/movement_tracker/control_reference"
-                          if os.environ.get("MOVIMENTO_NOVO") else "/control_command")
-        _dono = "planner+tracker" if os.environ.get("MOVIMENTO_NOVO") else "driver"
-        linha(_nome_setpoint, "controle", "(alvos da estrategia -> %s)" % _dono)
+        # Um caminho so desde que a dev removeu o driver.
+        linha("/movement_manager/commands", "controle",
+              "(a estrategia comandando -> manager)")
         linha("/commandTopic", "time", "(velocidades -> grSim)")
 
         print()
@@ -3215,33 +3200,19 @@ def _assinar_setpoint(no, ao_receber):
     inteiro seria bloqueado por um teste do instrumento, nao por falha da
     estrategia.
     """
-    if os.environ.get("MOVIMENTO_NOVO"):
-        # DOIS topicos, e o segundo e o que importa para o portao.
-        #
-        # 'movement_tracker/control_reference' so existe quando ha uma
-        # TRAJETORIA valida - ou seja, depois de a estrategia comandar E o
-        # planner planejar. O driver antigo, ao contrario, publicava
-        # /control_command continuamente, mesmo parado.
-        #
-        # Por isso o portao "a estrategia esta comandando?" passou a reprovar no
-        # caminho novo: ele exigia o produto FINAL da cadeia como prova de que o
-        # primeiro elo estava vivo. Sintoma: "faltou: estrategia-comandando" com
-        # a cadeia inteira verde no painel logo acima.
-        #
-        # 'movement_manager/commands' e a saida da PROPRIA estrategia - e a
-        # prova certa, e e o equivalente honesto do que /control_command era
-        # antes.
-        from movement_interfaces.msg import TrajectoryPoint as _TP
-        from movement_interfaces.msg import MovementCommandArray as _MCA
-        no.create_subscription(
-            _TP, "movement_tracker/control_reference",
-            lambda _m: ao_receber(), 10)
-        return no.create_subscription(
-            _MCA, "movement_manager/commands",
-            lambda m: ao_receber() if m.commands else None, 10)
+    # Um topico so: o driver acabou (ver a nota no gravador).
+    #
+    # 'movement_tracker/control_reference' so existe quando ha TRAJETORIA
+    # valida. 'movement_manager/commands' e a saida da PROPRIA estrategia, e e
+    # a prova certa de que o primeiro elo esta vivo - o portao "a estrategia
+    # esta comandando?" olha os dois.
+    from movement_interfaces.msg import TrajectoryPoint as _TP
+    from movement_interfaces.msg import MovementCommandArray as _MCA
+    no.create_subscription(_TP, "movement_tracker/control_reference",
+                           lambda _m: ao_receber(), 10)
     return no.create_subscription(
-        ControlCommand, "control_command",
-        lambda m: ao_receber() if m.command else None, 10)
+        _MCA, "movement_manager/commands",
+        lambda m: ao_receber() if m.commands else None, 10)
 
 
 def _servicos_exigidos():
@@ -3254,9 +3225,8 @@ def _servicos_exigidos():
     'set_orientation' vale nos dois: orientacao e do pacote control, que a dev
     nao mexeu.
     """
-    if os.environ.get("MOVIMENTO_NOVO"):
-        return {"/SetStaticObstacles", "/SetGoalKeeper", "/set_orientation"}
-    return {"/strategy_command", "/update_obstacles", "/set_orientation"}
+    # O driver acabou: nao ha mais 'strategy_command' nem 'update_obstacles'.
+    return {"/SetStaticObstacles", "/SetGoalKeeper", "/set_orientation"}
 
 
 def _pasta_replays_padrao():

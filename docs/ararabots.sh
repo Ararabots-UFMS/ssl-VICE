@@ -248,7 +248,10 @@ esperar_por() {          # esperar_por <teto_s> <descricao> <comando...>
 # rastreio e a unica grandeza medida que separa gol de erro.
 #
 # Limites (ARARABOTS_MIN_HZ e ARARABOTS_MIN_FPS ajustam):
-HZ_MIN_CONTROLE="${ARARABOTS_MIN_HZ:-60}"     # /control_command, timer e 100 Hz
+# 8 Hz, e nao 60: o que medimos agora e a ESTRATEGIA comandando, e o timer dela
+# e 10 Hz. Os 60 valiam para o /control_command do driver, que era interpolado
+# a 100 Hz. Comparar a taxa da estrategia com o limiar do driver reprovava tudo.
+HZ_MIN_CONTROLE="${ARARABOTS_MIN_HZ:-8}"     # /control_command, timer e 100 Hz
 FPS_MIN_GRSIM="${ARARABOTS_MIN_FPS:-45}"      # fisica do grSim
 portao_medicao() {
     local motivo=""
@@ -324,7 +327,18 @@ portao_medicao() {
     # 3. Nodes duplicados: ja medimos NOVE controllers publicando comandos
     #    contraditorios, com a visao caindo de 45 para 3 Hz.
     local dup
-    dup="$(docker exec vice ps -eo cmd 2>/dev/null | grep -oE "lib/[a-z_]+/[a-zA-Z_]+" \
+    # IGNORA OS ZUMBIS na contagem de duplicatas.
+    #
+    # Processo <defunct> (STAT Z) nao executa nada: e so uma entrada na tabela
+    # esperando o pai colher, e o pai aqui e o PID 1 do container, que nunca
+    # colhe. Eles se acumulam a cada execucao - medimos 21 do referee_node - e
+    # a contagem antiga os somava como se fossem nodes concorrentes.
+    #
+    # Resultado: "MEDICAO BLOQUEADA: nodes duplicados" com UM node vivo de cada,
+    # e todo lote reprovado por um teste do instrumento. A contagem de zumbis
+    # continua existindo logo acima ($nz), separada, que e onde ela informa.
+    dup="$(docker exec vice ps -eo stat=,cmd= 2>/dev/null | grep -v '^Z' \
+           | grep -oE "lib/[a-z_]+/[a-zA-Z_]+" \
            | sort | uniq -c | awk '$1 > 1 {print $2}' | tr '\n' ' ')"
     [ -n "$dup" ] && motivo="nodes duplicados: $dup"
 
@@ -337,8 +351,7 @@ portao_medicao() {
     # (tracker_node). Procurando so o antigo, em modo novo o grep nao casa,
     # hz_ctl fica vazio e o portao deixa passar qualquer coisa - inclusive uma
     # cadeia parada. Um portao que nao sabe o que medir nao e portao.
-    topico_ctl="/control_command"
-    [ -n "${MOVIMENTO_NOVO:-}" ] && topico_ctl="/movement_tracker/control_reference"
+    topico_ctl="/movement_manager/commands"
     hz_ctl="$(printf '%s' "$relatorio" | grep -oE "${topico_ctl} +[0-9.]+" | grep -oE "[0-9.]+$" | cut -d. -f1)"
     fps="$(ros_run "python3 /tmp/ararabots.py fps" 2>/dev/null | grep -oE "[0-9]+ Hz" | grep -oE "^[0-9]+")"
 
@@ -996,7 +1009,15 @@ cmd_cenario() {
     # variavel (ver strategy.py).
     # Nada a subir aqui: planner, manager e tracker vem do launch sim_one.py.
     # O driver acabou (a dev o removeu junto com o rename do pacote).
-    ros_d "ros2 run referee referee_node > /tmp/ref.log 2>&1"
+    # SO SOBE SE NAO HOUVER UM VIVO.
+    #
+    # O preparar ja sobe o referee_node (passo 8). Subindo outro aqui ficavam
+    # DOIS - conferido no ps: dois processos Sl do mesmo executavel - e o portao
+    # de medicao reprovava o lote inteiro com "nodes duplicados", corretamente.
+    # Dois referee_node publicando no mesmo topico e exatamente o tipo de coisa
+    # que o §5.9-A descreve.
+    vivo "referee/referee_node" \
+        || ros_d "ros2 run referee referee_node > /tmp/ref.log 2>&1"
     ros_d "ros2 run strategy strategyNode > /tmp/strategy.log 2>&1"
 
     # ---------------------------------------------------------------- 5

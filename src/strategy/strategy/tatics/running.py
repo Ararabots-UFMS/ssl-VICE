@@ -1,4 +1,4 @@
-from new_movement.entities.States import Vector2D
+from utils.math_util import Vector2D
 import os
 
 from math import atan2, hypot
