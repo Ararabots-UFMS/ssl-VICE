@@ -500,7 +500,26 @@ def _cmd_amarelo(c, rid, ori, vx_campo, vy_campo, girar=0.0, chute=0.0):
     rc.spinner = False
 
 
-def _ir_para(rx, ry, ax, ay, vel=1.2, freio=400.0):
+# VELOCIDADE DO ADVERSARIO, limitada para igualar a nossa.
+#
+# Medido no mesmo jogo, janela de 10 quadros: os amarelos cravam 1300 mm/s (e o
+# 'vel' daqui) e os nossos nao passam de 700 mm/s no p99, com p90 entre 260 e
+# 480. O planejador nosso tem teto de 2000 mm/s e nao chega perto; o campo
+# 'aggressiveness' existe na mensagem, e copiado no movement_manager e nunca
+# lido pelo planejador, ou seja nao ha como pedir mais.
+#
+# Com o dobro da nossa velocidade o adversario ganha TODA corrida ate a bola, e
+# qualquer teste de tatica passa a medir quem chega primeiro em vez de quem
+# decide melhor. Igualar a velocidade e o que torna a comparacao honesta
+# enquanto a equipe olha a falta de velocidade na cadeia de movimento.
+#
+#     ARARABOTS_VEL_INIMIGO=1.3 ./ararabots.sh ...   (volta ao antigo)
+VEL_INIMIGO = float(os.environ.get("ARARABOTS_VEL_INIMIGO", "0.65"))
+
+
+def _ir_para(rx, ry, ax, ay, vel=None, freio=400.0):
+    if vel is None:
+        vel = VEL_INIMIGO
     """Vetor de velocidade de (rx,ry) ate (ax,ay), freando na chegada.
 
     O freio proporcional existe pelo mesmo motivo da tatica: sem
@@ -563,6 +582,15 @@ def _varredura_y():
 def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=None):
     """Adversario com PAPEIS, em vez de um robo solto atacando a bola."""
     if not amarelos:
+        return
+    # ADVERSARIO PARADO: isola a nossa estrategia do comportamento deles.
+    #
+    # Com o amarelo jogando nao da para saber se o nosso atacante e passivo ou
+    # se apenas perde a disputa. Parado, sobra so o nosso lado: se mesmo assim
+    # ele nao chega na bola, o defeito e nosso.
+    #
+    #     ARARABOTS_INIMIGO_PARADO=1 ./ararabots.sh validar 3 jogo
+    if os.environ.get("ARARABOTS_INIMIGO_PARADO"):
         return
     azuis = azuis or {}
     pb = _carregar_protobuf()
@@ -629,7 +657,7 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
         #
         # 1,2 m/s tem folga sobre os 600 mm/s do alvo, e frear a partir de
         # 250 mm faz ele chegar sem passar.
-        vx, vy = _ir_para(gx, gy, alvo_x, alvo_y, vel=1.2, freio=250.0)
+        vx, vy = _ir_para(gx, gy, alvo_x, alvo_y, freio=250.0)
         _cmd_amarelo(c, 0, gori, vx, vy)
 
     linha = [r for r in ids if r != 0]
@@ -660,7 +688,7 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
             lado = 1.0 if ordem % 2 == 0 else -1.0
             ax = 850.0 + (ordem // 2) * 350.0
             ay = lado * (600.0 + (ordem // 2) * 450.0)
-            vx, vy = _ir_para(rx, ry, ax, ay, vel=1.2)
+            vx, vy = _ir_para(rx, ry, ax, ay, vel=VEL_INIMIGO)
             _cmd_amarelo(c, rid, rori, vx, vy)
         _enviar_agora(pacote)
         return
@@ -676,7 +704,7 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
                 atras_x, atras_y = bx + 220.0, by
                 perto = dist_bola < 140.0
                 alvo = (bx, by) if math.hypot(rx - atras_x, ry - atras_y) < 150.0 else (atras_x, atras_y)
-                vx, vy = _ir_para(rx, ry, alvo[0], alvo[1], vel=0.9, freio=250.0)
+                vx, vy = _ir_para(rx, ry, alvo[0], alvo[1], vel=min(0.9, VEL_INIMIGO), freio=250.0)
                 _cmd_amarelo(c, rid, rori, vx, vy, chute=5.0 if perto else 0.0)
             else:
                 # Demais robôs aguardam o passe na metade do seu campo
@@ -711,7 +739,7 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
                     perto = dist_bola < 140.0
                     alvo = (bx, by) if math.hypot(rx - atras_x, ry - atras_y) < 150.0 \
                         else (atras_x, atras_y)
-                    vx, vy = _ir_para(rx, ry, alvo[0], alvo[1], vel=0.9, freio=250.0)
+                    vx, vy = _ir_para(rx, ry, alvo[0], alvo[1], vel=min(0.9, VEL_INIMIGO), freio=250.0)
                     _cmd_amarelo(c, rid, rori, vx, vy, chute=5.0 if perto else 0.0)
             else:
                 lado = 1.0 if ordem % 2 == 0 else -1.0
@@ -735,24 +763,45 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
             ay = by + uy * 700.0 + py * lado * 180.0
             if math.hypot(ax - bx, ay - by) < 550.0:
                 ax, ay = bx + ux * 600.0, by + uy * 600.0
-            vx, vy = _ir_para(rx, ry, ax, ay, vel=1.2)
+            vx, vy = _ir_para(rx, ry, ax, ay, vel=VEL_INIMIGO)
             _cmd_amarelo(c, rid, rori, vx, vy)
         _enviar_agora(pacote)
         return
 
     # ------------------------------------------------------------- jogo normal
-    for ordem, rid in enumerate(linha):
+    # ADVERSARIO = A NOSSA ESTRATEGIA ANTIGA. Azul joga a nova, amarelo a velha.
+    #
+    # POR QUE MUDOU: antes os amarelos MARCAVAM os nossos robos e nunca iam a
+    # bola - ficavam a 350 mm de cada azul, na direcao do gol. Sem ninguem
+    # disputando, a bola parava e o jogo travava; media-se a estrategia nova
+    # contra um adversario que nao joga, e o replay nao mostrava jogo nenhum.
+    #
+    # O perfil aqui e o que a NOSSA tatica fazia antes desta fase, e ele e util
+    # justamente por ser diferente: TODOS vao a bola, sem papeis e sem eleicao,
+    # e empurram na direcao do gol adversario (o nosso). E o comportamento que
+    # produzia 36% de amontoado quando era nosso - agora ele e o sparring.
+    #
+    # Dois perfis distintos em campo geram disputa de verdade, que e o que
+    # faltava para o jogo andar.
+    nossa_meta = -meta_deles_x
+    for rid in linha:
         rx, ry, rori = amarelos[rid]
-        candidatos = sorted(azuis.items(), key=lambda kv: abs(meta_deles_x - kv[1][0]))
-        if ordem < len(candidatos):
-            azul = candidatos[ordem][1]
-            dx, dy = meta_deles_x - azul[0], 0.0 - azul[1]
-            n = math.hypot(dx, dy) or 1.0
-            ax, ay = azul[0] + dx / n * 350.0, azul[1] + dy / n * 350.0
+        # direcao bola -> gol que eles atacam (o nosso)
+        dgx, dgy = nossa_meta - bx, 0.0 - by
+        n = math.hypot(dgx, dgy) or 1.0
+        ux, uy = dgx / n, dgy / n
+        # atras da bola, e depois atravessa - a mesma ideia do empurrao, sem
+        # nenhuma das travas que a versao nova ganhou
+        d_bola = math.hypot(rx - bx, ry - by)
+        proj = (rx - bx) * ux + (ry - by) * uy
+        if proj < -80.0:
+            ax, ay = bx + ux * 300.0, by + uy * 300.0      # atravessa
         else:
-            ax, ay = meta_deles_x - 1500.0, 0.0
-        vx, vy = _ir_para(rx, ry, ax, ay, vel=1.2)
-        _cmd_amarelo(c, rid, rori, vx, vy)
+            ax, ay = bx - ux * 220.0, by - uy * 220.0      # posiciona atras
+        vx, vy = _ir_para(rx, ry, ax, ay, vel=VEL_INIMIGO)
+        # chuta quando encosta, apontando para a nossa meta
+        chute = 5.5 if d_bola < 140.0 else 0.0
+        _cmd_amarelo(c, rid, math.atan2(uy, ux), vx, vy, chute=chute)
     _enviar_agora(pacote)
 
 
@@ -788,8 +837,22 @@ def posicionar(cenario):
     rep.ball.vx = 0.0
     rep.ball.vy = 0.0
 
+    # CAMPO LIMPO: so os nossos.
+    #
+    # Isola a nossa estrategia por completo. O ARARABOTS_INIMIGO_PARADO apenas
+    # deixa de COMANDAR os amarelos - eles continuam em campo como obstaculos e
+    # como inimigos no game_state, e a tatica muda de situacao por causa deles.
+    # Aqui eles nem entram: turnon=False, fora da visao (sslworld.cpp:1102), o
+    # que deixa o teste medindo exclusivamente o nosso lado.
+    #
+    #     ARARABOTS_SO_NOSSOS=1 ./ararabots.sh validar 3 jogo
+    so_nossos = bool(os.environ.get("ARARABOTS_SO_NOSSOS"))
+
     for time_amarelo, chave in ((False, "azuis"), (True, "amarelos")):
-        usados = {rid: (x, y, d) for rid, x, y, d in cenario.get(chave, [])}
+        if so_nossos and time_amarelo:
+            usados = {}
+        else:
+            usados = {rid: (x, y, d) for rid, x, y, d in cenario.get(chave, [])}
         for rid in range(ROBOS_POR_TIME):
             r = rep.robots.add()
             r.id = rid
@@ -1048,6 +1111,14 @@ def _criar_gravador():
             self.create_subscription(VisionMessage, "visionTopic", self._visao, 10)
             self.create_subscription(VisionMessage, "visionTopic", self._contato, 10)
             self.create_subscription(TeamCommand, "commandTopic", self._comando, 10)
+            # COMANDO DO ARBITRO: serve para NAO gravar quando ele vem vazio.
+            #
+            # Com comando vazio a arvore recusa todas as jogadas e o time fica
+            # imovel - e o replay engana, porque parece tatica ruim. Ver a
+            # conferencia antes de 'gravando por ...'.
+            self.comando_arbitro = None
+            self.create_subscription(RefereeMessage, "refereeTopic",
+                                     self._arbitro_cmd, 10)
             # setpoint que o driver esta perseguindo, em mm. E o que diz se a
             # ancora dele ja voltou a coincidir com a realidade.
             self.setpoints = {}
@@ -1262,6 +1333,14 @@ def _criar_gravador():
                     ],
                 }
             )
+
+        def _arbitro_cmd(self, m):
+            # RefereeMessage traz 'command' DIRETO (system_interfaces/msg/
+            # RefereeMessage.msg:3). Quem tem 'referee.command' e o GameState.
+            # Trocar os dois faz o callback estourar AttributeError a cada
+            # mensagem, e o guard aborta por falta de comando - recusando o lote
+            # pelo motivo errado.
+            self.comando_arbitro = m.command
 
         def _comando(self, msg):
             if not self.gravando:
@@ -1553,6 +1632,8 @@ font:14px/1.5 ui-monospace,Menlo,Consolas,monospace}
 .top{padding:10px 14px;border-bottom:1px solid var(--linha);display:flex;gap:18px;flex-wrap:wrap;align-items:center}
 .badge{padding:2px 8px;border-radius:4px;font-weight:600}
 .g-sim{background:var(--ok);color:#062}.g-nao{background:#2a3340;color:var(--dim)}
+.sit-NOSSA{background:var(--ok);color:#062}.sit-DELES{background:var(--ruim);color:#300}
+.sit-DISPUTA{background:var(--alvo);color:#320}.sit-SOLTA{background:#2a3340;color:var(--fg)}
 .wrap{padding:12px}svg{width:100%;height:auto;display:block;background:#0d2818;border-radius:6px}
 .ctl{display:flex;gap:12px;align-items:center;padding:10px 14px;flex-wrap:wrap}
 input[type=range]{flex:1;min-width:220px}button{background:#22303f;color:var(--fg);border:1px solid var(--linha);
@@ -1566,6 +1647,7 @@ border-radius:5px;padding:6px 14px;cursor:pointer;font:inherit}button:hover{back
   <span id="gol" class="badge"></span>
   <span id="disp" class="badge"></span>
   <span class="num">t = <b id="t">0.00</b> s</span>
+  <span>situacao: <span id="sit" class="badge">-</span></span>
   <span class="num">erro de rastreio: <b id="err">-</b> mm</span>
 </div>
 <div class="top" id="resumo" style="font-size:13px">
@@ -1622,6 +1704,57 @@ alvo.appendChild(el('line',{x1:0,y1:-110,x2:0,y2:110,stroke:'#ffd166','stroke-wi
 // orientacao ambigua (a seta apontava para longe do corpo, parecendo um vetor
 // de movimento) e nao parecia um robo. Com a face chanfrada, para onde o
 // chutador aponta e OBVIO sem precisar de seta.
+// SITUACAO E PAPEIS, recalculados aqui com as MESMAS regras da tatica.
+//
+// POR QUE RECALCULAR e nao gravar da estrategia: as regras sao puramente
+// geometricas e sem estado (ver situacao_de_jogo e distribuir_papeis em
+// tatics/running.py), entao os mesmos dados dao o mesmo resultado. A unica
+// diferenca e a fonte: a tatica le o /game_state (filtrado pelo Kalman) e aqui
+// usamos a visao CRUA. Para ler o replay isso e melhor, nao pior - mostra onde
+// os robos estavam de verdade.
+//
+// ⚠️ Se as regras mudarem na tatica, mudem AQUI TAMBEM, senao o replay passa a
+// mentir. E o tipo de duplicacao que ja nos custou caro; fica aqui porque o
+// valor de ver o papel desenhado supera o risco, mas o risco existe.
+const RAIO_POSSE = 250;
+
+function situacaoDoQuadro(fr){
+  const b = fr.b, nossos = (fr.r||[]).filter(r => r[0] !== 0), deles = fr.y||[];
+  if (!nossos.length) return null;
+  const dn = Math.min(...nossos.map(r => Math.hypot(b[0]-r[1], b[1]-r[2])));
+  const dd = deles.length
+    ? Math.min(...deles.map(a => Math.hypot(b[0]-a[1], b[1]-a[2]))) : 1e9;
+  if (dn <= RAIO_POSSE && dd <= RAIO_POSSE) return "DISPUTA";
+  if (dn <= RAIO_POSSE) return "NOSSA";
+  if (dd <= RAIO_POSSE) return "DELES";
+  return "SOLTA";
+}
+
+function papeisDoQuadro(fr){
+  const b = fr.b, linha = (fr.r||[]).filter(r => r[0] !== 0);
+  const papeis = {};
+  if (!linha.length) return papeis;
+  // portador: distancia QUANTIZADA em faixas de 500 mm, desempate por id -
+  // e a mesma regra do eleger_atacante, e existe porque a distancia crua
+  // alterna o vencedor a cada ciclo.
+  const chave = r => {
+    const d = Math.hypot(b[0]-r[1], b[1]-r[2]);
+    return [Math.round(d/500), r[0]];
+  };
+  const ord = linha.slice().sort((x,y) => {
+    const a = chave(x), c = chave(y);
+    return a[0] !== c[0] ? a[0]-c[0] : a[1]-c[1];
+  });
+  papeis[ord[0][0]] = "portador";
+  const resto = linha.filter(r => r[0] !== ord[0][0])
+    .sort((x,y) => Math.hypot(b[0]-x[1], b[1]-x[2]) - Math.hypot(b[0]-y[1], b[1]-y[2]));
+  if (resto.length) papeis[resto[0][0]] = "apoio";
+  for (let k=1; k<resto.length; k++) papeis[resto[k][0]] = "cobertura";
+  return papeis;
+}
+
+const COR_PAPEL = {portador:"#3ddc84", apoio:"#ffd166", cobertura:"#8b98a8"};
+
 const R_ROBO = 90, FRENTE = 73, MEIA_FACE = Math.sqrt(90*90 - 73*73);
 function formaRobo(){
   return 'M ' + FRENTE + ' ' + (-MEIA_FACE) +
@@ -1739,6 +1872,13 @@ function desenha(i){
   // O cobrador vai cheio e com seta; os companheiros vao esmaecidos e com o
   // proprio alvo em risco fino. A linha de erro grossa e a legenda numerica
   // seguem SO o cobrador, que e quem decide a cobranca.
+  const papeisFr = papeisDoQuadro(q);
+  const sit = situacaoDoQuadro(q);
+  const bs = document.getElementById('sit');
+  if (bs){
+    bs.textContent = sit || '-';
+    bs.className = 'badge sit-' + (sit || 'x');
+  }
   trilhaB.setAttribute('d', trilhaDe(i, null, true));
   trilhaR.setAttribute('d', trilhaDe(i, COBRADOR, false));
   gAzuis.textContent = '';
@@ -1764,6 +1904,15 @@ function desenha(i){
                          'font-size':160, fill: ehCob?'#dff0ff':'#4da3ff'});
     t.textContent = r[0];
     gAzuis.appendChild(t);
+    // PAPEL, embaixo do robo. Era a pergunta que o replay nao respondia:
+    // "quem esta fazendo o que agora".
+    const pp = papeisFr[r[0]];
+    if (pp){
+      const tp = el('text',{x:r[1], y:r[2]+250,'text-anchor':'middle',
+                            'font-size':135, fill: COR_PAPEL[pp] || '#8b98a8'});
+      tp.textContent = pp;
+      gAzuis.appendChild(tp);
+    }
     // VETOR DE VELOCIDADE, medido entre quadros vizinhos da visao crua.
     const v = velRobo(i, r[0]);
     if (v && (Math.abs(v[0])+Math.abs(v[1])) > 60){
@@ -2447,10 +2596,22 @@ def rodar(nome, duracao=12.0):
         # e comandado por nos, por fora da arvore, entao ele varre normalmente.
         # Depois do aquecimento vem o STOP curto de sempre, tambem comandando os
         # amarelos, e so entao o comando da falta.
-        if adversario_ligado:
+        if adversario_ligado and modo_adv != "jogo":
             print(f"   aquecendo o adversario por {PRE_VARREDURA:.0f}s "
                   f"(goleiro ja varrendo quando a jogada comecar)...")
-        fim_pre = time.time() + (PRE_VARREDURA if adversario_ligado else 0.0)
+        # O AQUECIMENTO NAO VALE PARA O JOGO CORRIDO.
+        #
+        # Ele existe para a BOLA PARADA: o goleiro adversario precisa ja estar
+        # varrendo quando a cobranca comeca, porque o grSim zera a velocidade de
+        # quem nao recebe comando novo a cada passo de fisica.
+        #
+        # Em jogo corrido o perfil do adversario e ATACAR A BOLA. Aquecer por 5 s
+        # antes de comecar a gravar significa deixa-lo jogar sozinho cinco
+        # segundos: medido nos replays, a partida comecava com a bola ja em
+        # x=-1438 e -1311, e num deles havia um CHUTE amarelo no instante 0,0 s.
+        # Nao ha cenario nenhum sendo medido ali - o jogo ja aconteceu.
+        aquecer = adversario_ligado and modo_adv != "jogo"
+        fim_pre = time.time() + (PRE_VARREDURA if aquecer else 0.0)
         while time.time() < fim_pre:
             _girar(no, 0.02)
             if adversario_ligado and no.bola:
@@ -2487,6 +2648,36 @@ def rodar(nome, duracao=12.0):
         else:
             print(f"   comando do arbitro: {tipo} {cor}")
             enviar_comando_arbitro(tipo, cor)
+
+        # O COMANDO CHEGOU? Se nao, NAO grava.
+        #
+        # O referee_node as vezes publica comando VAZIO mesmo com o ssl-gc de pe
+        # e respondendo na 8081. Quando isso acontece o CheckState da arvore
+        # recusa todas as jogadas - ele espera FORCE_START ou NORMAL_START e
+        # recebe '' - e o time inteiro fica imovel.
+        #
+        # O replay resultante e uma armadilha: a bola para em x=-1085 porque
+        # BATE no nosso robo 1 parado onde nasceu, e a analise diz "nenhum chute
+        # nosso, o adversario domina". Isso queimou QUATRO lotes desta fase, e em
+        # dois deles o resultado foi reportado como efeito da tatica.
+        #
+        # Medido na ultima vez: 1328 ciclos com cmd=''. Agora falha na cara.
+        cmd_visto = no.comando_arbitro if hasattr(no, "comando_arbitro") else None
+        t_esp = time.time() + 3.0
+        while time.time() < t_esp:
+            rclpy.spin_once(no, timeout_sec=0.05)
+            cmd_visto = getattr(no, "comando_arbitro", None)
+            if cmd_visto:
+                break
+        if not cmd_visto:
+            print()
+            print("   XX O ARBITRO NAO ESTA PUBLICANDO COMANDO (veio vazio).")
+            print("      A arvore recusa TODAS as jogadas e o time fica imovel;")
+            print("      o replay pareceria 'tatica ruim'. Nao vou gravar.")
+            print()
+            print("      ./ararabots.sh parar && ./ararabots.sh preparar --headless")
+            print()
+            return 3
 
         print(f"   gravando por {duracao:.0f}s (olhe a janela do grSim)...")
         no.t0 = time.monotonic()
@@ -3460,6 +3651,142 @@ disso nao vale.
 
 
 
+def _ferramenta_narrar():
+    """NARRA o replay quadro a quadro: o que aconteceu, em ordem, e por quem.
+
+    POR QUE ISTO EXISTE
+    -------------------
+    O 'jogo-analise' devolve os numeros do FIM - x_max, v_pico, posse. Esses
+    numeros esconderam o essencial durante varias rodadas: 'v_pico 5389' foi
+    lido como "nosso time chuta" quando na verdade TODO arranco da bola era do
+    adversario, sempre para tras. Agregado nao distingue quem fez o que.
+
+    Aqui o replay e lido como jogo: cada toque, cada chute, quem tocou, para
+    onde a bola foi e quanto andou. E o que permite dizer "aos 4,2 s o amarelo 1
+    chutou para tras e a bola parou 1,1 m depois" em vez de "mediana 341 mm".
+
+    Uso:  ./ararabots.sh narrar [n]     (n = quantos replays, padrao 1)
+    """
+    import glob as _glob
+
+    quantos = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+    pasta = _pasta_replays_padrao()
+    arqs = sorted(_glob.glob(os.path.join(pasta, "jogo__*.html")),
+                  key=os.path.getmtime)[-quantos:]
+    if not arqs:
+        print("   XX nenhum replay do cenario 'jogo' em %s" % pasta)
+        return 1
+
+    TOQUE = 130.0        # raio de contato: robo 90 + bola 21, com folga
+    MOVE = 400.0         # mm/s a partir do qual a bola esta "andando"
+
+    for arq in arqs:
+        D = _ler_replay(arq)
+        Q = (D or {}).get("quadros") or []
+        if len(Q) < 10:
+            continue
+        print()
+        print("   " + "=" * 68)
+        print("   %s   (%d quadros, %d de linha por time)"
+              % (os.path.basename(arq), len(Q), len(Q[0].get("r", [])) - 1))
+        print("   " + "=" * 68)
+
+        def _t(i):
+            return Q[i].get("t", i / 60.0)
+
+        def _dono(f):
+            """(time, id, dist) do robo mais proximo da bola."""
+            b = f["b"]
+            melhor = (None, None, 1e9)
+            for time, chave in (("AZUL", "r"), ("AMARELO", "y")):
+                for r in f.get(chave, []):
+                    d = math.hypot(r[1] - b[0], r[2] - b[1])
+                    if d < melhor[2]:
+                        melhor = (time, r[0], d)
+            return melhor
+
+        def _vel(i):
+            if i == 0:
+                return 0.0, 0.0, 0.0
+            dt = max(_t(i) - _t(i - 1), 1e-3)
+            vx = (Q[i]["b"][0] - Q[i - 1]["b"][0]) / dt
+            vy = (Q[i]["b"][1] - Q[i - 1]["b"][1]) / dt
+            return vx, vy, math.hypot(vx, vy)
+
+        eventos = []
+        ult_dono = None
+        i = 1
+        while i < len(Q):
+            f = Q[i]
+            time, rid, d = _dono(f)
+            vx, vy, v = _vel(i)
+            _, _, v0 = _vel(i - 1)
+
+            # CHUTE: a bola sai do repouso para velocidade alta junto de um robo
+            if v > 2000.0 and v0 < 600.0 and d < 400.0:
+                # ate onde ela foi antes de parar ou ser tocada de novo
+                j = i
+                while j + 1 < len(Q) and _vel(j + 1)[2] > MOVE:
+                    j += 1
+                perc = math.hypot(Q[j]["b"][0] - Q[i - 1]["b"][0],
+                                  Q[j]["b"][1] - Q[i - 1]["b"][1])
+                dxt = Q[j]["b"][0] - Q[i - 1]["b"][0]
+                rumo = ("para o gol DELES" if dxt > 150 else
+                        "para o NOSSO gol" if dxt < -150 else "para o lado")
+                eventos.append((_t(i), "CHUTE", time, rid,
+                                "%4.0f mm/s, andou %4.0f mm %s, parou em x=%+5.0f y=%+5.0f"
+                                % (v, perc, rumo, Q[j]["b"][0], Q[j]["b"][1])))
+                i = j + 1
+                ult_dono = (time, rid)
+                continue
+
+            # TOQUE: mudou de dono estando em contato
+            if d < TOQUE and (time, rid) != ult_dono:
+                eventos.append((_t(i), "toque", time, rid,
+                                "bola em x=%+5.0f y=%+5.0f" % (f["b"][0], f["b"][1])))
+                ult_dono = (time, rid)
+            i += 1
+
+        # PARADAS LONGAS: onde o jogo morreu
+        paradas = []
+        i = 1
+        while i < len(Q):
+            if _vel(i)[2] < 60.0:
+                j = i
+                while j + 1 < len(Q) and _vel(j + 1)[2] < 60.0:
+                    j += 1
+                if _t(j) - _t(i) > 1.5:
+                    time, rid, d = _dono(Q[i])
+                    paradas.append((_t(i), _t(j) - _t(i), Q[i]["b"][0],
+                                    Q[i]["b"][1], time, rid, d))
+                i = j + 1
+            else:
+                i += 1
+
+        for ev in eventos:
+            if ev[1] == "CHUTE":
+                print("   %6.1fs  CHUTE  %-7s %d   %s" % (ev[0], ev[2], ev[3], ev[4]))
+            else:
+                print("   %6.1fs  toque  %-7s %d   %s" % (ev[0], ev[2], ev[3], ev[4]))
+        if not eventos:
+            print("   (nenhum toque nem chute: ninguem encostou na bola)")
+
+        if paradas:
+            print()
+            print("   BOLA PARADA (mais de 1,5 s sem andar):")
+            for t0, dur, bx, by, time, rid, d in paradas:
+                print("   %6.1fs  por %4.1fs em x=%+5.0f y=%+5.0f  "
+                      "(mais proximo: %s %d a %.0f mm)"
+                      % (t0, dur, bx, by, time, rid, d))
+        chutes_n = [e for e in eventos if e[1] == "CHUTE" and e[2] == "AZUL"]
+        chutes_d = [e for e in eventos if e[1] == "CHUTE" and e[2] == "AMARELO"]
+        print()
+        print("   RESUMO: %d chutes nossos, %d deles, %d toques, %d paradas longas"
+              % (len(chutes_n), len(chutes_d),
+                 len([e for e in eventos if e[1] == "toque"]), len(paradas)))
+    return 0
+
+
 def _ferramenta_jogo_analise():
     """Mede o JOGO CORRIDO nos replays do cenario 'jogo'.
 
@@ -3552,6 +3879,87 @@ def _ferramenta_jogo_analise():
     print("   5. alguem chuta        : v_pico %6.0f mm/s  (chute real e 5000+)"
           % med(4))
     print("   posse (alguem a menos de 200 mm da bola): %.0f%% do tempo" % med(5))
+    return 0
+
+
+
+def _ferramenta_posse():
+    """Separa a execucao em SITUACOES DE JOGO e mede quanto tempo em cada uma.
+
+    POR QUE ISTO EXISTE
+    -------------------
+    A tatica de jogo so distingue "o eleito e os outros". Ela reage a bola, nao
+    joga: nao existe 'eles estao com a bola', 'a bola esta solta', 'nos temos a
+    posse'. Sem separar os casos nao da para dar papel a ninguem - e sem medir
+    quanto tempo o jogo passa em cada um, nao da para saber quais casos valem a
+    pena tratar primeiro.
+
+    CRITERIO, todo geometrico e sem estado:
+      - DOMINIO: robo a menos de RAIO_POSSE da bola. Contato fisico acontece a
+        111 mm (raio do robo 90 + raio da bola 21,5); 250 mm cobre "esta com
+        ela" sem exigir toque perfeito, que a visao com ruido nao confirma.
+      - NOSSA / DELES / DISPUTA / SOLTA, nessa ordem de prioridade.
+
+    Uso:  ./ararabots.sh posse [n]     (n replays recentes de 'jogo', padrao 6)
+    """
+    import glob as _glob
+
+    RAIO_POSSE = 250.0
+    quantos = int(sys.argv[2]) if len(sys.argv) > 2 else 6
+    pasta = _pasta_replays_padrao()
+    arqs = sorted(_glob.glob(os.path.join(pasta, "jogo__*.html")),
+                  key=os.path.getmtime)[-quantos:]
+    if not arqs:
+        print("   XX nenhum replay de 'jogo' em %s" % pasta)
+        return 1
+
+    import collections
+    total = collections.Counter()
+    campo = collections.Counter()
+    amostras = 0
+    for arq in arqs:
+        D = _ler_replay(arq)
+        for fr in (D.get("quadros") or []):
+            b = fr["b"]
+            nossos = fr.get("r") or []
+            deles = fr.get("y") or []
+            if not nossos:
+                continue
+            dn = min((math.hypot(b[0] - r[1], b[1] - r[2]) for r in nossos),
+                     default=9e9)
+            dd = min((math.hypot(b[0] - a[1], b[1] - a[2]) for a in deles),
+                     default=9e9)
+            amostras += 1
+            if dn <= RAIO_POSSE and dd <= RAIO_POSSE:
+                estado = "DISPUTA"
+            elif dn <= RAIO_POSSE:
+                estado = "NOSSA"
+            elif dd <= RAIO_POSSE:
+                estado = "DELES"
+            else:
+                estado = "SOLTA"
+            total[estado] += 1
+            # onde a bola esta: nosso campo (x<0) ou o deles
+            campo[(estado, "ataque" if b[0] > 0 else "defesa")] += 1
+
+    if not amostras:
+        print("   XX replays sem quadros utilizaveis")
+        return 1
+
+    print("   %d replays de 'jogo', %d quadros" % (len(arqs), amostras))
+    print()
+    print("   SITUACAO         tempo      no nosso campo   no campo deles")
+    for estado in ("NOSSA", "DELES", "DISPUTA", "SOLTA"):
+        n = total[estado]
+        if not n:
+            continue
+        print("   %-14s %5.0f%%      %11.0f%%   %13.0f%%"
+              % (estado, 100.0 * n / amostras,
+                 100.0 * campo[(estado, "defesa")] / n,
+                 100.0 * campo[(estado, "ataque")] / n))
+    print()
+    print("   (posse = alguem a menos de %.0f mm da bola; contato fisico e 111 mm)"
+          % RAIO_POSSE)
     return 0
 
 
@@ -3816,6 +4224,8 @@ if __name__ == "__main__":
     elif acao == "sonda":    sys.exit(_ferramenta_sonda())
     elif acao == "mov-bruto": sys.exit(_ferramenta_mov_bruto())
     elif acao == "painel":   sys.exit(_ferramenta_painel())
+    elif acao == "narrar": sys.exit(_ferramenta_narrar())
     elif acao == "jogo-analise": sys.exit(_ferramenta_jogo_analise())
+    elif acao == "posse":    sys.exit(_ferramenta_posse())
     else:
         print(__doc__); sys.exit(2)

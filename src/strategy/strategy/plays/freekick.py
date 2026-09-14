@@ -1,4 +1,5 @@
 from system_interfaces.msg._game_state import GameState
+from strategy.plays.estado_jogo import EstadoJogo
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
 from system_interfaces.srv import GetGameConfig
 import time
@@ -16,7 +17,7 @@ class CheckState(LeafNode):
         super().__init__(name)
         self.desired_states = _desired_states
         self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
 
     def game_state_callback(self, msg: GameState):
         self.referee_command = msg.referee.command
@@ -30,7 +31,7 @@ class CheckIfOurFreekick(LeafNode):
         super().__init__(name)
         self.is_team_color_yellow = None
         self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
         self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
         self._get_color_future = None
         self._pedido_em = 0.0
@@ -101,7 +102,7 @@ class _AcaoFreekick(LeafNode):
         self.balls = []
         self.medidas = MedidasCampo()          # padrao Division B
         self.on_positive_half = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
         self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
         self._get_color_future = None
         self._pedido_em = 0.0

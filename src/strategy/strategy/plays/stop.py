@@ -1,5 +1,6 @@
 from system_interfaces.srv import GetGameConfig
 from system_interfaces.msg._game_state import GameState
+from strategy.plays.estado_jogo import EstadoJogo
 from strategy.skills.skills import Skills
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
 from strategy.tatics.stop import goAwayFromBall
@@ -13,7 +14,7 @@ class CheckState(LeafNode):
         super().__init__(name)
         self.desired_states = _desired_states
         self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
 
     def game_state_callback(self, msg: GameState):
         self.referee_command = msg.referee.command
@@ -31,7 +32,7 @@ class CheckDistance(LeafNode):
         super().__init__(name)
         self.ally_robots = None
         self.ball = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = msg.ally_robots
@@ -66,7 +67,7 @@ class KeepPosition(LeafNode):
     def __init__(self, name):
         super().__init__(name)
         self.ally_robots = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}
@@ -81,7 +82,7 @@ class GetoffBall(LeafNode):
         super().__init__(name)
         self.ally_robots = None
         self.ball = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
         self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
         self.on_positive_half = None
         self._get_half_future = None
@@ -132,7 +133,7 @@ class Stop(Sequence):
         super().__init__(name, [])
         self.ally_robots = None
         self.ball = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
 
         game_state_is_stop = CheckState("game_state_is_stop", ["STOP"])
 

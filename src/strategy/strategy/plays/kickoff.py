@@ -1,4 +1,5 @@
 from system_interfaces.msg._game_state import GameState
+from strategy.plays.estado_jogo import EstadoJogo
 from strategy.behaviour import LeafNode, Selector, Sequence, TaskStatus
 from system_interfaces.srv import GetGameConfig
 from strategy.tatics.kickoff import OurKickoff, TheirKickoff
@@ -9,15 +10,32 @@ class CheckState(LeafNode):
         super().__init__(name)
         self.desired_states = _desired_states
         self.referee_command = None
-        self.create_subscription(
-            GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
 
     def game_state_callback(self, msg: GameState):
         self.referee_command = msg.referee.command
 
     def run(self):
         if self.referee_command is None:
-            return TaskStatus.RUNNING, None
+            # SEM COMANDO DO ARBITRO -> FAILURE, NUNCA RUNNING.
+            #
+            # BUG QUE ISTO CORRIGE, e era o maior de todos. O RootTree e um
+            # Selector, e Selector para no primeiro filho que nao devolve
+            # FAILURE - RUNNING inclusive. O Kickoff vem ANTES do NormalStart.
+            # Entao, sempre que o 'game_state' falhava, este RUNNING bloqueava
+            # a arvore e o NormalStart nunca rodava: o time inteiro ficava
+            # imovel, sem uma linha de log dizendo por que.
+            #
+            # Medido no replay: nossos robos deslocaram 2, 4 e 4 mm em 24,5 s,
+            # enquanto o adversario - comandado direto no grSim pela ferramenta,
+            # sem passar pela arvore - andava 1500 mm. A cadeia de movimento
+            # estava boa o tempo todo ('mov-bruto': 3448 mm -> 3 mm, CHEGOU).
+            # Era a arvore que nunca chegava a pedir nada.
+            #
+            # Nao saber o comando nao e razao para impedir TODAS as jogadas
+            # seguintes. FAILURE deixa o Selector seguir; se for mesmo kickoff,
+            # o proximo ciclo (58 Hz) corrige.
+            return TaskStatus.FAILURE, None
         return (TaskStatus.SUCCESS, None) if self.referee_command in self.desired_states else (TaskStatus.FAILURE, None)
 
 
@@ -26,8 +44,7 @@ class CheckIfOurKickoff(LeafNode):
         super().__init__(name)
         self.is_team_color_yellow = None
         self.referee_command = None
-        self.create_subscription(
-            GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
         self.game_config_client = self.create_client(
             GetGameConfig, "get_game_config")
         self._get_color_future = None
@@ -73,8 +90,7 @@ class OurKickoffAction(LeafNode):
         super().__init__(name)
         self.ally_robots = {}
         self.on_positive_half = None
-        self.create_subscription(
-            GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
         self.game_config_client = self.create_client(
             GetGameConfig, "get_game_config")
         self._get_color_future = None
@@ -122,8 +138,7 @@ class TheirKickoffAction(LeafNode):
         super().__init__(name)
         self.ally_robots = {}
         self.on_positive_half = None
-        self.create_subscription(
-            GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
         self.game_config_client = self.create_client(
             GetGameConfig, "get_game_config")
         self._get_color_future = None

@@ -1,4 +1,5 @@
 from system_interfaces.msg import GameState
+from strategy.plays.estado_jogo import EstadoJogo
 from strategy.behaviour import Sequence, LeafNode, TaskStatus
 from strategy.tatics.halt import HaltAction
 
@@ -8,7 +9,7 @@ class checkState(LeafNode):
         super().__init__(name)
         self.desired_states = _desired_states
         self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
 
     def game_state_callback(self, msg: GameState):
         self.referee_command = msg.referee.command
@@ -26,7 +27,7 @@ class HaltActionNode(LeafNode):
         super().__init__(name)
 
         self.ally_robots = {}
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
 
     def game_state_callback(self, msg: GameState):
         self.ally_robots = {r.id: r for r in msg.ally_robots}

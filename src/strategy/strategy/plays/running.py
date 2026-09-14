@@ -2,7 +2,9 @@ import os
 
 from utils.math_util import Vector2D
 from strategy.behaviour import Selector, Sequence, LeafNode, TaskStatus
+import os
 from system_interfaces.msg._game_state import GameState
+from strategy.plays.estado_jogo import EstadoJogo
 from system_interfaces.srv import GetGameConfig
 from strategy.tatics.running import Atack, Defense
 
@@ -12,12 +14,15 @@ class CheckState(LeafNode):
         super().__init__(name)
         self.desired_states = desired_states
         self.referee_command = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
 
     def game_state_callback(self, msg: GameState):
         self.referee_command = msg.referee.command
 
     def run(self):
+        if os.environ.get("DIAG_JOGO"):
+            print("[JG] CheckState cmd=%r espera=%s" %
+                  (self.referee_command, self.desired_states), flush=True)
         return (
             (TaskStatus.SUCCESS, None)
             if self.referee_command in self.desired_states
@@ -30,7 +35,7 @@ class CheckAtack(LeafNode):
         super().__init__(name)
         self.ball = None
         self.on_positive_half = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
         self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
         self._get_half_future = None
         self._config_timer = self.create_timer(0.5, self._request_half_once)
@@ -109,10 +114,14 @@ class CheckAtack(LeafNode):
 class AtackAction(LeafNode):
     def __init__(self, name):
         super().__init__(name)
+        # Estado que sobrevive entre ciclos. Ver alvo_do_chute: sem ele o alvo
+        # do passe e reescolhido a cada quadro, a linha bola->apoio gira, e o
+        # portador persegue um ponto que nao espera - nunca chega a angular.
+        self.estado = {}
         self.ally_robots = None
         self.enemy_robots = None
         self.on_positive_half = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
         self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
         self._config_timer = self.create_timer(0.5, self._request_half_once)
         self._get_half_future = None
@@ -162,6 +171,7 @@ class AtackAction(LeafNode):
             enemy_robots=self.enemy_robots,
             ball=self.ball,
             on_positive_half=self.on_positive_half,
+            estado=self.estado,
         )
 
         return TaskStatus.SUCCESS, atacker.execute()
@@ -170,10 +180,14 @@ class AtackAction(LeafNode):
 class DefenseAction(LeafNode):
     def __init__(self, name):
         super().__init__(name)
+        # Estado que sobrevive entre ciclos. Ver alvo_do_chute: sem ele o alvo
+        # do passe e reescolhido a cada quadro, a linha bola->apoio gira, e o
+        # portador persegue um ponto que nao espera - nunca chega a angular.
+        self.estado = {}
         self.ally_robots = None
         self.enemy_robots = None
         self.on_positive_half = None
-        self.create_subscription(GameState, "game_state", self.game_state_callback, 10)
+        EstadoJogo.registrar(self, self.game_state_callback)
         self.game_config_client = self.create_client(GetGameConfig, "get_game_config")
         self._config_timer = self.create_timer(0.5, self._request_half_once)
         self._get_half_future = None
@@ -237,6 +251,8 @@ class DefenseAction(LeafNode):
             ally_robots=self.ally_robots,
             ball=self.ball,
             on_positive_half=self.on_positive_half,
+            enemy_robots=self.enemy_robots,
+            estado=self.estado,
         )
 
         return TaskStatus.SUCCESS, defensor.execute()

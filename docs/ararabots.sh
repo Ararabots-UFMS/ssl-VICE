@@ -169,7 +169,7 @@ DDS_ENV=""
 [ -n "${MOVIMENTO_ANTIGO:-}" ] && MOVIMENTO_NOVO=""
 export MOVIMENTO_NOVO
 
-ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 # GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
 #
 # O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
@@ -185,7 +185,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -289,7 +289,25 @@ portao_medicao() {
         cmd_grsim --headless >/dev/null 2>&1
     fi
 
-    if ! pgrep -x grSim >/dev/null; then
+    # 1-B. O ARBITRO PRECISA ESTAR PUBLICANDO UM COMANDO.
+    #
+    # O ssl-game-controller cai sozinho. Quando isso acontece, o referee_node
+    # segue de pe escutando o multicast e publica comando VAZIO - e a arvore,
+    # corretamente, recusa todas as jogadas: o CheckState espera FORCE_START ou
+    # NORMAL_START e recebe ''. O time inteiro congela.
+    #
+    # O sintoma no replay e indistinguivel de tatica ruim: a bola para em
+    # x=-1085 porque BATE no nosso robo 1 parado onde nasceu, e o relatorio diz
+    # "nenhum chute nosso". Isto queimou QUATRO lotes desta fase, e em dois eu
+    # reportei o resultado como se fosse da tatica antes de conferir o log.
+    #
+    # 1328 ciclos com cmd='' foi a ultima vez. Agora o lote nao roda.
+    # O arbitro e o container 'ssl-gc' e responde na 8081. Conferir por curl e
+    # mais confiavel que pgrep: 'pgrep -f ssl-game-controller' casa com qualquer
+    # shell que mencione o nome, inclusive o proprio comando que faz a checagem.
+    if ! curl -sf -o /dev/null --max-time 3 http://localhost:8081/; then
+        motivo="o arbitro (ssl-gc) nao responde na 8081 - ele publica comando vazio e a arvore recusa TODAS as jogadas"
+    elif ! pgrep -x grSim >/dev/null; then
         motivo="o grSim nao esta rodando"
     elif ! ps -o args= -C grSim 2>/dev/null | grep -q -- --headless; then
         echo "   ! grSim em modo JANELA: mantenha a janela visivel e sem nada"
@@ -531,6 +549,7 @@ cmd_parar() {
     fi
 
     echo ">> Parando containers..."
+    local c
     for c in ssl-gc ssl-gui vice; do
         if [ -n "$(docker ps -q -f name=^${c}$)" ]; then
             docker stop "$c" >/dev/null && echo "   $c parado"
@@ -545,6 +564,35 @@ cmd_parar() {
 
 
 # ============================================================================
+# QUANTOS ROBOS O CENARIO EXIGE.
+#
+# Era so ARARABOTS_ROBOS, lido uma vez dentro do 'preparar'. Quem rodasse
+# 'validar jogo' com o ambiente ja de pe herdava o que estivesse no XML - e o
+# 'jogo' rodou medido ora com 3 de linha, ora com 2, sem nada dizer qual. Dois
+# de linha nao permitem papeis (o 0 e sempre goleiro), entao metade dos lotes
+# mediu uma estrategia que nem existia naquela execucao.
+#
+# Agora o numero vem do CENARIO e e garantido em toda montagem.
+robos_do_cenario() {
+    case "$1" in
+        jogo) echo 4 ;;                      # goleiro + TRES de linha
+        *)    echo "${ARARABOTS_ROBOS:-3}" ;;
+    esac
+}
+
+garantir_robos() {
+    local alvo="${1:-3}"
+    [ -f ~/.grsim.xml ] || return 0
+    grep -q "Robots Count" ~/.grsim.xml || return 0
+    local n_rob
+    n_rob="$(grep -A1 'Robots Count' ~/.grsim.xml | tail -1 | tr -d ' \t')"
+    [ "$n_rob" = "$alvo" ] && return 0
+    # o grSim reescreve o XML ao sair: so vale mexer com ele parado
+    pgrep -x grSim >/dev/null && { pkill -x grSim; sleep 2; }
+    perl -0pi -e "s|(<Var name=\"Robots Count\"[^>]*>\s*\n\s*)\d+|\${1}$alvo|" ~/.grsim.xml
+    ok "robos por time: $alvo (eram $n_rob)"
+}
+
 cmd_preparar() {
     # JANELA E O PADRAO - o Felipe roda para ASSISTIR o resultado.
     #
@@ -723,15 +771,7 @@ cmd_preparar() {
     #
     # ATENCAO ao subir: cada robo a mais custa FPS do grSim e CPU do controle, e
     # ja medimos que carga alta destroi o rastreio. Confira o portao de medicao.
-    ROBOS_TIME="${ARARABOTS_ROBOS:-3}"
-    if [ -f ~/.grsim.xml ] && grep -q "Robots Count" ~/.grsim.xml; then
-        n_rob="$(grep -A1 'Robots Count' ~/.grsim.xml | tail -1 | tr -d ' \t')"
-        if [ "$n_rob" != "$ROBOS_TIME" ]; then
-            pgrep -x grSim >/dev/null && { pkill -x grSim; sleep 2; }
-            perl -0pi -e "s|(<Var name=\"Robots Count\"[^>]*>\s*\n\s*)\d+|\${1}$ROBOS_TIME|" ~/.grsim.xml
-            ok "robos por time: $ROBOS_TIME (eram $n_rob)"
-        fi
-    fi
+    garantir_robos "$(robos_do_cenario "${CENARIO_ALVO:-}")"
 
     if [ -f ~/.grsim.xml ]; then
         comp="$(sed -n '30p' ~/.grsim.xml | tr -d ' \t')"
@@ -1102,8 +1142,28 @@ cmd_validar() {
 
     [ ${#LISTA[@]} -gt 0 ] && CENARIOS=("${LISTA[@]}")
     [ -f "$SAIDA" ] || echo "cenario,rep,gol,chute_pedido,disparou,hz_controle,rastreio_med,rastreio_p90,janela_abriu,janela_armada,v_saida_mms,xx,yy,percorreu,bola_ini_x,bola_ini_y,bola_fim_x,bola_fim_y,andou,load" > "$SAIDA"
-    for c in "${CENARIOS[@]}"; do
+    # NOME PROPRIO PARA A VARIAVEL DO LACO.
+    #
+    # Era 'c'. O cmd_parar, chamado aqui dentro na remontagem, faz
+    # 'for c in ssl-gc ssl-gui vice' - e em bash isso e GLOBAL. Ao voltar, o
+    # laco continuava com c="vice" e o lote inteiro ia para o CSV como cenario
+    # "vice,1,ERRO", sem replay nenhum. O sintoma era identico a "a tatica nao
+    # encostou na bola", e foi lido assim uma vez.
+    for _cen in "${CENARIOS[@]}"; do
+        c="$_cen"
         echo "############ $c"
+        # O CENARIO manda na contagem de robos, nao o ambiente herdado.
+        # Se o XML nao bate, o grSim precisa reiniciar - so o 'preparar' faz
+        # isso com seguranca, entao remontamos o ambiente inteiro uma vez.
+        export CENARIO_ALVO="$c"
+        _alvo_rob="$(robos_do_cenario "$c")"
+        _tem_rob="$(grep -A1 'Robots Count' ~/.grsim.xml 2>/dev/null | tail -1 | tr -d ' \t')"
+        if [ -n "$_tem_rob" ] && [ "$_tem_rob" != "$_alvo_rob" ]; then
+            echo "   robos por time: $_tem_rob -> $_alvo_rob (o cenario exige); remontando"
+            cmd_parar >/dev/null 2>&1
+            cmd_preparar --headless >/dev/null 2>&1 || {
+                echo "   XX nao consegui remontar com $_alvo_rob robos"; continue; }
+        fi
         for i in $(seq 1 "$N"); do
             cmd_cenario "$c" >/dev/null 2>&1
             st=$?
@@ -1710,7 +1770,9 @@ case "${1:-menu}" in
     ajustes)   shift; cmd_ajustes "$@" ;;
     sonda)     shift; python3 "$PY" sonda "$@" ;;
     painel)    shift; python3 "$PY" painel "$@" ;;
+    narrar)   shift; python3 "$PY" narrar "$@" ;;
     jogo-analise) shift; python3 "$PY" jogo-analise "$@" ;;
+    posse)     shift; python3 "$PY" posse "$@" ;;
     mov-bruto) shift; docker cp "$PY" vice:/tmp/ararabots.py >/dev/null 2>&1
                MOVIMENTO_NOVO=1 ros_run "python3 /tmp/ararabots.py mov-bruto $*" ;;
     menu)      cmd_menu ;;
