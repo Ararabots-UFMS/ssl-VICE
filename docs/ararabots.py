@@ -3651,6 +3651,82 @@ disso nao vale.
 
 
 
+def _ferramenta_sonda_chute():
+    """Segue o COMANDO DE CHUTE ao longo da cadeia, ate o grSim.
+
+    POR QUE ISTO EXISTE
+    -------------------
+    A estrategia arma o chute ('arma=True' no DIAG_JOGO) dezenas de vezes por
+    partida, o robo chega a 92-96 mm da bola - dentro da janela de disparo do
+    grSim, que exige o centro da bola a ate ~104,5 mm - e NENHUM disparo sai.
+    O adversario, comandado direto no simulador, dispara a 105 mm.
+
+    Entre a nossa ordem e o chutador ha esta cadeia:
+
+        strategy --update_kick--> control --commandTopic--> grsim_messenger
+
+    Sondas avulsas por 'docker exec' deram medidas erradas (viam zero mensagem
+    em topicos que existiam), entao a sonda vive aqui, no mesmo caminho que
+    todos os outros testes usam.
+
+    Uso:  ./ararabots.sh sonda-chute [segundos]
+          (rode um cenario em outro terminal, ou logo apos 'cenario jogo')
+    """
+    segundos = float(sys.argv[2]) if len(sys.argv) > 2 else 25.0
+    rclpy.init()
+    no = Node("sonda_chute")
+    est = {"cmd": 0, "ref": 0, "kick_pos": 0, "kick_max": 0.0, "robos": set()}
+
+    def _cmd(m):
+        est["cmd"] += 1
+        for r in m.robots:
+            est["robos"].add(int(r.robot_id))
+            k = float(r.kick)
+            if k > 0.0:
+                est["kick_pos"] += 1
+            est["kick_max"] = max(est["kick_max"], k)
+
+    def _ref(m):
+        est["ref"] += 1
+
+    no.create_subscription(TeamCommand, "commandTopic", _cmd, 10)
+    try:
+        from movement_interfaces.msg import TrajectoryPoint as _TP
+        no.create_subscription(_TP, "movement_tracker/control_reference",
+                               _ref, 10)
+    except Exception:
+        pass
+
+    t0 = time.time()
+    while time.time() - t0 < segundos:
+        rclpy.spin_once(no, timeout_sec=0.05)
+    dur = max(time.time() - t0, 0.001)
+
+    print()
+    print("   CADEIA DO CHUTE, em %.0f s" % dur)
+    print("   %-34s %6.1f Hz" % ("movement_tracker/control_reference",
+                                 est["ref"] / dur))
+    print("   %-34s %6.1f Hz   robos=%s"
+          % ("commandTopic", est["cmd"] / dur, sorted(est["robos"])))
+    print("   %-34s %6d amostras   maior valor=%.1f"
+          % ("kick > 0 no commandTopic", est["kick_pos"], est["kick_max"]))
+    print()
+    if est["cmd"] == 0:
+        print("   >> O commandTopic esta MUDO: nada chega ao grSim por aqui.")
+        print("      control.py so publica se 'control_references' nao estiver")
+        print("      vazio (control.py:120) - ou seja, so enquanto o rastreador")
+        print("      emite referencia para o robo.")
+    elif est["kick_pos"] == 0:
+        print("   >> O commandTopic publica, mas o KICK nunca sai positivo:")
+        print("      o problema esta entre 'update_kick' e o kick_cache.")
+    else:
+        print("   >> O chute CHEGA ao grSim. Se nao dispara, e geometria:")
+        print("      bola a mais de ~104,5 mm do centro, ou fora da face.")
+    no.destroy_node()
+    rclpy.shutdown()
+    return 0
+
+
 def _ferramenta_narrar():
     """NARRA o replay quadro a quadro: o que aconteceu, em ordem, e por quem.
 
@@ -3687,12 +3763,51 @@ def _ferramenta_narrar():
             continue
         print()
         print("   " + "=" * 68)
+        # CONTA OS ROBOS EM TODOS OS QUADROS, nao so no primeiro.
+        #
+        # Era 'len(Q[0]["r"]) - 1'. O rastreio perde robos em quadros isolados -
+        # medido: os quatro azuis aparecem em ~1345 de 1407 quadros, e o azul 3
+        # simplesmente nao esta no quadro 0. O relatorio dizia "2 de linha" e eu
+        # tratei tres lotes como contaminados por isso, procurando um defeito de
+        # simulacao que nao existia.
+        _ids = set()
+        for _f in Q:
+            for _r in _f.get("r", []):
+                _ids.add(_r[0])
         print("   %s   (%d quadros, %d de linha por time)"
-              % (os.path.basename(arq), len(Q), len(Q[0].get("r", [])) - 1))
+              % (os.path.basename(arq), len(Q), max(len(_ids) - 1, 0)))
         print("   " + "=" * 68)
 
         def _t(i):
             return Q[i].get("t", i / 60.0)
+
+        def _do_corpo(f, vx, vy):
+            """A bola saiu no eixo do corpo de alguem em contato?"""
+            saida = math.atan2(vy, vx)
+            b = f["b"]
+            for chave in ("r", "y"):
+                for r in f.get(chave, []):
+                    if math.hypot(r[1] - b[0], r[2] - b[1]) > 160.0:
+                        continue
+                    dif = abs((saida - r[3] + math.pi) % (2 * math.pi) - math.pi)
+                    if dif < 0.45:          # ~25 graus do eixo do corpo
+                        return True
+            return False
+
+        def _dono_chute(f, vx, vy):
+            """Quem disparou: contato + corpo alinhado com a saida da bola."""
+            saida = math.atan2(vy, vx)
+            b = f["b"]
+            melhor = (None, None, 9e9)
+            for time, chave in (("AZUL", "r"), ("AMARELO", "y")):
+                for r in f.get(chave, []):
+                    dd = math.hypot(r[1] - b[0], r[2] - b[1])
+                    if dd > 160.0:
+                        continue
+                    dif = abs((saida - r[3] + math.pi) % (2 * math.pi) - math.pi)
+                    if dif < 0.45 and dif < melhor[2]:
+                        melhor = (time, r[0], dif)
+            return melhor
 
         def _dono(f):
             """(time, id, dist) do robo mais proximo da bola."""
@@ -3723,7 +3838,17 @@ def _ferramenta_narrar():
             _, _, v0 = _vel(i - 1)
 
             # CHUTE: a bola sai do repouso para velocidade alta junto de um robo
-            if v > 2000.0 and v0 < 600.0 and d < 400.0:
+            # ATRIBUICAO POR EIXO DO CORPO, nao por proximidade.
+            #
+            # BUG QUE ISTO CORRIGE: o chute era atribuido ao robo mais proximo
+            # dentro de 400 mm. Se um adversario chutava e um robo nosso estava
+            # mais perto naquele quadro, o relatorio dizia "CHUTE AZUL" - e eu
+            # reportei tres vezes como avanco nosso o que era chute deles.
+            #
+            # O disparo do grSim sai no EIXO DO CORPO (robot.cpp:157). Uma
+            # trombada sai na linha robo->bola. Entao o dono do chute e quem
+            # tem o corpo alinhado com a saida da bola E esta em contato.
+            if v > 2000.0 and v0 < 600.0 and d < 400.0 and _do_corpo(Q[i - 1], vx, vy):
                 # ate onde ela foi antes de parar ou ser tocada de novo
                 j = i
                 while j + 1 < len(Q) and _vel(j + 1)[2] > MOVE:
@@ -3733,6 +3858,11 @@ def _ferramenta_narrar():
                 dxt = Q[j]["b"][0] - Q[i - 1]["b"][0]
                 rumo = ("para o gol DELES" if dxt > 150 else
                         "para o NOSSO gol" if dxt < -150 else "para o lado")
+                # o contato se ve no quadro ANTERIOR: no quadro do
+                # salto de velocidade a bola ja saiu do chutador.
+                _tm, _rd, _ = _dono_chute(Q[i - 1], vx, vy)
+                time = _tm if _tm is not None else time
+                rid = _rd if _rd is not None else rid
                 eventos.append((_t(i), "CHUTE", time, rid,
                                 "%4.0f mm/s, andou %4.0f mm %s, parou em x=%+5.0f y=%+5.0f"
                                 % (v, perc, rumo, Q[j]["b"][0], Q[j]["b"][1])))
@@ -4224,6 +4354,7 @@ if __name__ == "__main__":
     elif acao == "sonda":    sys.exit(_ferramenta_sonda())
     elif acao == "mov-bruto": sys.exit(_ferramenta_mov_bruto())
     elif acao == "painel":   sys.exit(_ferramenta_painel())
+    elif acao == "sonda-chute": sys.exit(_ferramenta_sonda_chute())
     elif acao == "narrar": sys.exit(_ferramenta_narrar())
     elif acao == "jogo-analise": sys.exit(_ferramenta_jogo_analise())
     elif acao == "posse":    sys.exit(_ferramenta_posse())

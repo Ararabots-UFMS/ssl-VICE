@@ -1770,6 +1770,7 @@ case "${1:-menu}" in
     ajustes)   shift; cmd_ajustes "$@" ;;
     sonda)     shift; python3 "$PY" sonda "$@" ;;
     painel)    shift; python3 "$PY" painel "$@" ;;
+    sonda-chute) shift; ros_run "python3 /tmp/ararabots.py sonda-chute $*" ;;
     narrar)   shift; python3 "$PY" narrar "$@" ;;
     jogo-analise) shift; python3 "$PY" jogo-analise "$@" ;;
     posse)     shift; python3 "$PY" posse "$@" ;;
