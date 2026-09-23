@@ -1,3 +1,4 @@
+import math
 from typing import Dict, Optional
 
 import rclpy
@@ -84,14 +85,20 @@ class MovementPlanner(Node):
         if self.cur_targets is None or self.game_state is None:
             return
 
+        # The overhead anchor is judged fresh as of the moment the plan is REQUESTED,
+        # not when a worker picks it up. There is one worker thread, so under load a
+        # task can sit in the queue for longer than overhead_max_age and arrive with
+        # its anchor already expired, dropping every robot onto the vision fallback.
+        requested_sec = self.get_clock().now().nanoseconds / 1e9
+
         for target in self.cur_targets.targets:
             rid = target.robot_id
-            
+
             # THROTTLING: If a task is already running for this robot, skip this cycle
             if rid in self.active_futures and not self.active_futures[rid].done():
                 continue
 
-            future = self.par_executor.submit(self.plan_for_robot, target)
+            future = self.par_executor.submit(self.plan_for_robot, target, requested_sec)
             self.active_futures[rid] = future
             future.add_done_callback(self.make_publish_callback(rid))
 
@@ -139,6 +146,28 @@ class MovementPlanner(Node):
             Vector2D(state.velocity.x, state.velocity.y),
         )
 
+    def _cap_speed_with_overhead(self, robot_id: int, state: MotionState) -> MotionState:
+        """Cap a vision-derived start speed with the last overhead prediction.
+
+        The overhead point may be too old to plan from, but it still tracks the
+        braking profile, so it is a better upper bound on the current speed than a
+        lagging vision sample.
+        """
+        overhead = self.cur_overhead_points.get(robot_id)
+        if overhead is None:
+            return state
+
+        speed = math.hypot(state.velocity.x, state.velocity.y)
+        reference_speed = math.hypot(overhead.vel.x, overhead.vel.y)
+        if speed <= reference_speed or speed < 1e-6:
+            return state
+
+        scale = reference_speed / speed
+        return MotionState(
+            state.position,
+            Vector2D(state.velocity.x * scale, state.velocity.y * scale),
+        )
+
     def _is_parked(self, robot_id: int, goal_pos: Vector2D, measured_pos: Vector2D) -> bool:
         radius = float(self.get_parameter('accept_radius').value)
         parked_at = self._parked.get(robot_id)
@@ -157,9 +186,9 @@ class MovementPlanner(Node):
             return True
         return False
 
-    def plan_for_robot(self, target):
+    def plan_for_robot(self, target, requested_sec: Optional[float] = None):
         robot_id = target.robot_id
-        
+
         init_pos = Vector2D(target.initial_pos.x, target.initial_pos.y)
         goal_pos = Vector2D(target.target_pos.x, target.target_pos.y)
 
@@ -167,12 +196,14 @@ class MovementPlanner(Node):
             return None
 
         now_sec = self.get_clock().now().nanoseconds / 1e9
+        if requested_sec is None:
+            requested_sec = now_sec
         initial_state = None
         handoff_stamp = None
 
         if robot_id in self.cur_overhead_points:
             overhead_point = self.cur_overhead_points[robot_id]
-            age = now_sec - overhead_point.wall_stamp
+            age = requested_sec - overhead_point.wall_stamp
             max_age = float(self.get_parameter('overhead_max_age').value)
             max_future = float(self.get_parameter('overhead_max_future').value)
 
@@ -193,6 +224,11 @@ class MovementPlanner(Node):
         # for the planner's measured/configured handoff latency.
         if initial_state is None:
             vision_state, vision_stamp = self._state_from_vision(target)
+            # Vision velocity lags reality while the robot is braking, so carrying it
+            # forward hands the solver more speed than the robot really has - the same
+            # overshoot the branch above documents. The last overhead prediction does
+            # follow the braking profile, so use it as a ceiling on the start speed.
+            vision_state = self._cap_speed_with_overhead(robot_id, vision_state)
             latency = max(
                 0.0,
                 float(self.get_parameter('vision_handoff_latency').value),
