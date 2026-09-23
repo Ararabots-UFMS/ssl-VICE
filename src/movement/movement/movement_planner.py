@@ -25,6 +25,8 @@ from utils.math_util import Vector2D
 PARK_RELEASE_FACTOR = 2.0
 GOAL_MOVED_EPSILON = 1.0
 MAX_VISION_AGE = 0.2
+# How old the overhead point may be and still bound the current speed.
+OVERHEAD_SPEED_CAP_MAX_AGE = 0.2
 
 class MovementPlanner(Node):
     def __init__(self):
@@ -146,7 +148,9 @@ class MovementPlanner(Node):
             Vector2D(state.velocity.x, state.velocity.y),
         )
 
-    def _cap_speed_with_overhead(self, robot_id: int, state: MotionState) -> MotionState:
+    def _cap_speed_with_overhead(
+        self, robot_id: int, state: MotionState, now_sec: float
+    ) -> MotionState:
         """Cap a vision-derived start speed with the last overhead prediction.
 
         The overhead point may be too old to plan from, but it still tracks the
@@ -155,6 +159,11 @@ class MovementPlanner(Node):
         """
         overhead = self.cur_overhead_points.get(robot_id)
         if overhead is None:
+            return state
+
+        # Past this it describes some earlier move, not the speed now. A robot that
+        # parked and set off again would otherwise be pinned to the stale zero.
+        if now_sec - overhead.wall_stamp > OVERHEAD_SPEED_CAP_MAX_AGE:
             return state
 
         speed = math.hypot(state.velocity.x, state.velocity.y)
@@ -228,7 +237,9 @@ class MovementPlanner(Node):
             # forward hands the solver more speed than the robot really has - the same
             # overshoot the branch above documents. The last overhead prediction does
             # follow the braking profile, so use it as a ceiling on the start speed.
-            vision_state = self._cap_speed_with_overhead(robot_id, vision_state)
+            vision_state = self._cap_speed_with_overhead(
+                robot_id, vision_state, requested_sec
+            )
             latency = max(
                 0.0,
                 float(self.get_parameter('vision_handoff_latency').value),
