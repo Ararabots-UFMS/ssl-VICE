@@ -26,6 +26,13 @@ DEFAULT_PARAMS = {
     "divergence_frames": 3,
     "recovery_frames": 10,
     "divergence_timeout_frames": 120,
+    # As declared by the node, so the reprojection path behaves here as it does live.
+    "reprojection_enabled": True,
+    "reprojection_window_before": 0.30,
+    "reprojection_window_after": 0.50,
+    "reprojection_max_correction": 0.03,
+    "reprojection_min_position_error": 20.0,
+    "control_reference_topic": "movement_tracker/control_reference",
 }
 
 
