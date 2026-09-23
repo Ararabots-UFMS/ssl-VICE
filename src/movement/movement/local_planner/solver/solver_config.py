@@ -11,8 +11,8 @@ class SolverConfig:
     field_width: float = 9000.0
     # Magnitudes: MoveConstraints derives min = -max from them, so a negative value
     # inverts the bounds and breaks the trapezoidal steer. Rejected in __post_init__.
-    max_velocity: Vector2D = field(default_factory=lambda: Vector2D(2000.0, 2000.0))  # mm/s
-    max_acceleration: Vector2D = field(default_factory=lambda: Vector2D(1500.0, 1500.0)) # mm/s²
+    max_velocity: Vector2D = field(default_factory=lambda: Vector2D(2500.0, 2500.0))  # mm/s
+    max_acceleration: Vector2D = field(default_factory=lambda: Vector2D(3000.0, 3000.0)) # mm/s²
     continuity_threshold: float = 1e-3
     # How much faster a newly sampled bypass must be to replace the previous one.
     bypass_cost_margin: float = 0.15
