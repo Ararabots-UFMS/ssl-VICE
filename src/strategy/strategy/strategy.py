@@ -1,4 +1,5 @@
 import os
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -74,6 +75,27 @@ class Strategy(Node):
             while not self.kick_cli.wait_for_service(timeout_sec=3.0):
                 self.get_logger().info('Aguardando serviço "kick_command"...')
 
+        # CONFIGURA O MANAGER ANTES DE COMECAR A COMANDAR.
+        #
+        # Era feito preguicosamente, no primeiro _send_move - ou seja, as duas
+        # chamadas de servico saiam NO MESMO CICLO da primeira publicacao de
+        # alvos, correndo com ela. E o proprio comentario de _configurar_manager
+        # avisa o que acontece nesse intervalo: sem _static_obstacles e
+        # _goal_keeper_id preenchidos, o _ready_to_publish() do MovementManager
+        # recusa, ele recebe os comandos e NAO publica alvo nenhum - sem erro,
+        # sem log, sem nada.
+        #
+        # MEDIDO (sonda [LG], cenario 'jogo'): no ciclo 1, t=0,000 apos o
+        # FORCE_START, a estrategia ja manda r1 para (-28,-7), que e a bola no
+        # centro, com o robo a 1172 mm dela. E o robo anda 3 mm em 0,6 s. O
+        # comando certo sai na hora certa e nao vira movimento.
+        #
+        # Aqui as duas chamadas acontecem na construcao, depois do
+        # wait_for_service dos dois servicos logo acima - entao quando o primeiro
+        # alvo for publicado o manager ja tem o que precisa.
+        if self.movimento_novo:
+            self._configurar_manager()
+
         self.timer = self.create_timer(0.1, self.run)
         self.root = RootTree("RootStrategy")
 
@@ -85,6 +107,57 @@ class Strategy(Node):
 
     def run(self):
         status, action = self.root.run()
+
+        # SONDA DA LARGADA (sai com DIAG_JOGO=1) - instrumentacao, nao comportamento.
+        #
+        # MEDIDO nos replays: os nossos robos so comecam a se mover entre 0,68 e
+        # 1,03 s (o goleiro aos 3,73 s), enquanto os amarelos partem aos 0,08 s.
+        # O adversario toca a bola aos 0,6-0,7 s e chuta: a partida esta decidida
+        # antes de o time sair do lugar.
+        #
+        # A pergunta que esta sonda responde, e que NAO da para responder por
+        # inferencia: a estrategia demorou a MANDAR, ou a cadeia demorou a
+        # EXECUTAR? Ela carimba o instante de cada ciclo, o status devolvido pela
+        # raiz, quantos comandos sairam, e o instante da primeira publicacao.
+        #
+        # So os primeiros ciclos interessam - depois disso o log vira ruido.
+        #
+        # Vai atras do DIAG_JOGO em vez de uma variavel propria: variavel lida
+        # pela ESTRATEGIA precisa ser exportada no 'ros_d' do ararabots.sh, que
+        # fica fora de src/strategy/. O DIAG_JOGO ja esta plumbado la.
+        # O ZERO DO TEMPO E A LARGADA, nao o inicio do no.
+        #
+        # A primeira versao desta sonda carimbava a partir do primeiro ciclo do
+        # strategyNode, que sobe MUITO antes do comando do arbitro - e mostrava
+        # 'comandos=4 desde t=0,001', que e verdade e nao responde nada: sob HALT
+        # a jogada Halt tambem devolve 4 comandos. O zero tem de ser o instante
+        # em que o arbitro manda comecar.
+        if os.environ.get("DIAG_JOGO"):
+            from strategy.plays.estado_jogo import EstadoJogo
+            _m = EstadoJogo.ultimo()
+            _cmd = None
+            if _m is not None:
+                _cmd = getattr(getattr(_m, "referee", None), "command", None)
+            if _cmd in ("FORCE_START", "NORMAL_START"):
+                if not hasattr(self, "_t0_largada"):
+                    self._t0_largada = time.monotonic()
+                    self._ciclo_largada = 0
+                self._ciclo_largada += 1
+                if self._ciclo_largada <= 25:
+                    n = 0
+                    if action is not None:
+                        n = len(action) if isinstance(action, Iterable) else 1
+                    _alvos = ""
+                    if action is not None and isinstance(action, Iterable):
+                        _alvos = " ".join(
+                            "r%d:(%.0f,%.0f)" % (s.robot_id, s.target_x or 0.0,
+                                                 s.target_y or 0.0)
+                            for s in action if hasattr(s, "robot_id"))
+                    print("[LG] ciclo=%d t=%.3f status=%s comandos=%d %s"
+                          % (self._ciclo_largada,
+                             time.monotonic() - self._t0_largada,
+                             getattr(status, "name", status), n, _alvos),
+                          flush=True)
 
         if action is None:
             return
@@ -127,11 +200,96 @@ class Strategy(Node):
             ) and self._obstaculos_mudaram(sk):
                 self._send_obstacles(sk)
 
+        # NAO SEGURE A PUBLICACAO PARA "EVITAR REPLANEJAMENTO". TESTADO, PIOROU.
+        #
+        # A hipotese era: publicamos a 10 Hz sem filtro, entao o planejador
+        # recebe alvo novo 10 vezes por segundo e reinicia o perfil de
+        # trajetoria - dai a rampa lenta medida na largada.
+        #
+        # MEDIDO, segurando a publicacao enquanto nenhum alvo andava mais que
+        # 50 mm (array sempre completo, reenvio de seguranca a cada 0,5 s):
+        #
+        #   control_reference       10 Hz        segurando
+        #     0,5-0,6 s             301 mm/s     85
+        #     0,7-0,8 s             551          317
+        #     0,9-1,0 s             767          102
+        #   velocidade real 1,1-1,2 323          83
+        #
+        # Piorou tudo, e a referencia passou a OSCILAR (397 -> 175 -> 253) em vez
+        # de subir: ela DECAI quando nao e renovada. A cadeia e construida em
+        # torno da republicacao continua - o MovementManager substitui a lista
+        # inteira a cada mensagem e so publica alvo para quem esta na ultima.
+        #
+        # De quebra, o portao de medicao do ararabots.sh barra o lote:
+        # "/movement_manager/commands a 1 Hz (minimo 8)". Ele esta certo - nao ha
+        # como distinguir "quieta de proposito" de "morrendo".
+        # TESTE A/B: UM ROBO SO COM MOVIMENTO, OUTRO COM A ESTRATEGIA.
+        # (bandeira /tmp/ararabots_ab)
+        #
+        # A PERGUNTA, do Felipe: a lentidao e da movimentacao ou da estrategia?
+        # Se for so da movimentacao, um robo indo de A para B com alvo FIXO deve
+        # ter a mesma velocidade e os mesmos erros de um robo comandado pela
+        # estrategia. Se o da estrategia for pior, o problema e como NOS mandamos
+        # o alvo - que muda a cada ciclo conforme a situacao oscila.
+        #
+        # POR QUE AQUI, e nao num publicador separado: o MovementManager faz
+        # 'self._movement_commands = msg.commands', ou seja, SUBSTITUI a lista a
+        # cada mensagem. Dois publicadores no mesmo topico se apagariam um ao
+        # outro e o teste mediria a briga, nao a diferenca. Saindo pelo mesmo
+        # array, os dois robos recebem comando no mesmo ciclo, pelo mesmo caminho.
+        #
+        # O robo 3 passa a fazer vaivem entre dois pontos fixos; os demais seguem
+        # com a estrategia normal. O alvo dele so muda quando ele CHEGA - que e
+        # o oposto do alvo da estrategia, que e reescrito todo ciclo.
+        if self.movimento_novo and self._lote_mov and os.path.exists("/tmp/ararabots_ab"):
+            # O COMPRIMENTO DO TRAJETO E PARAMETRO, e e o ponto do teste.
+            #
+            # A primeira rodada usou 6 m e o robo de alvo fixo ficou 45% mais
+            # rapido que os da estrategia. So que ele tinha 6 metros para
+            # acelerar e os outros perseguem alvos perto da bola - a diferenca
+            # podia ser so isso. Escrevendo um numero no arquivo-bandeira, o
+            # vaivem passa a ter esse comprimento em mm: com um trajeto CURTO,
+            # comparavel ao da estrategia, a comparacao fica honesta.
+            try:
+                _L = float(open("/tmp/ararabots_ab").read().strip() or 6000.0)
+            except Exception:
+                _L = 6000.0
+            _A, _B = (-_L / 2.0, 2000.0), (_L / 2.0, 2000.0)
+            _pos = getattr(self, "_ab_alvo", _B)
+            for _c in self._lote_mov:
+                if _c.robot_id == 3:
+                    _r = None
+                    _m = None
+                    try:
+                        from strategy.plays.estado_jogo import EstadoJogo
+                        _m = EstadoJogo.ultimo()
+                    except Exception:
+                        pass
+                    if _m is not None:
+                        for _rb in _m.ally_robots:
+                            if _rb.id == 3:
+                                _r = _rb
+                    if _r is not None:
+                        _d = ((_r.position_x - _pos[0]) ** 2
+                              + (_r.position_y - _pos[1]) ** 2) ** 0.5
+                        if _d < 300.0:                    # chegou: inverte
+                            _pos = _A if _pos == _B else _B
+                            self._ab_alvo = _pos
+                    self._ab_alvo = _pos
+                    _c.target_pos.x, _c.target_pos.y = _pos[0], _pos[1]
+                    if os.environ.get("DIAG_JOGO"):
+                        print("[AB] r3 alvo fixo=(%.0f,%.0f)" % _pos, flush=True)
+
         # UMA publicacao por ciclo, com o time inteiro. Ver _send_move.
         if self.movimento_novo and self._lote_mov:
             msg = self._MovementCommandArray()
             msg.commands = self._lote_mov
             self.mov_pub.publish(msg)
+            if os.environ.get("DIAG_JOGO") and not hasattr(self, "_1a_pub"):
+                self._1a_pub = time.monotonic()
+                print("[LG] PRIMEIRA PUBLICACAO t=%.3f robos=%s"
+                      % (self._1a_pub - getattr(self, "_t0_largada", self._1a_pub),
+                         [c.robot_id for c in self._lote_mov]), flush=True)
 
     # Quanto o alvo precisa andar para valer um novo pedido de replanejamento.
     # Abaixo disso e ruido de visao, nao intencao nova.

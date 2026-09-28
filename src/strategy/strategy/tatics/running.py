@@ -214,6 +214,33 @@ def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
     if not linha:
         return {}
 
+    # EXPERIMENTO A2-B: PAPEIS FIXOS POR ID (ARARABOTS_PAPEIS_FIXOS=1).
+    #
+    # Isola a ELEICAO e a HISTERESE de uma vez: o robo de menor id e sempre o
+    # buscador, o seguinte sempre o portador, o resto cobertura. Nada troca,
+    # nunca. Serve para responder se o custo esta na TROCA de papel - se o jogo
+    # ficar mais fluido assim, e a troca; se nao mudar nada, a histerese atual ja
+    # esta fazendo o trabalho e o custo esta noutro lugar.
+    #
+    # NAO E PARA FICAR: papeis fixos ignoram a geometria, entao na bola sobrando
+    # atras quem busca pode ser o mais distante - que e exatamente o defeito da
+    # largada que a inversao buscador-primeiro corrigiu.
+    # A bandeira e um ARQUIVO, nao uma variavel de ambiente: variavel lida pela
+    # ESTRATEGIA precisa ser exportada no 'ros_d' do ararabots.sh, que fica fora
+    # de src/strategy/. O proprio ararabots.sh ja usa arquivos em /tmp para
+    # estado (ex.: /tmp/ararabots_modo_grsim), entao o padrao nao e novo.
+    if (os.environ.get("ARARABOTS_PAPEIS_FIXOS")
+            or os.path.exists("/tmp/ararabots_papeis_fixos")):
+        papeis_fixos = {}
+        for i, rid in enumerate(linha):
+            if i == 0:
+                papeis_fixos[rid] = PAPEL_APOIO        # buscador
+            elif i == 1:
+                papeis_fixos[rid] = PAPEL_PORTADOR
+            else:
+                papeis_fixos[rid] = PAPEL_COBERTURA
+        return papeis_fixos
+
     def _adiantado(rid):
         return ally_robots[rid].position_x * sentido
 
@@ -242,6 +269,17 @@ def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
                            - _dist_bola(ally_robots[buscador], ball)
                            < VANTAGEM_TROCA):
                 buscador = ant
+        # T-3: QUAL TROCA CUSTA CARO. So log, nenhum comportamento muda.
+        #
+        # "a troca de papel custa" e grosso demais para virar correcao: trocar o
+        # portador com a bola longe e barato; trocar o BUSCADOR quando ele ja
+        # esta a meio caminho da bola joga fora a corrida inteira. O log registra
+        # a distancia do robo que SAI e do que ENTRA, no instante da troca, para
+        # a analise separar os dois casos.
+        if ant is not None and ant != buscador and os.environ.get("DIAG_JOGO"):
+            print("[TR] troca=buscador sai=r%s d_sai=%.0f entra=r%s d_entra=%.0f"
+                  % (ant, _dist_bola(ally_robots[ant], ball) if ant in ally_robots else -1,
+                     buscador, _dist_bola(ally_robots[buscador], ball)), flush=True)
         estado["buscador_ciclos"] = (
             estado.get("buscador_ciclos", 0) + 1 if buscador == ant else 0)
         estado["buscador"] = buscador
@@ -257,6 +295,10 @@ def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
             travado = estado.get("portador_ciclos", 0) < CICLOS_MIN_PAPEL
             if travado or _adiantado(portador) - _adiantado(ant) < VANTAGEM_TROCA:
                 portador = ant
+        if ant is not None and ant != portador and os.environ.get("DIAG_JOGO"):
+            print("[TR] troca=portador sai=r%s d_sai=%.0f entra=r%s d_entra=%.0f"
+                  % (ant, _dist_bola(ally_robots[ant], ball) if ant in ally_robots else -1,
+                     portador, _dist_bola(ally_robots[portador], ball)), flush=True)
         estado["portador_ciclos"] = (
             estado.get("portador_ciclos", 0) + 1 if portador == ant else 0)
         estado["portador"] = portador
@@ -600,6 +642,29 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
             return _no_campo(bx + ux * APOIO_AVANCO + px * APOIO_ABERTURA * lado,
                              by + uy * APOIO_AVANCO + py * APOIO_ABERTURA * lado) + (False,)
 
+        # BOLA JA CHUTADA: INTERCEPTA, NAO PERSEGUE.
+        #
+        # Este tratamento existia, mas ESCRITO DEPOIS DO 'return' do contorno,
+        # logo abaixo - codigo inalcancavel. O portador tinha a guarda
+        # (ver o ramo PORTADOR); o buscador nao.
+        #
+        # POR QUE IMPORTA: robot.cpp:168 SUBTRAI velocidade da bola no contato.
+        # Quem alcanca a bola em voo a FREIA. E o defeito que fez nascer o
+        # VEL_BOLA_CHUTADA - medimos a bola partindo a 5929 mm/s e andando
+        # 200 mm porque o proprio robo a alcancou e segurou.
+        #
+        # Com a bola viajando nao ha o que contornar: o lado por onde se chega
+        # deixa de ser escolha nossa e passa a ser a trajetoria dela. Mirar o
+        # ponto de interceptacao, e alem dele para nao chegar freando.
+        if bola_ja_saiu(ball):
+            _avanco_int = (AVANCO_SOLTA if situacao == SITUACAO_SOLTA
+                           else AVANCO_PORTADOR)
+            _fx, _fy = onde_a_bola_vai(ball, 0.5)
+            _dxp, _dyp = _fx - rx, _fy - ry
+            _np = hypot(_dxp, _dyp) or 1.0
+            return _no_campo(_fx + (_dxp / _np) * _avanco_int,
+                             _fy + (_dyp / _np) * _avanco_int) + (True,)
+
         # SOLTA, DELES, DISPUTA: vai na bola. Em movimento, ao ponto de
         # interceptacao, e sempre ALEM dele - frear em cima da bola foi o que
         # travou o portador antes (medido: um toque em 25 s, com o campo livre).
@@ -702,18 +767,6 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         _lat = LATERAL_CONTORNO * (1.0 - _t) * _lado * _c + VIES_LATERAL
         return _no_campo(bx + _ux_a * _off - _uy_a * _lat,
                          by + _uy_a * _off + _ux_a * _lat) + (True,)
-
-        avanco = AVANCO_SOLTA if situacao == SITUACAO_SOLTA else AVANCO_PORTADOR
-        if bola_ja_saiu(ball):
-            fx, fy = onde_a_bola_vai(ball, 0.5)
-            dxp, dyp = fx - rx, fy - ry
-            n_p = hypot(dxp, dyp) or 1.0
-            return _no_campo(fx + (dxp / n_p) * avanco,
-                             fy + (dyp / n_p) * avanco) + (True,)
-        dxp, dyp = bx - rx, by - ry
-        n_p = hypot(dxp, dyp) or 1.0
-        return _no_campo(bx + (dxp / n_p) * avanco,
-                         by + (dyp / n_p) * avanco) + (True,)
 
     # ------------------------------------------------------------ COBERTURA
     if papel == PAPEL_COBERTURA:

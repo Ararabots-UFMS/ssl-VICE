@@ -253,8 +253,24 @@ esperar_por() {          # esperar_por <teto_s> <descricao> <comando...>
 # a 100 Hz. Comparar a taxa da estrategia com o limiar do driver reprovava tudo.
 HZ_MIN_CONTROLE="${ARARABOTS_MIN_HZ:-8}"     # /control_command, timer e 100 Hz
 FPS_MIN_GRSIM="${ARARABOTS_MIN_FPS:-45}"      # fisica do grSim
+# Zumbis: o portao BLOQUEIA acima disto, nao so avisa.
+#
+# Eram so um aviso informativo no meio da saida, e por isso passavam batido:
+# medimos 142 num dia de testes sem que nada reprovasse. Zumbi isolado e
+# inofensivo (ja esta morto, esperando o pai recolher), mas uma centena deles
+# significa que a cadeia foi reiniciada dezenas de vezes no mesmo container -
+# e ai vale mais recriar do que seguir medindo em cima.
+#
+# Correcao de raiz, no arquivo do time: 'init: true' no servico vice do
+# docker-compose.yml poe o tini como PID 1, que recolhe orfaos.
+MAX_ZUMBIS="${ARARABOTS_MAX_ZUMBIS:-200}"
+# Onde o portao deixa o motivo do bloqueio, para o 'validar' registrar no CSV.
+# Ver F-1 em documentacao/strategy-analysis/duvidas-e-testes.md: o motivo existe,
+# e preciso, e se perdia porque o validar descarta a saida do cmd_cenario.
+MOTIVO_BLOQUEIO="/tmp/ararabots_motivo_bloqueio"
 portao_medicao() {
     local motivo=""
+    rm -f "$MOTIVO_BLOQUEIO"
 
     # 1. grSim de pe e em headless. Em modo janela a fisica so avanca quando a
     #    janela e redesenhada (glwidget.cpp:392): coberta = mundo parado.
@@ -341,6 +357,14 @@ portao_medicao() {
     nz="$(docker exec vice ps -eo stat= 2>/dev/null | grep -c '^Z' || echo 0)"
     [ "${nz:-0}" -gt 100 ] 2>/dev/null && \
         echo "   ! ${nz} processos zumbi (inofensivos, mas ja da para recriar o container)"
+    # E ACIMA DE MAX_ZUMBIS, BLOQUEIA.
+    #
+    # Antes isto era so o aviso acima, perdido no meio da saida - passamos um dia
+    # inteiro medindo com 142 zumbis sem que nada reprovasse. Aviso que ninguem
+    # le nao protege medicao nenhuma; e a mesma licao do grSim em modo janela,
+    # que tambem so avisava e passou a bloquear.
+    [ "${nz:-0}" -gt "$MAX_ZUMBIS" ] 2>/dev/null && \
+        motivo="${nz} processos zumbi no container (limite ${MAX_ZUMBIS}) - recrie com ./ararabots.sh parar && ./ararabots.sh preparar --headless"
 
     # 3. Nodes duplicados: ja medimos NOVE controllers publicando comandos
     #    contraditorios, com a visao caindo de 45 para 3 Hz.
@@ -375,11 +399,32 @@ portao_medicao() {
 
     [ -n "$fps" ] && [ "$fps" -lt "$FPS_MIN_GRSIM" ] 2>/dev/null && \
         motivo="grSim a ${fps} Hz (minimo ${FPS_MIN_GRSIM})"
-    [ -n "$hz_ctl" ] && [ "$hz_ctl" -lt "$HZ_MIN_CONTROLE" ] 2>/dev/null && \
-        motivo="${topico_ctl} a ${hz_ctl} Hz (minimo ${HZ_MIN_CONTROLE})"
+    # "ESTRATEGIA LENTA" e "ESTRATEGIA QUIETA DE PROPOSITO" sao coisas diferentes.
+    #
+    # Este limiar mede a frequencia de publicacao e nao tem como saber a intencao
+    # de quem publica. Num experimento de 21/09 seguramos a publicacao de
+    # proposito (para testar se replanejar a 10 Hz atrasava o movimento) e o
+    # portao reprovou o lote com "1 Hz (minimo 8)" - corretamente, do ponto de
+    # vista dele.
+    #
+    # ARARABOTS_SOB_DEMANDA=1 declara a intencao: a checagem de taxa da
+    # ESTRATEGIA e dispensada, o resto do portao continua valendo, e fica
+    # registrado no CSV que o lote rodou assim. Nao e atalho para maquina
+    # carregada - para isso existe ARARABOTS_MIN_HZ.
+    if [ -n "${ARARABOTS_SOB_DEMANDA:-}" ]; then
+        echo "   ! taxa da estrategia DISPENSADA (ARARABOTS_SOB_DEMANDA=1):"
+        echo "     publicacao sob demanda declarada; ${topico_ctl} a ${hz_ctl:-?} Hz"
+    else
+        [ -n "$hz_ctl" ] && [ "$hz_ctl" -lt "$HZ_MIN_CONTROLE" ] 2>/dev/null && \
+            motivo="${topico_ctl} a ${hz_ctl} Hz (minimo ${HZ_MIN_CONTROLE})"
+    fi
     printf '%s' "$relatorio" | grep -q "SEM DADOS" && motivo="algum topico sem dados"
 
     if [ -n "$motivo" ]; then
+        # O MOTIVO PRECISA SOBREVIVER ATE O CSV. Ver F-1: o 'validar' chama
+        # cmd_cenario com a saida descartada, entao esta mensagem - que e exata -
+        # morria aqui e o lote registrava so "BLOQUEADO".
+        printf '%s' "$motivo" > "$MOTIVO_BLOQUEIO" 2>/dev/null
         echo
         echo "   XX MEDICAO BLOQUEADA: $motivo"
         echo "      Este teste NAO rodaria um resultado valido, entao ele nao roda."
@@ -1141,7 +1186,7 @@ cmd_validar() {
     mapfile -t CENARIOS < <(python3 "$PY" listar | cut -d"|" -f1)
 
     [ ${#LISTA[@]} -gt 0 ] && CENARIOS=("${LISTA[@]}")
-    [ -f "$SAIDA" ] || echo "cenario,rep,gol,chute_pedido,disparou,hz_controle,rastreio_med,rastreio_p90,janela_abriu,janela_armada,v_saida_mms,xx,yy,percorreu,bola_ini_x,bola_ini_y,bola_fim_x,bola_fim_y,andou,load" > "$SAIDA"
+    [ -f "$SAIDA" ] || echo "cenario,rep,gol,chute_pedido,disparou,hz_controle,rastreio_med,rastreio_p90,janela_abriu,janela_armada,v_saida_mms,xx,yy,percorreu,bola_ini_x,bola_ini_y,bola_fim_x,bola_fim_y,andou,load,motivo" > "$SAIDA"
     # NOME PROPRIO PARA A VARIAVEL DO LACO.
     #
     # Era 'c'. O cmd_parar, chamado aqui dentro na remontagem, faz
@@ -1167,8 +1212,23 @@ cmd_validar() {
         for i in $(seq 1 "$N"); do
             cmd_cenario "$c" >/dev/null 2>&1
             st=$?
-            [ $st -eq 1 ] && { echo "  rep$i: cenario nao montou"; echo "$c,$i,ERRO,,,,,,," >> "$SAIDA"; continue; }
-            [ $st -eq 3 ] && { echo "  rep$i: BLOQUEADO pelo portao de medicao"; echo "$c,$i,BLOQUEADO,,,,,,," >> "$SAIDA"; continue; }
+            [ $st -eq 1 ] && { echo "  rep$i: cenario nao montou"; echo "$c,$i,ERRO,,,,,,,,,,,,,,,,,,\"cenario nao montou\"" >> "$SAIDA"; continue; }
+            # O MOTIVO VAI PARA O CSV, nao so "BLOQUEADO".
+            #
+            # O portao sabe exatamente por que recusou ("/movement_manager/
+            # commands a 1 Hz (minimo 8)", "142 zumbis", "o arbitro nao
+            # responde") e deixa isso em $MOTIVO_BLOQUEIO. Antes essa frase
+            # morria aqui, porque cmd_cenario roda com a saida descartada, e
+            # quem lesse o CSV depois via so "BLOQUEADO" - sem como saber se
+            # tinha sido maquina carregada, arbitro mudo ou node duplicado.
+            if [ $st -eq 3 ]; then
+                _mot="$(cat "$MOTIVO_BLOQUEIO" 2>/dev/null)"
+                _mot="${_mot:-motivo nao registrado}"
+                echo "  rep$i: BLOQUEADO - ${_mot}"
+                # aspas: o motivo tem virgulas e o arquivo e CSV
+                echo "$c,$i,BLOQUEADO,,,,,,,,,,,,,,,,,,\"${_mot//\"/\'}\"" >> "$SAIDA"
+                continue
+            fi
             L=$(cut -d' ' -f1 /proc/loadavg)
             OUT=$(ros_run "BRANCH=val_${c}_$i python3 /tmp/ararabots.py rodar $c 25" 2>&1)
             GOL=$(echo "$OUT" | grep -oE "GOL A FAVOR|GOL CONTRA|sem gol" | head -1)
@@ -1199,7 +1259,7 @@ cmd_validar() {
             PC=$(echo "$OUT" | grep -oE "a bola percorreu [0-9]+" | grep -oE "[0-9]+")
             echo "  rep$i: ${GOL:-?}  disparou=${DP:-?}  laco=${HZ:-?}Hz  rastreio=${RM:-?}/${RP:-?}mm  janela=${JA}q/armada=${JR}q  saida=${VS:-?}mm/s  xx=${XX:-?} yy=${YY:-?}  ${BOLA:-sem leitura}  (load $L)"
             copiar_replays
-            echo "$c,$i,${GOL:-?},${KICK:-?},${DP:-?},${HZ:-},${RM:-},${RP:-},${JA},${JR},${VS:-},${XX:-},${YY:-},${PC:-},${BI:-,},${BF:-,},${AN:-},$L" >> "$SAIDA"
+            echo "$c,$i,${GOL:-?},${KICK:-?},${DP:-?},${HZ:-},${RM:-},${RP:-},${JA},${JR},${VS:-},${XX:-},${YY:-},${PC:-},${BI:-,},${BF:-,},${AN:-},$L," >> "$SAIDA"
         done
     done
     echo

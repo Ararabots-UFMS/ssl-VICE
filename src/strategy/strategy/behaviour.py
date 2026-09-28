@@ -1,3 +1,6 @@
+import os
+import time
+
 from rclpy.node import Node
 from abc import abstractmethod
 from enum import Enum
@@ -68,6 +71,25 @@ class Selector(TreeNode):
         for c in self.children:
             status, action = c.run()
             if status != TaskStatus.FAILURE:
+                # T-5: UM RUNNING AQUI BLOQUEIA TODOS OS IRMAOS SEGUINTES.
+                #
+                # Esta e a semantica classica do Selector e a bola parada depende
+                # dela - nao foi alterada. O que muda e que ela deixa de ser
+                # SILENCIOSA: ja congelou o time inteiro duas vezes (deslocamento
+                # de 2 mm em 24,5 s), e nas duas o log nao tinha uma linha sequer
+                # dizendo quem estava segurando a arvore.
+                #
+                # Sai so com DIAG_JOGO, e so quando o filho devolve RUNNING - em
+                # operacao normal nao imprime nada.
+                if status == TaskStatus.RUNNING and os.environ.get("DIAG_JOGO"):
+                    _agora = time.monotonic()
+                    if _agora - getattr(self, "_ultimo_aviso_running", 0.0) > 1.0:
+                        self._ultimo_aviso_running = _agora
+                        _irmaos = [o.name for o in self.children
+                                   if o is not c and hasattr(o, "name")]
+                        print("[BT] %s parou em RUNNING no filho '%s'; nao rodaram: %s"
+                              % (self.name, getattr(c, "name", "?"), _irmaos),
+                              flush=True)
                 return status, action
         return TaskStatus.FAILURE, None
 

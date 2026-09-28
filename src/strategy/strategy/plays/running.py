@@ -112,12 +112,23 @@ class CheckAtack(LeafNode):
 
 
 class AtackAction(LeafNode):
-    def __init__(self, name):
+    def __init__(self, name, estado=None):
         super().__init__(name)
-        # Estado que sobrevive entre ciclos. Ver alvo_do_chute: sem ele o alvo
-        # do passe e reescolhido a cada quadro, a linha bola->apoio gira, e o
-        # portador persegue um ponto que nao espera - nunca chega a angular.
-        self.estado = {}
+        # UM ESTADO SO PARA A JOGADA INTEIRA, injetado pelo NormalStart.
+        #
+        # Cada acao criava o SEU dicionario. Como 'montar_comandos' le tt.estado,
+        # trocar de ramo ataque<->defesa trocava o dicionario inteiro - e ali
+        # moram a histerese de papeis (buscador_ciclos, portador_ciclos), a trava
+        # de mira (mira_ciclos), a trava de armamento do chute (chute_armado) e o
+        # alvo de passe congelado (alvo_passe). Ou seja: as travas que estabilizam
+        # o time se desarmavam sozinhas a cada transicao.
+        #
+        # MEDIDO antes de corrigir: 4 trocas de ramo em 250 ciclos - bem menos do
+        # que eu supunha, entao o impacto e pequeno. A correcao fica porque o
+        # defeito e real e custa 10 linhas, nao porque vai mudar o placar.
+        #
+        # E o mesmo padrao do EstadoFreekick, que a bola parada ja usa.
+        self.estado = estado if estado is not None else {}
         self.ally_robots = None
         self.enemy_robots = None
         self.on_positive_half = None
@@ -178,12 +189,23 @@ class AtackAction(LeafNode):
 
 
 class DefenseAction(LeafNode):
-    def __init__(self, name):
+    def __init__(self, name, estado=None):
         super().__init__(name)
-        # Estado que sobrevive entre ciclos. Ver alvo_do_chute: sem ele o alvo
-        # do passe e reescolhido a cada quadro, a linha bola->apoio gira, e o
-        # portador persegue um ponto que nao espera - nunca chega a angular.
-        self.estado = {}
+        # UM ESTADO SO PARA A JOGADA INTEIRA, injetado pelo NormalStart.
+        #
+        # Cada acao criava o SEU dicionario. Como 'montar_comandos' le tt.estado,
+        # trocar de ramo ataque<->defesa trocava o dicionario inteiro - e ali
+        # moram a histerese de papeis (buscador_ciclos, portador_ciclos), a trava
+        # de mira (mira_ciclos), a trava de armamento do chute (chute_armado) e o
+        # alvo de passe congelado (alvo_passe). Ou seja: as travas que estabilizam
+        # o time se desarmavam sozinhas a cada transicao.
+        #
+        # MEDIDO antes de corrigir: 4 trocas de ramo em 250 ciclos - bem menos do
+        # que eu supunha, entao o impacto e pequeno. A correcao fica porque o
+        # defeito e real e custa 10 linhas, nao porque vai mudar o placar.
+        #
+        # E o mesmo padrao do EstadoFreekick, que a bola parada ja usa.
+        self.estado = estado if estado is not None else {}
         self.ally_robots = None
         self.enemy_robots = None
         self.on_positive_half = None
@@ -268,9 +290,12 @@ class NormalStart(Sequence):
 
         i_can_atack = CheckAtack("CheckAtack")
 
-        atack_action = AtackAction("AtackAction")
+        # O estado da jogada nasce AQUI e e compartilhado pelas duas acoes.
+        estado_jogada = {}
 
-        defense_action = DefenseAction("DefenseAction")
+        atack_action = AtackAction("AtackAction", estado_jogada)
+
+        defense_action = DefenseAction("DefenseAction", estado_jogada)
 
         can_i_atack = Sequence("CanIAttack", [i_can_atack, atack_action])
 

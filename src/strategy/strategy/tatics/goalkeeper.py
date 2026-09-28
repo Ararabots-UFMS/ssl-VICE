@@ -7,6 +7,17 @@ from math import atan2, hypot
 # passe do goleiro. Menos que isso e passe lateral dentro da propria area.
 AVANCO_MINIMO_PASSE = 600.0
 
+# AREA DE DEFESA — Division B, em milimetros.
+#
+# Fonte: o proprio grSim, que arbitra o campo do teste. O ~/.grsim.xml traz,
+# para a Division B, 'Penalty width = 2' e 'Penalty depth = 1' (metros) - logo
+# 2000 mm de largura por 1000 de profundidade. Com a linha de gol em x = +-4500,
+# a nossa area e |y| <= 1000 e x a ate 1000 mm da linha.
+#
+# Nao repetir estes numeros em outro lugar. Ver _bola_na_area.
+AREA_PROFUNDIDADE = 1000.0
+AREA_MEIA_LARGURA = 1000.0
+
 
 class Goalkeeper:
     def __init__(self, gk_info, ball, on_positive_half,
@@ -37,11 +48,19 @@ class Goalkeeper:
         sentido = -1.0 if self.on_positive_half else 1.0
         # meia altura do campo, para a bola PARAR antes da linha de fundo deles
         alvo_x = 1000.0 * sentido
+        # A LINHA CONFERIDA E ATE O ALVO, nao ate um versor.
+        #
+        # 'linha_livre(ox, oy, dx_, dy_, inimigos)' espera as COORDENADAS DO
+        # DESTINO em dx_/dy_ (ver tatics/running.py). Passavamos 'dx/n, dy/n',
+        # que e um VERSOR: o segmento conferido ia da bola ate um ponto a ~1 mm
+        # da origem do campo. A checagem existia e nao conferia a linha pedida.
+        #
+        # MEDIDO na linha de base: com a bola na nossa area, o goleiro passou a
+        # engajar (A1), mas a escolha de PARA ONDE mandar era feita sobre esta
+        # conta errada - e a bola ficou no nosso campo 99,1% do tempo.
         melhor, melhor_folga = None, -1.0
         for alvo_y in (-2000.0, -1000.0, 0.0, 1000.0, 2000.0):
-            dx, dy = alvo_x - bx, alvo_y - by
-            n = hypot(dx, dy) or 1.0
-            if not linha_livre(bx, by, dx / n, dy / n, self.enemy_robots):
+            if not linha_livre(bx, by, alvo_x, alvo_y, self.enemy_robots):
                 continue
             folga = min([hypot(e.position_x - alvo_x, e.position_y - alvo_y)
                          for e in self.enemy_robots.values()] or [9999.0])
@@ -70,11 +89,14 @@ class Goalkeeper:
         for rid, r in self.ally_robots.items():
             if rid == 0:
                 continue
-            dx, dy = r.position_x - bx, r.position_y - by
-            n = hypot(dx, dy) or 1.0
+            n = hypot(r.position_x - bx, r.position_y - by)
             if n < 400.0:
                 continue          # colado demais: o toque nao sai
-            if not linha_livre(bx, by, dx / n, dy / n, self.enemy_robots):
+            # A LINHA CONFERIDA E ATE O COMPANHEIRO. Ver _espaco_livre_a_frente:
+            # passavamos um versor onde linha_livre espera o DESTINO, entao esta
+            # condicao nunca olhou para a linha bola->companheiro.
+            if not linha_livre(bx, by, r.position_x, r.position_y,
+                               self.enemy_robots):
                 continue
             # NUNCA PARA TRAS.
             #
@@ -97,22 +119,47 @@ class Goalkeeper:
         angle = atan2(dy, dx)
         return angle
 
-    def _ball_in_goal_area(self) -> bool:
-        # deprecated: keep for compatibility but prefer using goal_position-aware check in execute
-        if self.on_positive_half:
-            if (
-                self.ball.position_x > 1750.0 - self.padding
-                and abs(self.ball.position_y) < 700.0 - self.padding
-            ):
-                return True
-        else:
-            if (
-                self.ball.position_x < -1750.0 + self.padding
-                and abs(self.ball.position_y) < 700.0 - self.padding
-            ):
-                return True
+    def _bola_na_area(self, goal_x: float) -> bool:
+        """A bola esta na NOSSA area de defesa?
 
-        return False
+        O QUE ESTAVA ERRADO, e o que medimos
+        ------------------------------------
+        A condicao era 'x > 1750 - padding' com '|y| < 700 - padding'. Esses
+        numeros vem do campo antigo de +-2250 (meia-largura de SSL-EL), o mesmo
+        erro de geometria que o CenterGoal ja teve e que MedidasCampo (em
+        tatics/freekick.py) foi criada para nao deixar acontecer de novo. O
+        CenterGoal foi corrigido para +-4500; isto aqui ficou para tras.
+
+        Eu previ que o efeito seria o goleiro ABANDONAR a meta, porque em x a
+        condicao antiga e permissiva demais: com o gol em -4500, 'x < -1650'
+        libera a saida a 2850 mm do gol. MEDIDO nos 6 replays da linha de base:
+        o goleiro NUNCA passou de x = -3500. A previsao estava errada.
+
+        O defeito real esta no OUTRO eixo. Comparando a condicao antiga com a
+        area verdadeira da Division B em 8472 quadros:
+
+            falso positivo (age fora da area)        179 quadros   2,1%
+            falso negativo (NAO age dentro dela)    1373 quadros  16,2%
+
+        O '|y| < 600' e restritivo demais: a area tem 2000 mm de largura, ou
+        seja |y| < 1000. Com a bola na area entre 600 e 1000 mm do centro, o
+        goleiro ficava parado na linha assistindo. Numa das execucoes isso
+        durou 987 quadros - 16 dos 24 segundos de partida.
+
+        AS MEDIDAS, e a fonte delas: o proprio grSim arbitra o campo do teste, e
+        o ~/.grsim.xml declara para a Division B 'Penalty width = 2' e
+        'Penalty depth = 1'. Logo a area tem 2000 mm de largura por 1000 de
+        profundidade: |y| <= 1000, e x a ate 1000 mm da linha de gol.
+
+        'padding' passa a ser FOLGA que AUMENTA a area, nao que a encolhe: o
+        goleiro comecar a tratar a bola um pouco antes de ela entrar e barato,
+        e chegar tarde e caro.
+        """
+        if goal_x > 0:
+            dentro_x = self.ball.position_x > goal_x - AREA_PROFUNDIDADE - self.padding
+        else:
+            dentro_x = self.ball.position_x < goal_x + AREA_PROFUNDIDADE + self.padding
+        return dentro_x and abs(self.ball.position_y) < AREA_MEIA_LARGURA + self.padding
 
     def execute(self, goal_position: Vector2D, ball: Vector2D):
         """
@@ -127,17 +174,13 @@ class Goalkeeper:
 
         # Se a bola estiver na área do gol (uso goal_position para suportar ambos os lados)
         # definimos a área em função do lado do gol recebido.
+        #
+        # UMA conta so, em _bola_na_area. Antes a mesma condicao estava escrita
+        # duas vezes - aqui e no _ball_in_goal_area, marcado como 'deprecated' -
+        # com os mesmos numeros errados nas duas. Duas copias da mesma regra e
+        # como elas divergem; ver o motivo do ararabots.sh ser ferramenta unica.
         goal_x = goal_position.x
-        if goal_x > 0:
-            in_area = (
-                self.ball.position_x > 1750.0 - self.padding
-                and abs(self.ball.position_y) < 700.0 - self.padding
-            )
-        else:
-            in_area = (
-                self.ball.position_x < -1750.0 + self.padding
-                and abs(self.ball.position_y) < 700.0 - self.padding
-            )
+        in_area = self._bola_na_area(goal_x)
 
         if in_area:
             bx, by = ball.position_x, ball.position_y
