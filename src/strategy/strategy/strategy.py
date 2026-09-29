@@ -397,6 +397,9 @@ class Strategy(Node):
             cmd.robot_id = int(skill.robot_id)
             cmd.target_pos.x = float(skill.target_x or 0.0)
             cmd.target_pos.y = float(skill.target_y or 0.0)
+            # Velocidade final no alvo; 0 para parar nele (ver Skills.move_through).
+            cmd.target_vel.x = float(skill.vel_x)
+            cmd.target_vel.y = float(skill.vel_y)
             if self._lote_mov is None:
                 self._lote_mov = []
             self._lote_mov.append(cmd)
