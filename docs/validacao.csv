@@ -1,0 +1,436 @@
+cenario,rep,gol,chute_pedido,disparou,hz_controle,rastreio_med,rastreio_p90,janela_abriu,janela_armada,v_saida_mms,xx,yy,percorreu,bola_ini_x,bola_ini_y,bola_fim_x,bola_fim_y,andou,load
+ataque,1,sem gol,nao ativado,NAO,,24,192,46,0,747,6722.6,36.3,198,,,,,,5.74
+ataque,1,sem gol,nao ativado,NAO,100,103,271,404,0,640,5079.0,893.9,2052,,,,,,7.12
+um_so_cobrador,1,sem gol,nao ativado,NAO,,,,0,0,,521.8,150.6,,,,,,,5.21
+um_so_cobrador,2,sem gol,nao ativado,NAO,,,,0,0,,523.3,144.3,,,,,,,4.46
+um_so_cobrador,3,sem gol,nao ativado,NAO,,,,0,0,,522.2,148.0,,,,,,,4.81
+um_so_cobrador,4,sem gol,nao ativado,NAO,,,,0,0,,522.2,150.1,,,,,,,4.00
+um_so_cobrador,5,sem gol,nao ativado,NAO,,,,0,0,806,521.5,153.8,7,,,,,,5.15
+um_so_cobrador,6,sem gol,nao ativado,NAO,,,,0,0,,521.3,152.9,,,,,,,4.76
+jogo,1,sem gol,nao ativado,NAO,,,,0,0,,3558.9,17.0,,,,,,,4.57
+jogo,2,sem gol,nao ativado,NAO,,,,0,0,,3564.9,44.9,,,,,,,5.32
+jogo,3,sem gol,nao ativado,NAO,,,,0,0,,3564.9,19.8,,,,,,,4.62
+jogo,4,sem gol,nao ativado,NAO,,,,0,0,,3559.5,41.0,,,,,,,4.30
+jogo,5,sem gol,nao ativado,NAO,,,,0,0,,3506.3,23.0,,,,,,,4.09
+jogo,6,sem gol,nao ativado,NAO,,,,0,0,,3565.6,16.6,,,,,,,4.56
+um_so_cobrador,1,GOL A FAVOR,ATIVADO,SIM,100,5,104,4,4,6191,12.5,66.5,963,,,,,,4.50
+um_so_cobrador,2,GOL A FAVOR,ATIVADO,SIM,100,22,108,27,0,6368,7.3,16.7,1213,,,,,,5.42
+um_so_cobrador,1,sem gol,ATIVADO,SIM,100,4,100,2,2,6342,69.6,17.1,1799,,,,,,4.98
+um_so_cobrador,2,sem gol,ATIVADO,SIM,100,4,103,1,1,6128,75.0,13.6,2088,,,,,,5.34
+um_so_cobrador,3,GOL A FAVOR,ATIVADO,SIM,100,5,102,55,0,6196,12.4,65.6,923,,,,,,5.10
+um_so_cobrador,4,sem gol,ATIVADO,SIM,100,4,98,2,2,6178,76.3,0.2,1744,,,,,,4.46
+um_so_cobrador,5,GOL A FAVOR,ATIVADO,SIM,100,5,104,0,0,6084,19.2,70.7,1820,,,,,,4.14
+um_so_cobrador,6,GOL A FAVOR,ATIVADO,SIM,100,86,359,0,0,6282,4.5,93.6,2007,,,,,,4.91
+jogo,1,sem gol,ATIVADO,NAO,100,23,292,0,0,,1658.3,721.7,,,,,,,5.72
+jogo,2,sem gol,ATIVADO,SIM,100,7,348,49,25,947,2641.3,39.5,6165,,,,,,6.39
+jogo,3,sem gol,ATIVADO,SIM,100,208,501,57,13,906,60.4,19.3,635,,,,,,5.95
+jogo,4,GOL A FAVOR,ATIVADO,SIM,100,5,147,2,2,5986,2815.2,50.0,5527,,,,,,6.68
+jogo,5,sem gol,ATIVADO,NAO,100,6,532,9,0,,2650.3,9.6,,,,,,,5.79
+jogo,6,sem gol,ATIVADO,NAO,100,89,543,0,0,693,2620.9,33.8,218,,,,,,6.73
+um_so_cobrador,1,GOL A FAVOR,ATIVADO,SIM,62,5,82,0,0,6208,33.7,10.1,1408,,,,,,3.13
+um_so_cobrador,2,GOL A FAVOR,ATIVADO,SIM,62,5,88,1,1,6303,32.8,25.7,1822,,,,,,4.77
+jogo,1,sem gol,nao ativado,NAO,,,,0,0,858,3315.6,24.3,252,,,,,,4.59
+jogo,1,sem gol,ATIVADO,SIM,62,5,71,3,0,5848,3480.6,131.6,79,,,,,,2.92
+jogo,1,sem gol,ATIVADO,SIM,62,5,101,3,1,950,3430.2,3.4,136,,,,,,3.22
+jogo,2,sem gol,ATIVADO,SIM,62,5,99,9,2,5610,3418.9,43.8,115,,,,,,3.28
+jogo,3,sem gol,ATIVADO,SIM,62,5,94,3,0,5705,3419.4,44.5,105,,,,,,3.64
+jogo,4,sem gol,ATIVADO,SIM,62,5,85,4,2,5680,3485.9,2.7,110,,,,,,3.60
+jogo,5,sem gol,ATIVADO,SIM,62,5,72,2,0,5918,3397.6,8.6,82,,,,,,4.38
+jogo,6,sem gol,ATIVADO,SIM,62,5,93,12,2,5784,3404.6,17.3,151,,,,,,4.05
+jogo,1,sem gol,ATIVADO,SIM,62,5,126,29,2,5677,3357.1,25.6,252,,,,,,4.13
+jogo,2,sem gol,ATIVADO,SIM,62,5,102,37,3,5936,3346.0,86.7,219,,,,,,3.52
+jogo,3,sem gol,nao ativado,NAO,,,,0,0,884,3483.4,48.9,735,,,,,,4.12
+jogo,4,sem gol,ATIVADO,SIM,62,4,21,36,2,5944,3366.5,50.1,76,,,,,,4.35
+jogo,5,sem gol,ATIVADO,SIM,62,10,188,18,4,5998,3422.2,10.4,5159,,,,,,3.35
+jogo,6,sem gol,ATIVADO,SIM,62,5,79,25,3,4402,3480.9,118.4,75,,,,,,3.38
+jogo,1,sem gol,ATIVADO,SIM,62,5,87,34,2,4933,3490.7,142.5,11,,,,,,3.97
+jogo,2,sem gol,ATIVADO,SIM,62,5,80,34,2,5164,3422.1,2.3,107,,,,,,4.04
+jogo,3,sem gol,ATIVADO,SIM,62,5,110,36,0,5583,3400.3,35.7,254,,,,,,3.40
+jogo,4,sem gol,ATIVADO,SIM,62,5,90,35,3,5806,3358.1,98.6,90,,,,,,3.72
+jogo,5,sem gol,ATIVADO,SIM,62,5,104,41,0,5850,3396.9,101.6,164,,,,,,4.37
+jogo,6,sem gol,ATIVADO,SIM,62,5,89,41,2,5875,3370.4,46.4,85,,,,,,5.57
+jogo,1,ERRO,,,,,,,
+jogo,1,sem gol,ATIVADO,NAO,62,11,151,10,0,,3287.1,15.0,,,,,,,3.16
+jogo,1,sem gol,ATIVADO,NAO,62,24,146,7,0,806,3339.8,42.0,7,,,,,,3.43
+jogo,2,sem gol,ATIVADO,NAO,62,5,130,5,0,,3273.8,29.7,,,,,,,3.65
+jogo,3,sem gol,ATIVADO,SIM,62,20,235,23,1,5781,1933.6,154.2,4307,,,,,,4.91
+jogo,4,sem gol,ATIVADO,NAO,62,22,142,7,0,,3293.9,19.4,,,,,,,4.00
+jogo,5,sem gol,ATIVADO,NAO,62,22,155,15,0,759,3306.1,149.5,105,,,,,,3.93
+jogo,6,sem gol,ATIVADO,NAO,62,6,134,7,0,,3257.7,3.4,,,,,,,3.43
+jogo,1,sem gol,ATIVADO,SIM,62,6,120,39,0,4689,3515.3,118.7,105,,,,,,4.33
+jogo,2,sem gol,ATIVADO,SIM,62,5,135,38,0,5175,3434.0,164.6,236,,,,,,4.40
+jogo,3,sem gol,ATIVADO,SIM,62,9,229,6,6,4720,3233.2,19.5,4296,,,,,,4.02
+jogo,4,sem gol,ATIVADO,SIM,62,6,98,36,0,5430,3408.9,34.2,214,,,,,,3.61
+jogo,5,sem gol,ATIVADO,SIM,62,6,131,36,2,4862,3489.8,107.1,73,,,,,,3.92
+jogo,6,sem gol,ATIVADO,SIM,62,6,134,42,4,5022,3437.1,107.9,318,,,,,,4.54
+jogo,1,ERRO,,,,,,,
+jogo,1,sem gol,ATIVADO,SIM,62,10,134,18,18,4615,3403.5,80.1,905,,,,,,3.92
+jogo,1,sem gol,ATIVADO,SIM,62,6,116,3,3,3188,3404.0,1.3,326,,,,,,3.87
+jogo,2,sem gol,ATIVADO,SIM,62,48,207,4,4,4366,3430.6,23.5,2079,,,,,,4.17
+jogo,3,sem gol,ATIVADO,SIM,62,5,121,4,4,5400,3377.4,113.4,3284,,,,,,4.29
+jogo,4,sem gol,ATIVADO,SIM,62,8,228,1,1,5526,3501.6,40.0,5983,,,,,,3.64
+jogo,5,sem gol,ATIVADO,SIM,62,37,254,4,2,5842,3389.7,15.6,5107,,,,,,3.65
+jogo,6,sem gol,ATIVADO,SIM,62,6,114,2,2,5800,3465.4,18.7,146,,,,,,3.63
+jogo,1,sem gol,ATIVADO,SIM,62,71,226,168,166,4800,3437.3,46.2,2212,,,,,,5.60
+jogo,1,ERRO,,,,,,,
+jogo,2,ERRO,,,,,,,
+jogo,3,ERRO,,,,,,,
+jogo,4,ERRO,,,,,,,
+jogo,5,ERRO,,,,,,,
+jogo,6,ERRO,,,,,,,
+jogo,1,sem gol,ATIVADO,NAO,62,28,125,1272,0,634,1751.9,42.5,1537,,,,,,2.45
+jogo,1,sem gol,nao ativado,NAO,,,,0,0,,3436.8,78.5,,,,,,,3.28
+jogo,1,sem gol,ATIVADO,SIM,62,41,218,93,12,5782,3484.6,41.5,5408,,,,,,3.77
+jogo,1,sem gol,ATIVADO,SIM,62,11,143,28,8,3669,3197.7,6.6,832,,,,,,3.68
+jogo,2,sem gol,ATIVADO,SIM,62,6,114,11,11,5292,3410.5,132.6,419,,,,,,4.63
+jogo,3,sem gol,ATIVADO,SIM,62,8,182,2,2,5614,3493.3,22.1,6156,,,,,,3.93
+jogo,4,sem gol,ATIVADO,SIM,62,84,217,709,7,4855,3509.9,46.4,2826,,,,,,3.43
+jogo,5,sem gol,ATIVADO,SIM,62,6,144,8,8,4185,3455.9,72.7,715,,,,,,3.79
+jogo,6,sem gol,ATIVADO,SIM,62,48,226,17,9,4905,3395.3,67.9,2266,,,,,,3.37
+jogo,1,sem gol,nao ativado,NAO,62,41,91,580,0,5127,1708.9,4.5,2679,,,,,,3.79
+jogo,2,sem gol,ATIVADO,SIM,62,39,92,375,4,667,1592.3,43.4,1155,,,,,,3.64
+jogo,3,sem gol,ATIVADO,NAO,62,38,80,512,0,1004,1671.4,66.9,1510,,,,,,3.91
+jogo,1,?,?,?,,,,0,0,,,,,,,,,,3.43
+jogo,2,sem gol,nao ativado,NAO,,,,1142,0,794,3015.8,5.1,1094,,,,,,3.42
+jogo,1,sem gol,nao ativado,NAO,,,,1148,0,5304,3031.9,67.0,1097,,,,,,3.57
+jogo,1,sem gol,nao ativado,NAO,,,,1181,0,816,3005.6,90.6,7,,,,,,3.13
+jogo,1,sem gol,nao ativado,NAO,,,,1515,0,5333,3017.5,63.7,1098,,,,,,3.43
+jogo,1,sem gol,ATIVADO,SIM,62,39,164,781,258,914,1238.2,244.2,1738,,,,,,3.08
+jogo,1,sem gol,ATIVADO,SIM,62,29,210,1379,16,974,1541.6,24.4,1009,,,,,,4.34
+jogo,2,sem gol,ATIVADO,SIM,62,45,225,858,15,771,8.2,77.9,3130,,,,,,4.51
+jogo,3,sem gol,ATIVADO,NAO,62,73,260,0,0,859,216.5,8.0,3242,,,,,,3.69
+jogo,4,sem gol,ATIVADO,NAO,62,23,249,3,0,1022,360.9,20.7,3042,,,,,,3.47
+jogo,5,sem gol,ATIVADO,SIM,62,41,201,532,159,948,283.1,748.4,3040,,,,,,3.04
+jogo,6,sem gol,ATIVADO,NAO,62,24,206,249,0,877,704.6,1272.4,4707,,,,,,4.92
+jogo,1,sem gol,ATIVADO,SIM,62,48,196,714,26,718,2577.3,30.9,491,,,,,,4.13
+jogo,1,sem gol,ATIVADO,NAO,62,72,247,0,0,1934,112.4,209.6,3229,,,,,,4.32
+jogo,2,GOL CONTRA,ATIVADO,NAO,62,66,226,0,0,1023,82.0,16.5,2928,,,,,,4.48
+jogo,3,sem gol,ATIVADO,SIM,62,12,279,1426,3,928,1527.3,184.5,1459,,,,,,3.13
+jogo,4,sem gol,ATIVADO,NAO,62,6,114,0,0,1201,200.3,788.8,3658,,,,,,4.98
+jogo,5,GOL CONTRA,ATIVADO,NAO,62,15,227,0,0,1985,62.0,312.8,3913,,,,,,5.04
+jogo,6,sem gol,ATIVADO,NAO,62,62,220,0,0,705,1550.6,731.8,600,,,,,,3.90
+vice,1,ERRO,,,,,,,
+jogo,1,sem gol,nao ativado,NAO,62,76,283,55,0,4953,25.4,56.3,3763,,,,,,3.37
+jogo,1,GOL CONTRA,ATIVADO,NAO,62,70,261,0,0,915,117.2,22.2,3580,,,,,,3.98
+jogo,2,sem gol,nao ativado,NAO,62,6,160,0,0,5086,1164.4,1523.1,5435,,,,,,4.60
+jogo,3,sem gol,nao ativado,NAO,62,13,215,66,0,3004,856.3,1303.9,5390,,,,,,4.70
+jogo,4,sem gol,ATIVADO,SIM,62,73,266,765,44,728,71.1,5.5,2197,,,,,,4.46
+jogo,5,sem gol,nao ativado,NAO,,,,1179,0,5210,3007.3,41.7,1095,,,,,,4.15
+jogo,6,sem gol,nao ativado,NAO,,,,1280,0,5381,3010.5,43.4,1099,,,,,,3.60
+jogo,1,sem gol,nao ativado,NAO,,,,1162,0,5362,3009.2,48.0,1100,,,,,,3.74
+jogo,2,sem gol,nao ativado,NAO,,,,1266,0,5358,3011.0,59.1,1100,,,,,,3.72
+jogo,3,sem gol,nao ativado,NAO,,,,1202,0,5267,3008.0,12.8,1095,,,,,,3.28
+jogo,4,sem gol,nao ativado,NAO,,,,1255,0,5238,2997.2,54.0,1097,,,,,,3.49
+jogo,5,sem gol,nao ativado,NAO,,,,1337,0,5367,3004.4,63.5,1095,,,,,,2.25
+jogo,6,sem gol,nao ativado,NAO,,,,1200,0,5322,3005.2,25.1,1101,,,,,,3.21
+jogo,1,sem gol,nao ativado,NAO,,,,1154,0,5392,3079.3,73.9,1047,,,,,,2.26
+vice,1,ERRO,,,,,,,
+vice,2,ERRO,,,,,,,
+vice,3,ERRO,,,,,,,
+vice,4,ERRO,,,,,,,
+vice,5,ERRO,,,,,,,
+vice,6,ERRO,,,,,,,
+jogo,1,sem gol,ATIVADO,NAO,62,31,258,0,0,1921,2071.8,87.2,3981,,,,,,3.63
+jogo,1,sem gol,nao ativado,NAO,62,16,176,0,0,3162,240.9,863.0,4786,,,,,,2.96
+jogo,2,sem gol,ATIVADO,NAO,62,46,210,0,0,1003,2940.4,6.0,3754,,,,,,4.62
+jogo,3,sem gol,nao ativado,NAO,62,6,135,0,0,5190,813.3,1202.8,5335,,,,,,4.68
+jogo,4,GOL CONTRA,nao ativado,NAO,62,43,228,0,0,5362,75.5,458.2,4618,,,,,,4.11
+jogo,5,sem gol,ATIVADO,NAO,62,74,237,0,0,681,3226.0,86.2,1119,,,,,,3.88
+jogo,6,GOL CONTRA,nao ativado,NAO,62,18,237,93,0,5137,130.7,258.9,4643,,,,,,5.14
+jogo,1,GOL CONTRA,nao ativado,NAO,62,28,227,153,0,3253,236.0,0.0,4654,,,,,,4.03
+jogo,1,sem gol,ATIVADO,SIM,62,60,134,805,23,,4219.0,65.3,,,,,,,3.70
+jogo,2,sem gol,ATIVADO,SIM,62,82,257,43,3,2322,1292.1,198.4,1574,,,,,,4.54
+jogo,3,sem gol,ATIVADO,SIM,62,61,184,1043,46,735,4219.4,7.6,206,,,,,,3.82
+jogo,1,sem gol,nao ativado,NAO,,,,0,0,,4217.3,54.0,,,,,,,3.72
+jogo,2,sem gol,nao ativado,NAO,,,,0,0,,4217.8,94.9,,,,,,,3.72
+jogo,3,sem gol,nao ativado,NAO,,,,0,0,780,4212.0,236.8,10,,,,,,3.96
+vice,1,ERRO,,,,,,,
+vice,2,ERRO,,,,,,,
+vice,3,ERRO,,,,,,,
+jogo,1,sem gol,nao ativado,NAO,62,23,182,0,0,,4218.7,4.0,,,,,,,3.72
+jogo,2,sem gol,nao ativado,NAO,62,83,250,65,0,,4218.9,81.1,,,,,,,3.84
+jogo,3,sem gol,nao ativado,NAO,62,20,195,0,0,,4219.7,20.3,,,,,,,3.61
+jogo,1,sem gol,nao ativado,NAO,62,20,183,0,0,,4217.9,89.1,,,,,,,3.55
+jogo,2,sem gol,nao ativado,NAO,62,20,195,0,0,,4218.4,60.7,,,,,,,4.39
+jogo,3,sem gol,nao ativado,NAO,62,25,206,0,0,,4220.0,40.3,,,,,,,4.69
+jogo,1,sem gol,nao ativado,NAO,62,8,181,1,0,,4219.2,4.9,,,,,,,5.67
+jogo,2,sem gol,nao ativado,NAO,58,7,142,112,0,,4218.8,3.7,,,,,,,4.88
+jogo,3,BLOQUEADO,,,,,,,
+jogo,1,GOL A FAVOR,ATIVADO,SIM,62,5,160,1,1,5682,4215.8,174.3,3856,,,,,,4.11
+jogo,2,GOL A FAVOR,ATIVADO,SIM,62,5,187,3,3,5945,4219.8,40.5,3862,,,,,,3.84
+jogo,3,GOL A FAVOR,ATIVADO,SIM,61,5,142,3,3,5728,4216.1,148.2,3860,,,,,,3.85
+jogo,1,sem gol,nao ativado,NAO,62,8,126,0,0,5153,975.2,1133.2,5312,,,,,,4.39
+jogo,2,sem gol,nao ativado,NAO,62,8,200,0,0,5162,923.1,1038.7,5040,,,,,,4.12
+jogo,3,sem gol,nao ativado,NAO,62,54,227,6,0,5376,1598.2,307.6,2659,,,,,,3.43
+jogo,1,BLOQUEADO,,,,,,,
+jogo,2,BLOQUEADO,,,,,,,
+jogo,3,BLOQUEADO,,,,,,,
+jogo,1,sem gol,nao ativado,NAO,,,,1416,0,5258,2992.8,93.4,1098,,,,,,3.71
+jogo,2,sem gol,nao ativado,NAO,,,,1325,0,5381,2989.6,84.3,1097,,,,,,3.75
+jogo,3,sem gol,nao ativado,NAO,,,,1363,0,5222,2982.6,26.9,1097,,,,,,3.31
+jogo,1,GOL CONTRA,nao ativado,NAO,62,40,237,384,0,5246,75.5,9.9,4550,,,,,,3.52
+jogo,2,sem gol,nao ativado,NAO,62,7,130,0,0,5362,819.7,960.2,5486,,,,,,2.76
+jogo,3,GOL CONTRA,nao ativado,NAO,62,23,185,244,0,5415,66.0,42.0,4321,,,,,,3.47
+jogo,1,sem gol,nao ativado,NAO,,,,1367,0,5322,3008.8,53.4,1141,,,,,,2.50
+jogo,2,sem gol,nao ativado,NAO,,,,1212,0,5411,2971.7,53.6,1097,,,,,,3.14
+jogo,3,sem gol,nao ativado,NAO,,,,1772,0,5373,3003.6,77.0,1154,,,,,,2.90
+jogo,1,?,?,?,,,,0,0,,,,,,,,,,4.77
+jogo,2,?,?,?,,,,0,0,,,,,,,,,,5.08
+jogo,3,?,?,?,,,,0,0,,,,,,,,,,3.64
+jogo,1,GOL CONTRA,nao ativado,NAO,62,56,205,54,0,5070,68.7,21.7,2767,,,,,,3.00
+jogo,2,sem gol,nao ativado,NAO,62,20,260,0,0,1032,876.1,1055.1,4044,,,,,,4.95
+jogo,3,GOL CONTRA,nao ativado,NAO,62,14,245,0,0,5148,3.2,332.1,3008,,,,,,3.79
+jogo,1,?,?,?,,,,0,0,,,,,,,,,,3.59
+jogo,2,?,?,?,,,,0,0,,,,,,,,,,3.57
+jogo,3,?,?,?,,,,0,0,,,,,,,,,,3.41
+jogo,1,sem gol,nao ativado,NAO,62,14,261,0,0,5152,755.6,918.3,5425,,,,,,3.05
+jogo,2,?,?,?,,,,0,0,,,,,,,,,,2.71
+jogo,3,?,?,?,,,,0,0,,,,,,,,,,3.33
+jogo,1,sem gol,nao ativado,NAO,62,26,208,0,0,5267,1919.4,130.6,2292,,,,,,4.79
+jogo,2,sem gol,nao ativado,NAO,62,34,221,0,0,5283,239.6,172.3,5196,,,,,,5.98
+jogo,3,GOL CONTRA,nao ativado,NAO,62,43,256,3,0,5470,68.2,50.8,1153,,,,,,6.56
+jogo,1,sem gol,ATIVADO,SIM,62,87,248,9,0,2196,35.4,38.7,2525,,,,,,4.00
+jogo,2,sem gol,nao ativado,NAO,62,6,193,0,0,5270,904.3,948.8,5510,,,,,,4.16
+jogo,3,sem gol,nao ativado,NAO,62,58,228,0,0,4986,2839.0,7.5,4061,,,,,,3.82
+jogo,1,sem gol,nao ativado,NAO,62,14,231,0,0,5265,896.7,884.3,5582,,,,,,3.56
+jogo,2,sem gol,nao ativado,NAO,62,72,193,4,0,5248,2391.8,86.6,2331,,,,,,3.49
+jogo,3,sem gol,nao ativado,NAO,62,8,219,0,0,5434,834.2,1005.2,5523,,,,,,4.91
+jogo,1,sem gol,nao ativado,NAO,62,47,251,37,0,5301,1973.6,993.5,4087,,,,,,3.74
+jogo,2,GOL CONTRA,nao ativado,NAO,62,109,313,163,0,5118,77.2,17.8,5248,,,,,,4.41
+jogo,3,GOL CONTRA,nao ativado,NAO,62,36,212,295,0,5239,70.3,38.0,1657,,,,,,4.31
+jogo,1,sem gol,nao ativado,NAO,62,42,266,49,0,5076,1370.7,1480.6,5412,,,,,,3.57
+jogo,2,sem gol,nao ativado,NAO,62,75,264,981,0,5455,65.1,29.8,4457,,,,,,4.95
+jogo,3,sem gol,nao ativado,NAO,62,44,256,239,0,5212,70.6,38.5,3916,,,,,,4.05
+jogo,1,GOL CONTRA,nao ativado,NAO,62,89,293,265,0,5389,69.2,14.6,4136,,,,,,6.36
+jogo,2,sem gol,nao ativado,NAO,62,41,211,329,0,5246,79.8,18.4,3457,,,,,,3.97
+jogo,3,sem gol,nao ativado,NAO,62,19,272,66,0,5368,539.4,975.7,5289,,,,,,4.09
+jogo,1,GOL CONTRA,ATIVADO,NAO,62,67,273,67,0,810,43.7,51.8,264,,,,,,3.77
+jogo,1,GOL CONTRA,nao ativado,NAO,62,52,244,311,0,5196,74.9,21.0,3377,,,,,,3.67
+jogo,2,sem gol,nao ativado,NAO,62,25,174,926,0,5277,73.6,0.8,4100,,,,,,2.84
+jogo,3,GOL CONTRA,ATIVADO,NAO,62,105,293,190,0,,76.1,31.4,,,,,,,4.02
+jogo,1,sem gol,nao ativado,NAO,37,37,178,240,0,5371,76.6,26.5,4207,,,,,,3.76
+jogo,2,sem gol,nao ativado,NAO,63,7,58,160,0,5213,2967.0,202.4,2654,,,,,,3.50
+jogo,3,sem gol,nao ativado,NAO,,,,204,0,5533,19.2,871.0,3232,,,,,,4.20
+jogo,1,sem gol,nao ativado,NAO,62,54,265,44,0,5336,679.8,1070.5,4962,,,,,,2.78
+jogo,2,sem gol,nao ativado,NAO,62,29,229,277,0,5271,93.2,20.5,4200,,,,,,4.09
+jogo,3,sem gol,nao ativado,NAO,62,59,257,107,0,5384,801.5,1205.1,5032,,,,,,4.46
+jogo,1,GOL CONTRA,nao ativado,NAO,62,60,251,87,0,5308,79.2,32.2,3910,,,,,,4.00
+jogo,2,sem gol,nao ativado,NAO,62,7,249,115,0,5359,1180.7,305.6,4852,,,,,,3.72
+jogo,3,sem gol,ATIVADO,SIM,62,47,244,10,1,1133,93.8,419.0,2701,,,,,,4.26
+jogo,1,GOL CONTRA,ATIVADO,SIM,62,16,201,2,0,1246,30.3,13.8,1989,,,,,,3.60
+jogo,2,sem gol,ATIVADO,NAO,62,35,193,361,0,1492,79.2,4.8,2381,,,,,,3.95
+jogo,3,sem gol,ATIVADO,SIM,62,29,260,3,0,1845,903.3,1376.6,4372,,,,,,3.52
+jogo,1,sem gol,ATIVADO,NAO,62,8,249,3,0,2424,270.6,1.2,3336,,,,,,5.95
+jogo,1,sem gol,ATIVADO,SIM,62,14,244,3,0,1255,76.5,110.3,3178,,,,,,3.85
+jogo,2,GOL CONTRA,ATIVADO,SIM,62,77,270,2,0,2946,75.1,131.6,3916,,,,,,3.31
+jogo,3,sem gol,ATIVADO,NAO,62,72,213,285,0,1568,74.4,4.4,2489,,,,,,3.24
+jogo,1,sem gol,ATIVADO,SIM,62,16,230,7,3,955,595.8,1032.2,3944,,,,,,3.22
+jogo,2,sem gol,ATIVADO,NAO,62,29,193,171,0,839,79.2,13.9,65,,,,,,3.27
+jogo,3,GOL CONTRA,ATIVADO,NAO,62,70,260,190,0,1821,63.1,34.4,2939,,,,,,3.94
+jogo,1,GOL CONTRA,ATIVADO,NAO,62,89,274,341,0,1887,79.1,1.7,3085,,,,,,3.61
+jogo,2,sem gol,ATIVADO,NAO,62,22,217,4,0,2488,43.2,73.9,3354,,,,,,4.05
+jogo,3,GOL CONTRA,ATIVADO,SIM,62,91,266,20,19,2155,14.8,322.5,3351,,,,,,5.44
+jogo,1,sem gol,nao ativado,NAO,62,5,63,135,0,5383,269.1,1409.1,4900,,,,,,4.30
+jogo,2,sem gol,nao ativado,NAO,62,5,109,520,0,5397,75.7,1.4,4424,,,,,,2.80
+jogo,3,GOL CONTRA,nao ativado,NAO,62,5,70,100,0,5316,73.6,6.4,4985,,,,,,3.44
+jogo,1,GOL CONTRA,ATIVADO,NAO,62,74,250,545,0,1354,77.7,0.1,3868,,,,,,2.61
+jogo,2,GOL CONTRA,ATIVADO,SIM,62,56,267,2,2,3722,168.1,12.7,3373,,,,,,3.33
+jogo,3,sem gol,ATIVADO,SIM,62,29,254,1,0,1192,941.6,1432.3,4527,,,,,,3.96
+jogo,1,sem gol,ATIVADO,SIM,62,46,250,2,0,2516,1596.7,279.2,4011,,,,,,4.62
+jogo,1,sem gol,ATIVADO,NAO,62,7,115,1,0,981,2414.6,27.7,923,,,,,,4.21
+jogo,1,sem gol,ATIVADO,SIM,62,56,235,3,0,1859,473.3,911.0,3982,,,,,,3.84
+jogo,2,sem gol,ATIVADO,SIM,62,61,248,1,0,3929,441.9,1070.5,4017,,,,,,4.54
+jogo,3,GOL CONTRA,ATIVADO,NAO,62,36,214,591,0,2802,76.8,6.7,3487,,,,,,3.92
+jogo,1,sem gol,ATIVADO,SIM,62,81,263,4,2,1490,609.3,109.9,2799,,,,,,4.10
+jogo,1,sem gol,ATIVADO,SIM,62,60,280,136,1,3606,74.9,34.8,6003,,,,,,3.02
+jogo,2,sem gol,ATIVADO,SIM,62,48,197,47,47,3825,1847.2,144.0,1550,,,,,,4.16
+jogo,3,sem gol,ATIVADO,SIM,62,9,246,2,2,3721,149.9,593.2,3878,,,,,,4.08
+jogo,1,sem gol,ATIVADO,SIM,62,10,134,3,2,3927,2425.7,65.3,2321,,,,,,5.32
+jogo,2,GOL CONTRA,ATIVADO,SIM,62,22,253,5,0,2421,49.6,108.8,3377,,,,,,3.76
+jogo,3,sem gol,ATIVADO,NAO,62,56,229,390,0,1604,75.0,1.3,3330,,,,,,4.01
+jogo,1,sem gol,ATIVADO,SIM,62,50,211,276,83,724,62.4,34.5,2668,,,,,,4.27
+jogo,2,sem gol,ATIVADO,SIM,62,28,241,101,0,3454,76.0,16.6,6006,,,,,,3.86
+jogo,3,sem gol,ATIVADO,NAO,62,42,226,660,0,2645,74.7,15.1,2485,,,,,,4.67
+jogo,1,GOL CONTRA,ATIVADO,SIM,62,58,258,4,2,3849,35.0,23.4,3535,,,,,,5.06
+jogo,2,sem gol,ATIVADO,SIM,62,42,227,2,0,1951,316.4,63.1,3092,,,,,,3.72
+jogo,3,sem gol,ATIVADO,NAO,62,18,238,4,0,2326,49.9,71.2,3697,,,,,,2.50
+jogo,1,sem gol,ATIVADO,NAO,62,77,256,4,0,886,52.9,520.5,3564,,,,,,5.60
+jogo,2,GOL CONTRA,ATIVADO,NAO,62,48,237,363,0,1138,77.8,10.2,2568,,,,,,3.88
+jogo,3,sem gol,ATIVADO,SIM,62,17,222,3,0,2410,3053.7,65.9,2384,,,,,,5.18
+jogo,1,sem gol,ATIVADO,SIM,62,18,262,6,2,2608,1164.6,1603.2,4471,,,,,,3.66
+jogo,2,sem gol,ATIVADO,SIM,62,37,233,1,0,1971,2052.7,82.1,2857,,,,,,3.24
+jogo,3,sem gol,ATIVADO,NAO,62,55,241,3,0,1196,202.8,618.0,3616,,,,,,2.84
+jogo,1,sem gol,ATIVADO,NAO,62,37,236,2,0,1765,55.1,64.0,3333,,,,,,4.17
+jogo,2,sem gol,ATIVADO,NAO,62,21,234,3,0,1401,1148.5,1042.9,4750,,,,,,4.37
+jogo,3,sem gol,ATIVADO,NAO,62,38,215,311,0,2075,76.9,0.2,2944,,,,,,3.06
+jogo,1,?,?,?,,,,0,0,,,,,,,,,,2.34
+jogo,2,?,?,?,,,,0,0,,,,,,,,,,4.54
+jogo,3,?,?,?,,,,0,0,,,,,,,,,,3.87
+jogo,1,sem gol,ATIVADO,SIM,62,108,339,8,4,1928,367.3,17.1,3577,,,,,,7.46
+jogo,2,GOL CONTRA,ATIVADO,SIM,62,96,349,5,0,2075,57.4,91.8,816,,,,,,6.58
+jogo,3,sem gol,ATIVADO,SIM,62,146,369,2,1,2226,849.6,1207.6,1077,,,,,,6.16
+jogo,1,sem gol,ATIVADO,SIM,62,100,358,4,1,1725,530.9,817.5,2629,,,,,,7.79
+jogo,2,sem gol,ATIVADO,SIM,62,72,299,16,2,2199,727.5,1428.3,4315,,,,,,9.48
+jogo,3,sem gol,ATIVADO,NAO,62,58,234,3,0,1237,79.4,94.3,2457,,,,,,6.94
+jogo,4,sem gol,ATIVADO,SIM,62,50,191,3,0,3865,26.8,26.6,3955,,,,,,4.11
+jogo,5,sem gol,ATIVADO,SIM,62,20,267,4,2,2494,2374.9,65.1,4591,,,,,,5.35
+jogo,6,sem gol,ATIVADO,SIM,62,40,245,4,4,3798,76.3,550.5,3246,,,,,,4.74
+jogo,1,sem gol,ATIVADO,SIM,62,48,251,13,4,3932,626.9,962.9,4307,,,,,,3.45
+jogo,2,sem gol,ATIVADO,SIM,62,50,238,19,4,2242,1247.1,20.4,2069,,,,,,5.16
+jogo,3,GOL CONTRA,ATIVADO,SIM,62,75,282,3,0,2330,57.4,116.8,3516,,,,,,6.01
+jogo,4,sem gol,ATIVADO,SIM,62,65,253,146,1,3570,87.4,34.0,1462,,,,,,5.21
+jogo,5,sem gol,ATIVADO,SIM,62,93,281,8,2,3604,1286.0,982.7,4244,,,,,,4.20
+jogo,6,GOL CONTRA,ATIVADO,SIM,62,85,267,2,2,3742,44.8,27.9,3456,,,,,,4.11
+jogo,1,sem gol,ATIVADO,NAO,62,40,171,360,0,1941,79.5,12.5,1698,,,,,,3.95
+jogo,2,GOL CONTRA,ATIVADO,NAO,62,26,200,1,0,1719,162.6,222.5,3581,,,,,,4.31
+jogo,3,sem gol,ATIVADO,SIM,62,10,178,4,0,1532,1970.3,90.9,2222,,,,,,4.16
+jogo,4,sem gol,ATIVADO,NAO,62,58,238,261,0,5090,72.1,7.8,2557,,,,,,4.29
+jogo,5,GOL CONTRA,ATIVADO,NAO,62,29,211,388,0,5241,82.0,2.0,2395,,,,,,3.69
+jogo,6,sem gol,ATIVADO,SIM,62,60,274,88,2,3660,67.5,42.3,6015,,,,,,4.33
+jogo,1,sem gol,ATIVADO,NAO,62,39,217,4,0,4387,1995.6,103.8,1716,,,,,,4.38
+jogo,2,GOL CONTRA,ATIVADO,SIM,62,75,260,1,0,2297,36.8,31.0,3871,,,,,,4.89
+jogo,3,GOL CONTRA,ATIVADO,NAO,62,16,238,253,0,1276,6.9,24.5,3965,,,,,,4.13
+jogo,4,sem gol,ATIVADO,SIM,62,21,243,0,0,2127,1409.8,1476.2,4556,,,,,,5.09
+jogo,5,sem gol,ATIVADO,SIM,62,23,247,4,2,3744,1859.6,1164.6,4402,,,,,,5.17
+jogo,6,sem gol,ATIVADO,NAO,62,15,269,2,0,2302,376.7,639.7,4515,,,,,,5.76
+jogo,1,ERRO,,,,,,,
+jogo,2,ERRO,,,,,,,
+jogo,3,ERRO,,,,,,,
+jogo,4,ERRO,,,,,,,
+jogo,5,ERRO,,,,,,,
+jogo,6,ERRO,,,,,,,
+jogo,1,sem gol,ATIVADO,NAO,62,65,242,484,0,5164,65.7,10.5,5072,,,,,,2.93
+jogo,2,sem gol,ATIVADO,SIM,62,38,273,53,0,2048,77.8,39.0,1874,,,,,,3.54
+jogo,3,GOL CONTRA,ATIVADO,NAO,62,78,239,274,0,5416,74.1,15.8,2218,,,,,,4.45
+jogo,4,GOL CONTRA,ATIVADO,NAO,62,84,279,229,0,964,73.8,27.5,2925,,,,,,3.79
+jogo,5,GOL CONTRA,ATIVADO,SIM,62,54,259,6,4,3866,32.3,13.2,3453,,,,,,3.88
+jogo,6,sem gol,ATIVADO,SIM,62,96,250,45,1,2139,65.0,11.9,2237,,,,,,4.27
+jogo,1,sem gol,ATIVADO,SIM,62,38,201,2,0,2675,1599.8,158.5,1782,,,,,,5.28
+jogo,2,sem gol,ATIVADO,SIM,62,37,148,299,240,1193,1990.7,58.8,385,,,,,,3.93
+jogo,3,GOL CONTRA,ATIVADO,SIM,62,74,262,165,2,2342,76.2,16.0,3101,,,,,,3.84
+jogo,4,sem gol,ATIVADO,NAO,62,49,269,4,0,895,1042.0,1371.6,4630,,,,,,4.84
+jogo,5,GOL CONTRA,ATIVADO,NAO,62,74,260,240,0,796,76.8,27.2,3340,,,,,,4.67
+jogo,6,sem gol,ATIVADO,SIM,62,80,297,130,2,3630,75.9,33.3,3027,,,,,,3.92
+jogo,1,GOL A FAVOR,ATIVADO,SIM,62,7,204,1,1,5876,4218.5,121.2,3858,,,,,,4.29
+jogo,2,GOL A FAVOR,ATIVADO,SIM,62,7,205,0,0,5944,4219.5,24.6,3865,,,,,,4.73
+jogo,3,GOL A FAVOR,ATIVADO,SIM,62,6,211,0,0,5555,4219.2,41.1,3856,,,,,,4.38
+jogo,1,sem gol,ATIVADO,NAO,62,38,238,230,0,1818,73.1,19.3,3236,,,,,,3.51
+jogo,2,sem gol,ATIVADO,SIM,62,15,173,3,0,2004,3076.2,40.4,3216,,,,,,4.13
+jogo,3,GOL CONTRA,ATIVADO,SIM,62,28,256,5,0,1633,62.5,95.6,2456,,,,,,4.01
+jogo,4,GOL CONTRA,ATIVADO,NAO,62,96,277,8,0,5248,80.9,19.4,3042,,,,,,4.02
+jogo,5,sem gol,ATIVADO,SIM,62,8,215,4,0,2046,35.7,83.6,3610,,,,,,3.89
+jogo,6,sem gol,ATIVADO,SIM,62,43,271,71,2,3760,78.7,32.1,1201,,,,,,4.51
+jogo,1,GOL A FAVOR,ATIVADO,SIM,62,7,213,7,7,5947,4218.1,94.9,3866,,,,,,3.54
+jogo,2,GOL A FAVOR,ATIVADO,SIM,62,7,210,6,6,5717,4218.6,61.3,3859,,,,,,3.04
+jogo,3,GOL A FAVOR,ATIVADO,SIM,62,6,215,3,3,5870,4218.0,112.3,3857,,,,,,3.31
+jogo,4,GOL A FAVOR,ATIVADO,SIM,62,7,196,2,2,5925,4215.5,164.4,3863,,,,,,3.25
+jogo,5,GOL A FAVOR,ATIVADO,SIM,62,7,212,5,5,5860,4218.4,49.3,3864,,,,,,4.99
+jogo,6,GOL A FAVOR,ATIVADO,SIM,62,6,180,3,3,5787,4217.7,131.5,3857,,,,,,3.57
+jogo,1,sem gol,ATIVADO,SIM,62,12,240,144,2,2206,63.0,20.5,173,,,,,,3.38
+jogo,2,sem gol,ATIVADO,NAO,62,28,178,2,0,2298,3069.1,155.3,714,,,,,,5.19
+jogo,3,sem gol,ATIVADO,SIM,62,69,261,3,1,2784,659.2,1066.0,3991,,,,,,4.16
+jogo,4,sem gol,ATIVADO,NAO,62,62,244,278,0,1295,64.2,20.2,2696,,,,,,3.90
+jogo,5,sem gol,ATIVADO,SIM,62,37,224,2,0,1842,284.7,46.8,3285,,,,,,2.91
+jogo,6,GOL CONTRA,ATIVADO,SIM,62,23,188,3,0,2105,8.0,62.2,3339,,,,,,4.62
+jogo,1,GOL CONTRA,ATIVADO,SIM,62,66,232,7,2,3299,81.7,53.2,1700,,,,,,3.74
+jogo,2,GOL CONTRA,ATIVADO,SIM,62,77,240,22,13,3874,84.2,11.9,349,,,,,,5.21
+jogo,3,GOL CONTRA,ATIVADO,SIM,62,47,257,33,19,4177,85.6,11.1,3714,,,,,,3.57
+jogo,4,sem gol,ATIVADO,SIM,62,10,252,21,10,3856,76.1,20.7,1813,,,,,,3.85
+jogo,5,sem gol,ATIVADO,SIM,62,48,296,587,274,770,22.0,9.1,3049,,,,,,4.96
+jogo,6,GOL CONTRA,ATIVADO,SIM,62,53,217,4,3,3163,15.4,26.3,183,,,,,,5.47
+jogo,1,GOL CONTRA,ATIVADO,SIM,62,58,252,0,0,2639,130.4,90.0,2518,,,,,,2.82
+jogo,2,sem gol,ATIVADO,SIM,62,9,224,3,1,3800,73.4,540.2,3696,,,,,,3.86
+jogo,3,sem gol,ATIVADO,SIM,62,63,228,9,0,1580,54.4,8.2,279,,,,,,3.50
+jogo,4,sem gol,ATIVADO,SIM,62,21,182,854,520,929,2628.2,67.5,188,,,,,,3.63
+jogo,5,GOL CONTRA,ATIVADO,NAO,62,80,238,4,0,1662,27.8,95.1,3210,,,,,,3.83
+jogo,6,sem gol,ATIVADO,SIM,62,61,266,3,0,2110,846.1,1336.2,600,,,,,,2.81
+jogo,1,GOL CONTRA,ATIVADO,SIM,62,71,271,6,4,3282,21.6,6.0,1794,,,,,,3.79
+jogo,2,GOL CONTRA,ATIVADO,NAO,62,77,266,10,2,5256,69.9,21.7,2398,,,,,,4.70
+jogo,3,sem gol,ATIVADO,SIM,62,31,276,6,1,3705,56.8,16.5,3794,,,,,,3.65
+jogo,4,sem gol,ATIVADO,SIM,62,69,243,461,139,3376,39.3,0.4,486,,,,,,3.28
+jogo,5,sem gol,ATIVADO,NAO,62,12,227,3,0,889,338.5,757.9,4133,,,,,,5.28
+jogo,6,sem gol,ATIVADO,SIM,62,18,220,3,0,2274,46.7,72.0,3284,,,,,,5.81
+jogo,1,sem gol,ATIVADO,SIM,62,18,277,4,0,2345,1700.0,1498.4,4791,,,,,,3.81
+jogo,1,sem gol,ATIVADO,SIM,62,16,149,3,3,3575,3087.2,28.4,1413,,,,,,3.98
+jogo,1,sem gol,ATIVADO,SIM,62,53,251,12,0,2222,1005.2,1218.5,4359,,,,,,3.82
+jogo,1,sem gol,ATIVADO,SIM,62,47,203,4,2,3279,6.8,36.0,2797,,,,,,4.24
+jogo,2,sem gol,ATIVADO,SIM,62,34,251,6,2,2864,25.2,27.7,2503,,,,,,4.74
+jogo,3,sem gol,ATIVADO,NAO,62,38,217,4,0,2167,85.5,47.6,3328,,,,,,7.79
+jogo,4,GOL CONTRA,ATIVADO,SIM,62,56,250,4,0,1938,196.8,9.3,3618,,,,,,5.59
+jogo,5,sem gol,ATIVADO,SIM,62,80,272,4,1,1890,5.4,4.0,4209,,,,,,6.37
+jogo,6,sem gol,ATIVADO,SIM,62,44,234,1,1,1882,84.9,6.1,3359,,,,,,5.29
+jogo,1,GOL CONTRA,ATIVADO,SIM,62,83,301,3,0,1280,126.4,76.6,3495,,,,,,4.69
+jogo,1,sem gol,ATIVADO,SIM,62,32,150,7,3,3624,28.4,17.9,1337,,,,,,3.27
+jogo,1,sem gol,ATIVADO,SIM,62,65,248,12,4,3843,71.0,4.4,2980,,,,,,3.46
+jogo,1,GOL CONTRA,ATIVADO,SIM,62,83,282,3,2,3334,14.1,5.5,1538,,,,,,3.29
+jogo,1,sem gol,ATIVADO,NAO,62,13,238,4,0,4534,503.4,880.3,4338,,,,,,3.11
+jogo,2,sem gol,ATIVADO,SIM,62,34,224,416,313,3482,36.1,2.4,1416,,,,,,4.05
+jogo,3,sem gol,ATIVADO,SIM,62,53,242,5,2,3420,12.7,1.0,818,,,,,,5.24
+jogo,4,sem gol,ATIVADO,SIM,62,43,222,7,0,3503,34.5,1.3,3031,,,,,,4.27
+jogo,5,sem gol,ATIVADO,SIM,62,68,262,6,1,2642,35.6,31.4,4460,,,,,,4.30
+jogo,6,GOL CONTRA,ATIVADO,NAO,62,97,260,55,0,1792,73.5,35.4,2858,,,,,,4.27
+jogo,1,BLOQUEADO,,,,,,,
+jogo,1,BLOQUEADO,,,,,,,
+jogo,1,GOL CONTRA,ATIVADO,SIM,62,17,229,2,2,3724,128.7,41.7,3664,,,,,,2.91
+um_so_cobrador,1,GOL A FAVOR,ATIVADO,SIM,62,5,82,13,0,6191,20.5,33.2,1713,,,,,,5.07
+um_so_cobrador,2,GOL A FAVOR,ATIVADO,SIM,62,5,86,0,0,6240,31.9,21.9,1437,,,,,,3.50
+um_so_cobrador,3,GOL A FAVOR,ATIVADO,SIM,62,5,84,0,0,5971,33.2,27.2,1187,,,,,,3.38
+um_so_cobrador,4,GOL A FAVOR,ATIVADO,SIM,62,5,88,0,0,6182,35.9,3.3,1433,,,,,,4.00
+um_so_cobrador,5,GOL A FAVOR,ATIVADO,SIM,62,73,253,2,2,6267,35.0,12.6,1328,,,,,,4.45
+um_so_cobrador,6,sem gol,ATIVADO,SIM,62,5,86,2,2,6162,34.8,20.6,1774,,,,,,4.80
+jogo,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"10 processos zumbi no container (limite 1) - recrie com ./ararabots.sh parar && ./ararabots.sh preparar --headless"
+jogo,1,sem gol,ATIVADO,SIM,62,48,229,4,1,2269,1046.7,218.6,2113,,,,,,3.50,
+jogo,2,sem gol,ATIVADO,SIM,62,51,207,8,2,3244,44.9,12.0,2200,,,,,,2.73,
+jogo,3,sem gol,ATIVADO,SIM,62,64,228,11,6,2423,14.0,14.9,2156,,,,,,3.22,
+jogo,4,GOL CONTRA,ATIVADO,SIM,62,38,200,10,1,4229,11.9,61.5,600,,,,,,3.62,
+jogo,5,sem gol,ATIVADO,SIM,62,84,263,35,23,3997,75.4,20.7,1842,,,,,,4.38,
+jogo,6,sem gol,ATIVADO,NAO,62,19,197,2,0,2806,2129.1,91.5,1239,,,,,,4.09,
+jogo,1,sem gol,ATIVADO,SIM,62,11,238,21,17,4239,79.4,5.0,909,,,,,,3.15,
+jogo,2,GOL CONTRA,ATIVADO,SIM,62,102,291,5,2,3548,23.2,5.0,1890,,,,,,3.17,
+jogo,3,sem gol,ATIVADO,SIM,62,44,229,14,9,3950,64.3,11.2,3891,,,,,,4.00,
+jogo,4,sem gol,ATIVADO,NAO,62,40,198,4,0,2527,542.5,128.8,2184,,,,,,4.99,
+jogo,5,GOL CONTRA,ATIVADO,SIM,62,126,282,12,3,2344,37.3,4.7,777,,,,,,3.78,
+jogo,6,GOL CONTRA,ATIVADO,SIM,62,64,251,5,0,3271,7.1,35.1,376,,,,,,2.90,
+jogo,1,GOL CONTRA,ATIVADO,NAO,62,104,277,3,1,2556,67.2,41.6,3058,,,,,,5.40,
+jogo,2,sem gol,ATIVADO,SIM,62,36,270,6,2,2347,759.9,1309.8,4290,,,,,,4.06,
+jogo,3,GOL CONTRA,ATIVADO,SIM,62,112,300,9,3,3768,72.1,21.8,3557,,,,,,2.68,
+jogo,4,sem gol,ATIVADO,SIM,62,15,245,4,0,2399,1154.5,1524.7,4560,,,,,,2.18,
+jogo,5,sem gol,ATIVADO,SIM,62,64,239,1,0,1748,1199.6,11.2,3696,,,,,,4.02,
+jogo,6,sem gol,ATIVADO,SIM,62,37,235,2,0,3712,3091.4,0.9,3085,,,,,,3.12,
+um_so_cobrador,1,GOL A FAVOR,ATIVADO,SIM,62,12,106,1,1,6291,29.0,16.0,3302,,,,,,4.65,
+um_so_cobrador,2,GOL A FAVOR,ATIVADO,SIM,62,5,88,0,0,6141,32.4,10.9,1940,,,,,,4.70,
+um_so_cobrador,3,GOL A FAVOR,ATIVADO,SIM,62,5,87,1,1,6100,31.1,18.1,1415,,,,,,4.04,
+um_so_cobrador,4,sem gol,ATIVADO,SIM,62,5,79,1,1,6349,34.1,8.5,1811,,,,,,3.86,
+um_so_cobrador,5,GOL A FAVOR,ATIVADO,SIM,62,5,80,2,2,6332,29.5,16.1,1410,,,,,,4.50,
+um_so_cobrador,6,GOL A FAVOR,ATIVADO,SIM,62,4,81,0,0,6174,36.1,13.0,1782,,,,,,2.88,
+jogo,1,sem gol,nao ativado,NAO,62,20,180,0,0,,4220.2,29.6,,,,,,,3.02,
+jogo,2,sem gol,ATIVADO,NAO,62,26,197,0,0,,4218.3,105.7,,,,,,,3.95,
+jogo,3,sem gol,nao ativado,NAO,62,27,198,0,0,,4219.0,83.8,,,,,,,5.09,
+jogo,4,sem gol,nao ativado,NAO,62,36,210,0,0,,4220.1,40.7,,,,,,,3.42,
+jogo,5,sem gol,nao ativado,NAO,62,17,198,0,0,872,4218.5,94.3,11,,,,,,3.29,
+jogo,6,sem gol,nao ativado,NAO,62,21,201,0,0,,4218.8,36.3,,,,,,,3.54,
+jogo,1,GOL CONTRA,ATIVADO,SIM,62,92,291,65,1,2468,24.4,12.3,2441,,,,,,3.22,
+jogo,2,sem gol,ATIVADO,NAO,62,52,301,2,0,1523,150.9,70.0,3414,,,,,,3.84,
+jogo,3,sem gol,ATIVADO,NAO,62,86,284,4,0,1248,1064.3,1283.3,4125,,,,,,3.42,
+jogo,4,sem gol,ATIVADO,NAO,62,47,251,3,0,964,3067.0,60.8,1681,,,,,,3.81,
+jogo,5,GOL CONTRA,ATIVADO,SIM,62,58,282,7,3,2328,22.2,1.3,3567,,,,,,3.84,
+jogo,6,GOL CONTRA,ATIVADO,NAO,62,101,290,3,0,5226,10.2,54.4,5013,,,,,,3.95,
+jogo,1,sem gol,ATIVADO,SIM,62,31,217,6,2,3238,18.1,15.8,1498,,,,,,3.39,
+jogo,2,sem gol,ATIVADO,SIM,62,63,228,8,4,3346,35.5,4.8,858,,,,,,4.15,
+jogo,3,sem gol,ATIVADO,SIM,62,44,230,3,2,2194,209.8,3.0,3764,,,,,,3.53,
+jogo,4,GOL CONTRA,ATIVADO,SIM,62,44,228,4,1,2822,55.0,34.6,2881,,,,,,4.15,
+jogo,5,sem gol,ATIVADO,SIM,62,69,241,0,0,3775,149.0,2.1,3269,,,,,,4.21,
+jogo,6,sem gol,ATIVADO,SIM,62,27,269,5,2,3170,11.7,0.1,3132,,,,,,4.98,
+jogo,1,GOL A FAVOR,ATIVADO,SIM,62,13,234,1,1,5917,4217.2,95.6,3863,,,,,,3.87,
+jogo,2,GOL A FAVOR,ATIVADO,SIM,62,15,215,0,0,5802,4218.1,106.8,3857,,,,,,3.72,
+jogo,3,BLOQUEADO,,,,,,,,,,,,,,,,,,"210 processos zumbi no container (limite 200) - recrie com ./ararabots.sh parar && ./ararabots.sh preparar --headless"
+jogo,4,BLOQUEADO,,,,,,,,,,,,,,,,,,"220 processos zumbi no container (limite 200) - recrie com ./ararabots.sh parar && ./ararabots.sh preparar --headless"
+jogo,5,BLOQUEADO,,,,,,,,,,,,,,,,,,"230 processos zumbi no container (limite 200) - recrie com ./ararabots.sh parar && ./ararabots.sh preparar --headless"
+jogo,6,BLOQUEADO,,,,,,,,,,,,,,,,,,"240 processos zumbi no container (limite 200) - recrie com ./ararabots.sh parar && ./ararabots.sh preparar --headless"
+jogo,1,GOL A FAVOR,ATIVADO,SIM,62,7,204,0,0,5795,4219.8,53.8,3861,,,,,,2.16,
+jogo,2,GOL A FAVOR,ATIVADO,SIM,62,7,185,0,0,5713,4218.7,120.0,3856,,,,,,4.52,
+jogo,3,GOL A FAVOR,ATIVADO,SIM,62,7,201,0,0,5800,4216.3,148.6,3856,,,,,,4.32,
+jogo,4,GOL A FAVOR,ATIVADO,SIM,62,7,194,0,0,5615,4214.2,192.9,3854,,,,,,4.14,
+jogo,5,sem gol,ATIVADO,NAO,62,38,202,0,0,,4219.7,26.5,,,,,,,3.37,
+jogo,6,GOL A FAVOR,ATIVADO,SIM,62,6,165,6,6,5833,4220.1,38.0,3857,,,,,,3.80,
+jogo,1,GOL A FAVOR,ATIVADO,SIM,62,13,231,0,0,5772,4219.4,41.9,3860,,,,,,4.18,

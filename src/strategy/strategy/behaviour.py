@@ -1,57 +1,38 @@
-"""Behaviour tree primitives.
+import os
+import time
 
-These are plain Python objects. They do not inherit from rclpy's Node, do not
-subscribe to anything, and cannot reach the ROS graph. A node receives what it needs
-in two ways: long-lived collaborators through ``deps`` at construction, and the
-world through the ``TickContext`` passed into ``run()``.
+from rclpy.node import Node
+from abc import abstractmethod
+from enum import Enum
 
-That makes a traversal a pure function of its context, so a test builds a context,
-calls ``run`` and asserts on the returned skill, with no ROS running.
-"""
+class TaskStatus(Enum):
+    SUCCESS = 0
+    FAILURE = 1
+    RUNNING = 2
 
-from abc import ABC, abstractmethod
-from typing import Any, Iterable, List, Optional, Sequence as SequenceT, Tuple
-
-from strategy.context import TickContext, TreeDeps
-from strategy.commons.task_status import TaskStatus
-
-
-# What every run() returns: how the node finished, and the skill it wants executed.
-RunResult = Tuple[TaskStatus, Optional[Any]]
-
-class BehaviourNode(ABC):
-    """Common base for leaves and composites."""
-
-    def __init__(self, name: str, deps: TreeDeps):
+class LeafNode(Node):
+    def __init__(self, name):
+        super().__init__(name)
         self.name = name
-        self.deps = deps
-
-    @property
-    def logger(self):
-        return self.deps.logger
 
     @abstractmethod
-    def run(self, context: TickContext) -> RunResult:
-        raise NotImplementedError("subclass must override run")
+    def run(self):
+        raise Exception("subclass must override run")
 
-
-class LeafNode(BehaviourNode):
-    """A node with no children. Reads the context, returns a status and a skill."""
-
-    children: SequenceT["BehaviourNode"] = ()
-
-
-class TreeNode(BehaviourNode):
-    """A node that delegates to children."""
-
-    def __init__(self, name: str, deps: TreeDeps, children: Iterable[BehaviourNode]):
-        super().__init__(name, deps)
-        self.children: List[BehaviourNode] = []
+class TreeNode(Node):
+    def __init__(self, name, children):
+        super().__init__(name)
+        self.name = name
+        self.children = []
         self.add_children(children)
 
-    def add_children(self, children: Iterable[BehaviourNode]) -> None:
+    def add_children(self, children) -> None:
         for child in children:
             self.children.append(child)
+
+    @abstractmethod
+    def run(self):
+        raise Exception("subclass must override run")
 
 
 class Sequence(TreeNode):
@@ -63,12 +44,12 @@ class Sequence(TreeNode):
     or FAILURE is returned from the subtask.
     """
 
-    def run(self, context: TickContext) -> RunResult:
-        # Seeded so an empty sequence returns cleanly instead of raising on an
-        # unbound name, which is what the previous version did.
-        action = None
+    def __init__(self, name, children):
+        super().__init__(name, children)
+
+    def run(self):
         for c in self.children:
-            status, action = c.run(context)
+            status, action = c.run()
             if status != TaskStatus.SUCCESS:
                 return status, action
         return TaskStatus.SUCCESS, action
@@ -83,9 +64,38 @@ class Selector(TreeNode):
     or FAILURE is returned from the subtask.
     """
 
-    def run(self, context: TickContext) -> RunResult:
+    def __init__(self, name, children):
+        super().__init__(name, children)
+
+    def run(self):
         for c in self.children:
-            status, action = c.run(context)
+            status, action = c.run()
             if status != TaskStatus.FAILURE:
+                # T-5: UM RUNNING AQUI BLOQUEIA TODOS OS IRMAOS SEGUINTES.
+                #
+                # Esta e a semantica classica do Selector e a bola parada depende
+                # dela - nao foi alterada. O que muda e que ela deixa de ser
+                # SILENCIOSA: ja congelou o time inteiro duas vezes (deslocamento
+                # de 2 mm em 24,5 s), e nas duas o log nao tinha uma linha sequer
+                # dizendo quem estava segurando a arvore.
+                #
+                # Sai so com DIAG_JOGO, e so quando o filho devolve RUNNING - em
+                # operacao normal nao imprime nada.
+                if status == TaskStatus.RUNNING and os.environ.get("DIAG_JOGO"):
+                    _agora = time.monotonic()
+                    if _agora - getattr(self, "_ultimo_aviso_running", 0.0) > 1.0:
+                        self._ultimo_aviso_running = _agora
+                        _irmaos = [o.name for o in self.children
+                                   if o is not c and hasattr(o, "name")]
+                        print("[BT] %s parou em RUNNING no filho '%s'; nao rodaram: %s"
+                              % (self.name, getattr(c, "name", "?"), _irmaos),
+                              flush=True)
                 return status, action
         return TaskStatus.FAILURE, None
+
+class BaseTree(Selector):
+    def __init__(self, name, children):
+        super().__init__(name, children)
+
+    def run(self):
+        return super().run()
