@@ -27,6 +27,8 @@ GOAL_MOVED_EPSILON = 1.0
 MAX_VISION_AGE = 0.2
 # How old the overhead point may be and still bound the current speed.
 OVERHEAD_SPEED_CAP_MAX_AGE = 0.2
+# Below this final speed (mm/s) a goal is one to stop at rather than pass through.
+PASS_THROUGH_MIN_SPEED = 1.0
 
 class MovementPlanner(Node):
     def __init__(self):
@@ -200,8 +202,12 @@ class MovementPlanner(Node):
 
         init_pos = Vector2D(target.initial_pos.x, target.initial_pos.y)
         goal_pos = Vector2D(target.target_pos.x, target.target_pos.y)
+        goal_vel = Vector2D(target.target_vel.x, target.target_vel.y)
 
-        if self._is_parked(robot_id, goal_pos, init_pos):
+        # A goal with a final velocity is driven through, so there is nothing to park at.
+        if goal_vel.size() >= PASS_THROUGH_MIN_SPEED:
+            self._parked.pop(robot_id, None)
+        elif self._is_parked(robot_id, goal_pos, init_pos):
             return None
 
         now_sec = self.get_clock().now().nanoseconds / 1e9
@@ -250,10 +256,7 @@ class MovementPlanner(Node):
                 handoff_stamp - now_sec,
             )
 
-        target_state = MotionState(
-            Vector2D(target.target_pos.x, target.target_pos.y),
-            Vector2D(target.target_vel.x, target.target_vel.y)
-            )
+        target_state = MotionState(goal_pos, goal_vel)
 
         try:
             obstacles = self.factory.create_obstacles(

@@ -15,6 +15,9 @@ from movement.entities.motion.motion_state import MotionState
 
 from utils.math_util import Vector2D
 
+# Below this final speed (mm/s) a plan ends at rest, so there is nothing to coast on.
+COAST_MIN_SPEED = 1.0
+
 
 def build_overhead_point(
     robot_id: int,
@@ -47,6 +50,31 @@ def build_overhead_point(
     point.wall_stamp = now_sec + (sample_time - time_offset)
     point.trajectory = trajectory_msg
     return point
+
+
+def reference_state(
+    trajectory: Trajectory, offset: float, max_coast: float
+) -> Optional[MotionState]:
+    """
+    The state at offset, carried on at the final velocity past the end of the plan.
+
+    Holding a pass-through goal instead has the position term pull the robot back
+    while the velocity feedforward pushes it on. Past max_coast it stops.
+    """
+    duration = trajectory.get_total_duration()
+    state = trajectory.get_state(min(offset, duration))
+    overrun = offset - duration
+    if state is None or overrun <= 0.0:
+        return state
+
+    overrun = min(overrun, max_coast)
+    position = Vector2D(
+        state.position.x + state.velocity.x * overrun,
+        state.position.y + state.velocity.y * overrun,
+    )
+    if overrun >= max_coast:
+        return MotionState(position, Vector2D(0.0, 0.0))
+    return MotionState(position, state.velocity)
 
 
 def tracking_error(
@@ -108,6 +136,8 @@ class MovementTracker(Node):
             "control_reference_topic", "movement_tracker/control_reference"
         )
         self.declare_parameter('change_radius', 10)
+        self.declare_parameter('change_velocity', 50.0)
+        self.declare_parameter('coast_max_time', 0.3)
         self.declare_parameter('divergence_radius', 400.0)
         self.declare_parameter('divergence_frames', 3)
         self.declare_parameter('recovery_frames', 10)
@@ -226,8 +256,16 @@ class MovementTracker(Node):
         if msg.handoff_stamp < pending["handoff_stamp"]:
             return  # strictly older handoff — discard
 
-        dist_goal = trajectory.get_destination().position.distance(pending["trajectory"].get_destination().position)
-        goal_changed = dist_goal > float(self.get_parameter('change_radius').value)  # mm
+        goal = trajectory.get_destination()
+        pending_goal = pending["trajectory"].get_destination()
+        # A new final velocity is a new goal too, or a strategy retargeting only the
+        # speed it wants to pass through at would wait on the arrival-time comparison.
+        goal_changed = (
+            goal.position.distance(pending_goal.position)
+            > float(self.get_parameter('change_radius').value)  # mm
+            or goal.velocity.distance(pending_goal.velocity)
+            > float(self.get_parameter('change_velocity').value)  # mm/s
+        )
 
         if goal_changed:
             data["pending"] = {
@@ -273,24 +311,37 @@ class MovementTracker(Node):
 
         total_duration = trajectory.get_total_duration()
         time_offset = float(data.get("time_offset", 0.0))
+        max_coast = max(0.0, float(self.get_parameter("coast_max_time").value))
 
-        # Advance the reference in time, then use the latest measured pose to
-        # pull the trajectory clock back toward where the robot actually is.
-        if time_offset < total_duration:
-            expected_offset = min(time_offset + dt, total_duration)
-        else:
-            expected_offset = total_duration
-
-        new_offset = self._closed_loop_offset(
-            robot_id,
-            trajectory,
-            expected_offset,
-            now_sec,
+        final_state = trajectory.get_destination()
+        coasting = (
+            time_offset >= total_duration
+            and final_state is not None
+            and final_state.velocity.size() >= COAST_MIN_SPEED
         )
+
+        if coasting:
+            # Past the end of a plan that finishes moving: keep the clock running so
+            # the reference carries on at the final velocity until the next plan.
+            new_offset = min(time_offset + dt, total_duration + max_coast)
+        else:
+            # Advance the reference in time, then use the latest measured pose to
+            # pull the trajectory clock back toward where the robot actually is.
+            if time_offset < total_duration:
+                expected_offset = min(time_offset + dt, total_duration)
+            else:
+                expected_offset = total_duration
+
+            new_offset = self._closed_loop_offset(
+                robot_id,
+                trajectory,
+                expected_offset,
+                now_sec,
+            )
         data["time_offset"] = new_offset
 
         # Publish Control Reference using the corrected trajectory time.
-        current_state = trajectory.get_state(new_offset)
+        current_state = reference_state(trajectory, new_offset, max_coast)
         control_ref = build_control_reference_point(
             robot_id,
             data.get("trajectory_msg"),

@@ -10,6 +10,7 @@ from movement.movement_tracker import (
     MovementTracker,
     build_control_reference_point,
     build_overhead_point,
+    reference_state,
     tracking_error,
 )
 
@@ -22,6 +23,8 @@ DEFAULT_PARAMS = {
     "lookahead_time": 0.2,
     "improvement_threshold": 0.1,
     "change_radius": 10,
+    "change_velocity": 50.0,
+    "coast_max_time": 0.3,
     "divergence_radius": 400.0,
     "divergence_frames": 3,
     "recovery_frames": 10,
@@ -77,10 +80,10 @@ def tracker():
     return _tracker()
 
 
-def _trajectory(distance: float = 1000.0) -> Trajectory:
+def _trajectory(distance: float = 1000.0, final_speed: float = 0.0) -> Trajectory:
     generator = TrajectoryGenerator()
     start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
-    goal = MotionState(Vector2D(distance, 0), Vector2D(0, 0))
+    goal = MotionState(Vector2D(distance, 0), Vector2D(final_speed, 0))
     return Trajectory(generator.generate(start, goal))
 
 
@@ -137,10 +140,10 @@ def test_build_control_reference_point():
     assert len(point.trajectory.segments) > 0
 
 
-def _trajectory_msg(start_xy, goal_xy, robot_id=1, handoff_stamp=0.0):
+def _trajectory_msg(start_xy, goal_xy, robot_id=1, handoff_stamp=0.0, goal_vel=(0, 0)):
     generator = TrajectoryGenerator()
     start = MotionState(Vector2D(*start_xy), Vector2D(0, 0))
-    goal = MotionState(Vector2D(*goal_xy), Vector2D(0, 0))
+    goal = MotionState(Vector2D(*goal_xy), Vector2D(*goal_vel))
     msg = Trajectory(generator.generate(start, goal)).to_msg(robot_id=robot_id)
     msg.handoff_stamp = handoff_stamp
     return msg
@@ -197,6 +200,17 @@ class TestTrajectoryCallback:
         tracker.trajectory_callback(_trajectory_msg((950, 0), (1000, 0), handoff_stamp=5.01))
 
         assert tracker.robot_data[1]["pending"]["handoff_stamp"] == 5.01
+
+    def test_a_new_final_velocity_replaces_pending(self, tracker):
+        """Same point, different speed through it: the arrival times say nothing."""
+        tracker.trajectory_callback(_trajectory_msg((0, 0), (1000, 0), handoff_stamp=5.0))
+        tracker.trajectory_callback(
+            _trajectory_msg((0, 0), (1000, 0), handoff_stamp=5.01, goal_vel=(600, 0))
+        )
+
+        pending = tracker.robot_data[1]["pending"]
+        assert pending["handoff_stamp"] == 5.01
+        assert pending["trajectory"].get_destination().velocity.x == pytest.approx(600)
 
 
 class TestTimerCallback:
@@ -288,6 +302,65 @@ class TestUpdateActiveTrajectory:
 
         assert tracker.overhead_pub.publish.called
         assert data["time_offset"] == pytest.approx(0.51)
+
+
+class TestCoastingPastTheEnd:
+    def _data(self, trajectory, time_offset):
+        return {
+            "trajectory": trajectory,
+            "trajectory_msg": trajectory.to_msg(1),
+            "time_offset": time_offset,
+        }
+
+    def test_a_plan_ending_at_rest_holds_its_goal(self):
+        trajectory = _trajectory(1000.0)
+        duration = trajectory.get_total_duration()
+
+        state = reference_state(trajectory, duration + 0.1, max_coast=0.3)
+
+        assert state.position.x == pytest.approx(1000.0)
+        assert state.velocity.size() == pytest.approx(0.0, abs=1e-6)
+
+    def test_a_pass_through_plan_carries_on_at_its_final_velocity(self):
+        trajectory = _trajectory(1000.0, final_speed=800.0)
+        duration = trajectory.get_total_duration()
+
+        state = reference_state(trajectory, duration + 0.1, max_coast=0.3)
+
+        assert state.position.x == pytest.approx(1080.0)
+        assert state.velocity.x == pytest.approx(800.0)
+
+    def test_the_coast_stops_after_max_coast(self):
+        """With no new plan by then something is wrong; stop rather than run on."""
+        trajectory = _trajectory(1000.0, final_speed=800.0)
+        duration = trajectory.get_total_duration()
+
+        state = reference_state(trajectory, duration + 5.0, max_coast=0.3)
+
+        assert state.position.x == pytest.approx(1240.0)
+        assert state.velocity.size() == pytest.approx(0.0)
+
+    def test_the_clock_runs_past_the_end_of_a_pass_through_plan(self, tracker):
+        trajectory = _trajectory(1000.0, final_speed=800.0)
+        duration = trajectory.get_total_duration()
+        data = self._data(trajectory, time_offset=duration)
+
+        tracker._update_active_trajectory(1, data, dt=0.05, now_sec=10.0, lookahead=0.2)
+
+        assert data["time_offset"] == pytest.approx(duration + 0.05)
+        reference = tracker.control_reference_pub.publish.call_args[0][0]
+        assert reference.pos.x == pytest.approx(1040.0)
+        assert reference.vel.x == pytest.approx(800.0)
+        assert not tracker.overhead_pub.publish.called
+
+    def test_the_clock_is_capped_at_max_coast(self, tracker):
+        trajectory = _trajectory(1000.0, final_speed=800.0)
+        duration = trajectory.get_total_duration()
+        data = self._data(trajectory, time_offset=duration + 0.29)
+
+        tracker._update_active_trajectory(1, data, dt=0.05, now_sec=10.0, lookahead=0.2)
+
+        assert data["time_offset"] == pytest.approx(duration + 0.3)
 
 
 class TestHandlePendingHandoff:

@@ -1,3 +1,4 @@
+from math import cos, sin
 from typing import List, Optional
 
 
@@ -6,7 +7,8 @@ class Skill:
 
     Campos usados:
       robot_id (obrigatório)
-      target_x, target_y, vel_x, vel_y (movimento)
+      target_x, target_y, vel_x, vel_y (movimento; vel_* é a velocidade final
+        no alvo em mm/s, 0 para parar nele)
       angle (orientação)
       field_border, penalty_area, center_area, ball, enemy_ids, ally_ids (obstáculos)
     Apenas os campos presentes são enviados.
@@ -17,6 +19,8 @@ class Skill:
         # Movimento
         self.target_x: Optional[float] = None
         self.target_y: Optional[float] = None
+        # Velocidade final no alvo (mm/s). Diferente de zero, o robô passa pelo alvo
+        # em vez de parar; o planner limita o módulo à velocidade máxima.
         self.vel_x: float = 0.0
         self.vel_y: float = 0.0
         self.kick: float = 0.0
@@ -67,6 +71,19 @@ class Skills:
         s = self.move_to(robot_id, target_x, target_y, vel_x, vel_y)
         s.angle = angle
         return s
+
+    def move_through(
+        self,
+        robot_id: int,
+        target_x: float,
+        target_y: float,
+        speed: float,
+        heading: float,
+    ) -> Skill:
+        """Passa pelo alvo a `speed` mm/s na direção `heading` (rad), sem parar."""
+        return self.move_to(
+            robot_id, target_x, target_y, speed * cos(heading), speed * sin(heading)
+        )
 
     def set_orientation(self, robot_id: int, angle: float) -> Skill:
         s = Skill(robot_id)

@@ -363,3 +363,30 @@ class TestRecoveryBraking:
         stop = planner._get_recovery_trajectory(start).get_destination()
 
         assert stop.position.distance(start.position) == pytest.approx(0.0, abs=1.0)
+
+
+class TestFinalVelocity:
+    def test_the_plan_ends_moving_at_the_requested_velocity(self):
+        planner = Orchestrator()
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(3000, 1000), Vector2D(1500, 500))
+
+        end = planner.find(start, goal, []).get_destination()
+
+        assert end.position.distance(goal.position) == pytest.approx(0.0, abs=1e-3)
+        assert end.velocity.distance(goal.velocity) == pytest.approx(0.0, abs=1e-3)
+
+    def test_a_final_velocity_over_the_limit_is_scaled_down_keeping_its_heading(self):
+        """Unclamped, the steering solver cannot end there and returns an empty plan."""
+        config = SolverConfig()
+        planner = Orchestrator(config)
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(3000, 1000), Vector2D(5000, 2500))
+
+        trajectory = planner.find(start, goal, [])
+        end = trajectory.get_destination()
+
+        assert trajectory.get_total_duration() > 0.0
+        assert end.position.distance(goal.position) == pytest.approx(0.0, abs=1e-3)
+        assert end.velocity.x == pytest.approx(config.max_velocity.x)
+        assert end.velocity.y == pytest.approx(config.max_velocity.x / 2.0)

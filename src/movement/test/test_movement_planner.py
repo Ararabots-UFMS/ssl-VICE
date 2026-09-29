@@ -429,6 +429,27 @@ class TestArrivalLatch:
         assert not planner_node._is_parked(2, self.GOAL, Vector2D(2000.0, 0.0))
         assert planner_node._is_parked(1, self.GOAL, Vector2D(0.0, 0.0))
 
+    def test_a_pass_through_goal_is_planned_even_on_top_of_it(self, planner_node):
+        """A goal with a final velocity is driven through, never parked at."""
+        planner_node.game_state = MagicMock()
+        planner_node.factory.create_obstacles.return_value = []
+        planner_node.planner.find.return_value = MagicMock(root=MagicMock(), via_state=None)
+        target = _make_target(initial_pos=(0, 0), target_pos=(0, 0), target_vel=(1500, 0))
+
+        assert planner_node.plan_for_robot(target) is not None
+        goal_state = planner_node.planner.find.call_args[0][1]
+        assert goal_state.velocity == Vector2D(1500, 0)
+
+    def test_a_pass_through_goal_releases_an_earlier_park(self, planner_node):
+        planner_node._is_parked(1, self.GOAL, Vector2D(0.0, 0.0))
+        planner_node.game_state = MagicMock()
+        planner_node.factory.create_obstacles.return_value = []
+        planner_node.planner.find.return_value = MagicMock(root=MagicMock(), via_state=None)
+
+        planner_node.plan_for_robot(_make_target(target_pos=(0, 0), target_vel=(0, 800)))
+
+        assert 1 not in planner_node._parked
+
 
 class TestPlanningFromVision:
     """
