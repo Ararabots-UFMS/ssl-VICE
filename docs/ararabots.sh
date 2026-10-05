@@ -20,6 +20,9 @@
 #                                     (foi ela que provou que a cadeia da dev
 #                                      seguia a referencia e o erro era nosso)
 #      MOVIMENTO_ANTIGO=1 ./ararabots.sh ...   volta ao driver (letra 'v')
+#      ./ararabots.sh web [porta]     PAINEL NO NAVEGADOR destes subcomandos
+#                                     (http://127.0.0.1:8099; a GUI Vue tambem
+#                                      consome esta ponte, na aba 'Tool')
 #      ./ararabots.sh painel [pasta]  junta todos os validacao.csv* num HTML
 #                                     com taxa de disparo e de gol por cenario
 #      ./ararabots.sh sonda           le as linhas [FK] do ultimo teste
@@ -603,6 +606,18 @@ cmd_parar() {
         fi
     done
 
+    # DEVOLVE O ARQUIVO DE OUTRO PACOTE AO ESTADO DO COMMIT.
+    #
+    # O 'preparar' aplica o ajuste do PID em src/control/ - fora de
+    # src/strategy/, que e o nosso escopo. Enquanto os nodes rodam ele TEM de
+    # ficar aplicado (o container le o arquivo ao vivo, --symlink-install).
+    # Quando a sessao acaba, nao: deixar a arvore suja e como um ajuste de teste
+    # entra num commit por acidente.
+    #
+    # Simetria explicita: preparar liga, parar desliga.
+    echo ">> Devolvendo os ajustes ao estado do commit..."
+    cmd_ajustes off controle
+
     echo ""
     echo "Tudo parado. Para subir de novo: ./ararabots.sh --headless"
 }
@@ -716,7 +731,36 @@ cmd_preparar() {
     # arquivo deixaram de existir e a chamada so produzia um erro vermelho a
     # cada subida ("nenhum arquivo com marcador"). O defeito que ele corrigia
     # tambem deixou de existir - quem for reavaliar, olhe o codigo novo antes.
-    cmd_ajustes on controle
+    # O AJUSTE DO PID DEIXOU DE SER SILENCIOSO.
+    #
+    # O QUE ESTAVA ERRADO: esta linha era 'cmd_ajustes on controle', sem
+    # condicao e sem aviso. Tres consequencias, todas medidas nesta arvore:
+    #
+    #   1. TODO numero desta fase foi medido com o feedforward DESLIGADO,
+    #      enquanto o codigo COMMITADO tem ele ligado. Quem le o repositorio ve
+    #      uma coisa; quem roda, outra. E a planilha nao registra qual;
+    #   2. a arvore de trabalho ficava suja depois de cada 'preparar', e abortar
+    #      com Ctrl-C deixava o arquivo de OUTRO pacote alterado - a um 'git
+    #      add .' de entrar num commit sem ninguem notar;
+    #   3. ninguem decidia nada: o patch virou o default por inercia.
+    #
+    # A DECISAO: continua ligando por default, porque desligar agora mudaria a
+    # condicao de medida e quebraria a comparacao com a linha de base (21/09).
+    # Mas passa a DIZER o que fez, aceita ser desligado por variavel, e o
+    # 'parar' devolve o arquivo ao estado do commit (ver cmd_parar). Assim a
+    # sessao comeca explicita e termina limpa.
+    #
+    # Para medir COM o feedforward (o codigo como esta commitado):
+    #     ARARABOTS_AJUSTE=off ./ararabots.sh preparar --headless
+    if [ "${ARARABOTS_AJUSTE:-on}" = "off" ]; then
+        cmd_ajustes off controle
+        echo "   !! ajuste do PID DESLIGADO por ARARABOTS_AJUSTE=off"
+        echo "      o feedforward fica ATIVO - condicao diferente da linha de base"
+    else
+        cmd_ajustes on controle
+        echo "   ajuste do PID ligado (feedforward desligado) - condicao da linha de base"
+        echo "      para medir sem ele:  ARARABOTS_AJUSTE=off ./ararabots.sh preparar"
+    fi
 
     passo 1 "Verificando pré-requisitos"
 
@@ -1836,6 +1880,27 @@ case "${1:-menu}" in
     posse)     shift; python3 "$PY" posse "$@" ;;
     mov-bruto) shift; docker cp "$PY" vice:/tmp/ararabots.py >/dev/null 2>&1
                MOVIMENTO_NOVO=1 ros_run "python3 /tmp/ararabots.py mov-bruto $*" ;;
+    web)       shift
+               # PAINEL WEB: so mais uma porta de entrada para os subcomandos
+               # acima - nenhuma receita de montagem nova. A ponte roda no HOST
+               # porque este script precisa de docker e do grSim, e o apiNode da
+               # GUI vive dentro do container 'vice', sem alcance nenhum dos
+               # dois.
+               #
+               # O PAINEL MORA NO REPOSITORIO DA GUI (ssl-gui/painel/), porque e
+               # interface. A ferramenta continua inteira aqui; este ramo e a
+               # unica linha de ligacao entre as duas coisas.
+               PONTE="$RAIZ/ssl-gui/painel/ararabots_web.py"
+               if [ ! -f "$PONTE" ]; then
+                   echo "   XX painel nao encontrado em $PONTE"
+                   echo "      ele vive no repositorio da GUI; clone ssl-gui ao lado de ssl-VICE"
+                   exit 1
+               fi
+               if [ -n "${1:-}" ]; then
+                   python3 "$PONTE" --porta "$1"
+               else
+                   python3 "$PONTE"
+               fi ;;
     menu)      cmd_menu ;;
     -h|--help) uso ;;
     # sem subcomando reconhecido: e o menu, e os argumentos sao dele

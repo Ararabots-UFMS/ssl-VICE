@@ -1625,48 +1625,188 @@ def imprimir_janela(j):
 
 
 _MODELO_REPLAY = r"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-<title>Replay da cobranca</title><style>
-:root{--bg:#11151a;--fg:#e8eef5;--dim:#8b98a8;--linha:#39485a;--ok:#3ddc84;--ruim:#ff6b6b;--alvo:#ffd166}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
-font:14px/1.5 ui-monospace,Menlo,Consolas,monospace}
-.top{padding:10px 14px;border-bottom:1px solid var(--linha);display:flex;gap:18px;flex-wrap:wrap;align-items:center}
-.badge{padding:2px 8px;border-radius:4px;font-weight:600}
-.g-sim{background:var(--ok);color:#062}.g-nao{background:#2a3340;color:var(--dim)}
-.sit-NOSSA{background:var(--ok);color:#062}.sit-DELES{background:var(--ruim);color:#300}
-.sit-DISPUTA{background:var(--alvo);color:#320}.sit-SOLTA{background:#2a3340;color:var(--fg)}
-.wrap{padding:12px}svg{width:100%;height:auto;display:block;background:#0d2818;border-radius:6px}
-.ctl{display:flex;gap:12px;align-items:center;padding:10px 14px;flex-wrap:wrap}
-input[type=range]{flex:1;min-width:220px}button{background:#22303f;color:var(--fg);border:1px solid var(--linha);
-border-radius:5px;padding:6px 14px;cursor:pointer;font:inherit}button:hover{background:#2c3d50}
-.leg{display:flex;gap:16px;flex-wrap:wrap;padding:0 14px 12px;color:var(--dim);font-size:12px}
-.leg i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
-.num{font-variant-numeric:tabular-nums}
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Replay &middot; Ararabots</title><style>
+/* ==========================================================================
+   VISUALIZADOR DE REPLAY. Autocontido de proposito: um arquivo, nenhuma
+   dependencia externa, abre em qualquer navegador e sobrevive a um zip no
+   e-mail. O payload da execucao e injetado no lugar de /*DADOS*/.
+
+   A LEITURA TEM UMA ORDEM, e o layout a segue:
+     1. QUE execucao e esta (cenario, rotulo, hora)  -> cabecalho
+     2. O QUE deu                                     -> veredito + numeros
+     3. COMO deu                                      -> campo + linha do tempo
+   ========================================================================== */
+:root{
+  --bg:#12161f; --carta:#1b2029; --carta2:#232935; --linha:#333b49;
+  --fg:#e8eef5; --dim:#8b98a8; --fraco:#6b7687;
+  --ok:#3ddc84; --ruim:#ff6b6b; --alvo:#ffd166; --azul:#4da3ff; --campo:#0d2818;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);display:flex;flex-direction:column;
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,sans-serif}
+.mono,.num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums}
+
+/* -------------------------------------------------------------- cabecalho */
+header{flex:none;display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;
+  padding:13px 20px;background:var(--carta);border-bottom:1px solid var(--linha)}
+.cen{font-size:17px;font-weight:650;letter-spacing:.2px}
+.rotulo{font-size:12.5px;padding:3px 9px;border-radius:5px;background:var(--carta2);
+  color:var(--dim);font-family:ui-monospace,Menlo,monospace}
+.quando{font-size:12.5px;color:var(--fraco)}
+.selos{margin-left:auto;display:flex;gap:9px;flex-wrap:wrap}
+.selo{padding:4px 11px;border-radius:999px;font-size:12.5px;font-weight:600;
+  border:1px solid transparent}
+.selo.bom{background:rgba(61,220,132,.16);border-color:rgba(61,220,132,.5);color:#b9f0d0}
+.selo.mau{background:rgba(255,107,107,.15);border-color:rgba(255,107,107,.5);color:#ffc9c9}
+.selo.neutro{background:var(--carta2);border-color:var(--linha);color:var(--dim)}
+
+/* ---------------------------------------------------------------- numeros */
+.kpis{flex:none;display:grid;gap:1px;background:var(--linha);
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  border-bottom:1px solid var(--linha)}
+.kpi{background:var(--carta);padding:11px 16px}
+.kpi dt{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--fraco);
+  margin:0 0 3px}
+.kpi dd{margin:0;font-size:18px;font-weight:600;font-family:ui-monospace,Menlo,monospace;
+  font-variant-numeric:tabular-nums}
+.kpi dd small{font-size:11.5px;font-weight:400;color:var(--fraco);margin-left:4px;
+  font-family:inherit}
+.kpi.bom dd{color:var(--ok)} .kpi.mau dd{color:var(--ruim)}
+
+/* ------------------------------------------------------------------ campo */
+main{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 20px;gap:12px}
+.palco{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+svg{width:100%;height:100%;max-height:100%;display:block;background:var(--campo);
+  border-radius:10px;border:1px solid var(--linha)}
+
+/* ----------------------------------------------------------- linha do tempo */
+.tempo{flex:none;background:var(--carta);border:1px solid var(--linha);
+  border-radius:10px;padding:12px 16px}
+.marcas{position:relative;height:16px;margin:0 0 -4px}
+.marca{position:absolute;top:0;width:2px;height:11px;border-radius:1px;cursor:pointer}
+.marca.chute{background:var(--ok)}
+.marca.gol{background:var(--alvo);width:3px;height:16px}
+.marca::after{content:attr(data-r);position:absolute;top:-16px;left:50%;
+  transform:translateX(-50%);font-size:10px;color:var(--fraco);white-space:nowrap}
+input[type=range]{width:100%;margin:0;accent-color:var(--azul)}
+.ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+button{background:var(--carta2);color:var(--fg);border:1px solid var(--linha);
+  border-radius:7px;padding:8px 14px;cursor:pointer;font:inherit;font-size:13.5px}
+button:hover{background:#2b3240}
+button:focus-visible{outline:2px solid rgba(77,163,255,.7);outline-offset:2px}
+button.toca{min-width:112px;font-weight:600;background:var(--azul);color:#06213d;
+  border-color:transparent}
+button.toca:hover{background:#63b0ff}
+.vels{display:flex;border:1px solid var(--linha);border-radius:7px;overflow:hidden}
+.vels button{border:0;border-radius:0;padding:8px 11px;font-size:13px}
+.vels button.sel{background:var(--azul);color:#06213d;font-weight:600}
+.relogio{font-size:14px;color:var(--dim)}
+.relogio b{color:var(--fg);font-size:15px}
+.agora{margin-left:auto;display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--dim)}
+.agora b{color:var(--fg)}
+.sit{padding:2px 9px;border-radius:5px;font-size:12.5px;font-weight:600}
+.sit-NOSSA{background:rgba(61,220,132,.2);color:#b9f0d0}
+.sit-DELES{background:rgba(255,107,107,.2);color:#ffc9c9}
+.sit-DISPUTA{background:rgba(255,209,102,.2);color:#ffe6b0}
+.sit-SOLTA{background:var(--carta2);color:var(--dim)}
+
+/* ---------------------------------------------------------------- legenda */
+details.leg{flex:none;background:var(--carta);border:1px solid var(--linha);
+  border-radius:10px}
+details.leg>summary{padding:10px 16px;cursor:pointer;font-size:13px;color:var(--dim);
+  list-style:none;display:flex;align-items:center;gap:9px}
+details.leg>summary::-webkit-details-marker{display:none}
+details.leg>summary::before{content:"▸";color:var(--fraco)}
+details.leg[open]>summary::before{content:"▾"}
+.leg-corpo{display:grid;gap:7px 22px;padding:4px 16px 14px;
+  grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+  font-size:12.5px;color:var(--dim)}
+.leg-corpo i{display:inline-block;width:10px;height:10px;border-radius:50%;
+  margin-right:7px;vertical-align:-1px}
+kbd{background:var(--carta2);border:1px solid var(--linha);border-bottom-width:2px;
+  border-radius:4px;padding:1px 6px;font-size:11.5px;font-family:ui-monospace,Menlo,monospace}
+@media (max-width:760px){
+  .selos{margin-left:0} .agora{margin-left:0; width:100%}
+  main{padding:10px 12px}
+}
 </style></head><body>
-<div class="top">
-  <b id="cen"></b>
-  <span id="gol" class="badge"></span>
-  <span id="disp" class="badge"></span>
-  <span class="num">t = <b id="t">0.00</b> s</span>
-  <span>situacao: <span id="sit" class="badge">-</span></span>
-  <span class="num">erro de rastreio: <b id="err">-</b> mm</span>
-</div>
-<div class="top" id="resumo" style="font-size:13px">
-</div>
-<div class="wrap"><svg id="campo" viewBox="-5000 -3400 10000 6800"></svg></div>
-<div class="ctl">
-  <button id="play">reproduzir</button>
-  <button id="lento">0,25x</button>
-  <input type="range" id="sl" min="0" value="0">
-</div>
-<div class="leg">
-  <span><i style="background:#ff9f1c"></i>bola</span>
-  <span><i style="background:#4da3ff"></i>nossos robos &mdash; a FACE CHANFRADA e o chutador</span>
-  <span><i style="background:#ffd166"></i>adversarios (mesma forma)</span>
-  <span><i style="background:var(--alvo)"></i>setpoint comandado &mdash; a linha tracejada e o ERRO DE RASTREIO</span>
-  <span><i style="background:var(--ok)"></i>disparo do chutador (verdade do grSim)</span>
-  <span>o risco claro saindo do robo e a VELOCIDADE (1 m/s = 200 mm)</span>
-  <span>trilhas = ultimos 3 s &middot; reproducao em tempo real da gravacao</span>
-</div>
+
+<header>
+  <span class="cen" id="cen">execucao</span>
+  <span class="rotulo" id="rotulo" hidden></span>
+  <span class="quando" id="quando"></span>
+  <span class="selos">
+    <span class="selo neutro" id="selo-gol">—</span>
+    <span class="selo neutro" id="selo-disp">—</span>
+    <span class="selo neutro" id="selo-ajuste" hidden></span>
+  </span>
+</header>
+
+<dl class="kpis">
+  <div class="kpi"><dt>duração</dt><dd id="k-dur">—<small>s</small></dd></div>
+  <div class="kpi"><dt>pico da bola</dt><dd id="k-pico">—<small>mm/s</small></dd></div>
+  <div class="kpi" id="kpi-rastreio"><dt>erro de rastreio (mediana)</dt>
+    <dd id="k-med">—<small>mm</small></dd></div>
+  <div class="kpi"><dt>rastreio p90</dt><dd id="k-p90">—<small>mm</small></dd></div>
+  <div class="kpi"><dt>disparos do chutador</dt><dd id="k-chutes">—</dd></div>
+  <div class="kpi"><dt>situação dominante</dt><dd id="k-sit">—</dd></div>
+  <!-- ADVERSARIO EM CAMPO: o confundidor que mais custou leitura errada.
+       Um lote de 21/09 marcou 5 gols em 6 no cenario 'jogo' e a planilha nao
+       dizia que ele rodou com ARARABOTS_SO_NOSSOS - zero quadros com amarelo
+       em campo. "5 em 6" sem adversario e a linha de base conhecida; com
+       adversario sao 0 em ~40. Agora o replay diz, sozinho, em qual dos dois
+       mundos ele foi gravado. -->
+  <div class="kpi" id="kpi-adv"><dt>adversário em campo</dt><dd id="k-adv">—</dd></div>
+</dl>
+
+<main>
+  <div class="palco"><svg id="campo" viewBox="-5000 -3400 10000 6800"></svg></div>
+
+  <div class="tempo">
+    <div class="marcas" id="marcas"></div>
+    <input type="range" id="sl" min="0" value="0" aria-label="linha do tempo">
+    <div class="ctl">
+      <button class="toca" id="play">▶ reproduzir</button>
+      <button id="passo-tras" title="quadro anterior (←)">◀ı</button>
+      <button id="passo-frente" title="quadro seguinte (→)">ı▶</button>
+      <div class="vels" id="vels">
+        <button data-v="0.1">0,1×</button>
+        <button data-v="0.25">0,25×</button>
+        <button data-v="1" class="sel">1×</button>
+        <button data-v="2">2×</button>
+      </div>
+      <span class="relogio num">t = <b id="t">0.00</b> / <span id="tfim">—</span> s</span>
+      <span class="agora">
+        <span>situação <span class="sit sit-SOLTA" id="sit">—</span></span>
+        <span class="num">erro <b id="err">—</b> mm</span>
+      </span>
+    </div>
+  </div>
+
+  <details class="leg">
+    <summary>Como ler este campo &middot; atalhos</summary>
+    <div class="leg-corpo">
+      <span><i style="background:#ff9f1c"></i>bola</span>
+      <span><i style="background:#4da3ff"></i>nossos robôs — a <b>face chanfrada</b> é o chutador</span>
+      <span><i style="background:#ffd166"></i>adversários (mesma forma)</span>
+      <span><i style="background:#ffd166"></i>setpoint comandado — a linha tracejada é o <b>erro de rastreio</b></span>
+      <span><i style="background:#3ddc84"></i>disparo do chutador (verdade do grSim)</span>
+      <span>o risco claro saindo do robô é a <b>velocidade</b> (1 m/s = 200 mm)</span>
+      <span>a cor do anel diz o <b>papel</b>: <i style="background:#3ddc84"></i>portador
+        <i style="background:#ffd166;margin-left:6px"></i>apoio
+        <i style="background:#8b98a8;margin-left:6px"></i>cobertura</span>
+      <span>trilhas = últimos 3 s</span>
+      <span>na linha do tempo: <i style="background:#3ddc84"></i>disparo
+        <i style="background:#ffd166;margin-left:6px"></i>gol — clique para pular</span>
+      <span><kbd>espaço</kbd> toca/pausa &nbsp; <kbd>←</kbd> <kbd>→</kbd> quadro
+        &nbsp; <kbd>Home</kbd> início</span>
+    </div>
+  </details>
+</main>
+
 <script>
 const D = /*DADOS*/;
 const svg = document.getElementById('campo');
@@ -1807,7 +1947,22 @@ robo.appendChild(seta);
 const bola = el('circle',{r:45,fill:'#ff9f1c'}); svg.appendChild(bola);
 const marcaChute = el('circle',{r:0,fill:'none',stroke:'var(--ok)','stroke-width':22}); svg.appendChild(marcaChute);
 
-document.getElementById('cen').textContent = D.cenario || 'execucao';
+// ------------------------------------------------------------- identidade
+// O arquivo se chama <cenario>__<rotulo>__<HHMMSS>.html; o rotulo e a hora
+// dizem QUAL execucao e esta, e so existiam no nome do arquivo. Um replay
+// aberto do e-mail nao dizia nem de quando era.
+(function(){
+  document.getElementById('cen').textContent = D.cenario || 'execucao';
+  const m = (location.pathname.split('/').pop() || '').match(/^(.+?)__(.+?)__(\d{6})\.html$/);
+  if (m){
+    const r = document.getElementById('rotulo');
+    r.textContent = m[2]; r.hidden = false;
+    document.getElementById('quando').textContent =
+      m[3].slice(0,2) + ':' + m[3].slice(2,4) + ':' + m[3].slice(4,6);
+  }
+  document.title = 'Replay · ' + (D.cenario || 'execucao') + (m ? ' · ' + m[2] : '');
+})();
+
 // QUEM E O COBRADOR. Vem do proprio resultado; se faltar, cai no robo que mais
 // se aproximou da bola ao longo da execucao - nunca em "o primeiro da lista",
 // que era o criterio anterior e mudava de quadro em quadro.
@@ -1821,39 +1976,95 @@ const COBRADOR = (D.cobrador !== null && D.cobrador !== undefined) ? D.cobrador 
   for(const k in dist) if(melhor===null || dist[k]<dist[melhor]) melhor=k;
   return melhor===null?null:+melhor;
 })();
-// resumo do erro de rastreio - aparece sem precisar clicar em nada
+
+// ------------------------------------------------------------------ selos
 (function(){
-  // usa D.quadros direto: este bloco roda ANTES da declaracao 'const Q',
-  // e tocar em Q aqui levantava ReferenceError (zona morta temporal do
-  // const) - o script abortava e o replay nunca comecava a tocar.
-  // PAREIA CADA ROBO COM O SETPOINT DELE.
+  const g = document.getElementById('selo-gol');
+  g.textContent = D.gol === 'nosso' ? 'GOL A FAVOR'
+                : D.gol === 'contra' ? 'GOL SOFRIDO' : 'sem gol';
+  g.className = 'selo ' + (D.gol === 'nosso' ? 'bom' : D.gol === 'contra' ? 'mau' : 'neutro');
+  const d = document.getElementById('selo-disp');
+  d.textContent = D.disparou ? 'chutador disparou' : 'não disparou';
+  d.className = 'selo ' + (D.disparou ? 'bom' : 'neutro');
+  // O ESTADO DO AJUSTE DO PID, quando gravado.
   //
+  // Sem isto um numero velho nao dizia em que condicao rodou: o 'preparar'
+  // desligava o feedforward do controlador e nada registrava. Replays antigos
+  // nao tem o campo - ai o selo nao aparece, em vez de mentir um default.
+  if (D.ajuste_pid !== undefined && D.ajuste_pid !== null){
+    const a = document.getElementById('selo-ajuste');
+    a.textContent = D.ajuste_pid ? 'PID: sem feedforward' : 'PID: com feedforward';
+    a.className = 'selo neutro'; a.hidden = false;
+  }
+})();
+
+// ------------------------------------------------------------------- KPIs
+//
+// Os numeros que decidem a leitura, no alto e sem clique. Sao os mesmos que o
+// 'validar' grava no CSV - aqui ficam ao lado do video que os produziu.
+const KPI = (function(){
+  const Qd = D.quadros;
+  const dur = Qd.length ? Qd[Qd.length-1].t : 0;
+
+  // pico de velocidade da bola, pelo dt REAL (o indice do quadro nao e tempo)
+  let pico = 0;
+  for (let i=1;i<Qd.length;i++){
+    const dt = Qd[i].t - Qd[i-1].t;
+    if (dt > 0.005){
+      const v = Math.hypot(Qd[i].b[0]-Qd[i-1].b[0], Qd[i].b[1]-Qd[i-1].b[1]) / dt;
+      if (v > pico && v < 12000) pico = v;       // 12 m/s = ruido de deteccao
+    }
+  }
+
+  // erro de rastreio DO COBRADOR, pareando robo com o setpoint dele.
   // A versao anterior comparava q.r[0] com q.a - o primeiro robo da lista
-  // contra o ultimo setpoint de qualquer robo. Media a distancia entre dois
-  // objetos que nao tem relacao nenhuma.
+  // contra o ultimo setpoint de qualquer robo, dois objetos sem relacao.
   const es=[];
-  D.quadros.forEach(q=>{
+  Qd.forEach(q=>{
     if(!q.a || !q.r) return;
-    const alvo=q.a.find(a=>a[0]===COBRADOR);
-    const rb=q.r.find(r=>r[0]===COBRADOR);
+    const alvo=q.a.find(a=>a[0]===COBRADOR), rb=q.r.find(r=>r[0]===COBRADOR);
     if(alvo && rb) es.push(Math.hypot(alvo[1]-rb[1], alvo[2]-rb[2]));
   });
   es.sort((x,y)=>x-y);
-  if(!es.length) return;
-  const med=es[es.length>>1], p90=es[Math.floor(.9*es.length)];
-  const acima=100*es.filter(x=>x>200).length/es.length;
-  const d=document.getElementById('resumo');
-  d.innerHTML='rastreio: mediana <b>'+med.toFixed(0)+'</b> mm &nbsp; p90 <b>'
-    +p90.toFixed(0)+'</b> mm &nbsp; acima de 200 mm em <b>'+acima.toFixed(0)+'%</b> do tempo';
-  d.style.color = med>150 ? 'var(--ruim)' : 'var(--ok)';
-})();
-const gb=document.getElementById('gol');
-gb.textContent = D.gol==='nosso' ? 'GOL' : (D.gol==='contra' ? 'GOL CONTRA' : 'sem gol');
-gb.className = 'badge ' + (D.gol==='nosso' ? 'g-sim':'g-nao');
-const db=document.getElementById('disp');
-db.textContent = D.disparou ? 'chutador DISPAROU' : 'nao disparou';
-db.className = 'badge ' + (D.disparou ? 'g-sim':'g-nao');
+  const med = es.length ? es[es.length>>1] : null;
+  const p90 = es.length ? es[Math.floor(.9*es.length)] : null;
 
+  // disparos: transicoes de flat_kick para verdadeiro (nao o numero de eventos)
+  let chutes = 0, antes = false;
+  (D.eventos||[]).forEach(e=>{ const f=!!e.flat_kick; if(f && !antes) chutes++; antes=f; });
+
+  // situacao dominante, com as MESMAS regras da tatica (ver situacaoDoQuadro)
+  const conta={};
+  Qd.forEach(q=>{ const sq=situacaoDoQuadro(q); if(sq) conta[sq]=(conta[sq]||0)+1; });
+  const total=Object.values(conta).reduce((a,b)=>a+b,0);
+  let dom=null; for(const k in conta) if(!dom||conta[k]>conta[dom]) dom=k;
+
+  // quantos quadros tinham ao menos um adversario detectado
+  const comAdv = Qd.filter(q => (q.y || []).length).length;
+  const pctAdv = Qd.length ? 100 * comAdv / Qd.length : 0;
+
+  const põe=(id,txt)=>{document.getElementById(id).innerHTML=txt;};
+  põe('k-dur', dur.toFixed(1) + '<small>s</small>');
+  põe('k-pico', pico ? Math.round(pico) + '<small>mm/s</small>' : '—');
+  põe('k-med', med===null ? '—' : Math.round(med) + '<small>mm</small>');
+  põe('k-p90', p90===null ? '—' : Math.round(p90) + '<small>mm</small>');
+  põe('k-chutes', String(chutes));
+  põe('k-sit', dom ? dom.toLowerCase() +
+      '<small>' + Math.round(100*conta[dom]/total) + '% do tempo</small>' : '—');
+  põe('k-adv', pctAdv >= 95 ? 'sim<small>100% do tempo</small>'
+             : pctAdv < 1 ? 'NÃO<small>campo sem adversário</small>'
+             : Math.round(pctAdv) + '%<small>do tempo</small>');
+  // sem adversario nao e erro - e outro teste. Mas tem de ficar OBVIO, porque
+  // um numero dali nao se compara com um de jogo disputado.
+  document.getElementById('kpi-adv').className = 'kpi ' + (pctAdv < 1 ? 'mau' : '');
+  // chute real e 5000+; empurrao fica na faixa de 2500
+  document.getElementById('k-pico').parentElement.className =
+    'kpi ' + (pico >= 5000 ? 'bom' : pico >= 2500 ? '' : 'mau');
+  // as execucoes que marcaram tiveram mediana de 76 e 153 mm; a que falhou, 306
+  if (med !== null)
+    document.getElementById('kpi-rastreio').className = 'kpi ' + (med > 150 ? 'mau' : 'bom');
+  return {dur: dur};
+})();
 
 const Q = D.quadros;
 const sl = document.getElementById('sl'); sl.max = Q.length-1;
@@ -1877,7 +2088,7 @@ function desenha(i){
   const bs = document.getElementById('sit');
   if (bs){
     bs.textContent = sit || '-';
-    bs.className = 'badge sit-' + (sit || 'x');
+    bs.className = 'sit sit-' + (sit || 'SOLTA');
   }
   trilhaB.setAttribute('d', trilhaDe(i, null, true));
   trilhaR.setAttribute('d', trilhaDe(i, COBRADOR, false));
@@ -2066,7 +2277,6 @@ const trilhasOutros = {};
 // escolhemos o quadro cujo q.t e o mais proximo. Um robo parado fica parado; um
 // robo a 1,5 m/s atravessa a tela no tempo que levou de verdade.
 let vel=1, timer=null, tPlay=0, tUltimo=0;
-const botao=document.getElementById('play');
 const T_FIM = Q.length ? Q[Q.length-1].t : 0;
 
 // indice do quadro mais proximo de um instante (busca binaria)
@@ -2080,32 +2290,114 @@ function idxDoTempo(t){
   return lo;
 }
 
+// --------------------------------------------------- reproducao e controles
+//
+// O TEMPO E O DA GRAVACAO, nao o do indice: a tela avanca a 30 Hz e o quadro
+// escolhido e o que corresponde ao instante acumulado. Sem isso, um replay com
+// perda de deteccao (quadros espacados) corre mais rapido nos trechos ruins.
+const bt = document.getElementById('play');
 function tique(){
   const agora = performance.now();
-  const dt = (agora - tUltimo) / 1000;
+  tPlay += (agora - tUltimo) / 1000 * vel;
   tUltimo = agora;
-  tPlay += dt * vel;
-  if (tPlay > T_FIM) tPlay = 0;
-  const i = idxDoTempo(tPlay);
+  let i = idxDoTempo(tPlay);
+  if (i >= Q.length - 1){ i = Q.length - 1; para(); }
   sl.value = i; desenha(i);
 }
 function toca(){
+  if (+sl.value >= Q.length - 1){ sl.value = 0; tPlay = Q[0].t; }
   para();
   tUltimo = performance.now();
-  timer = setInterval(tique, 33);      // 30 quadros/s de TELA; o tempo da
-  botao.textContent='pausar';          // gravacao e independente disto
+  timer = setInterval(tique, 33);
+  bt.textContent = '❚❚ pausar';
 }
-function para(){ if(timer){clearInterval(timer); timer=null;} botao.textContent='reproduzir'; }
-botao.onclick = () => timer ? para() : toca();
-document.getElementById('lento').onclick = e => {
-  vel = vel===1?0.25:(vel===0.25?0.1:1);
-  e.target.textContent = vel===1?'1x':(vel===0.25?'0,25x':'0,1x');
-};
+function para(){
+  if (timer){ clearInterval(timer); timer = null; }
+  bt.textContent = '▶ reproduzir';
+}
+function vaiPara(i){
+  i = Math.max(0, Math.min(Q.length - 1, i));
+  sl.value = i; tPlay = Q[i].t; desenha(i);
+}
+bt.onclick = () => timer ? para() : toca();
+document.getElementById('passo-tras').onclick = () => { para(); vaiPara(+sl.value - 1); };
+document.getElementById('passo-frente').onclick = () => { para(); vaiPara(+sl.value + 1); };
+document.getElementById('vels').querySelectorAll('button').forEach(b => {
+  b.onclick = () => {
+    vel = +b.dataset.v;
+    document.getElementById('vels').querySelectorAll('button')
+      .forEach(o => o.classList.toggle('sel', o === b));
+  };
+});
 sl.onmousedown = para;
 sl.oninput = () => { tPlay = Q[+sl.value] ? Q[+sl.value].t : 0; desenha(+sl.value); };
+
+// ATALHOS: quem analisa replay passa o tempo pulando quadro a quadro.
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' && e.key !== ' ') return;
+  if (e.key === ' '){ e.preventDefault(); timer ? para() : toca(); }
+  else if (e.key === 'ArrowLeft'){ para(); vaiPara(+sl.value - (e.shiftKey ? 10 : 1)); }
+  else if (e.key === 'ArrowRight'){ para(); vaiPara(+sl.value + (e.shiftKey ? 10 : 1)); }
+  else if (e.key === 'Home'){ para(); vaiPara(0); }
+  else if (e.key === 'End'){ para(); vaiPara(Q.length - 1); }
+});
+
+// ------------------------------------------------------- MARCAS DO TEMPO
+//
+// Os instantes que interessam ficavam escondidos: para achar o disparo era
+// preciso arrastar o controle procurando. Agora cada disparo e o gol tem uma
+// marca clicavel sobre a linha do tempo.
+(function(){
+  const faixa = document.getElementById('marcas');
+  const tFim = T_FIM || 1;
+  document.getElementById('tfim').textContent = tFim.toFixed(1);
+
+  const poe = (t, classe, titulo) => {
+    const m = document.createElement('div');
+    m.className = 'marca ' + classe;
+    m.style.left = (100 * t / tFim) + '%';
+    m.title = titulo + ' · t = ' + t.toFixed(2) + ' s';
+    m.onclick = () => { para(); vaiPara(idxDoTempo(t)); };
+    faixa.appendChild(m);
+  };
+
+  let antes = false;
+  (D.eventos || []).forEach(e => {
+    const f = !!e.flat_kick;
+    if (f && !antes) poe(e.t, 'chute', 'disparo do chutador (robo ' + e.id + ')');
+    antes = f;
+  });
+
+  // O GOL NAO TEM INSTANTE no payload - 'gol_em' e a POSICAO do cruzamento.
+  // O tempo sai do primeiro quadro em que a bola passa da linha, que e a
+  // mesma conta que o resumo usa para contar gol.
+  if (D.gol){
+    const q = Q.find(q => Math.abs(q.b[0]) >= 4500);
+    if (q) poe(q.t, 'gol', D.gol === 'nosso' ? 'gol a favor' : 'gol sofrido');
+  }
+})();
+
 desenha(0);
 toca();   // comeca tocando: nada de clicar para ver a execucao
 </script></body></html>"""
+
+
+def _ajuste_pid_ligado():
+    """O ajuste do PID (feedforward desligado) esta aplicado agora?
+
+    Le o marcador que o 'ararabots.sh ajustes' deixa no arquivo: quando o ajuste
+    esta LIGADO, a linha original fica comentada com '#ORIG#'. Devolve None se
+    nao der para ler - melhor nao registrar nada do que registrar um palpite.
+    """
+    alvo = "/root/ssl-VICE/src/control/control/pid_controller.py"
+    try:
+        with open(alvo, encoding="utf-8") as fp:
+            for linha in fp:
+                if linha.strip().startswith("#ORIG#"):
+                    return True
+        return False
+    except OSError:
+        return None
 
 
 def erro_de_rastreio(resultado):
@@ -2795,6 +3087,14 @@ def rodar(nome, duracao=12.0):
         "t_pedido_chute": {str(k): v for k, v in pedido_chute.items()},
         "energia": energia,
         "registrado_em": time.strftime("%Y-%m-%d %H:%M:%S"),
+        # EM QUE CONDICAO ISTO RODOU.
+        #
+        # O 'preparar' aplica um ajuste em src/control/ que DESLIGA o
+        # feedforward do PID, e nada registrava isso: um numero de hoje nao
+        # dizia se veio do codigo commitado ou do codigo com o patch. Agora o
+        # proprio replay diz. Replays antigos nao tem o campo - o visualizador
+        # entao nao mostra o selo, em vez de inventar um default.
+        "ajuste_pid": _ajuste_pid_ligado(),
     }
 
     os.makedirs(SAIDA_DIR, exist_ok=True)
