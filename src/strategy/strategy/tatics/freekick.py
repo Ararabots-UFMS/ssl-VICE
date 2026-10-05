@@ -1,5 +1,7 @@
 from utils.math_util import Vector2D
 from strategy.skills.skills import Skills
+from strategy.skills import chute as skill_chute
+from strategy.skills import geometria as skill_geometria
 from strategy.behaviour import TaskStatus
 from math import atan2, hypot, cos, sin, pi, acos
 import os
@@ -505,11 +507,21 @@ PASSO_MIRA = 60.0
 # alinhamento lateral estiver bom - mantendo armado enquanto continuar bom. Nao
 # adianta so estar "atras da bola": o que decide e o eixo do corpo passar pela
 # bola dentro de 40 mm.
-CENTRO_ATE_PLACA = 73.0
-ESPESSURA_PLACA = 5.0
-RAIO_BOLA_MM = 21.5
-LIM_XX_GRSIM = ESPESSURA_PLACA * 2.0 + RAIO_BOLA_MM     # 31,5 mm
-LIM_YY_GRSIM = 40.0
+# A GEOMETRIA DO CHUTADOR MORA NA CAMADA DE SKILLS (skills/chute.py).
+#
+# Os mesmos cinco numeros estavam escritos aqui e reproduzidos a mao em
+# tatics/running.py. Sao medida do grSim (robot.cpp:120-128), nao escolha nossa:
+# fonte unica.
+#
+# A LOGICA de armamento desta tatica NAO foi migrada, de proposito: ela e o
+# codigo com resultado comprovado da base (5 gols em 6) e usa um ponto de
+# referencia proprio (centro da placa, nao a face). Migrar muda numeros que
+# ninguem mediu de novo. Ver docs/auditoria-papeis-e-testes.md secao 6.3.
+CENTRO_ATE_PLACA = skill_chute.CENTRO_ATE_PLACA
+ESPESSURA_PLACA = skill_chute.ESPESSURA_PLACA
+RAIO_BOLA_MM = skill_chute.RAIO_BOLA_MM
+LIM_XX_GRSIM = skill_chute.LIM_XX_GRSIM
+LIM_YY_GRSIM = skill_chute.LIM_YY_GRSIM
 
 # Para ARMAR exigimos folga sobre o limite do grSim; para MANTER armado
 # aceitamos ate o limite. Sem essa histerese o chute volta a piscar.
@@ -1338,15 +1350,15 @@ class OurFreekick(_BaseFreekick):
         return gx, melhor
 
     def _linha_livre(self, ax, ay, bx, by, folga=FOLGA_LINHA_PASSE) -> bool:
-        """Nenhum adversario a menos de 'folga' do segmento a->b."""
-        vx, vy = bx - ax, by - ay
-        comp2 = vx * vx + vy * vy
-        for r in self.enemy_robots.values():
-            wx, wy = r.position_x - ax, r.position_y - ay
-            t = 0.0 if comp2 <= 0 else max(0.0, min(1.0, (wx * vx + wy * vy) / comp2))
-            if hypot(wx - t * vx, wy - t * vy) < folga:
-                return False
-        return True
+        """Nenhum adversario a menos de 'folga' do segmento a->b.
+
+        Delega para skills/geometria.py. A conta e identica; a unica diferenca
+        e o caso degenerado (origem e destino a menos de 1 mm), em que a camada
+        devolve "livre" - situacao impossivel em campo, porque o robo tem
+        180 mm de diametro.
+        """
+        return skill_geometria.linha_livre(ax, ay, bx, by, self.enemy_robots,
+                                           folga)
 
     def _companheiro_para_passe(self, cobrador, avanco_min, com_goleiro=False):
         """Melhor companheiro para receber, ou None.

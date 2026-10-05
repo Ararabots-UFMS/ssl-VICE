@@ -1,67 +1,24 @@
 from utils.math_util import Vector2D
 import os
 
-from math import atan2, hypot, pi, cos, sin
+from math import atan2, hypot
 
 from strategy.skills.skills import Skills
+from strategy.skills import aproximacao, chute, geometria, posicionamento
+from strategy.skills import bola as skill_bola
 from strategy.tatics.goalkeeper import Goalkeeper
 
 
-# Forca do chute em jogo aberto, em m/s, e o alcance para arma-lo.
+# CONSTANTES E PREDICADOS DE CHUTE E DE BOLA: moram na CAMADA DE SKILLS.
 #
-# 6,0 m/s: a cobranca de falta mediu o atrito do grSim - 3,0 m/s percorre
-# 1633 mm, 5,0 percorre 1803, e 6,0 percorre 4220. A curva e abrupta, e abaixo
-# de 6 a bola morre antes de atravessar o campo. O teto da regra 8.4.2 e 6,5.
-FORCA_CHUTE = 6.0
-# 300 mm: ARMA CEDO e mantem armado durante toda a aproximacao final.
-#
-# Era 130 mm (o contato acontece a 111) e o chutador do grSim NAO disparou em
-# nenhuma execucao - 2 eventos registrados, zero disparos. O motivo esta no
-# §18 da cobranca de falta: o grSim so dispara no instante em que a bola encosta
-# na placa, e essa janela dura UMA amostra. Se o chute nao estiver armado
-# exatamente nela, o que sobra e o empurrao do corpo.
-#
-# Armar cedo nao custa nada - o simulador ignora o comando ate haver contato.
-# Recusar armar custa a jogada inteira.
-FORCA_CHUTE_ALCANCE = 300.0
-
-# Acima desta velocidade a bola JA FOI CHUTADA - ninguem persegue.
-#
-# POR QUE ISTO PRECISA EXISTIR - o defeito que segurava o jogo inteiro
-# ---------------------------------------------------------------------
-# O chute saia certo: MEDIDO no replay, com o robo atras da bola e o disparo
-# confirmado pelo grSim (flat_kick em t=2,31), a bola partiu para a frente a
-# 5929 mm/s. E percorreu 200 mm.
-#
-# O motivo esta no robot.cpp:168 do grSim: o contato SUBTRAI velocidade da bola
-# (KickerDampFactor). Como o alvo do empurrao fica alem dela, o robo continua
-# avancando depois do disparo, alcanca a bola e a FREIA. Medimos ele grudado a
-# 158 mm dela pelos 22 s seguintes, com a bola imovel em x=-668.
-#
-# A cobranca de falta ja tinha passado por isto (§6.7 item 4: "chute de 6 m/s
-# virando 350 mm") e resolveu com o recuo pos-chute. O jogo corrido nao tinha
-# equivalente.
-#
-# O criterio e a VELOCIDADE DA BOLA, nao um estado guardado: a tatica e
-# reconstruida a cada ciclo, entao qualquer memoria aqui seria perdida.
-#
-# 250 mm/s, e nao 800. O valor TEM de vir do que a estrategia enxerga, nao da
-# fisica: a velocidade chega pelo filtro de Kalman, que subnotifica e atrasa (o
-# HANDOVER da bola parada registra 6196 mm/s reais publicados como 1607).
-#
-# MEDIDO no proprio /game_state durante um jogo, 526 amostras:
-#     p50 = 15    p90 = 36    max = 1321 mm/s
-# Com o limiar em 800 a condicao so fechava no pico, por um ou dois quadros -
-# quando o robo ja tinha alcancado a bola e freado. 250 fica muito acima do
-# ruido (p90 = 36) e pega a bola ainda saindo.
-VEL_BOLA_CHUTADA = 250.0
-
-
-def bola_ja_saiu(ball):
-    """A bola esta viajando? Entao nao ha o que empurrar - ver VEL_BOLA_CHUTADA."""
-    vx = getattr(ball, "velocity_x", 0.0) or 0.0
-    vy = getattr(ball, "velocity_y", 0.0) or 0.0
-    return hypot(vx, vy) > VEL_BOLA_CHUTADA
+# O racional medido de cada numero (por que 6,0 m/s, por que armar a 300 mm, por
+# que 250 mm/s e nao 800) esta em skills/chute.py e skills/bola.py, junto da
+# funcao que usa o numero. Aqui ficam so os nomes, para nao quebrar quem importa
+# deste modulo.
+FORCA_CHUTE = chute.FORCA_CHUTE
+FORCA_CHUTE_ALCANCE = chute.FORCA_CHUTE_ALCANCE
+VEL_BOLA_CHUTADA = skill_bola.VEL_BOLA_CHUTADA
+bola_ja_saiu = skill_bola.bola_ja_saiu
 
 
 def eleger_atacante(ally_robots, ball):
@@ -143,6 +100,16 @@ SITUACAO_DELES = "DELES"
 SITUACAO_DISPUTA = "DISPUTA"
 SITUACAO_SOLTA = "SOLTA"
 
+# OS TRES PAPEIS, e o que cada nome QUER DIZER.
+#
+# Os nomes estavam trocados: o rotulo 'apoio' era dado a quem ia a BOLA e o
+# rotulo 'portador' a quem ficava adiantado esperando. Nao era so cosmetico -
+# 'alvo_do_chute' escolhe o receptor do passe entre os PAPEL_APOIO, ou seja
+# escolhia justamente quem estava indo disputar a bola. Ver distribuir_papeis.
+#
+#   PORTADOR    quem tem a bola ou vai busca-la. UM por ciclo.
+#   APOIO       quem ajuda sem a bola: ataque (oferece-se) ou marcacao.
+#   COBERTURA   entre a bola e o nosso gol; segunda a ir a bola em DELES/DISPUTA.
 PAPEL_PORTADOR = "portador"
 PAPEL_APOIO = "apoio"
 PAPEL_COBERTURA = "cobertura"
@@ -164,18 +131,8 @@ def situacao_de_jogo(ally_robots, enemy_robots, ball):
     return SITUACAO_SOLTA
 
 
-def onde_a_bola_vai(ball, segundos=0.5):
-    """Posicao prevista da bola daqui a 'segundos'.
-
-    ATENCAO a fonte: a velocidade vem do filtro de Kalman, que SUBNOTIFICA e
-    atrasa. MEDIDO no /game_state durante um jogo, 526 amostras: p50 = 15,
-    p90 = 36, maximo 1321 mm/s - enquanto a visao crua mostra picos de 6000.
-    A previsao, portanto, e conservadora por construcao: erra para perto, nunca
-    para longe. Serve para escolher ONDE ESPERAR, nao para cronometrar nada.
-    """
-    vx = getattr(ball, "velocity_x", 0.0) or 0.0
-    vy = getattr(ball, "velocity_y", 0.0) or 0.0
-    return ball.position_x + vx * segundos, ball.position_y + vy * segundos
+# Previsao da bola: skills/bola.py (atencao a fonte - o Kalman subnotifica).
+onde_a_bola_vai = skill_bola.onde_a_bola_vai
 
 
 def _dist_bola(robo, ball):
@@ -184,28 +141,76 @@ def _dist_bola(robo, ball):
 
 
 def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
-    """Quem busca a bola, quem ocupa o espaco a frente, quem cobre.
+    """Quem vai a bola, quem apoia, quem cobre. SEMPRE os tres papeis.
 
-    QUEM BUSCA E QUEM ATACA SAO PAPEIS DIFERENTES - e antes eram o mesmo.
-    ---------------------------------------------------------------------
-    A eleicao antiga escolhia o mais PROXIMO da bola e o chamava de portador.
-    Consequencia: quem recuperava a bola era sempre o mais adiantado, que por
-    isso perdia a posicao de ataque. Toda recuperacao custava o nosso espaco.
+    OS NOMES ESTAVAM TROCADOS, E ISSO NAO ERA COSMETICO
+    ---------------------------------------------------
+    Ate aqui o rotulo PAPEL_APOIO era dado a quem ia a BOLA (chamado
+    'buscador' nos comentarios) e o PAPEL_PORTADOR a quem ficava adiantado
+    esperando. Um consumidor leu o rotulo pelo que ele DIZ: 'alvo_do_chute'
+    escolhe o receptor do passe entre os PAPEL_APOIO - isto e, escolhia
+    justamente quem estava indo disputar a bola.
 
-    Agora:
-      - PORTADOR   e o mais ADIANTADO. Ele ocupa o espaco a frente e recebe.
-                   So vai a bola quando ela e nossa e esta com ele.
-      - BUSCADOR   e quem vai buscar, escolhido ENTRE OS DE TRAS. Recuperar
-                   deixou de custar a posicao ofensiva.
-      - COBERTURA  fica entre a bola e o nosso gol.
+    MEDIDO offline, sonda de decisao sem simulador (as duas funcoes sao puras):
+        receptor do passe == robo mais proximo da bola     3 de 3 cenarios
+    Com o robo a 100 mm da bola, o 'passe' virava um alvo em cima do proprio
+    chutador. E como TODA direcao do ciclo sai de 'alvo_chute' - a orientacao
+    do corpo, o ponto de atravessar, o 'espaco a frente' do apoio -, a
+    consequencia era o time apontar e andar PARA TRAS:
 
-    QUANTOS VAO A BOLA, por situacao (pedido do Felipe):
-      SOLTA          UM  - o mais proximo entre os de tras. Dois atras da mesma
-                     bola solta e desperdicio: o outro fica livre para o espaco.
-      DELES/DISPUTA  DOIS - buscador e cobertura. Medimos 'bloqueado' + 'alivio'
-                     em 200 de 242 ciclos porque eles chegam com tres e nos com
-                     um; um contra tres nao se resolve posicionando.
-      NOSSA          o buscador vira segundo atacante e sobe.
+        cenario 'posse nossa'  corpo do apoio   -139,9 graus (nosso gol)
+        cenario 'largada'      alvo do apoio    (-1500, 0) com a bola em (0,0)
+
+    E a trava de seguranca entao recusava armar o chute, porque a direcao de
+    saida apontava para a nossa meta. Laco fechado: gol bloqueado -> passe
+    degenerado -> todas as direcoes invertidas -> nao chuta. Isto explica o
+    'alvo_chute=passe em 250 de 250 ciclos' melhor do que a folga de linha,
+    porque o segmento bola -> robo-mais-proximo e curto e quase sempre livre.
+
+    O QUE CADA PAPEL E AGORA
+    ------------------------
+      PORTADOR   tem a bola ou vai busca-la. Escolhido PRIMEIRO, o mais
+                 proximo dela. (Era o 'buscador'.)
+      APOIO      ajuda sem a bola - ataque ou marcacao, conforme o cenario.
+                 O mais adiantado entre os que sobram. (Era o 'portador'.)
+      COBERTURA  entre a bola e o nosso gol; em DELES/DISPUTA e a SEGUNDA a ir
+                 a bola, entrando pelo lado oposto ao do portador.
+
+    O PORTADOR E ESCOLHIDO PRIMEIRO, E E O MAIS PROXIMO DA BOLA
+    -----------------------------------------------------------
+    Isto nao mudou, e e a inversao que consertou a largada. Antes o mais
+    ADIANTADO era escolhido primeiro e quem ia a bola saia dos que sobravam:
+    com a bola no centro, o nosso robo 1 a 1200 mm dela e os robos 2 e 3 a
+    ~2500 mm, o robo 1 ficava parado ocupando espaco e mandavamos disputar
+    quem estava MAIS LONGE. Medido: em 2 de 3 replays o amarelo tocava a bola
+    aos 0,7 s e chutava 5400 mm direto para o nosso fundo, com UM unico toque
+    na partida inteira.
+
+    A mesma regra produz os dois comportamentos certos, pela geometria:
+      - bola no centro na largada -> o mais proximo e o da frente, e ele vai;
+      - bola sobrando atras com o atacante la em cima -> o mais proximo e um
+        dos de tras, e o adiantado fica livre para o espaco.
+
+    QUANTOS VAO A BOLA, por situacao:
+      SOLTA          UM  - o portador. Dois atras da mesma bola solta e
+                     desperdicio: o outro fica livre para o espaco.
+      DELES/DISPUTA  DOIS - portador e cobertura. Medimos 'bloqueado' +
+                     'alivio' em 200 de 242 ciclos porque eles chegam com tres
+                     e nos com um; um contra tres nao se resolve posicionando.
+      NOSSA          UM - o portador NAO larga a bola (ver alvo_do_papel); o
+                     apoio sobe para receber.
+
+    OS TRES SEMPRE EXISTEM
+    ----------------------
+    Pedido do Felipe: "faca apoio, portador e cobertura sempre". Com tres
+    robos de linha (o cenario 'jogo' tem quatro: goleiro + tres) sai exatamente
+    um de cada. Com MENOS robos que papeis a prioridade e
+
+        PORTADOR -> COBERTURA -> APOIO
+
+    porque alguem tem de ir a bola, e deixar a linha do gol descoberta custa
+    mais que perder a linha de passe. Antes, com dois de linha, saiam portador
+    e apoio e NINGUEM cobria.
 
     'sentido' e +1 quando atacamos +x e -1 quando atacamos -x: e o que define
     "adiantado".
@@ -217,26 +222,25 @@ def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
     # EXPERIMENTO A2-B: PAPEIS FIXOS POR ID (ARARABOTS_PAPEIS_FIXOS=1).
     #
     # Isola a ELEICAO e a HISTERESE de uma vez: o robo de menor id e sempre o
-    # buscador, o seguinte sempre o portador, o resto cobertura. Nada troca,
-    # nunca. Serve para responder se o custo esta na TROCA de papel - se o jogo
-    # ficar mais fluido assim, e a troca; se nao mudar nada, a histerese atual ja
-    # esta fazendo o trabalho e o custo esta noutro lugar.
+    # portador, o seguinte sempre o apoio, o resto cobertura. Nada troca,
+    # nunca. T-2 ja respondeu (engajamento igual, amontoamento de 1% para 42%),
+    # entao a bandeira pode sair - fica porque o lote que a respondeu esta
+    # registrado no ESTADO_ATUAL.md e o custo de manter e uma linha.
     #
-    # NAO E PARA FICAR: papeis fixos ignoram a geometria, entao na bola sobrando
-    # atras quem busca pode ser o mais distante - que e exatamente o defeito da
-    # largada que a inversao buscador-primeiro corrigiu.
+    # NAO E PARA FICAR: papeis fixos ignoram a geometria, entao na bola
+    # sobrando atras quem busca pode ser o mais distante - que e exatamente o
+    # defeito da largada que a inversao portador-primeiro corrigiu.
     # A bandeira e um ARQUIVO, nao uma variavel de ambiente: variavel lida pela
     # ESTRATEGIA precisa ser exportada no 'ros_d' do ararabots.sh, que fica fora
-    # de src/strategy/. O proprio ararabots.sh ja usa arquivos em /tmp para
-    # estado (ex.: /tmp/ararabots_modo_grsim), entao o padrao nao e novo.
+    # de src/strategy/.
     if (os.environ.get("ARARABOTS_PAPEIS_FIXOS")
             or os.path.exists("/tmp/ararabots_papeis_fixos")):
         papeis_fixos = {}
         for i, rid in enumerate(linha):
             if i == 0:
-                papeis_fixos[rid] = PAPEL_APOIO        # buscador
-            elif i == 1:
                 papeis_fixos[rid] = PAPEL_PORTADOR
+            elif i == 1:
+                papeis_fixos[rid] = PAPEL_APOIO
             else:
                 papeis_fixos[rid] = PAPEL_COBERTURA
         return papeis_fixos
@@ -244,57 +248,22 @@ def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
     def _adiantado(rid):
         return ally_robots[rid].position_x * sentido
 
-    # QUEM BUSCA SAI PRIMEIRO, E E O MAIS PROXIMO DA BOLA.
-    #
-    # Antes o PORTADOR era escolhido primeiro, como o mais adiantado, e o
-    # buscador saia dos que sobravam. Na LARGADA isso e desastroso: a bola fica
-    # no centro, o nosso robo 1 esta a 1200 mm dela e os robos 2 e 3 a ~2500 mm.
-    # O robo 1 virava portador - o mais adiantado - e ficava parado ocupando
-    # espaco, enquanto mandavamos disputar quem estava MAIS LONGE. Medido: em
-    # 2 de 3 replays o amarelo tocava a bola aos 0,7 s e chutava 5400 mm direto
-    # para o nosso fundo, com UM unico toque na partida inteira.
-    #
-    # Invertendo a ordem, a mesma regra produz os dois comportamentos que
-    # queremos, pela geometria:
-    #   - bola no centro na largada -> o mais proximo e o da frente, e ele vai;
-    #   - bola sobrando no nosso campo com o atacante la em cima -> o mais
-    #     proximo e um dos de tras, e o portador fica livre para o espaco,
-    #     que foi exatamente o pedido original.
-    buscador = min(linha, key=lambda rid: _dist_bola(ally_robots[rid], ball))
+    # ---- PORTADOR: o mais proximo da bola, com histerese
+    portador = min(linha, key=lambda rid: _dist_bola(ally_robots[rid], ball))
     if estado is not None:
-        ant = estado.get("buscador")
-        if ant is not None and ant in linha and ant != buscador:
-            travado = estado.get("buscador_ciclos", 0) < CICLOS_MIN_PAPEL
+        ant = estado.get("portador")
+        if ant is not None and ant in linha and ant != portador:
+            travado = estado.get("portador_ciclos", 0) < CICLOS_MIN_PAPEL
             if travado or (_dist_bola(ally_robots[ant], ball)
-                           - _dist_bola(ally_robots[buscador], ball)
+                           - _dist_bola(ally_robots[portador], ball)
                            < VANTAGEM_TROCA):
-                buscador = ant
+                portador = ant
         # T-3: QUAL TROCA CUSTA CARO. So log, nenhum comportamento muda.
         #
         # "a troca de papel custa" e grosso demais para virar correcao: trocar o
-        # portador com a bola longe e barato; trocar o BUSCADOR quando ele ja
-        # esta a meio caminho da bola joga fora a corrida inteira. O log registra
-        # a distancia do robo que SAI e do que ENTRA, no instante da troca, para
-        # a analise separar os dois casos.
-        if ant is not None and ant != buscador and os.environ.get("DIAG_JOGO"):
-            print("[TR] troca=buscador sai=r%s d_sai=%.0f entra=r%s d_entra=%.0f"
-                  % (ant, _dist_bola(ally_robots[ant], ball) if ant in ally_robots else -1,
-                     buscador, _dist_bola(ally_robots[buscador], ball)), flush=True)
-        estado["buscador_ciclos"] = (
-            estado.get("buscador_ciclos", 0) + 1 if buscador == ant else 0)
-        estado["buscador"] = buscador
-
-    # PORTADOR: o mais adiantado ENTRE OS QUE SOBRAM.
-    sobram = [rid for rid in linha if rid != buscador]
-    if not sobram:
-        return {buscador: PAPEL_APOIO}
-    portador = max(sobram, key=_adiantado)
-    if estado is not None:
-        ant = estado.get("portador")
-        if ant is not None and ant in sobram and ant != portador:
-            travado = estado.get("portador_ciclos", 0) < CICLOS_MIN_PAPEL
-            if travado or _adiantado(portador) - _adiantado(ant) < VANTAGEM_TROCA:
-                portador = ant
+        # apoio com a bola longe e barato; trocar o PORTADOR quando ele ja esta
+        # a meio caminho da bola joga fora a corrida inteira. O log registra a
+        # distancia do robo que SAI e do que ENTRA, no instante da troca.
         if ant is not None and ant != portador and os.environ.get("DIAG_JOGO"):
             print("[TR] troca=portador sai=r%s d_sai=%.0f entra=r%s d_entra=%.0f"
                   % (ant, _dist_bola(ally_robots[ant], ball) if ant in ally_robots else -1,
@@ -303,29 +272,44 @@ def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
             estado.get("portador_ciclos", 0) + 1 if portador == ant else 0)
         estado["portador"] = portador
 
-    papeis = {portador: PAPEL_PORTADOR, buscador: PAPEL_APOIO}
+    sobram = [rid for rid in linha if rid != portador]
+    if not sobram:
+        # UM robo de linha so: ele e o portador. Nao ha o que distribuir.
+        return {portador: PAPEL_PORTADOR}
+
+    # ---- COBERTURA antes do APOIO quando falta gente (ver docstring)
+    if len(sobram) == 1:
+        return {portador: PAPEL_PORTADOR, sobram[0]: PAPEL_COBERTURA}
+
+    # ---- APOIO: o mais adiantado entre os que sobram, com histerese
+    apoio = max(sobram, key=_adiantado)
+    if estado is not None:
+        ant = estado.get("apoio")
+        if ant is not None and ant in sobram and ant != apoio:
+            travado = estado.get("apoio_ciclos", 0) < CICLOS_MIN_PAPEL
+            if travado or _adiantado(apoio) - _adiantado(ant) < VANTAGEM_TROCA:
+                apoio = ant
+        if ant is not None and ant != apoio and os.environ.get("DIAG_JOGO"):
+            print("[TR] troca=apoio sai=r%s d_sai=%.0f entra=r%s d_entra=%.0f"
+                  % (ant, _dist_bola(ally_robots[ant], ball) if ant in ally_robots else -1,
+                     apoio, _dist_bola(ally_robots[apoio], ball)), flush=True)
+        estado["apoio_ciclos"] = (
+            estado.get("apoio_ciclos", 0) + 1 if apoio == ant else 0)
+        estado["apoio"] = apoio
+
+    papeis = {portador: PAPEL_PORTADOR, apoio: PAPEL_APOIO}
     for rid in linha:
         if rid not in papeis:
             papeis[rid] = PAPEL_COBERTURA
     return papeis
 
 
-def _livre_do_lado(x, y, inimigos, folga=320.0):
-    """Nenhum adversario a menos de 'folga' deste ponto."""
-    return not any(hypot(e.position_x - x, e.position_y - y) < folga
-                   for e in (inimigos or {}).values())
+
+_livre_do_lado = geometria.livre_do_lado
+_norm_ang = geometria.norm_ang
 
 
-def _norm_ang(a):
-    """Angulo em (-pi, pi]."""
-    while a > pi:
-        a -= 2.0 * pi
-    while a <= -pi:
-        a += 2.0 * pi
-    return a
-
-
-FOLGA_LINHA = 180.0
+FOLGA_LINHA = geometria.FOLGA_LINHA
 
 # PRESSAO: adversarios a menos de PRESSAO_RAIO do portador. 400 mm e pouco mais
 # que um diametro de robo (180) - quem esta ai disputa o corpo, nao marca.
@@ -361,108 +345,6 @@ RAIO_POSSE_PORTADOR = 200.0
 # Dentro disto o portador disputa a bola sempre, independente do rotulo da
 # situacao - que oscila com o rastreio. 450 mm e o dobro do raio de posse.
 ENGAJA_RAIO = 450.0
-# Quanto ele avanca ALEM da bola ao empurrar/tocar - atravessa em vez de parar.
-AVANCO_PORTADOR = 500.0
-# ATAQUE A BOLA SOLTA, em forca total.
-#
-# Medido nos replays: com a bola solta os nossos andavam a p50 de 38 a 192 mm/s
-# estando a 1200-2500 mm dela. O planejador desacelera ao se aproximar do alvo,
-# entao mirar A BOLA significa chegar nela devagar - e quem chega devagar na
-# bola solta perde a bola solta.
-#
-# Mirando MUITO alem dela, o alvo nunca esta perto e a desaceleracao nao entra:
-# o robo cruza a bola em velocidade. E o "vai igual maluco" na pratica, dentro
-# do unico canal que temos (o 'aggressiveness' da mensagem nao e lido pelo
-# planejador - ver PLANO.md, item M2).
-AVANCO_SOLTA = 1600.0
-# Contorno: quanto o alvo fica ATRAS da bola quando a chegada esta no lado
-# errado, e quanto ele se desloca para o lado para o robo fazer a curva.
-RECUO_CONTORNO = 700.0
-# Onde o CENTRO do robo precisa estar para a bola encostar na placa do chutador:
-# 73 mm (placa) + 21 mm (raio da bola). Alem disso o casco redondo bate antes.
-PONTO_CHUTE = 94.0
-# COMPENSACAO DE VIES, medida e nao arbitrada.
-#
-# Com o alvo pedindo xx=15 e |yy| centrado, o que se mede nos ciclos armados e:
-#     xx  mediana  50   -> o robo para 35 mm ALEM do pedido
-#     yy  mediana -50   -> sempre para o MESMO lado
-#
-# O yy nao e dispersao, e VIES: metade dos ciclos ja cairia dentro da janela se
-# a distribuicao estivesse centrada. Entao pedimos deslocado, de proposito, para
-# o erro de rastreio cair DENTRO em vez de fora.
-#
-#   lateral: -50 mm, contrario ao vies medido
-#   longitudinal: pedir 53 mm em vez de 88. O robo nao cabe a 53 (a placa fica
-#   a 73), entao ele PRESSIONA para dentro e para onde a fisica deixa - na
-#   placa, que e exatamente onde queremos.
-# CALIBRADO, nao arbitrado. Com -50 a mediana do yy foi de -50 para +42, ou
-# seja o deslocamento moveu a distribuicao em +92 mm e passou do centro. Para
-# levar -50 ate 0, o valor proporcional e -27.
-#
-# O fato de o deslocamento MOVER a mediana de forma previsivel prova que o
-# desvio lateral e VIES, e nao ruido de rastreio - vies se corrige mirando
-# deslocado, ruido nao.
-VIES_LATERAL = -27.0
-# A partir daqui o alvo comeca a virar o ponto de chute em vez do avanco.
-# OPCAO A: CHEGAR MAIS DEVAGAR.
-#
-# O xx medido tem espalhamento de 7 a 179 mm com mediana 92 - dispersao, nao
-# vies (o yy, que era vies, cedeu na primeira calibracao: mediana -50 -> -12 e
-# a taxa dentro da janela subiu de 18% para 67%). Deslocar o alvo nao corrige
-# dispersao.
-#
-# Mas houve ciclos com xx=7 e xx=44: o robo CHEGA na janela as vezes, so nao
-# fica. Comecando a mirar o ponto de chute de 1200 mm em vez de 600, ele passa
-# mais tempo desacelerando e chega com menos velocidade - menos ultrapassagem,
-# menos espalhamento.
-# TESTADO E REVERTIDO: 1200 (chegar mais devagar) PIOROU.
-#
-#   com 600:   armados 6, xx mediana  92, xx na janela 1, yy_ok 4
-#   com 1200:  armados 2, xx mediana 106, xx na janela 0, yy_ok 2
-#
-# Comecar a mirar o ponto de chute mais cedo nao reduziu a ultrapassagem: so
-# reduziu o tempo em que o robo fica perto o bastante para armar. A dispersao do
-# xx (7 a 179 mm) nao vem da velocidade de chegada.
-RAIO_ENCAIXE = 600.0
-# Alvo proximo: ALEM da bola, nao no ponto de chute. Ver a nota sobre o
-# control.py:120 - robo parado significa comando de chute nao enviado.
-# Alvo proximo: pouco ALEM do ponto de chute, nao muito alem da bola.
-#
-# HISTORICO, para nao repetir: mirar o PONTO DE CHUTE (-94, onde a face encosta)
-# deu a melhor geometria ja medida - 25 a 52 quadros por partida dentro da
-# janela, contra 1 antes. Eu troquei isso por +80 (alem da bola) acreditando que
-# o robo parado calava o rastreador e prendia o chute no cache. A sonda-chute
-# depois PROVOU essa hipotese falsa: control_reference a 186 Hz, commandTopic a
-# 37 Hz, kick=6.0 em 365 amostras, com o robo parado. Troquei a melhor
-# configuracao medida por uma teoria errada.
-#
-# -60 fica 34 mm a frente do ponto de chute: o robo ainda avanca para dentro da
-# bola, mas devagar, sem atravessar de raspao como acontecia com +80.
-# O ALVO PROXIMO E O MEIO DA JANELA DE DISPARO.
-#
-# ARITMETICA, medida no referencial do robo (o que o grSim arbitra):
-#     xx = distancia_ao_longo_do_corpo - 73      dispara com 0 <= xx < 31,5
-# Logo o CENTRO do robo tem de parar entre 73 e 104,5 mm da bola.
-#
-# Com o alvo em -60 o pedido era 60 mm - mais perto que a propria placa, e
-# impossivel: o casco (90) com a bola (21) trava em 111 mm. Medido: xx=-13,
-# fora da janela, e o robo empurrando com o ombro para alcancar um ponto onde
-# nao cabe. Resultado do lote: xx na janela em 2 de 14 ciclos armados.
-#
-# -88 pede o centro a 88 mm, o que da xx = 15 mm: o meio da janela, com folga
-# dos dois lados para o atraso do rastreio.
-ATRAVESSA_CHUTE = -53.0
-LATERAL_CONTORNO = 550.0
-# Quanto a frente da bola o portador se oferece quando nao e ele que busca.
-PORTADOR_ESPACO = 1500.0
-# A que distancia da bola o portador se planta para tapar a linha de chute,
-# quando a posse e deles e os outros dois ja estao disputando. 600 mm e fora do
-# alcance de contato (111 mm) e perto o bastante para cobrir angulo util.
-BLOQUEIO_DIST = 600.0
-# Onde a cobertura fica na reta bola->nosso gol: 0 e na bola, 1 e no gol.
-# 0,45 a deixa mais perto da bola que do gol, dentro do corredor do chute e com
-# tempo de reagir ao rebote.
-COBERTURA_FRACAO = 0.45
 # Com a bola a menos disto do nosso gol, a cobertura para de cobrir a linha e
 # vai NA bola. 2500 mm cobre o nosso terco defensivo (campo de 9000).
 COBERTURA_MATA = 2500.0
@@ -474,29 +356,6 @@ RAIO_MIRA = 400.0
 # 25 graus de face deixa margem para o rastreio; 20 para a mira.
 TOL_FACE = 0.44
 TOL_MIRA = 0.35
-# Ate quantos graus do eixo de ataque o corpo pode estar e ainda assim chutar.
-# 100 graus (1,75 rad) permite o alivio lateral e proibe o chute para tras.
-TOL_PARA_TRAS = 1.75
-# ARMAR CEDO E MANTER ARMADO ATE O CONTATO.
-#
-# GEOMETRIA DO GRSIM: a placa do chutador fica a 73 mm do centro do robo e a
-# bola so dispara se estiver a no maximo 31,5 mm dela (KickerThickness*2 +
-# BallRadius) - ou seja, centro da bola a ate ~104,5 mm do centro do robo.
-#
-# Armavamos em d < 150 e o unico disparo medido foi em d = 110: 5,5 mm FORA da
-# janela. O adversario arma em d < 140 e funciona porque e comandado a ~50 Hz -
-# fica armado o tempo todo e pega o instante em que a distancia cruza 104,5. Nos
-# rodamos a 10 Hz: entre um ciclo e outro o robo percorre dezenas de milimetros
-# e a janela passa sem ninguem olhar.
-#
-# A correcao nao e mirar melhor a janela, e ficar armado durante toda a
-# aproximacao final. O chutador do grSim so dispara quando a geometria permite,
-# entao armar cedo nao gasta nada - e a trava de seguranca continua impedindo
-# que algo saia na direcao da nossa meta.
-ALCANCE_CONTATO = 260.0
-# Uma vez armado, so desarma quando a bola se afasta disto - ela saiu, ou
-# perdemos a disputa. Mais largo que o alcance de armar, de proposito.
-ALCANCE_SOLTA_TRAVA = 420.0
 # Dentro disto o robo ja aponta na direcao do chute em vez de olhar para a bola.
 RAIO_ORIENTA_CHUTE = 700.0
 PRESSAO_RAIO = 400.0
@@ -504,22 +363,33 @@ PRESSAO_MIN = 1
 LIMITE_Y = 2600.0
 
 
-def linha_livre(ox, oy, dx_, dy_, inimigos, folga=FOLGA_LINHA):
-    """Nenhum adversario a menos de 'folga' do segmento origem -> destino."""
-    vx, vy = dx_ - ox, dy_ - oy
-    comp2 = vx * vx + vy * vy
-    if comp2 <= 1.0:
-        return True
-    for r in (inimigos or {}).values():
-        wx, wy = r.position_x - ox, r.position_y - oy
-        t = max(0.0, min(1.0, (wx * vx + wy * vy) / comp2))
-        if hypot(wx - t * vx, wy - t * vy) < folga:
-            return False
-    return True
+# Predicado de linha: skills/geometria.py. ATENCAO ao contrato - os quatro
+# primeiros argumentos sao COORDENADAS, nao um ponto e um versor (o goleiro
+# chamava com versor e nao conferia linha nenhuma).
+
+# Constantes que passaram para a CAMADA DE SKILLS, junto da funcao que as
+# usa. O racional medido de cada uma esta la; aqui fica so o nome, porque
+# constante medida escrita em dois lugares e defeito esperando acontecer.
+AVANCO_PORTADOR = aproximacao.AVANCO_PORTADOR
+AVANCO_SOLTA = aproximacao.AVANCO_SOLTA
+RECUO_CONTORNO = aproximacao.RECUO_CONTORNO
+PONTO_CHUTE = aproximacao.PONTO_CHUTE
+VIES_LATERAL = aproximacao.VIES_LATERAL
+RAIO_ENCAIXE = aproximacao.RAIO_ENCAIXE
+ATRAVESSA_CHUTE = aproximacao.ATRAVESSA_CHUTE
+LATERAL_CONTORNO = aproximacao.LATERAL_CONTORNO
+PORTADOR_ESPACO = posicionamento.PORTADOR_ESPACO
+BLOQUEIO_DIST = posicionamento.BLOQUEIO_DIST
+MARCACAO_DIST = posicionamento.MARCACAO_DIST
+COBERTURA_FRACAO = posicionamento.COBERTURA_FRACAO
+TOL_PARA_TRAS = chute.TOL_PARA_TRAS
+ALCANCE_CONTATO = chute.ALCANCE_CONTATO
+ALCANCE_SOLTA_TRAVA = chute.ALCANCE_SOLTA_TRAVA
+linha_livre = geometria.linha_livre
 
 
 def alvo_do_chute(ball, gol_ataque, ally_robots, enemy_robots, papeis, estado=None):
-    """Para onde o portador deve mandar a bola: o gol, o apoio, ou lugar nenhum.
+    """Para onde o portador deve mandar a bola: o gol, o APOIO, ou lugar nenhum.
 
     POR QUE ISTO PRECISOU EXISTIR
     -----------------------------
@@ -561,12 +431,34 @@ def alvo_do_chute(ball, gol_ataque, ally_robots, enemy_robots, papeis, estado=No
     # solucao: congelar a posicao do receptor no instante da decisao. A linha
     # continua sendo re-verificada contra a posicao ATUAL dele - se ele se mudar
     # e a linha fechar, a jogada escolhe outra coisa.
+    # O RECEPTOR TEM DE ESTAR A FRENTE DA BOLA.
+    #
+    # DEFEITO QUE ISTO CORRIGE, e era o pior achado da auditoria de papeis.
+    # O receptor era escolhido entre os PAPEL_APOIO, e o PAPEL_APOIO era o robo
+    # que ia a BOLA (os nomes estavam trocados - ver distribuir_papeis). Ou
+    # seja: o alvo do passe era a posicao de quem ia chutar.
+    #
+    # MEDIDO offline (sonda de decisao, sem simulador):
+    #     receptor == robo mais proximo da bola      3 de 3 cenarios
+    #     'posse nossa': receptor a 100 mm da bola
+    # Como o segmento bola -> robo-mais-proximo e curto, 'linha_livre' quase
+    # sempre aprovava: 'passe' ganhava sempre que o gol estivesse fechado. E
+    # todas as direcoes do ciclo saem de 'alvo_chute', entao o corpo apontava
+    # para tras (-139,9 graus medidos) e a trava de seguranca recusava armar.
+    #
+    # Com os papeis nomeados corretamente o receptor passa a ser o APOIO - o
+    # mais adiantado, que e quem se oferece. A guarda de AVANCO vem da cobranca
+    # de falta, que ja tinha a licao paga em _companheiro_para_passe: "menos que
+    # isso e passe lateral dentro da propria area". Sem ela, um apoio que
+    # recuou vira alvo e o passe sai para tras.
+
     if estado is not None:
         congelado = estado.get("alvo_passe")
         if congelado is not None:
             rid_c = congelado[2]
             atual = ally_robots.get(rid_c)
             if (atual is not None and papeis.get(rid_c) == PAPEL_APOIO
+                    and posicionamento.pode_receber(atual, bx, by, gol_ataque)
                     and linha_livre(bx, by, atual.position_x, atual.position_y,
                                     enemy_robots)):
                 return congelado[0], congelado[1], "passe"
@@ -576,25 +468,24 @@ def alvo_do_chute(ball, gol_ataque, ally_robots, enemy_robots, papeis, estado=No
         if papel != PAPEL_APOIO or rid not in ally_robots:
             continue
         a = ally_robots[rid]
-        if linha_livre(bx, by, a.position_x, a.position_y, enemy_robots):
+        if (posicionamento.pode_receber(a, bx, by, gol_ataque)
+                and linha_livre(bx, by, a.position_x, a.position_y, enemy_robots)):
             if estado is not None:
                 estado["alvo_passe"] = (a.position_x, a.position_y, rid)
             return a.position_x, a.position_y, "passe"
     return None, None, "bloqueado"
 
 
-# Geometria do apoio: a FRENTE da bola e ABERTO, fora do corredor do portador.
-#
-# 1800/1600, e nao 1200/900: com 1200 a frente e 900 de lado ele ficava DENTRO
-# do corredor por onde o portador precisa empurrar, e o chute caiu de 5525 para
-# 1536 mm/s. Medido duas vezes, revertido duas vezes.
-# Recuo do apoio quando a via esta obstruida: atras da bola, onde a linha
-# costuma estar limpa porque a marcacao vem de frente.
-APOIO_RECUO = 900.0
-APOIO_AVANCO = 1800.0
-APOIO_ABERTURA = 1600.0
 
 
+
+# Constantes que passaram para a CAMADA DE SKILLS, junto da funcao que as
+# usa. O racional medido de cada uma esta la; aqui fica so o nome, porque
+# constante medida escrita em dois lugares e defeito esperando acontecer.
+AVANCO_MINIMO_PASSE = posicionamento.AVANCO_MINIMO_PASSE
+APOIO_RECUO = posicionamento.APOIO_RECUO
+APOIO_AVANCO = posicionamento.APOIO_AVANCO
+APOIO_ABERTURA = posicionamento.APOIO_ABERTURA
 def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol,
                   ordem=0, alvo_chute=None, inimigos=None, bloqueado=False):
     """Para onde cada robo vai, por (situacao, papel). Devolve (x, y, chuta).
@@ -617,31 +508,42 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
     ux, uy = dax / na, day / na
     px, py = -uy, ux                      # perpendicular
 
-    def _no_campo(x, y):
-        return max(-4300.0, min(4300.0, x)), max(-2800.0, min(2800.0, y))
+    _no_campo = geometria.no_campo
 
     # ---------------------------------------------------------------- APOIO
-    if papel == PAPEL_APOIO:
+    # ----------------------------------------------------------- PORTADOR
+    #
+    # QUEM VAI A BOLA E QUEM A TEM. Era o rotulo PAPEL_APOIO ('buscador').
+    #
+    # Todo o maquinario abaixo - interceptacao, contorno continuo, ponto de
+    # chute, desvio lateral que zera na chegada - veio deste ramo e NAO foi
+    # alterado: cada constante dele tem medicao no comentario. O que mudou e
+    # o nome do papel e uma coisa de comportamento, logo abaixo (NOSSA).
+    if papel == PAPEL_PORTADOR:
         if situacao == SITUACAO_SOLTA:
             # vai para onde a bola VAI PARAR, nao para onde ela esta: chegar
             # depois dela nao adianta.
             fx, fy = onde_a_bola_vai(ball, 1.0)
             return _no_campo(fx, fy) + (False,)
-        # O APOIO E O BUSCADOR: e ELE que vai a bola.
-        #
-        # Inverteu em relacao ao que havia aqui. Antes o mais proximo da bola
-        # virava portador e ia buscar, entao toda recuperacao custava a nossa
-        # posicao ofensiva. Agora o portador fica adiantado e quem busca e este,
-        # que ja estava atras - o pedido do Felipe: "liberar o portador para
-        # atacar o espaco".
-        #
-        # Com a bola NOSSA ele deixa de buscar e vira segundo atacante, a frente
-        # e aberto, para receber.
-        if situacao == SITUACAO_NOSSA:
-            lado = 1.0 if (ordem % 2 == 0) else -1.0
-            return _no_campo(bx + ux * APOIO_AVANCO + px * APOIO_ABERTURA * lado,
-                             by + uy * APOIO_AVANCO + py * APOIO_ABERTURA * lado) + (False,)
 
+        # COM A BOLA NOSSA, O PORTADOR NAO LARGA A BOLA.
+        #
+        # MUDANCA DE COMPORTAMENTO, e e a razao de ser desta correcao. Neste
+        # ramo havia o oposto: com a situacao NOSSA quem estava COM a bola era
+        # mandado 1800 mm para a frente ('vira segundo atacante') enquanto o
+        # robo adiantado era mandado NA bola. Os dois trocavam de intencao e
+        # ninguem ficava com ela.
+        #
+        # MEDIDO offline (sonda de decisao, cenario 'posse nossa'):
+        #     r1 a 100 mm da bola   -> alvo (2300, 800)   = 1,8 m para a frente
+        #     r2 a 2484 mm da bola  -> alvo (1000, -800)  = de volta na bola
+        # E e exatamente o que o replay mostrava, e esta escrito no proprio
+        # arquivo: "o portador recebe a bola, toca nela e nao faz nada, ou se
+        # afasta da bola".
+        #
+        # Agora NOSSA nao tem ramo proprio: cai no tratamento normal de bola
+        # (atravessar na direcao do alvo), que e o que se faz com a posse.
+        # Quem sobe para receber e o APOIO.
         # BOLA JA CHUTADA: INTERCEPTA, NAO PERSEGUE.
         #
         # Este tratamento existia, mas ESCRITO DEPOIS DO 'return' do contorno,
@@ -659,11 +561,8 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         if bola_ja_saiu(ball):
             _avanco_int = (AVANCO_SOLTA if situacao == SITUACAO_SOLTA
                            else AVANCO_PORTADOR)
-            _fx, _fy = onde_a_bola_vai(ball, 0.5)
-            _dxp, _dyp = _fx - rx, _fy - ry
-            _np = hypot(_dxp, _dyp) or 1.0
-            return _no_campo(_fx + (_dxp / _np) * _avanco_int,
-                             _fy + (_dyp / _np) * _avanco_int) + (True,)
+            return aproximacao.ponto_de_interceptacao(
+                rx, ry, ball, _avanco_int) + (True,)
 
         # SOLTA, DELES, DISPUTA: vai na bola. Em movimento, ao ponto de
         # interceptacao, e sempre ALEM dele - frear em cima da bola foi o que
@@ -687,88 +586,13 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         # limite - ver AVANCO_SOLTA.
         _dir_alvo = alvo_chute if alvo_chute is not None else (
             bx + ux * 1000.0, by + uy * 1000.0)
-        _a_alvo = atan2(_dir_alvo[1] - by, _dir_alvo[0] - bx)
-        _a_cheg = atan2(by - ry, bx - rx)
-        _t = 1.0 - min(abs(_norm_ang(_a_cheg - _a_alvo)) / pi, 1.0)   # 1 = perfeito
-        _ux_a, _uy_a = cos(_a_alvo), sin(_a_alvo)
-
         avanco_base = AVANCO_SOLTA if situacao == SITUACAO_SOLTA else AVANCO_PORTADOR
+        # O contorno continuo, o ponto de chute e o desvio lateral que zera na
+        # chegada vivem em skills/aproximacao.py, com as medicoes que os geraram.
+        return aproximacao.ponto_de_aproximacao(
+            rx, ry, bx, by, _dir_alvo, avanco_base) + (True,)
 
-        # PERTO, MIRA O PONTO DE CHUTE; LONGE, MIRA ALEM DA BOLA.
-        #
-        # GEOMETRIA: o casco tem raio 90 mm e a bola 21, entao tocando o casco
-        # redondo a distancia trava em 111 mm e o chutador - que fica a 73 mm do
-        # centro - nunca alcanca a bola. Para a bola entrar na placa, o CENTRO
-        # do robo precisa ficar a ~94 mm dela (73 + 21), com a face plana
-        # apresentada. Medido nos replays: chegamos a 95 e 99 mm, dentro da
-        # janela, mas em UM unico quadro de cada partida - passamos de raspao
-        # em vez de estacionar ali.
-        #
-        # Mirar 500-1600 mm ALEM da bola faz o robo chegar rapido e bater com o
-        # ombro: a bola escapa antes do disparo. Mirar o PONTO DE CHUTE faz ele
-        # desacelerar apresentando a face.
-        #
-        # Os dois regimes num alvo continuo: longe vale o avanco (velocidade),
-        # perto vale o ponto de chute (precisao), interpolando pela distancia.
-        # distancia do robo a bola neste ramo (o 'd_bola' do portador esta
-        # noutro escopo - foi o que quebrou na primeira versao)
-        _d_ate_bola = hypot(rx - bx, ry - by)
-        _c = min(max((_d_ate_bola - PONTO_CHUTE) / (RAIO_ENCAIXE - PONTO_CHUTE),
-                     0.0), 1.0)
-        # NUNCA "CHEGAR": o comando de chute so viaja com o robo em movimento.
-        #
-        # O kick vai dentro do TeamCommand, e o control.py so publica esse
-        # TeamCommand se 'control_references' nao estiver vazio (control.py:120)
-        # - ou seja, so enquanto o RASTREADOR emite referencia, que e so
-        # enquanto o robo esta indo a algum lugar.
-        #
-        # Mirar exatamente o ponto de chute fazia o robo CHEGAR: o rastreador se
-        # calava, o commandTopic parava, e o chute ficava preso no kick_cache,
-        # armado, sem nunca ser enviado. Quanto melhor o encaixe, mais garantido
-        # que o chute nao saia - medido: 'arma=True' 34 a 110 vezes por lote e
-        # ZERO disparos, com o robo a 92-96 mm da bola (dentro da janela).
-        #
-        # O alvo proximo passa a ser ALEM da bola, nao o ponto de chute. O robo
-        # atravessa devagar - o trajeto de ~175 mm mantem o rastreador vivo - e
-        # passa pela janela de disparo no caminho, com o chute ja armado.
-        _off_alinhado = ATRAVESSA_CHUTE + (avanco_base - ATRAVESSA_CHUTE) * _c
-        # PERTO DA BOLA, COMPROMETE-SE COM A JANELA.
-        #
-        # O termo de contorno dependia so do alinhamento. Com o robo a 90 mm da
-        # bola e alinhamento imperfeito (_t = 0,6), o alvo virava
-        #     -700*0,4 + (-88)*0,6 = -333 mm
-        # ou seja: ele era mandado para 333 mm ATRAS da bola estando colado
-        # nela, e recuava. Media disso: 5 ciclos armados por replay - ele quase
-        # nunca chegava a receber o alvo da janela.
-        #
-        # O lado por onde contornar ja foi escolhido la longe. Na chegada nao ha
-        # mais o que decidir: o alvo e o meio da janela de disparo, e ponto.
-        _off_longe = -RECUO_CONTORNO * (1.0 - _t) + _off_alinhado * _t
-        _off = _c * _off_longe + (1.0 - _c) * ATRAVESSA_CHUTE
-        # desvio lateral pelo lado em que o robo ja esta, para contornar em arco
-        _cruz = _ux_a * (ry - by) - _uy_a * (rx - bx)
-        _lado = 1.0 if _cruz >= 0 else -1.0
-        # O DESVIO LATERAL TEM DE SUMIR AO CHEGAR.
-        #
-        # Ele dependia so do alinhamento: perto da bola, com alinhamento ainda
-        # imperfeito, seguia empurrando o alvo 550 mm para o lado - e o robo
-        # passava AO LADO da bola em vez de atraves dela.
-        #
-        # Medido no referencial do robo (o que o grSim arbitra, robot.cpp:120):
-        # em 15 ciclos armados, 'dispara' foi False nos 15. O desvio lateral yy
-        # foi de -73 a -260 mm contra um limite de 40, e SEMPRE do mesmo lado,
-        # crescendo - o robo derivando enquanto a trava o mantinha armado. A
-        # bola ficava no ombro, nunca na placa. E o "esta com a bola e nao faz
-        # nada" que se ve no replay.
-        #
-        # Multiplicando pelo mesmo fator de distancia do avanco, o contorno vale
-        # longe (onde ele serve para escolher o lado) e zera na chegada, onde o
-        # robo precisa estar EM CIMA da linha de tiro.
-        _lat = LATERAL_CONTORNO * (1.0 - _t) * _lado * _c + VIES_LATERAL
-        return _no_campo(bx + _ux_a * _off - _uy_a * _lat,
-                         by + _uy_a * _off + _ux_a * _lat) + (True,)
 
-    # ------------------------------------------------------------ COBERTURA
     if papel == PAPEL_COBERTURA:
         # entre a bola e o NOSSO gol, espalhado para nao empilhar.
         # Na bola solta ela MANTEM a posicao - correr atras de bola solta e
@@ -801,9 +625,7 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         # espalha AO LONGO dela, mais perto do gol, em vez de para os lados:
         # dois corpos no mesmo corredor cobrem o rebote, dois ao lado nao cobrem
         # nada.
-        dgx, dgy = nosso_gol.x - bx, nosso_gol.y - by
-        n_g = hypot(dgx, dgy) or 1.0
-        lgx, lgy = dgx / n_g, dgy / n_g     # bola -> nosso gol
+
         # Vale em TODAS as situacoes, inclusive bola solta: antes ela mantinha
         # a posicao na bola solta, o que a deixava fora da linha justamente
         # quando o chute vem.
@@ -828,126 +650,116 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
             return _no_campo(bx + (dxm / n_m) * 400.0,
                              by + (dym / n_m) * 400.0) + (True,)
 
-        recuo_extra = 500.0 * ordem          # o segundo fica mais perto do gol
-        alvo_l = n_g * COBERTURA_FRACAO + recuo_extra
-        alvo_l = min(alvo_l, n_g - 200.0)    # nunca dentro da propria bola
-        return _no_campo(bx + lgx * alvo_l, by + lgy * alvo_l) + (False,)
+        # o segundo fica mais perto do gol; ver skills/posicionamento.py
+        return posicionamento.cobertura_na_linha(
+            bx, by, nosso_gol, recuo_extra=500.0 * ordem) + (False,)
 
-    # ------------------------------------------------------------- PORTADOR
+    # -------------------------------------------------------------- APOIO
     #
-    # REESCRITO, e a regra e curta de proposito:
+    # QUEM AJUDA SEM A BOLA. Era o rotulo PAPEL_PORTADOR.
     #
-    #   1. vai NA BOLA, direto, sempre;
-    #   2. pegou? tem companheiro livre a frente? toca nele e avanca para
-    #      receber de novo;
-    #   3. nao tem? leva a bola para frente ate a linha do gol abrir.
+    # Pedido do Felipe: "o papel apoio so ajuda ou na marcacao ou no ataque".
+    # Entao o ramo decide por CENARIO, e nao por rotulo:
+    #   ataque    (bola nossa, ou bola no campo deles) -> oferece-se adiantado
+    #                                                    e aberto, para receber
+    #   marcacao  (bola deles/disputa, ou bola no nosso campo) -> tira o angulo
+    #   solta     -> ocupa o espaco a frente
     #
-    # O QUE ISTO SUBSTITUI, e por que
-    # -------------------------------
-    # A versao anterior tinha ponto de encaixe: ele mirava um ponto ATRAS da
-    # bola (150-250 mm), esperava ficar alinhado e so entao atravessava. Duas
-    # medicoes mataram esse desenho:
-    #
-    #  - com o alvo sempre a ~200 mm dele (mediana medida: 201 mm), o encaixe
-    #    se deslocava junto com a bola a cada ciclo. Ele orbitava a bola sem
-    #    nunca alcanca-la: 'arma' fechou 8 vezes em 203 ciclos;
-    #  - com o ADVERSARIO PARADO - campo livre, ninguem disputando - o time
-    #    tocou na bola UMA vez em 25 s, em dois dos tres replays. Sem oposicao
-    #    nenhuma. O defeito nunca foi perder dividida.
-    #
-    # E a orientacao vinha junto: o portador ficava com 31-33 graus de erro
-    # medio para a bola e de COSTAS para ela em ~20% do tempo, enquanto apoio e
-    # cobertura ficavam com 2-3 graus. Era a linha de tiro, calculada a partir
-    # da posicao da BOLA: com o robo do lado errado, ela aponta para longe
-    # dela. O adversario que funciona - o perfil antigo, amarelo - nao tem
-    # encaixe nem espera alinhamento, e tocou 62 vezes num replay em que nos
-    # tocamos uma.
-    proj = (rx - bx) * ux + (ry - by) * uy
-    d_bola = hypot(rx - bx, ry - by)
+    # A DIRECAO AQUI SAI DO GOL DE ATAQUE, NAO DE 'alvo_chute'. Se saisse do
+    # alvo do chute, e o alvo do chute e o proprio apoio (ele e o receptor do
+    # passe), o apoio se posicionaria em relacao a si mesmo - a mesma
+    # auto-referencia que produziu o passe degenerado. Ver alvo_do_chute.
 
-    # PERDEU A DISPUTA? ENTAO TAPA A LINHA DE CHUTE.
-    #
-    # Pedido do Felipe: "se o nosso portador nao conseguir ganhar a disputa, ele
-    # pelo menos bloqueie a linha de chute".
-    #
-    # Com a bola deles e alguem NOSSO ja disputando (o buscador e a cobertura
-    # vao), o portador nao tem o que fazer indo tambem - seria o terceiro na
-    # mesma bola. Mas ficar 1500 mm a frente esperando tambem nao serve, porque
-    # medimos a bola saindo do pe deles direto para o nosso fundo: 5461 e
-    # 5377 mm em linha reta, com UM unico toque na partida inteira.
-    #
-    # Entre a bola e o NOSSO gol, colado no adversario que a tem, ele tira o
-    # angulo. E o mesmo principio da cobertura, aplicado a quem esta perto.
-    if situacao == SITUACAO_DELES and inimigos:
-        dono = min(inimigos.values(),
-                   key=lambda e: hypot(e.position_x - bx, e.position_y - by))
-        d_dono = hypot(dono.position_x - bx, dono.position_y - by)
-        if d_dono < RAIO_POSSE:
-            gx_, gy_ = nosso_gol.x - bx, nosso_gol.y - by
-            n_b = hypot(gx_, gy_) or 1.0
-            return _no_campo(bx + gx_ / n_b * BLOQUEIO_DIST,
-                             by + gy_ / n_b * BLOQUEIO_DIST) + (False,)
+    # versor do ATAQUE puro (bola -> gol deles) e a sua perpendicular
+    _dgx, _dgy = gol_ataque.x - bx, gol_ataque.y - by
+    _ng = hypot(_dgx, _dgy) or 1.0
+    _uax, _uay = _dgx / _ng, _dgy / _ng
+    _pax, _pay = -_uay, _uax
 
-    # O PORTADOR NAO VAI MAIS BUSCAR. Ele ataca o espaco e espera a bola.
+    # SE A BOLA E MINHA, EU DISPUTO - nao importa o rotulo deste ciclo.
     #
-    # Quem busca e o apoio (buscador); em DELES e DISPUTA a cobertura vai junto.
-    # Se o portador tambem descesse, ninguem estaria a frente quando a bola
-    # fosse recuperada, e era isso que acontecia: zero quadros alem de x=3500 em
-    # todas as execucoes, em todos os lotes desta fase.
-    #
-    # Com a bola longe e nao nossa, ele se oferece: adiante da bola, no meio.
-    # SE ELE ESTA EM CIMA DA BOLA, NAO LARGA.
-    #
-    # Observado no replay: "o portador recebe a bola, toca nela e nao faz nada,
-    # ou se afasta da bola". O ramo abaixo manda o portador se oferecer 1500 mm
-    # a frente quando a situacao e DELES ou SOLTA. Mas a situacao e geometrica e
-    # oscila: com o robo a 260 mm da bola e o raio de posse em 250, um quadro de
-    # rastreio ruim vira SOLTA e ele ABANDONA a bola que acabou de receber, indo
-    # embora para a frente.
-    #
-    # Quem esta a menos de ENGAJA_RAIO e e o nosso mais proximo dela, disputa -
-    # nao importa como a situacao esta rotulada naquele ciclo.
-    _meu = all(d_bola <= hypot(o.position_x - bx, o.position_y - by) + 1.0
+    # Guarda preservada do ramo antigo: a situacao e geometrica e oscila com o
+    # rastreio (raio de posse 250 mm), e a histerese de papel dura 20 ciclos.
+    # Nesse intervalo o apoio pode ser quem esta em cima da bola; mandar ele
+    # se posicionar seria abandonar a bola que ele acabou de ganhar.
+    _meu = all(_dist_bola(r, ball) <= hypot(o.position_x - bx, o.position_y - by) + 1.0
                for rid_o, o in ally_robots.items()
                if rid_o != 0 and rid_o != rid)
-    if d_bola < ENGAJA_RAIO and _meu:
-        pass          # cai no tratamento normal de bola: atravessa e chuta
-    elif situacao in (SITUACAO_DELES, SITUACAO_SOLTA) and d_bola > RAIO_POSSE_PORTADOR:
-        return _no_campo(bx + ux * PORTADOR_ESPACO, by + uy * PORTADOR_ESPACO * 0.3) + (False,)
+    if _dist_bola(r, ball) < ENGAJA_RAIO and _meu:
+        if alvo_chute is not None:
+            _avx, _avy = alvo_chute[0] - bx, alvo_chute[1] - by
+            _nav = hypot(_avx, _avy) or 1.0
+            _dx, _dy = _avx / _nav, _avy / _nav
+        else:
+            _dx, _dy = _uax, _uay
+        return _no_campo(bx + _dx * AVANCO_PORTADOR,
+                         by + _dy * AVANCO_PORTADOR) + (True,)
 
-    # UM ALVO SO: o ponto logo ALEM da bola, na direcao em que ela deve ir.
+    # ---- MARCACAO: a bola e deles, ou esta na zona de perigo
     #
-    # Dirigir para la significa atravessar a bola - longe ou perto, a instrucao
-    # e a mesma. Nao existe fronteira de posse, e e de proposito.
+    # A DISPUTA NAO ENTRA AQUI, de proposito. Ela e 51% do tempo (medido em
+    # 8802 quadros); se disputa virasse motivo para o apoio recuar, ele passaria
+    # metade do jogo marcando e ninguem estaria a frente quando a bola fosse
+    # recuperada - que e o defeito medido desta fase (ZERO quadros com robo
+    # nosso alem de x=3500, em todas as execucoes de todos os lotes).
     #
-    # BUG QUE ISTO CORRIGE: a primeira versao desta reescrita tinha a fronteira
-    # em 200 mm - fora dela o alvo era a bola, dentro dela o alvo saltava para
-    # 500 mm alem. O robo cruzava a fronteira, o alvo pulava 500 mm, ele
-    # recuava, cruzava de volta, e ficava oscilando em cima do limite sem se
-    # comprometer. Medido com o adversario PARADO: ele encostava na bola uma
-    # vez, por volta de 4 s, e nunca mais - 'arma' nao fechou nenhuma vez em
-    # 166 ciclos, e a distancia ao alvo nunca desceu de 202 mm (mediana 337).
-    #
-    # Alvo continuo, sem degrau: ele chega, atravessa e segue.
-    if bola_ja_saiu(ball):
-        # em movimento, persegue onde ela VAI estar - nunca fica parado.
-        fx, fy = onde_a_bola_vai(ball, 0.5)
-        dxp, dyp = fx - rx, fy - ry
-        n_p = hypot(dxp, dyp) or 1.0
-        return _no_campo(fx + (dxp / n_p) * AVANCO_PORTADOR,
-                         fy + (dyp / n_p) * AVANCO_PORTADOR) + (True,)
+    # Zona de perigo e o mesmo TERCO_DEFENSIVO que liga a saida de bola: a
+    # 3000 mm do nosso gol a prioridade e tirar o perigo, nao construir.
+    _zona_de_perigo = hypot(bx - nosso_gol.x, by - nosso_gol.y) < TERCO_DEFENSIVO
+    if situacao == SITUACAO_DELES or _zona_de_perigo:
+        # PERDEU A DISPUTA? ENTAO TAPA A LINHA DE CHUTE.
+        #
+        # Bloco preservado do ramo antigo, com a medicao que o motivou:
+        # a bola saindo do pe deles direto para o nosso fundo, 5461 e 5377 mm
+        # em linha reta, com UM unico toque na partida inteira. Com o portador
+        # e a cobertura ja na bola, o terceiro corpo vale mais tirando o
+        # angulo que indo tambem.
+        if inimigos:
+            dono = min(inimigos.values(),
+                       key=lambda e: hypot(e.position_x - bx, e.position_y - by))
+            if hypot(dono.position_x - bx, dono.position_y - by) < RAIO_POSSE:
+                return posicionamento.bloquear_linha(bx, by, nosso_gol) + (False,)
+            # Ninguem com a posse: marca a AMEACA, que e o adversario mais
+            # adiantado no nosso campo - quem recebe o passe seguinte. Fica
+            # entre ele e o nosso gol, encostado, nao em cima dele: sem
+            # dribbler o contato e o que decide a direcao, e queremos o
+            # angulo, nao a dividida.
+            ameaca = posicionamento.ameaca_mais_perigosa(inimigos, nosso_gol)
+            if ameaca is not None:
+                return posicionamento.marcar(ameaca, nosso_gol) + (False,)
+        # sem adversario em campo (cenarios de teste): cobre a linha
+        return posicionamento.bloquear_linha(bx, by, nosso_gol) + (False,)
 
-    # Parada: a direcao e a do ALVO DO CHUTE quando existe (companheiro livre a
-    # frente, ou o gol), senao a do ataque. Atravessar nessa direcao e ao mesmo
-    # tempo o "toca nele" e o "leva para frente ate a linha abrir".
-    if alvo_chute is not None:
-        avx, avy = alvo_chute[0] - bx, alvo_chute[1] - by
-        n_av = hypot(avx, avy) or 1.0
-        dirx, diry = avx / n_av, avy / n_av
-    else:
-        dirx, diry = ux, uy
-    return _no_campo(bx + dirx * AVANCO_PORTADOR,
-                     by + diry * AVANCO_PORTADOR) + (True,)
+    # ---- SOLTA: ocupa o espaco a frente
+    #
+    # Com a bola sobrando, alguem tem de estar a frente quando ela for
+    # recuperada: medimos ZERO quadros com robo nosso alem de x=3500 em todas
+    # as execucoes desta fase, porque todo mundo descia.
+    #
+    # O 'a frente' agora e a direcao do ATAQUE. Antes saia de 'alvo_chute', e
+    # com o passe degenerado isso apontava para tras: MEDIDO offline, cenario
+    # 'largada', o alvo do apoio era (-1500, 0) com a bola em (0,0) - ele
+    # 'ocupava o espaco' recuando 1,5 m na direcao do nosso gol.
+    if situacao == SITUACAO_SOLTA:
+        return posicionamento.ocupar_espaco(bx, by, _uax, _uay) + (False,)
+
+    # ---- ATAQUE (bola nossa): oferece-se adiantado e ABERTO
+    #
+    # 1800/1600, e nao 1200/900: com 1200 a frente e 900 de lado ele ficava
+    # DENTRO do corredor por onde o portador precisa empurrar, e o chute caiu
+    # de 5525 para 1536 mm/s. Medido duas vezes, revertido duas vezes.
+    #
+    # VIA OBSTRUIDA: recua para ATRAS da bola (APOIO_RECUO), onde a linha
+    # costuma estar limpa porque a marcacao vem de frente. A constante e o
+    # parametro 'bloqueado' existiam desde sempre e NUNCA eram usados - o
+    # apoio ficava se oferecendo num ponto sem linha, e 'alvo_do_chute' nao
+    # tinha para quem apontar.
+    lado = 1.0 if (ordem % 2 == 0) else -1.0
+    if bloqueado:
+        return posicionamento.recuo_de_apoio(
+            bx, by, _uax, _uay, _pax, _pay, lado) + (False,)
+    return posicionamento.oferta_de_passe(
+        bx, by, _uax, _uay, _pax, _pay, lado) + (False,)
 
 
 class CenterGoal:
@@ -1073,15 +885,10 @@ def montar_comandos(tt):
             _dx, _dy = _cx - tt.ball.position_x, _cy - tt.ball.position_y
             _n = hypot(_dx, _dy) or 1.0
             _ux_c, _uy_c = _dx / _n, _dy / _n
-            _folga = 9999.0
-            for _e in (tt.enemy_robots or {}).values():
-                _px = _e.position_x - tt.ball.position_x
-                _py = _e.position_y - tt.ball.position_y
-                _proj = _px * _ux_c + _py * _uy_c
-                if _proj <= 0 or _proj > _n:
-                    continue                      # atras de nos ou alem do alvo
-                _lat = abs(-_px * _uy_c + _py * _ux_c)
-                _folga = min(_folga, _lat)
+            # quem esta atras de nos ou alem do alvo nao atrapalha o tiro
+            _folga = geometria.folga_lateral(
+                tt.ball.position_x, tt.ball.position_y, _ux_c, _uy_c, _n,
+                tt.enemy_robots)
             if _folga > _melhor_folga:
                 _melhor, _melhor_folga = (_cx, _cy), _folga
         if _melhor is not None:
@@ -1121,7 +928,7 @@ def montar_comandos(tt):
               (tipo_alvo, len(tt.enemy_robots or {}), situacao), flush=True)
 
     comandos = []
-    ordem = {PAPEL_APOIO: 0, PAPEL_COBERTURA: 0}
+    ordem = {PAPEL_PORTADOR: 0, PAPEL_APOIO: 0, PAPEL_COBERTURA: 0}
     for rid in sorted(tt.ally_robots):
         if rid == 0:
             continue
@@ -1217,9 +1024,7 @@ def montar_comandos(tt):
         # passe curto e 2,5 (forca de gol atravessa o receptor); saida e
         # media, para a bola PARAR no campo deles e nao sair pela linha de
         # fundo - Aimless Kick, Division B.
-        forca = (2.5 if tipo_alvo == "passe"
-                 else 4.5 if tipo_alvo == "saida"
-                 else FORCA_CHUTE)
+        forca = chute.forca_por_alvo(tipo_alvo)
         # ARMAR PELO CORPO, NAO PELA POSICAO.
         #
         # O portao era 'chuta', que exige o robo ATRAS da bola e a menos de
@@ -1236,103 +1041,32 @@ def montar_comandos(tt):
         if os.environ.get("DIAG_JOGO") and _com_a_bola:
             print("[JG] COM_A_BOLA r%d papel=%s d=%.0f alvo=%s"
                   % (rid, papel, d_bola, tipo_alvo), flush=True)
-        if alvo_chute is None or d_bola >= FORCA_CHUTE_ALCANCE:
-            arma = False
-        else:
-            ang_alvo = atan2(alvo_chute[1] - tt.ball.position_y,
-                             alvo_chute[0] - tt.ball.position_x)
-            ang_bola = atan2(tt.ball.position_y - r.position_y,
-                             tt.ball.position_x - r.position_x)
-            # ARMA POR PROXIMIDADE, como o adversario faz.
-            #
-            # O portao anterior exigia bola na face E corpo alinhado com o alvo.
-            # Sem dribbler as duas nunca fecham juntas: girar para o alvo tira a
-            # bola da face, olhar para a bola desalinha a mira. Medido: 'mirado'
-            # falso em 96 de 96 ciclos COM a bola, e o time nunca chutou em
-            # nenhuma partida desta fase.
-            #
-            # Com o corpo ja apontado na direcao do chute (ver a orientacao
-            # acima), o contato basta: o tiro sai no eixo do corpo, que e o eixo
-            # certo. E o que o perfil amarelo faz, e ele chuta em toda partida.
-            #
-            # A UNICA trava que fica e a de seguranca: nada sai na direcao da
-            # nossa meta, exceto passe - um chute forte para o nosso campo
-            # entrega a bola com velocidade onde eles chutam.
-            sentido_x = -1.0 if tt.on_positive_half else 1.0
-            ang_saida = atan2(alvo_chute[1] - tt.ball.position_y,
-                              alvo_chute[0] - tt.ball.position_x)
-            para_frente = abs(_norm_ang(ang_saida - (0.0 if sentido_x > 0
-                                                     else pi))) < TOL_PARA_TRAS
-            # TRAVA: UMA VEZ ARMADO, SEGUE ARMADO ATE A BOLA SAIR.
-            #
-            # Esta licao ja estava paga na fase de bola parada, e eu nao a
-            # trouxe. O comentario de _chute_deve_estar_armado (freekick.py)
-            # registra a medicao:
-            #
-            #   "a janela do chutador abriu em 4 de 6 execucoes, ficou aberta
-            #    ~30 quadros (0,5 s) em duas delas, e o disparo nao saiu - com a
-            #    estrategia tendo pedido chute em algum outro momento. Pedido e
-            #    janela simplesmente nao se encontravam."
-            #
-            # A causa e o atraso da orientacao da visao: 4,7 graus com o filtro
-            # corrigido, 17-23 sem ele - o que vale 8 a 42 mm de desvio lateral
-            # so de atraso. Recalcular a condicao a cada ciclo faz o chute
-            # PISCAR durante a aproximacao, e acertar o quadro do contato vira
-            # sorte. A 10 Hz, com a janela durando poucos quadros, a sorte nao
-            # acontece: medimos 73 pedidos de chute e ZERO disparos, com o
-            # comando comprovadamente chegando ao grSim (sonda-chute: kick=6.0
-            # em 365 amostras do commandTopic).
-            #
-            # Quem arbitra continua sendo o grSim, que so dispara com a bola na
-            # placa (robot.cpp:128). Manter armado nao cria chute torto - a
-            # direcao segue protegida pela trava de seguranca abaixo; so deixa
-            # de perder o chute certo.
-            # A BOLA PRECISA ESTAR NA FRENTE DO CHUTADOR.
-            #
-            # Sem isto o criterio e simetrico: arma com a bola encostada nas
-            # COSTAS do robo. E o que estava acontecendo - medido, a mediana do
-            # xx com o chute armado era -244 mm, com 76 de 83 ciclos negativos.
-            # O robo ultrapassa a bola, fica a frente dela olhando para longe, e
-            # a trava o mantem armado nessa posicao inutil.
-            #
-            # A guarda ja existia no freekick.py (_chute_deve_estar_armado):
-            #   "A BOLA PRECISA ESTAR NA FRENTE. Sem isto o criterio e simetrico
-            #    e arma com a bola encostada nas costas do robo."
-            # Terceira licao da bola parada que faltava trazer para o jogo
-            # corrido - as outras duas foram a trava de armamento e nao exigir
-            # alinhamento fino no instante do contato.
-            _bxr = tt.ball.position_x - r.position_x
-            _byr = tt.ball.position_y - r.position_y
-            _frente_placa = (_bxr * cos(r.orientation)
-                             + _byr * sin(r.orientation)) - 73.0
-            _perto = d_bola < ALCANCE_CONTATO and _frente_placa > -20.0
-            _ok_dir = para_frente or tipo_alvo == "passe"
-            _travas = tt.estado.setdefault("chute_armado", {}) \
-                if hasattr(tt, "estado") and tt.estado is not None else {}
-            if (_travas.get(rid) and d_bola < ALCANCE_SOLTA_TRAVA
-                    and _ok_dir and _frente_placa > -20.0):
-                arma = True                      # segue armado
-            else:
-                arma = _perto and _ok_dir
-            _travas[rid] = arma
-            if os.environ.get("DIAG_JOGO"):
-                # GEOMETRIA NO REFERENCIAL DO ROBO, que e o que o grSim arbitra:
-                # ele dispara com xx < 31,5 mm (placa) e |yy| < 40 mm (largura).
-                # Ver robot.cpp:120-128. Sem isto nao da para saber SE a bola
-                # chega na placa - so que o robo esta "perto".
-                _bx_r = tt.ball.position_x - r.position_x
-                _by_r = tt.ball.position_y - r.position_y
-                _co, _si = cos(r.orientation), sin(r.orientation)
-                _xx = (_bx_r * _co + _by_r * _si) - 73.0
-                _yy = -_bx_r * _si + _by_r * _co
-                print("[JG] PLACA r%d papel=%s xx=%.0f yy=%.0f arma=%s dispara=%s"
-                      % (rid, papel, _xx, _yy, arma,
-                         (0.0 <= _xx < 31.5 and abs(_yy) < 40.0)), flush=True)
-            na_face = mirado = arma          # mantidos so para o diagnostico
-            if os.environ.get("DIAG_JOGO"):
-                print("[JG] arma=%s face=%s mira=%s frente=%s d=%.0f tipo=%s"
-                      % (arma, na_face, mirado, para_frente, d_bola, tipo_alvo),
-                      flush=True)
+        # O PORTAO DE CHUTE VIVE NA CAMADA DE SKILLS: skills/chute.py.
+        #
+        # Lá estão as tres licoes que a bola parada pagou e o jogo corrido teve
+        # de redescobrir: a trava de armamento (a janela do grSim dura UMA
+        # amostra), a guarda de "bola a frente da placa" (o teste do grSim e
+        # simetrico e arma com a bola nas costas) e nao exigir alinhamento fino
+        # no instante do contato.
+        _sentido_x = -1.0 if tt.on_positive_half else 1.0
+        _travas = tt.estado.setdefault("chute_armado", {}) \
+            if hasattr(tt, "estado") and tt.estado is not None else {}
+        arma = chute.armar_chute(r, tt.ball, alvo_chute, _sentido_x,
+                                 tipo_alvo, _travas, rid)
+        if os.environ.get("DIAG_JOGO"):
+            # GEOMETRIA NO REFERENCIAL DO ROBO, que e o que o grSim arbitra:
+            # ele dispara com 0 <= xx < 31,5 mm (placa) e |yy| < 40 mm.
+            # Ver robot.cpp:120-128 e skills/chute.py. Sem isto nao da para
+            # saber SE a bola chega na placa - so que o robo esta "perto".
+            _xx, _yy, _ = chute.geometria_do_chutador(r, tt.ball)
+            _frente = (alvo_chute is not None
+                       and chute.direcao_para_frente(tt.ball, alvo_chute,
+                                                     _sentido_x))
+            print("[JG] PLACA r%d papel=%s xx=%.0f yy=%.0f arma=%s dispara=%s"
+                  % (rid, papel, _xx, _yy, arma,
+                     chute.na_janela_de_disparo(_xx, _yy)), flush=True)
+            print("[JG] arma=%s frente=%s d=%.0f tipo=%s"
+                  % (arma, _frente, d_bola, tipo_alvo), flush=True)
         cmd.kick = forca if arma else 0.0
         # a bola so e obstaculo para quem NAO vai disputa-la
         cmd.ball = (papel != PAPEL_PORTADOR)

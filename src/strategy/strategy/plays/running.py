@@ -118,7 +118,7 @@ class AtackAction(LeafNode):
         #
         # Cada acao criava o SEU dicionario. Como 'montar_comandos' le tt.estado,
         # trocar de ramo ataque<->defesa trocava o dicionario inteiro - e ali
-        # moram a histerese de papeis (buscador_ciclos, portador_ciclos), a trava
+        # moram a histerese de papeis (portador_ciclos, apoio_ciclos), a trava
         # de mira (mira_ciclos), a trava de armamento do chute (chute_armado) e o
         # alvo de passe congelado (alvo_passe). Ou seja: as travas que estabilizam
         # o time se desarmavam sozinhas a cada transicao.
@@ -195,7 +195,7 @@ class DefenseAction(LeafNode):
         #
         # Cada acao criava o SEU dicionario. Como 'montar_comandos' le tt.estado,
         # trocar de ramo ataque<->defesa trocava o dicionario inteiro - e ali
-        # moram a histerese de papeis (buscador_ciclos, portador_ciclos), a trava
+        # moram a histerese de papeis (portador_ciclos, apoio_ciclos), a trava
         # de mira (mira_ciclos), a trava de armamento do chute (chute_armado) e o
         # alvo de passe congelado (alvo_passe). Ou seja: as travas que estabilizam
         # o time se desarmavam sozinhas a cada transicao.

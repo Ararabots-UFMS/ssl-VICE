@@ -1,11 +1,13 @@
 from strategy.skills.skills import Skills
+from strategy.skills import geometria, posicionamento
 from utils.math_util import Vector2D
 from math import atan2, hypot
 
 
 # O companheiro precisa estar ao menos isto a frente da bola para receber o
-# passe do goleiro. Menos que isso e passe lateral dentro da propria area.
-AVANCO_MINIMO_PASSE = 600.0
+# passe. A constante MORA NA CAMADA DE SKILLS (skills/posicionamento.py): o
+# mesmo valor, com o mesmo motivo, estava escrito aqui e em tatics/running.py.
+AVANCO_MINIMO_PASSE = posicionamento.AVANCO_MINIMO_PASSE
 
 # AREA DE DEFESA — Division B, em milimetros.
 #
@@ -42,7 +44,7 @@ class Goalkeeper:
         para mirar o gol - varrer e escolher o setor mais livre - aplicado aqui
         a saida de bola.
         """
-        from strategy.tatics.running import linha_livre
+        linha_livre = geometria.linha_livre
 
         bx, by = self.ball.position_x, self.ball.position_y
         sentido = -1.0 if self.on_positive_half else 1.0
@@ -81,7 +83,7 @@ class Goalkeeper:
         Escolhe o mais adiantado entre os que tem linha livre, porque tocar para
         tras so adia o problema.
         """
-        from strategy.tatics.running import linha_livre
+        linha_livre = geometria.linha_livre
 
         bx, by = self.ball.position_x, self.ball.position_y
         sentido = -1.0 if self.on_positive_half else 1.0
