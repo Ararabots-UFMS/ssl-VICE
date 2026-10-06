@@ -6,7 +6,7 @@ from utils.math_util import Vector2D
 @dataclass
 class SolverConfig:
     """Configuration for planning algorithms."""
-    max_iterations: int = 20
+    max_iterations: int = 60
     field_length: float = 12000.0
     field_width: float = 9000.0
     # Magnitudes: MoveConstraints derives min = -max from them, so a negative value

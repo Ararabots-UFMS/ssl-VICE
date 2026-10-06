@@ -11,7 +11,7 @@ from movement.local_planner.solver import BaseSolver
 
 # Perpendicular sampling sigma, as a fraction of the start-goal distance.
 MIN_SPREAD = 0.03
-MAX_SPREAD = 0.35
+MAX_SPREAD = 0.6  # desvio lateral maior: contornar um inimigo no meio do caminho
 
 class BypassSolver(BaseSolver):
     """RRT-inspired solver for finding collision-free bypasses."""

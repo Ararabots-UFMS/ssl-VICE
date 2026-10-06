@@ -321,6 +321,84 @@ CENARIOS = {
                      (3, 2200, 1200, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
+    "zagueiro_vs_dois": {
+        "titulo": "Zagueiro e dois companheiros contra dois atacantes adversarios",
+        "descricao": (
+            "Dois atacantes deles com a bola a 1,3 m do nosso gol, em jogo "
+            "corrido. Nos temos goleiro e dois de linha: o codigo atribui a "
+            "cobertura (zagueiro) e o portador. Mede se o zagueiro barra o "
+            "avanco e o chute, sem subir pra atacar."
+        ),
+        "bola": (-1200.0, 200.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0),
+                  (1, -2600.0, 400.0, 0.0),
+                  (2, -3000.0, -700.0, 0.0),
+                  (3, -2000.0, -300.0, 0.0)],
+        "amarelos": [(0, 4300, 0, 180),
+                     (1, -1300, 250, 180),
+                     (2, -1800, -900, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "defesa_3v3": {
+        "titulo": "3 contra 3: tres atacantes deles com a bola indo ao nosso gol",
+        "descricao": (
+            "Jogo corrido 3v3 (goleiro + tres de linha de cada lado). A bola vem "
+            "do meio-campo ja em movimento na direcao do nosso gol, com os tres "
+            "atacantes deles por perto. Mede se a defesa barra o avanco e o chute "
+            "sem sair do nosso lado do campo."
+        ),
+        "bola": (-1800.0, 300.0),
+        "bola_vel": (-1500.0, -100.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0),
+                  (1, -3000.0, 600.0, 0.0),
+                  (2, -3200.0, -600.0, 0.0),
+                  (3, -1200.0, -300.0, 0.0)],
+        "amarelos": [(0, 4300, 0, 180),
+                     (1, -2600, 300, 180),
+                     (2, -2200, -900, 180),
+                     (3, -1500, 1100, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zv_marcacao": {
+        "titulo": "Zagueiro: atacante deles perto do nosso gol, bola solta (marcacao)",
+        "descricao": "Verificacao de acao: cobertura deve marcar o atacante mais perigoso.",
+        "bola": (-3000.0, -1500.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2600.0, -900.0, 0.0), (3, -1000.0, -300.0, 0.0)],
+        "amarelos": [(0, 4300, 0, 180), (1, -2400, 300, 180), (2, -1500, 1200, 180), (3, -1500, -1200, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zv_corredor": {
+        "titulo": "Zagueiro: sem ameaca no nosso campo, bola solta (corredor)",
+        "descricao": "Verificacao de acao: cobertura deve ficar no corredor goleiro->bola.",
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2000.0, -900.0, 0.0), (3, -1000.0, -300.0, 0.0)],
+        "amarelos": [(0, 4300, 0, 180), (1, 2500, 1000, 180), (2, 2500, -1000, 180), (3, 1000, 1500, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zv_disputa": {
+        "titulo": "Zagueiro: disputa da bola (nosso robo e inimigo juntos)",
+        "descricao": "Verificacao de acao: em DISPUTA a cobertura deve afastar a bola pra frente.",
+        "bola": (-2600.0, 0.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2000.0, -900.0, 0.0), (3, -2760.0, 100.0, 0.0)],
+        "amarelos": [(0, 4300, 0, 180), (1, -2800, -150, 180), (2, 1500, 1000, 180), (3, 1500, -1000, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zv_deles": {
+        "titulo": "Zagueiro: inimigo com a bola (posse deles)",
+        "descricao": "Verificacao de acao: em DELES a cobertura deve reagir a posse deles.",
+        "bola": (-2600.0, 0.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2000.0, -900.0, 0.0), (3, -1000.0, -300.0, 0.0)],
+        "amarelos": [(0, 4300, 0, 180), (1, -2700, -100, 180), (2, 1500, 1000, 180), (3, 1500, -1000, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zv_mata": {
+        "titulo": "Zagueiro: bola perto do nosso gol, solta (mata a jogada)",
+        "descricao": "Verificacao de acao: bola a menos de 2500 mm do nosso gol, cobertura deve ir na bola.",
+        "bola": (-3200.0, 200.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2000.0, -900.0, 0.0), (3, -1000.0, -300.0, 0.0)],
+        "amarelos": [(0, 4300, 0, 180), (1, 1500, 1000, 180), (2, 1500, -1000, 180), (3, 1000, 1500, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
     "cobertura_chute_longe": {
         "titulo": "Chute deles do meio-campo; a cobertura chega a tempo?",
         "descricao": (
@@ -1096,6 +1174,18 @@ def _abrir_escuta_status():
         return None
 
 
+PAPEIS_ARQUIVO = "/tmp/ararabots_papeis.json"
+
+
+def _ler_papeis():
+    """Papel de cada robo publicado pela estrategia, ou None."""
+    try:
+        with open(PAPEIS_ARQUIVO) as f:
+            return {int(k): v for k, v in json.load(f).items()}
+    except (OSError, ValueError):
+        return None
+
+
 def _criar_gravador():
     """Cria o node que escuta visao e comandos. rclpy ja deve estar inicializado."""
     from rclpy.node import Node
@@ -1147,6 +1237,8 @@ def _criar_gravador():
             # ancora dele ja voltou a coincidir com a realidade.
             self.setpoints = {}
             self.alvos = []
+            self.papeis_hist = []
+            self._papeis_ultimo = None
             # SETPOINT: /movement_tracker/control_reference (TrajectoryPoint).
             #
             # O topico antigo (/control_command, do driver) ACABOU: a dev
@@ -1328,6 +1420,10 @@ def _criar_gravador():
             }
             if not self.gravando:
                 return
+            _pap = _ler_papeis()
+            if _pap is not None and _pap != self._papeis_ultimo:
+                self._papeis_ultimo = _pap
+                self.papeis_hist.append((round(time.monotonic() - self.t0, 4), _pap))
             self.amostras.append(
                 {
                     # 4 casas: com a bola a 6 m/s, 1 ms vale 6 mm. Arredondar em
@@ -1895,6 +1991,7 @@ function situacaoDoQuadro(fr){
 }
 
 function papeisDoQuadro(fr){
+  if (fr.p && Object.keys(fr.p).length) return fr.p;
   const b = fr.b, linha = (fr.r||[]).filter(r => r[0] !== 0);
   const papeis = {};
   if (!linha.length) return papeis;
@@ -2620,9 +2717,16 @@ def gerar_replay(resultado, destino):
     # Some-se o outro defeito: o desenho usava q.r[0], "o primeiro robo da
     # lista", e essa lista vem de um dicionario - ou seja, QUAL robo aparecia
     # como 'o nosso' mudava de quadro em quadro.
+    # papeis gravados pela estrategia, no mesmo relogio dos quadros
+    ph = sorted((para_tc(tn), {str(k): v for k, v in p.items()})
+                for tn, p in (resultado.get("papeis_hist") or []))
+    ip, papel_vigente = 0, {}
     quadros = []
     ia, alvo_por_robo = 0, {}
     for t, x, y, _tn in vc:
+        while ip < len(ph) and ph[ip][0] <= t:
+            papel_vigente = ph[ip][1]
+            ip += 1
         while ia < len(alvos_t) and alvos_t[ia][0] <= t:
             rid, ax, ay = alvos_t[ia][1]
             alvo_por_robo[rid] = [rid, ax, ay]
@@ -2633,6 +2737,7 @@ def gerar_replay(resultado, destino):
             "r": robos_perto(t),
             "y": amarelos_perto(t),
             "a": list(alvo_por_robo.values()),
+            "p": papel_vigente,
         })
 
     dados = _json.dumps({
@@ -3084,6 +3189,7 @@ def rodar(nome, duracao=12.0):
         pedido_chute = dict(no.t_pedido_chute)
         visao_crua = list(no.visao_crua)
         alvos = list(no.alvos)
+        papeis_hist = list(no.papeis_hist)
         robos_crus = list(no.robos_crus)
         amarelos_crus = list(no.amarelos_crus)
         janelas_kick = list(no.janelas_kick)
@@ -3148,6 +3254,7 @@ def rodar(nome, duracao=12.0):
         "robos_crus": robos_crus,
         "amarelos_crus": amarelos_crus,
         "alvos": alvos,
+        "papeis_hist": papeis_hist,
         "janela_chutador": janela,
         "janelas_kick": janelas_kick,
         "rastreio": rastreio_calc,

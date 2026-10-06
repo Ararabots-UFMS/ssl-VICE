@@ -15,7 +15,7 @@ tatics/goalkeeper.py e tatics/running.py.
 
 from math import hypot
 
-from strategy.skills.geometria import no_campo, versor
+from strategy.skills.geometria import linha_livre, no_campo, versor
 
 # --- oferta ofensiva ------------------------------------------------------
 # 1800/1600, e nao 1200/900: com 1200 a frente e 900 de lado o apoio ficava
@@ -124,3 +124,66 @@ def cobertura_na_linha(bx, by, nosso_gol, fracao=COBERTURA_FRACAO,
     ux, uy, n = versor(bx, by, nosso_gol.x, nosso_gol.y)
     alvo = min(n * fracao + recuo_extra, n - margem)
     return no_campo(bx + ux * alvo, by + uy * alvo)
+
+
+# Fracao do caminho goleiro->bola em que o zagueiro se posta.
+FRACAO_BLOQUEIO = 0.5
+
+
+def ponto_no_corredor(goleiro, bx, by, fracao):
+    """Ponto na reta goleiro->bola, a 'fracao' do caminho a partir do goleiro."""
+    return no_campo(goleiro.position_x + (bx - goleiro.position_x) * fracao,
+                    goleiro.position_y + (by - goleiro.position_y) * fracao)
+
+
+
+# Area penal do nosso time (Division B): 1000 mm de profundidade e 1000 mm de
+# meia-largura, contadas a partir da linha do gol. Jogador de linha nao pode
+# entrar nela; so o goleiro. A margem cobre o raio do robo (90 mm).
+PROFUNDIDADE_AREA = 1000.0
+MEIA_LARGURA_AREA = 1000.0
+MARGEM_ROBO = 100.0
+
+
+def fora_da_area_penal(x, y, nosso_gol):
+    """Empurra um alvo de jogador de linha para fora da nossa area penal.
+
+    Escolhe a saida de menor deslocamento: pela frente da area (linha
+    x = gol + profundidade) ou pela lateral (y = +/- meia-largura).
+    """
+    sentido = 1.0 if nosso_gol.x < 0 else -1.0       # para dentro do campo
+    prof = PROFUNDIDADE_AREA + MARGEM_ROBO
+    meia = MEIA_LARGURA_AREA + MARGEM_ROBO
+    dentro_x = sentido * (x - nosso_gol.x) < prof
+    dentro_y = abs(y) < meia
+    if not (dentro_x and dentro_y):
+        return x, y
+    mover_x = nosso_gol.x + sentido * prof
+    mover_y = meia if y >= 0 else -meia
+    if abs(mover_x - x) <= abs(mover_y - y):
+        return mover_x, y
+    return x, mover_y
+
+
+def bloqueio_do_lado_nosso(goleiro, rx, ry, bx, by, nosso_gol, inimigos):
+    """Posicao defensiva do zagueiro: sempre do nosso lado, entre o perigo e o gol.
+
+    Com um adversario ameacando no nosso campo, encosta nele pelo lado do nosso
+    gol (bloqueia o passe). Sem ameaca, fica no corredor goleiro->bola. Nunca
+    cruza a linha central. Se o caminho direto ate o alvo passa por um inimigo,
+    desloca o alvo lateralmente ate achar um caminho livre: o planejador nao
+    contorna inimigos bem, e um alvo do outro lado de um atacante trava o robo.
+    """
+    ameaca = ameaca_mais_perigosa(inimigos, nosso_gol)
+    if ameaca is not None:
+        x, y = marcar(ameaca, nosso_gol)
+    else:
+        x, y = ponto_no_corredor(goleiro, bx, by, FRACAO_BLOQUEIO)
+    if x * nosso_gol.x < 0:
+        x = 0.0
+    if not linha_livre(rx, ry, x, y, inimigos):
+        for desl in (600.0, -600.0, 1200.0, -1200.0):
+            cx, cy = no_campo(x, y + desl)
+            if linha_livre(rx, ry, cx, cy, inimigos):
+                return cx, cy
+    return x, y

@@ -1,4 +1,5 @@
 from utils.math_util import Vector2D
+import json
 import os
 
 from math import atan2, hypot
@@ -138,6 +139,18 @@ onde_a_bola_vai = skill_bola.onde_a_bola_vai
 def _dist_bola(robo, ball):
     return hypot(robo.position_x - ball.position_x,
                  robo.position_y - ball.position_y)
+
+
+PAPEIS_ARQUIVO = "/tmp/ararabots_papeis.json"
+
+
+def _gravar_papeis(papeis):
+    """Publica o papel de cada robo para o gravador do replay (ararabots.py)."""
+    try:
+        with open(PAPEIS_ARQUIVO, "w") as f:
+            json.dump({str(k): v for k, v in papeis.items()}, f)
+    except OSError:
+        pass
 
 
 def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
@@ -603,7 +616,15 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         # buscador: sem dribbler, a direcao do empurrao e dada pela POSICAO de
         # quem encosta, entao dois angulos de ataque dao duas saidas possiveis
         # em vez de uma. O portador segue adiantado, esperando a recuperacao.
-        if situacao in (SITUACAO_DELES, SITUACAO_DISPUTA):
+        if situacao == SITUACAO_DISPUTA:
+            # AFASTAR: aproxima da bola por tras, em relacao ao lado DELES, e
+            # chuta pra frente, tirando a bola do nosso campo.
+            sent = 1.0 if gol_ataque.x >= 0 else -1.0
+            lado_y = 1.0 if by >= 0 else -1.0
+            alvo_afasta = (bx + 2000.0 * sent, by + 900.0 * lado_y)
+            return aproximacao.ponto_de_aproximacao(
+                rx, ry, bx, by, alvo_afasta, aproximacao.AVANCO_PORTADOR) + (True,)
+        if situacao == SITUACAO_DELES:
             lado_c = 1.0 if (ordem % 2 == 0) else -1.0
             return _no_campo(bx + px * 240.0 * lado_c + ux * 100.0,
                              by + py * 240.0 * lado_c + uy * 100.0) + (True,)
@@ -650,7 +671,12 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
             return _no_campo(bx + (dxm / n_m) * 400.0,
                              by + (dym / n_m) * 400.0) + (True,)
 
-        # o segundo fica mais perto do gol; ver skills/posicionamento.py
+        # ZAGUEIRO: sempre do nosso lado, bloqueando a bola e o ataque deles.
+        # O papel e atribuido pelo proprio codigo (distribuir_papeis); aqui so
+        # definimos a posicao defensiva de quem recebeu a cobertura.
+        if 0 in ally_robots:
+            return posicionamento.bloqueio_do_lado_nosso(
+                ally_robots[0], rx, ry, bx, by, nosso_gol, inimigos) + (False,)
         return posicionamento.cobertura_na_linha(
             bx, by, nosso_gol, recuo_extra=500.0 * ordem) + (False,)
 
@@ -799,6 +825,7 @@ def montar_comandos(tt):
                  else tt.goal_center.GOAL_NEGATIVE)
     gol_ataque = (tt.goal_center.GOAL_NEGATIVE if tt.on_positive_half
                   else tt.goal_center.GOAL_POSITIVE)
+    _gravar_papeis(papeis)
 
     if os.environ.get("DIAG_JOGO"):
         print("[JG] situacao=%s papeis=%s" % (situacao, papeis), flush=True)
@@ -938,6 +965,7 @@ def montar_comandos(tt):
             papel, situacao, rid, tt.ally_robots, tt.ball,
             gol_ataque, nosso_gol, ordem=o, alvo_chute=alvo_chute,
             inimigos=tt.enemy_robots, bloqueado=(tipo_alvo == "bloqueado"))
+        alvo_x, alvo_y = posicionamento.fora_da_area_penal(alvo_x, alvo_y, nosso_gol)
         if papel in ordem:
             ordem[papel] += 1
 
