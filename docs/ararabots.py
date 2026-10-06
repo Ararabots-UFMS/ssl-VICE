@@ -321,6 +321,29 @@ CENARIOS = {
                      (3, 2200, 1200, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
+    "cobertura_chute_longe": {
+        "titulo": "Chute deles do meio-campo; a cobertura chega a tempo?",
+        "descricao": (
+            "BASELINE para o item da cobertura (tempo de chegada). A bola nasce "
+            "ja em movimento (bola_vel), simulando o instante seguinte a um "
+            "chute do meio-campo na direcao do nosso gol. Nenhum dos nossos "
+            "robos de linha esta sobre a reta bola->nosso-gol. Hoje a cobertura "
+            "se planta a 45% do caminho pela posicao ATUAL da bola "
+            "(cobertura_na_linha), sem considerar a velocidade - este cenario "
+            "mede se isso chega a tempo ou se a bola atravessa o time."
+        ),
+        "bola": (0.0, 0.0),
+        "bola_vel": (-4300.0, 150.0),
+        "azuis": [(0, -4300, 0, 0),
+                  (1, -1200, 800, 0),
+                  (2, -2200, -600, 0),
+                  (3, -3000, 300, 0)],
+        "amarelos": [(0, 4300, 0, 180),
+                     (1, 300, 0, 180),
+                     (2, 1500, 1000, 180),
+                     (3, 1500, -1000, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
 
     "um_so_goleiro": {
         "titulo": "Um em campo: apenas o goleiro",
@@ -805,14 +828,14 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
     _enviar_agora(pacote)
 
 
-def mover_bola(x, y):
-    """Move so a bola, sem tocar nos robos."""
+def mover_bola(x, y, vx=0.0, vy=0.0):
+    """Move so a bola (posicao e velocidade), sem tocar nos robos."""
     pb = _carregar_protobuf()
     pacote = pb.grSim_Packet()
     pacote.replacement.ball.x = x / 1000.0
     pacote.replacement.ball.y = y / 1000.0
-    pacote.replacement.ball.vx = 0.0
-    pacote.replacement.ball.vy = 0.0
+    pacote.replacement.ball.vx = vx / 1000.0
+    pacote.replacement.ball.vy = vy / 1000.0
     _enviar(pacote)
 
 
@@ -834,8 +857,9 @@ def posicionar(cenario):
     bx, by = cenario["bola"]
     rep.ball.x = bx / 1000.0
     rep.ball.y = by / 1000.0
-    rep.ball.vx = 0.0
-    rep.ball.vy = 0.0
+    bvx, bvy = cenario.get("bola_vel", (0.0, 0.0))
+    rep.ball.vx = bvx / 1000.0
+    rep.ball.vy = bvy / 1000.0
 
     # CAMPO LIMPO: so os nossos.
     #
@@ -2805,15 +2829,40 @@ def rodar(nome, duracao=12.0):
     rclpy.init()
     no = _criar_gravador()
 
+    # BOLA COM VELOCIDADE INICIAL (cenario["bola_vel"]): ela nunca fica em
+    # repouso no ponto pedido, entao 'conferir_teleporte' - que espera a
+    # LEITURA bater com o alvo - sempre falharia (ela ja esta do outro lado do
+    # campo quando a visao publica). E o 'cmd_cenario' que a teleportou, la na
+    # frente (ate 10s antes, esperando o manual_command sair e o launch
+    # subir) - tempo de sobra para ela atravessar o campo inteiro sozinha.
+    #
+    # Para velocidade, trocamos a CONFIRMACAO por um RETELEPORTE: halt para
+    # ancorar os robos (esperar_assentar so olha ROBOS, nao a bola - pode
+    # rodar igual), e so then a bola volta para o estado exato (posicao +
+    # velocidade) o mais perto possivel do instante em que a gravacao comeca.
+    vel_ini = cen.get("bola_vel", (0.0, 0.0))
+    bola_em_movimento = math.hypot(vel_ini[0], vel_ini[1]) > 1.0
+
     try:
         pedido = alvo
-        ok, onde, atraso = conferir_teleporte(no, alvo, limite=25.0)
-        if ok:
-            print(f"   cenario confirmado pela visao em {atraso:.1f}s")
-            print("   assentando sob HALT (driver reancora as trajetorias)...")
+        if bola_em_movimento:
+            print("   bola com velocidade inicial - pulando confirmacao de repouso")
             enviar_comando_arbitro("HALT")
             gasto = esperar_assentar(no, limite=ESPERA_HALT, piso=1.5)
-            print(f"   assentado em {gasto:.1f}s (teto era {ESPERA_HALT:.0f}s)")
+            print(f"   robos assentados em {gasto:.1f}s sob HALT (teto era {ESPERA_HALT:.0f}s)")
+            mover_bola(pedido[0], pedido[1], vel_ini[0], vel_ini[1])
+            t0 = time.time()
+            while no.bola is None and time.time() - t0 < 10.0:
+                _girar(no, 0.1)
+            ok, onde, atraso = (no.bola is not None), no.bola, time.time() - t0
+        else:
+            ok, onde, atraso = conferir_teleporte(no, alvo, limite=25.0)
+            if ok:
+                print(f"   cenario confirmado pela visao em {atraso:.1f}s")
+                print("   assentando sob HALT (driver reancora as trajetorias)...")
+                enviar_comando_arbitro("HALT")
+                gasto = esperar_assentar(no, limite=ESPERA_HALT, piso=1.5)
+                print(f"   assentado em {gasto:.1f}s (teto era {ESPERA_HALT:.0f}s)")
 
         if not ok:
             visto = (

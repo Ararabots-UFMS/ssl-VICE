@@ -635,7 +635,7 @@ cmd_parar() {
 # Agora o numero vem do CENARIO e e garantido em toda montagem.
 robos_do_cenario() {
     case "$1" in
-        jogo) echo 4 ;;                      # goleiro + TRES de linha
+        jogo|cobertura_chute_longe) echo 4 ;;  # goleiro + TRES de linha
         *)    echo "${ARARABOTS_ROBOS:-3}" ;;
     esac
 }
