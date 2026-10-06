@@ -2838,8 +2838,17 @@ def rodar(nome, duracao=12.0):
     #
     # Para velocidade, trocamos a CONFIRMACAO por um RETELEPORTE: halt para
     # ancorar os robos (esperar_assentar so olha ROBOS, nao a bola - pode
-    # rodar igual), e so then a bola volta para o estado exato (posicao +
-    # velocidade) o mais perto possivel do instante em que a gravacao comeca.
+    # rodar igual). O RETELEPORTE DA BOLA EM SI fica para mais tarde, logo
+    # antes do comando real (FORCE_START/etc) - ver mais abaixo.
+    #
+    # BUG JA MEDIDO, e por isso o reteleporte NAO acontece aqui: havia uma
+    # transicao obrigatoria de 1,5s sob STOP entre este ponto e o comando
+    # real (linha "Transicao obrigatoria para STOP" abaixo). STOP nao trava
+    # a bola, so os robos - a 4300 mm/s isso sao mais de 6 METROS de voo
+    # livre antes da gravacao comecar de verdade. Reteleportar aqui e so
+    # confirmar presenca da bola aqui tem o mesmo defeito que o
+    # 'conferir_teleporte' original, so que mascarado: a leitura ficava boa,
+    # mas a bola ja tinha atravessado o campo quando o FORCE_START chegava.
     vel_ini = cen.get("bola_vel", (0.0, 0.0))
     bola_em_movimento = math.hypot(vel_ini[0], vel_ini[1]) > 1.0
 
@@ -2850,7 +2859,6 @@ def rodar(nome, duracao=12.0):
             enviar_comando_arbitro("HALT")
             gasto = esperar_assentar(no, limite=ESPERA_HALT, piso=1.5)
             print(f"   robos assentados em {gasto:.1f}s sob HALT (teto era {ESPERA_HALT:.0f}s)")
-            mover_bola(pedido[0], pedido[1], vel_ini[0], vel_ini[1])
             t0 = time.time()
             while no.bola is None and time.time() - t0 < 10.0:
                 _girar(no, 0.1)
@@ -3019,6 +3027,16 @@ def rodar(nome, duracao=12.0):
             print("      ./ararabots.sh parar && ./ararabots.sh preparar --headless")
             print()
             return 3
+
+        # RETELEPORTE DA BOLA EM MOVIMENTO, aqui - o mais tarde possivel, depois
+        # de TODA a espera de confirmacao do comando (handshake do websocket do
+        # arbitro + ate 3s esperando ele aparecer no topico). Reteleportar antes
+        # dessa espera - foi a primeira tentativa - ainda deixava a bola voar
+        # varios METROS de graca: medido, ela comecava a gravacao em x=-3333 em
+        # vez de 0. Agora o unico atraso que resta e a latencia da propria visao
+        # (1-2 quadros).
+        if bola_em_movimento:
+            mover_bola(pedido[0], pedido[1], vel_ini[0], vel_ini[1])
 
         print(f"   gravando por {duracao:.0f}s (olhe a janela do grSim)...")
         no.t0 = time.monotonic()
