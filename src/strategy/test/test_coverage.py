@@ -4,9 +4,23 @@ import pytest
 
 from strategy.skills.posicionamento import cobertura_defensiva
 from strategy.tatics.running import (
-    PAPEL_COBERTURA, SITUACAO_SOLTA, SITUACAO_DISPUTA, SITUACAO_DELES,
-    SITUACAO_NOSSA, alvo_do_papel,
+    PAPEL_COBERTURA, PAPEL_PORTADOR, SITUACAO_SOLTA, SITUACAO_DISPUTA,
+    SITUACAO_DELES, SITUACAO_NOSSA, alvo_do_papel, distribuir_papeis,
 )
+
+
+@pytest.mark.parametrize("forced,expected", [("1", PAPEL_COBERTURA),
+                                             ("0", PAPEL_PORTADOR),
+                                             ("", PAPEL_PORTADOR)])
+@pytest.mark.parametrize("situation", [SITUACAO_SOLTA, SITUACAO_DISPUTA,
+                                       SITUACAO_DELES, SITUACAO_NOSSA])
+def test_lone_defender_role_in_test_menu(monkeypatch, forced, expected, situation):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", forced)
+    monkeypatch.delenv("ARARABOTS_PAPEIS_FIXOS", raising=False)
+    monkeypatch.setattr("strategy.tatics.running.os.path.exists", lambda _: False)
+    ball = SimpleNamespace(position_x=-2600.0, position_y=0.0)
+    robots = {1: SimpleNamespace(position_x=-3000.0, position_y=600.0)}
+    assert distribuir_papeis(robots, ball, situation) == {1: expected}
 
 
 @pytest.mark.parametrize("side", [-1, 1])

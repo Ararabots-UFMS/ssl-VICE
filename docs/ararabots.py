@@ -322,39 +322,31 @@ CENARIOS = {
         "comando": ("FORCE_START", "BLUE"),
     },
     "zagueiro_vs_dois": {
-        "titulo": "Zagueiro e dois companheiros contra dois atacantes adversarios",
+        "titulo": "Zagueiro sozinho contra dois atacantes adversarios",
         "descricao": (
-            "Dois atacantes deles com a bola a 1,3 m do nosso gol, em jogo "
-            "corrido. Nos temos goleiro e dois de linha: o codigo atribui a "
-            "cobertura (zagueiro) e o portador. Mede se o zagueiro barra o "
+            "Dois atacantes deles com a bola no nosso campo, em jogo "
+            "corrido. Apenas nosso zagueiro, sem goleiros ou companheiros. "
+            "Mede se o zagueiro barra o "
             "avanco e o chute, sem subir pra atacar."
         ),
         "bola": (-1200.0, 200.0),
-        "azuis": [(0, -4300.0, 0.0, 0.0),
-                  (1, -2600.0, 400.0, 0.0),
-                  (2, -3000.0, -700.0, 0.0),
-                  (3, -2000.0, -300.0, 0.0)],
-        "amarelos": [(0, 4300, 0, 180),
-                     (1, -1300, 250, 180),
+        "azuis": [(1, -2600.0, 400.0, 0.0)],
+        "amarelos": [(1, -1300, 250, 180),
                      (2, -1800, -900, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
     "defesa_3v3": {
-        "titulo": "3 contra 3: tres atacantes deles com a bola indo ao nosso gol",
+        "titulo": "Zagueiro sozinho contra tres atacantes: bola indo ao nosso gol",
         "descricao": (
-            "Jogo corrido 3v3 (goleiro + tres de linha de cada lado). A bola vem "
+            "Jogo corrido 1v3, sem goleiros. A bola vem "
             "do meio-campo ja em movimento na direcao do nosso gol, com os tres "
-            "atacantes deles por perto. Mede se a defesa barra o avanco e o chute "
+            "atacantes deles por perto. Mede se o zagueiro barra o avanco e o chute "
             "sem sair do nosso lado do campo."
         ),
         "bola": (-1800.0, 300.0),
         "bola_vel": (-1500.0, -100.0),
-        "azuis": [(0, -4300.0, 0.0, 0.0),
-                  (1, -3000.0, 600.0, 0.0),
-                  (2, -3200.0, -600.0, 0.0),
-                  (3, -1200.0, -300.0, 0.0)],
-        "amarelos": [(0, 4300, 0, 180),
-                     (1, -2600, 300, 180),
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [(1, -2600, 300, 180),
                      (2, -2200, -900, 180),
                      (3, -1500, 1100, 180)],
         "comando": ("FORCE_START", "BLUE"),
@@ -396,40 +388,40 @@ CENARIOS = {
         "titulo": "Zagueiro: atacante deles perto do nosso gol, bola solta (marcacao)",
         "descricao": "Verificacao de acao: cobertura deve marcar o atacante mais perigoso.",
         "bola": (-3000.0, -1500.0),
-        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2600.0, -900.0, 0.0), (3, -1000.0, -300.0, 0.0)],
-        "amarelos": [(0, 4300, 0, 180), (1, -2400, 300, 180), (2, -1500, 1200, 180), (3, -1500, -1200, 180)],
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [(1, -2400, 300, 180), (2, -1500, 1200, 180), (3, -1500, -1200, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
     "zv_corredor": {
         "titulo": "Zagueiro: sem ameaca no nosso campo, bola solta (corredor)",
-        "descricao": "Verificacao de acao: cobertura deve ficar no corredor goleiro->bola.",
+        "descricao": "Verificacao de acao: zagueiro sozinho deve ficar no corredor nosso gol->bola.",
         "bola": (0.0, 0.0),
-        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2000.0, -900.0, 0.0), (3, -1000.0, -300.0, 0.0)],
-        "amarelos": [(0, 4300, 0, 180), (1, 2500, 1000, 180), (2, 2500, -1000, 180), (3, 1000, 1500, 180)],
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [(1, 2500, 1000, 180), (2, 2500, -1000, 180), (3, 1000, 1500, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
     "zv_disputa": {
         "titulo": "Zagueiro: disputa da bola (nosso robo e inimigo juntos)",
         "descricao": "Verificacao de acao: em DISPUTA a cobertura deve afastar a bola pra frente.",
         "bola": (-2600.0, 0.0),
-        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2000.0, -900.0, 0.0), (3, -2760.0, 100.0, 0.0)],
-        "amarelos": [(0, 4300, 0, 180), (1, -2800, -150, 180), (2, 1500, 1000, 180), (3, 1500, -1000, 180)],
+        "azuis": [(1, -2760.0, 100.0, 0.0)],
+        "amarelos": [(1, -2800, -150, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
     "zv_deles": {
         "titulo": "Zagueiro: inimigo com a bola (posse deles)",
         "descricao": "Verificacao de acao: em DELES a cobertura deve reagir a posse deles.",
         "bola": (-2600.0, 0.0),
-        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2000.0, -900.0, 0.0), (3, -1000.0, -300.0, 0.0)],
-        "amarelos": [(0, 4300, 0, 180), (1, -2700, -100, 180), (2, 1500, 1000, 180), (3, 1500, -1000, 180)],
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [(1, -2700, -100, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
     "zv_mata": {
         "titulo": "Zagueiro: bola perto do nosso gol, solta (mata a jogada)",
         "descricao": "Verificacao de acao: bola a menos de 2500 mm do nosso gol, cobertura deve ir na bola.",
         "bola": (-3200.0, 200.0),
-        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0), (2, -2000.0, -900.0, 0.0), (3, -1000.0, -300.0, 0.0)],
-        "amarelos": [(0, 4300, 0, 180), (1, 1500, 1000, 180), (2, 1500, -1000, 180), (3, 1000, 1500, 180)],
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [(1, 1500, 1000, 180), (2, 1500, -1000, 180), (3, 1000, 1500, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
     "cobertura_chute_longe": {
@@ -437,22 +429,15 @@ CENARIOS = {
         "descricao": (
             "BASELINE para o item da cobertura (tempo de chegada). A bola nasce "
             "ja em movimento (bola_vel), simulando o instante seguinte a um "
-            "chute do meio-campo na direcao do nosso gol. Nenhum dos nossos "
-            "robos de linha esta sobre a reta bola->nosso-gol. Hoje a cobertura "
-            "se planta a 45% do caminho pela posicao ATUAL da bola "
-            "(cobertura_na_linha), sem considerar a velocidade - este cenario "
-            "mede se isso chega a tempo ou se a bola atravessa o time."
+            "chute do meio-campo na direcao do nosso gol. Apenas nosso zagueiro "
+            "e o adversario que chutou ficam em campo, sem goleiros. O zagueiro "
+            "comeca fora da reta bola->nosso-gol; o teste mede se ele chega "
+            "a tempo de interceptar o chute."
         ),
         "bola": (0.0, 0.0),
         "bola_vel": (-4300.0, 150.0),
-        "azuis": [(0, -4300, 0, 0),
-                  (1, -1200, 800, 0),
-                  (2, -2200, -600, 0),
-                  (3, -3000, 300, 0)],
-        "amarelos": [(0, 4300, 0, 180),
-                     (1, 300, 0, 180),
-                     (2, 1500, 1000, 180),
-                     (3, 1500, -1000, 180)],
+        "azuis": [(1, -3000, 300, 0)],
+        "amarelos": [(1, 300, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
 
@@ -1966,6 +1951,10 @@ const svg = document.getElementById('campo');
 const NS = 'http://www.w3.org/2000/svg';
 function el(n, at){const e=document.createElementNS(NS,n);for(const k in at)e.setAttribute(k,at[k]);return e;}
 // campo Division B: 9000 x 6000, gols em x=+-4500 com 1000 de largura
+// Paredes fisicas do grSim: margem de 300 mm e espessura de 50 mm.
+const paredes = el('rect',{x:-4800,y:-3300,width:9600,height:6600,fill:'none',stroke:'#000000','stroke-width':50});
+const tituloParedes = el('title'); tituloParedes.textContent = 'Barreira física de borda do campo';
+paredes.appendChild(tituloParedes); svg.appendChild(paredes);
 svg.appendChild(el('rect',{x:-4500,y:-3000,width:9000,height:6000,fill:'none',stroke:'#3a6b52','stroke-width':20}));
 svg.appendChild(el('line',{x1:0,y1:-3000,x2:0,y2:3000,stroke:'#3a6b52','stroke-width':14}));
 svg.appendChild(el('circle',{cx:0,cy:0,r:500,fill:'none',stroke:'#3a6b52','stroke-width':14}));
@@ -2028,6 +2017,10 @@ function papeisDoQuadro(fr){
   const b = fr.b, linha = (fr.r||[]).filter(r => r[0] !== 0);
   const papeis = {};
   if (!linha.length) return papeis;
+  if (D.forcar_cobertura){
+    linha.forEach(r => { papeis[r[0]] = "cobertura"; });
+    return papeis;
+  }
   // portador: distancia QUANTIZADA em faixas de 500 mm, desempate por id -
   // e a mesma regra do eleger_atacante, e existe porque a distancia crua
   // alterna o vencedor a cada ciclo.
@@ -2781,6 +2774,7 @@ def gerar_replay(resultado, destino):
         "gol_em": resultado.get("gol_em"),
         "disparou": resultado.get("disparou"),
         "bola_inicial": resultado.get("bola_inicial"),
+        "forcar_cobertura": resultado.get("forcar_cobertura", False),
         # Quem cobrou, para o replay destacar o robo certo em vez de adivinhar.
         "cobrador": resultado.get("cobrador"),
     }, separators=(",", ":"))
@@ -3288,6 +3282,7 @@ def rodar(nome, duracao=12.0):
         "amarelos_crus": amarelos_crus,
         "alvos": alvos,
         "papeis_hist": papeis_hist,
+        "forcar_cobertura": os.environ.get("ARARABOTS_FORCAR_COBERTURA") == "1",
         "janela_chutador": janela,
         "janelas_kick": janelas_kick,
         "rastreio": rastreio_calc,

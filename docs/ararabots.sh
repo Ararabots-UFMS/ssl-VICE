@@ -172,7 +172,7 @@ DDS_ENV=""
 [ -n "${MOVIMENTO_ANTIGO:-}" ] && MOVIMENTO_NOVO=""
 export MOVIMENTO_NOVO
 
-ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 # GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
 #
 # O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
@@ -188,7 +188,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -1054,6 +1054,19 @@ except OSError: sys.exit(1)
 
 
 # ============================================================================
+garantir_estrategia_cobertura() {
+    [ "${ARARABOTS_FORCAR_COBERTURA:-}" = "1" ] || return 0
+    local conferir="python3 -c 'from pathlib import Path; import sys; import strategy.tatics.running as running; sys.exit(Path(running.__file__).read_bytes() != Path(\"/root/ssl-VICE/src/strategy/strategy/tatics/running.py\").read_bytes())'"
+    if ! ros_run "$conferir"; then
+        echo "   estrategia instalada desatualizada - compilando o pacote strategy..."
+        ros_run "cd /root/ssl-VICE && colcon build --packages-select strategy" || return 1
+        ros_run "$conferir" || {
+            echo "   XX a estrategia instalada ainda difere do codigo de cobertura" >&2
+            return 1
+        }
+    fi
+}
+
 cmd_cenario() {
     CENARIO="${1:?informe o cenario}"
     PERFIL="${2:-${CAMPO:-codigo}}"
@@ -1100,6 +1113,8 @@ cmd_cenario() {
     fi
     [ "$faltou" = "1" ] && { echo "   (o ./ararabots.sh preparar reconstroi tudo isso)"; return 1; }
 
+    garantir_estrategia_cobertura || return 1
+
     # Os scripts auxiliares vao junto sempre - assim uma correcao neles vale na hora,
     # sem depender de lembrar de copiar.
     docker cp "$PY" vice:/tmp/ararabots.py >/dev/null 2>&1
@@ -1109,6 +1124,8 @@ cmd_cenario() {
 
     # ---------------------------------------------------------------- 2 e 3
     cmd_limpar >/dev/null 2>&1
+    # O gravador nao deve herdar o papel do teste anterior durante HALT.
+    docker exec vice rm -f /tmp/ararabots_papeis.json || return 1
     ros_d "ros2 launch /root/ssl-VICE/launch/sim_one.py > /tmp/sim.log 2>&1"
 
     # ---------------------------------------------------------------- 4

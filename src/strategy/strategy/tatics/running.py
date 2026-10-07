@@ -250,9 +250,10 @@ def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
     # A bandeira e um ARQUIVO, nao uma variavel de ambiente: variavel lida pela
     # ESTRATEGIA precisa ser exportada no 'ros_d' do ararabots.sh, que fica fora
     # de src/strategy/.
-    # TESTE: com o arquivo /tmp/ararabots_forcar_cobertura, todo robo de linha
-    # vira cobertura - permite testar o zagueiro sozinho.
-    if os.path.exists("/tmp/ararabots_forcar_cobertura"):
+    # O menu de zagueiro exporta a variavel via ros_d para testar a cobertura
+    # sozinha. O arquivo continua disponivel para experimentos manuais.
+    if (os.environ.get("ARARABOTS_FORCAR_COBERTURA") == "1"
+            or os.path.exists("/tmp/ararabots_forcar_cobertura")):
         return {rid: PAPEL_COBERTURA for rid in linha}
 
     if (os.environ.get("ARARABOTS_PAPEIS_FIXOS")
