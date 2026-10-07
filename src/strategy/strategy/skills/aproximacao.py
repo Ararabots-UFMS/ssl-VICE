@@ -47,13 +47,61 @@ LATERAL_CONTORNO = 550.0
 # Vies lateral calibrado da cadeia de movimento (o robo chega deslocado deste
 # tanto; o alvo compensa).
 VIES_LATERAL = -27.0
-# Quanto ALEM da bola o alvo fica na chegada. Negativo porque e medido a partir
-# da bola na direcao de saida: ~53 mm antes dela, de modo que o trajeto restante
-# (~175 mm) mantenha o rastreador vivo durante a travessia.
+# Onde o alvo fica na chegada, medido A PARTIR DA BOLA na direcao de saida.
+# Negativo = AQUEM dela (do nosso lado); positivo = ALEM dela.
+#
+# -53 e o valor de "ainda nao da para empurrar": a chegada esta torta, o robo
+# encosta de raspao e o alvo nao o manda atravessar a bola.
 ATRAVESSA_CHUTE = -53.0
+
+# ALEM DA BOLA QUANDO A CHEGADA ESTA ALINHADA - o "empurrao".
+#
+# DEFEITO QUE ISTO CORRIGE, medido em 07/10/2026 com sonda guiada por replay
+# (as funcoes desta camada sao puras; os quadros vem dos replays do lote de
+# 03/10). Em TODOS os quadros de contato medidos o alvo estava 53 mm AQUEM da
+# bola:
+#
+#     orbita_frontal  antes  off mediana -58,3 mm   alem da bola em  0% dos quadros
+#     orbita_frontal  depois off mediana -56,1 mm   alem da bola em  3%
+#     orbita_colado   depois off mediana -53,0 mm   alem da bola em  9%
+#     pressao_na_bola        off mediana -54,9 mm   alem da bola em  0%
+#
+# O casco tem 90 mm e a bola 21: o CENTRO do robo nao chega a menos de 111 mm
+# do centro da bola. Um alvo a -53 mm e inalcancavel por construcao, e o que
+# sobra e um erro residual de ~58 mm. Com kp = 2,3 (control/pid_controller.py:8)
+# isso da 2,3 x 0,058 = 0,13 m/s - e o feedforward esta desligado pelo ajuste do
+# PID, que e a condicao de medida desta fase. O robo encosta na bola e a bola
+# nao sai do lugar: medido no replay, deslocamento LIQUIDO da bola de 0 a 8 mm
+# em 24,5 s nos tres cenarios de protecao.
+#
+# E o proprio cabecalho deste modulo ja dizia o certo ("por isso o alvo proximo
+# e ALEM da bola, nao o ponto de chute") - a constante contradizia o texto.
+#
+# 180 mm: com o robo em contato, o alvo fica a 111 + 180 = 291 mm dele, o que da
+# 2,3 x 0,291 = 0,67 m/s de comando. Empurrao de verdade, e trajeto que sobra de
+# folga para o rastreador nao se calar (ver o cabecalho).
+EMPURRAO = 180.0
+# So empurra quando a chegada esta BOA. t e o alinhamento (1 = perfeito), entao
+# 0,80 equivale a ~36 graus de erro entre a nossa chegada e a direcao de saida.
+# Abaixo disso o alvo continua aquem da bola e a geometria tem tempo de melhorar
+# - empurrar torto e mandar a bola para o lado errado, que e o defeito que a
+# orbita existe para evitar.
+TOL_EMPURRAO = 0.80
 # Avanco alem da bola/ponto de interceptacao, por situacao.
 AVANCO_PORTADOR = 500.0
 AVANCO_SOLTA = 1600.0
+
+# --- contorno em orbita: pegar a bola POR TRAS quando ela esta atras de nos ---
+#
+# 260 mm de raio: fora do contato (casco 90 + bola 21 = 111 mm) e dentro do
+# RAIO_ENCAIXE, para nao disputar com o regime de longe. Com o passo de ~52
+# graus, a corda do arco passa a 260*cos(26) = 234 mm da bola - o robo da a
+# volta sem encostar nela no caminho.
+RAIO_ORBITA = 260.0
+# O alvo fica sempre ~52 graus a frente do robo no arco. E tambem o que mantem o
+# robo EM MOVIMENTO: alvo alcancavel cala o rastreador e, com ele, o canal de
+# chute (ver o cabecalho deste modulo).
+PASSO_ORBITA = 0.9             # rad
 
 
 def ponto_de_interceptacao(rx, ry, ball, avanco, segundos=0.5):
@@ -69,7 +117,8 @@ def ponto_de_interceptacao(rx, ry, ball, avanco, segundos=0.5):
     return no_campo(fx + (dx / n) * avanco, fy + (dy / n) * avanco)
 
 
-def ponto_de_aproximacao(rx, ry, bx, by, dir_alvo, avanco_base):
+def ponto_de_aproximacao(rx, ry, bx, by, dir_alvo, avanco_base, contornar=True,
+                         empurrar=True):
     """Alvo continuo para chegar na bola pelo lado certo e atravessa-la.
 
     'dir_alvo' e o ponto para onde a bola deve sair (gol, companheiro, lateral).
@@ -85,16 +134,51 @@ def ponto_de_aproximacao(rx, ry, bx, by, dir_alvo, avanco_base):
     a_cheg = atan2(by - ry, bx - rx)
     t = 1.0 - min(abs(norm_ang(a_cheg - a_alvo)) / pi, 1.0)   # 1 = perfeito
     ux_a, uy_a = cos(a_alvo), sin(a_alvo)
+    d_ate_bola = hypot(rx - bx, ry - by)
+
+    # A BOLA ESTA ATRAS DE NOS? ENTAO CONTORNA E PEGA POR TRAS.
+    #
+    # DEFEITO QUE ISTO CORRIGE. Perto da bola o alvo era o ponto logo antes
+    # dela NA LINHA DE TIRO, e o desvio lateral do contorno zerava (de
+    # proposito: na chegada o robo tem de estar EM CIMA da linha). Com o robo do
+    # lado errado, esse alvo so e alcancavel atravessando a bola - e sem
+    # dribbler a bola sai na direcao robo->bola, isto e, PARA TRAS.
+    #
+    # MEDIDO (sonda de decisao offline, 12 largadas em volta da bola x 3 raios x
+    # 2 cenarios, deixando a propria decisao guiar o robo por 40 passos):
+    #     termina do lado errado em 22 de 72 largadas (31%)
+    #     pior caso: largada em cima da linha de tiro, 175 graus de erro -
+    #     ele empurrava a bola de volta para o nosso campo
+    #
+    # A correcao e geometrica: o robo precisa estar ATRAS da bola em relacao ao
+    # alvo (a_alvo + pi). Se ele nao esta e ja esta perto, o alvo passa a ser um
+    # ponto do ARCO em volta da bola, um passo adiante na direcao mais curta -
+    # ele orbita ate chegar do lado certo, e so entao o regime normal assume.
+    ang_robo = atan2(ry - by, rx - bx)
+    delta = norm_ang(norm_ang(a_alvo + pi) - ang_robo)
+    if contornar and d_ate_bola < RAIO_ENCAIXE and abs(delta) > pi / 2:
+        passo = delta if abs(delta) < PASSO_ORBITA else (
+            PASSO_ORBITA if delta > 0 else -PASSO_ORBITA)
+        a_novo = ang_robo + passo
+        return no_campo(bx + cos(a_novo) * RAIO_ORBITA,
+                        by + sin(a_novo) * RAIO_ORBITA)
 
     # PERTO, ATRAVESSA A JANELA; LONGE, MIRA ALEM DA BOLA.
     #
     # Mirar 500-1600 mm alem da bola faz o robo chegar rapido e bater com o
     # ombro: a bola escapa antes do disparo. Os dois regimes num alvo continuo,
     # interpolados pela distancia.
-    d_ate_bola = hypot(rx - bx, ry - by)
     c = min(max((d_ate_bola - PONTO_CHUTE) / (RAIO_ENCAIXE - PONTO_CHUTE),
                 0.0), 1.0)
-    off_alinhado = ATRAVESSA_CHUTE + (avanco_base - ATRAVESSA_CHUTE) * c
+    # NA CHEGADA, ALEM DA BOLA SE ESTIVER ALINHADO (ver EMPURRAO).
+    #
+    # Sem degrau, como todo o resto deste modulo: o alvo desliza de -53 mm
+    # (chegada torta) a +180 mm (chegada perfeita) conforme o alinhamento.
+    off_perto = ATRAVESSA_CHUTE
+    if empurrar:
+        k = max(0.0, (t - TOL_EMPURRAO) / (1.0 - TOL_EMPURRAO))
+        off_perto = ATRAVESSA_CHUTE + (EMPURRAO - ATRAVESSA_CHUTE) * k
+    off_alinhado = off_perto + (avanco_base - off_perto) * c
     # PERTO DA BOLA, COMPROMETE-SE COM A JANELA.
     #
     # O termo de contorno dependia so do alinhamento. Com o robo a 90 mm da bola
@@ -103,7 +187,7 @@ def ponto_de_aproximacao(rx, ry, bx, by, dir_alvo, avanco_base):
     # replay. O lado por onde contornar ja foi escolhido la longe; na chegada o
     # alvo e o meio da janela de disparo, e ponto.
     off_longe = -RECUO_CONTORNO * (1.0 - t) + off_alinhado * t
-    off = c * off_longe + (1.0 - c) * ATRAVESSA_CHUTE
+    off = c * off_longe + (1.0 - c) * off_perto
 
     # O DESVIO LATERAL TEM DE SUMIR AO CHEGAR.
     #

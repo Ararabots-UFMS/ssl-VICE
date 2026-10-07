@@ -4,7 +4,7 @@ import os
 from math import atan2, hypot
 
 from strategy.skills.skills import Skills
-from strategy.skills import aproximacao, chute, geometria, posicionamento
+from strategy.skills import aproximacao, chute, experimento, geometria, posicionamento
 from strategy.skills import bola as skill_bola
 from strategy.tatics.goalkeeper import Goalkeeper
 
@@ -377,6 +377,8 @@ PONTO_CHUTE = aproximacao.PONTO_CHUTE
 VIES_LATERAL = aproximacao.VIES_LATERAL
 RAIO_ENCAIXE = aproximacao.RAIO_ENCAIXE
 ATRAVESSA_CHUTE = aproximacao.ATRAVESSA_CHUTE
+EMPURRAO = aproximacao.EMPURRAO
+TOL_EMPURRAO = aproximacao.TOL_EMPURRAO
 LATERAL_CONTORNO = aproximacao.LATERAL_CONTORNO
 PORTADOR_ESPACO = posicionamento.PORTADOR_ESPACO
 BLOQUEIO_DIST = posicionamento.BLOQUEIO_DIST
@@ -388,7 +390,95 @@ ALCANCE_SOLTA_TRAVA = chute.ALCANCE_SOLTA_TRAVA
 linha_livre = geometria.linha_livre
 
 
-def alvo_do_chute(ball, gol_ataque, ally_robots, enemy_robots, papeis, estado=None):
+def alvo_do_chute(ball, gol_ataque, ally_robots, enemy_robots, papeis,
+                  estado=None):
+    """Para onde a bola deve ir, JA COM A MIRA TRAVADA (ver mira_firme)."""
+    ax, ay, tipo = _alvo_do_chute_cru(ball, gol_ataque, ally_robots,
+                                      enemy_robots, papeis, estado)
+    return mira_firme(estado, ax, ay, tipo, papeis)
+
+
+def mira_firme(estado, ax, ay, tipo, papeis):
+    """Segura a mira escolhida por CICLOS_MIN_MIRA ciclos. Devolve (x, y, tipo).
+
+    A TRAVA EXISTIA E EXCLUIA JUSTAMENTE A TRANSICAO QUE ACONTECIA
+    --------------------------------------------------------------
+    Ela morava em montar_comandos e so valia entre dois alvos VALIDOS:
+
+        if (_ant_t is not None and _n < CICLOS_MIN_MIRA
+                and tipo_alvo not in (None, "bloqueado")
+                and _ant_t not in (None, "bloqueado")):
+
+    Ou seja, qualquer troca que passasse por 'bloqueado' passava livre. E e por
+    'bloqueado' que ela passa: com o gol fechado e o apoio entrando e saindo da
+    linha, o tipo alterna passe -> bloqueado -> passe.
+
+    MEDIDO em 07/10/2026, sonda de decisao guiada pelos replays do lote de
+    03/10 (a tatica roda sobre os quadros gravados, sem ROS e sem simulador):
+
+        cenario                 ciclos 'passe'   ciclos 'bloqueado'
+        orientacao_terco              132              148
+        protecao_dois_lados            67              202
+        protecao_frontal               35              242
+
+    E TODA direcao do ciclo sai daqui - a orientacao do corpo, o lado por onde
+    se chega, o ponto de atravessar, o alivio sob pressao. Com a mira alternando
+    a linha de tiro gira dezenas de graus e o alinhamento nunca fecha:
+
+        alinhamento mediano do portador (1 = perfeito)   t = 0,11 a 0,02
+        alvo da aproximacao ATRAS da bola                54% a 58% dos ciclos
+        distancia do portador a bola                     314 a 652 mm, 24,5 s
+        deslocamento liquido da bola                     0 a 8 mm
+
+    O portador orbitava a bola sem nunca encostar nela. Por isso NENHUMA das
+    quatro modificacoes de 03/10 mediu ganho nos cenarios de protecao e de
+    pressao: as tres camadas decidiam sobre uma direcao que trocava sozinha.
+
+    A trava agora vale TAMBEM contra 'bloqueado' transitorio: uma mira valida
+    sobrevive 2 s, e so e abandonada quando deixa de existir (o passe perde o
+    receptor) ou quando o tempo acaba. 'bloqueado' nao e informacao nova a cada
+    ciclo - e a ausencia de informacao.
+    """
+    if estado is None:
+        return ax, ay, tipo
+    ant_t = estado.get("mira_tipo")
+    ant_p = estado.get("mira_ponto")
+    n = estado.get("mira_ciclos", 0)
+    ant_vale = ant_t not in (None, "bloqueado") and ant_p is not None
+
+    if experimento.desligado("MIRA_FIRME"):
+        # comportamento antigo: a trava so vale entre dois alvos validos
+        segura = (ant_vale and n < CICLOS_MIN_MIRA
+                  and tipo not in (None, "bloqueado"))
+    else:
+        segura = ant_vale and n < CICLOS_MIN_MIRA and _mira_existe(ant_t, papeis)
+
+    estado["mira_crua"] = tipo
+    estado["mira_segurada"] = bool(segura)
+    if segura:
+        estado["mira_ciclos"] = n + 1
+        return ant_p[0], ant_p[1], ant_t
+
+    estado["mira_tipo"] = tipo
+    estado["mira_ponto"] = None if ax is None else (ax, ay)
+    estado["mira_ciclos"] = 0
+    return ax, ay, tipo
+
+
+def _mira_existe(tipo, papeis):
+    """A mira anterior ainda tem sentido? O gol nao se muda; o receptor sim.
+
+    O ponto do passe ja vem congelado de _alvo_do_chute_cru, que o re-valida
+    contra a posicao ATUAL do receptor. Aqui basta exigir que exista alguem no
+    papel de apoio - sem apoio nao ha passe para segurar.
+    """
+    if tipo != "passe":
+        return True
+    return any(p == PAPEL_APOIO for p in papeis.values())
+
+
+def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
+                       estado=None):
     """Para onde o portador deve mandar a bola: o gol, o APOIO, ou lugar nenhum.
 
     POR QUE ISTO PRECISOU EXISTIR
@@ -523,8 +613,24 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         if situacao == SITUACAO_SOLTA:
             # vai para onde a bola VAI PARAR, nao para onde ela esta: chegar
             # depois dela nao adianta.
+            #
+            # MAS CHEGANDO PELO LADO CERTO. Este ramo devolvia o ponto previsto
+            # DIRETO, sem passar pelo maquinario de aproximacao - entao com a
+            # bola solta e o robo do lado errado ele ia reto nela e empurrava
+            # para tras. Achado no pre-voo dos cenarios: 'orbita_frontal' e
+            # 'orbita_diagonal' (robo a 260 e 400 mm, situacao SOLTA porque o
+            # raio de posse e 250) nao mudavam NADA com a chave da orbita, e o
+            # motivo era este return antecipado.
+            #
+            # A bola solta e justamente quando mais se ganha chegando por tras:
+            # ninguem disputa, da tempo de contornar.
             fx, fy = onde_a_bola_vai(ball, 1.0)
-            return _no_campo(fx, fy) + (False,)
+            _dir = alvo_chute if alvo_chute is not None else (
+                fx + ux * 1000.0, fy + uy * 1000.0)
+            return aproximacao.ponto_de_aproximacao(
+                rx, ry, fx, fy, _dir, AVANCO_SOLTA,
+                contornar=not experimento.desligado("ORBITA"),
+                empurrar=not experimento.desligado("EMPURRAO")) + (False,)
 
         # COM A BOLA NOSSA, O PORTADOR NAO LARGA A BOLA.
         #
@@ -590,7 +696,9 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         # O contorno continuo, o ponto de chute e o desvio lateral que zera na
         # chegada vivem em skills/aproximacao.py, com as medicoes que os geraram.
         return aproximacao.ponto_de_aproximacao(
-            rx, ry, bx, by, _dir_alvo, avanco_base) + (True,)
+            rx, ry, bx, by, _dir_alvo, avanco_base,
+            contornar=not experimento.desligado("ORBITA"),
+            empurrar=not experimento.desligado("EMPURRAO")) + (True,)
 
 
     if papel == PAPEL_COBERTURA:
@@ -801,16 +909,33 @@ def montar_comandos(tt):
                   else tt.goal_center.GOAL_POSITIVE)
 
     if os.environ.get("DIAG_JOGO"):
+        # QUE CODIGO ESTA RODANDO. O lote de 21/09 marcou 5 gols em 6 e a
+        # planilha nao dizia que era sem adversario; a mesma armadilha vale para
+        # as chaves de experimento. Sai uma vez por ciclo, junto do resto.
+        print("[JG] chaves=%s" % experimento.estado(), flush=True)
         print("[JG] situacao=%s papeis=%s" % (situacao, papeis), flush=True)
         print("[JG] lado=%s gol_ataque=%.0f nosso_gol=%.0f bola=%.0f,%.0f" %
               (tt.on_positive_half, gol_ataque.x, nosso_gol.x,
                tt.ball.position_x, tt.ball.position_y), flush=True)
 
     # PARA ONDE A BOLA DEVE IR neste ciclo: gol, apoio, ou lugar nenhum.
+    _est_m = getattr(tt, "estado", None)
     ax, ay, tipo_alvo = alvo_do_chute(tt.ball, gol_ataque,
                                       tt.ally_robots, tt.enemy_robots,
-                                      papeis, getattr(tt, "estado", None))
+                                      papeis, _est_m)
     alvo_chute = None if ax is None else (ax, ay)
+
+    # ESTA MIRA E DESTE CICLO OU EMPRESTADA DO ANTERIOR?
+    #
+    # Se for emprestada por cima de um 'bloqueado', o corpo e a aproximacao
+    # continuam usando-a (e disso que vive a estabilidade), mas o GATILHO nao:
+    # ver chute.chutar_em(pode_armar=...). Os ramos de saida de bola e de
+    # alivio, abaixo, so disparam com tipo_alvo em (None, 'bloqueado') - isto e,
+    # exatamente quando a mira NAO foi emprestada -, entao a bandeira continua
+    # valendo depois deles.
+    _mira_emprestada = bool(
+        _est_m is not None and _est_m.get("mira_segurada")
+        and _est_m.get("mira_crua") in (None, "bloqueado"))
 
     # A MIRA NAO PODE TROCAR A TODO MOMENTO.
     #
@@ -830,20 +955,13 @@ def montar_comandos(tt):
     # Mesma trava que estabilizou os papeis (133 trocas -> 1 em 250 ciclos):
     # o tipo escolhido vale por CICLOS_MIN_MIRA ciclos, desde que continue
     # valido. Trocar so quando o anterior deixa de existir.
-    _est = getattr(tt, "estado", None)
-    if _est is not None:
-        _ant_t = _est.get("mira_tipo")
-        _ant_p = _est.get("mira_ponto")
-        _n = _est.get("mira_ciclos", 0)
-        if (_ant_t is not None and _n < CICLOS_MIN_MIRA
-                and tipo_alvo not in (None, "bloqueado")
-                and _ant_t not in (None, "bloqueado")):
-            tipo_alvo, alvo_chute = _ant_t, _ant_p
-            _est["mira_ciclos"] = _n + 1
-        else:
-            _est["mira_tipo"] = tipo_alvo
-            _est["mira_ponto"] = alvo_chute
-            _est["mira_ciclos"] = 0
+    # A TRAVA MUDOU DE LUGAR, para 'mira_firme' em alvo_do_chute.
+    #
+    # Ela morava aqui e por isso nao podia ser medida fora do simulador: a sonda
+    # de decisao chama as funcoes puras, nao 'montar_comandos'. Agora a decisao
+    # de mira e a trava dela saem juntas da mesma funcao - e e la que esta o
+    # racional medido, inclusive por que a versao antiga nao pegava a transicao
+    # que importava.
 
     # SAIDA DE BOLA: no nosso terco, AFASTAR vem antes de construir.
     #
@@ -912,14 +1030,57 @@ def montar_comandos(tt):
         rid_p = next((k for k, v in papeis.items() if v == PAPEL_PORTADOR), None)
         if rid_p is not None and rid_p in tt.ally_robots:
             p_ = tt.ally_robots[rid_p]
-            perto = sum(1 for e in tt.enemy_robots.values()
-                        if hypot(e.position_x - p_.position_x,
-                                 e.position_y - p_.position_y) < PRESSAO_RAIO)
+            # PRESSAO SE MEDE NA BOLA, NAO NO CORPO DO ROBO.
+            #
+            # DEFEITO MEDIDO (sonda de decisao offline): com o portador atras da
+            # bola - a posicao CERTA para empurrar - o adversario que prensa a
+            # BOLA fica a mais de PRESSAO_RAIO do robo, e a conta dava ZERO
+            # adversarios perto. Resultado: numa prensa frontal classica (dois
+            # deles a 304 e 348 mm da bola) o alivio nao disparava, 'alvo_chute'
+            # ficava 'bloqueado' e o portador posicionava para sempre.
+            #
+            # Quem esta sob pressao e a BOLA e a jogada, nao o casco. Conta a
+            # uniao: perto da bola OU perto do portador.
+            if experimento.desligado("PRESSAO_BOLA"):
+                # COMPORTAMENTO ANTIGO: so o corpo do robo conta. Com o portador
+                # atras da bola, quem prensa a BOLA fica fora do raio e o alivio
+                # nao dispara.
+                perto = sum(1 for e in tt.enemy_robots.values()
+                            if hypot(e.position_x - p_.position_x,
+                                     e.position_y - p_.position_y) < PRESSAO_RAIO)
+            else:
+                perto = sum(1 for e in tt.enemy_robots.values()
+                            if hypot(e.position_x - tt.ball.position_x,
+                                     e.position_y - tt.ball.position_y) < PRESSAO_RAIO
+                            or hypot(e.position_x - p_.position_x,
+                                     e.position_y - p_.position_y) < PRESSAO_RAIO)
             if perto >= PRESSAO_MIN:
-                lat_y = LIMITE_Y if tt.ball.position_y >= 0 else -LIMITE_Y
-                avanco = 800.0 if gol_ataque.x >= 0 else -800.0
-                alvo_chute = (tt.ball.position_x + avanco, lat_y)
-                tipo_alvo = "alivio"
+                # PROTEGER A POSSE, e nao so "jogar na lateral".
+                #
+                # A direcao sai de uma varredura angular pontuada pela folga ate
+                # o adversario, com vies de ataque e o cone da nossa meta
+                # proibido (skills/posicionamento.saida_sob_pressao). Como o
+                # portador mira ATRAVES da bola nessa direcao, ele chega pelo
+                # lado do adversario e a bola fica do lado oposto: o casco no
+                # meio, que e o pedido - corpo entre o adversario e a bola.
+                # quem prensa: o adversario mais proximo do portador
+                _ameaca = min(tt.enemy_robots.values(),
+                              key=lambda e: hypot(e.position_x - p_.position_x,
+                                                  e.position_y - p_.position_y))
+                if experimento.desligado("PROTECAO"):
+                    # COMPORTAMENTO ANTIGO: lateral fixa, sempre no mesmo y
+                    # limite, sem olhar onde esta quem prensa.
+                    lat_y = LIMITE_Y if tt.ball.position_y >= 0 else -LIMITE_Y
+                    avanco = 800.0 if gol_ataque.x >= 0 else -800.0
+                    alvo_chute = (tt.ball.position_x + avanco, lat_y)
+                    tipo_alvo = "alivio"
+                else:
+                    _saida = posicionamento.saida_sob_pressao(
+                        tt.ball.position_x, tt.ball.position_y, tt.enemy_robots,
+                        gol_ataque, nosso_gol, ameaca=_ameaca)
+                    if _saida is not None:
+                        alvo_chute = _saida
+                        tipo_alvo = "alivio"
                 if os.environ.get("DIAG_JOGO"):
                     print("[JG] ALIVIO perto=%d -> %.0f,%.0f"
                           % (perto, alvo_chute[0], alvo_chute[1]), flush=True)
@@ -981,13 +1142,25 @@ def montar_comandos(tt):
         #
         # Quem esta indo a bola usa a direcao do CHUTE. Os outros seguem olhando
         # para ela, que e o certo para receber e para cobrir.
-        if _dperto < RAIO_ORIENTA_CHUTE:
-            _mira = alvo_chute or (gol_ataque.x, gol_ataque.y)
-            ang = atan2(_mira[1] - tt.ball.position_y,
-                        _mira[0] - tt.ball.position_x)
-        else:
-            ang = atan2(tt.ball.position_y - _r_o.position_y,
-                        tt.ball.position_x - _r_o.position_x)
+        # A ORIENTACAO VIVE NA CAMADA DE SKILLS: skills/chute.py.
+        #
+        # Quem chega pelo lado certo mira a direcao do chute (o tiro sai no eixo
+        # do corpo); quem esta do lado errado olha para a bola, em vez de
+        # receber ordem de ficar de costas para ela. A medicao que obrigou a
+        # distinguir os dois casos esta na docstring de orientacao_do_corpo:
+        # metade das posicoes em volta da bola mandavam o robo virar as costas.
+        _sentido_x = -1.0 if tt.on_positive_half else 1.0
+        _travas = tt.estado.setdefault("chute_armado", {}) \
+            if hasattr(tt, "estado") and tt.estado is not None else {}
+        # UMA chamada para os tres canais: ver skills/chute.chutar_em, que
+        # tambem documenta por que o alvo de movimento nunca pode ser
+        # alcancavel (o laco do control cala o canal de chute quando o robo
+        # chega).
+        ang, arma, forca = chute.chutar_em(
+            _r_o, tt.ball, alvo_chute, tipo_alvo, _sentido_x, _travas, rid,
+            (gol_ataque.x, gol_ataque.y),
+            so_lado_certo=not experimento.desligado("ORIENTACAO_LADO"),
+            pode_armar=not _mira_emprestada)
 
         # Quem esta efetivamente com a bola: o nosso mais proximo dentro do raio
         # de posse. Serve so para o diagnostico - a decisao de chutar e do
@@ -1024,7 +1197,6 @@ def montar_comandos(tt):
         # passe curto e 2,5 (forca de gol atravessa o receptor); saida e
         # media, para a bola PARAR no campo deles e nao sair pela linha de
         # fundo - Aimless Kick, Division B.
-        forca = chute.forca_por_alvo(tipo_alvo)
         # ARMAR PELO CORPO, NAO PELA POSICAO.
         #
         # O portao era 'chuta', que exige o robo ATRAS da bola e a menos de
@@ -1041,33 +1213,19 @@ def montar_comandos(tt):
         if os.environ.get("DIAG_JOGO") and _com_a_bola:
             print("[JG] COM_A_BOLA r%d papel=%s d=%.0f alvo=%s"
                   % (rid, papel, d_bola, tipo_alvo), flush=True)
-        # O PORTAO DE CHUTE VIVE NA CAMADA DE SKILLS: skills/chute.py.
-        #
-        # Lá estão as tres licoes que a bola parada pagou e o jogo corrido teve
-        # de redescobrir: a trava de armamento (a janela do grSim dura UMA
-        # amostra), a guarda de "bola a frente da placa" (o teste do grSim e
-        # simetrico e arma com a bola nas costas) e nao exigir alinhamento fino
-        # no instante do contato.
-        _sentido_x = -1.0 if tt.on_positive_half else 1.0
-        _travas = tt.estado.setdefault("chute_armado", {}) \
-            if hasattr(tt, "estado") and tt.estado is not None else {}
-        arma = chute.armar_chute(r, tt.ball, alvo_chute, _sentido_x,
-                                 tipo_alvo, _travas, rid)
         if os.environ.get("DIAG_JOGO"):
             # GEOMETRIA NO REFERENCIAL DO ROBO, que e o que o grSim arbitra:
             # ele dispara com 0 <= xx < 31,5 mm (placa) e |yy| < 40 mm.
-            # Ver robot.cpp:120-128 e skills/chute.py. Sem isto nao da para
-            # saber SE a bola chega na placa - so que o robo esta "perto".
+            # Ver robot.cpp:120-128 e skills/chute.py.
             _xx, _yy, _ = chute.geometria_do_chutador(r, tt.ball)
             _frente = (alvo_chute is not None
-                       and chute.direcao_para_frente(tt.ball, alvo_chute,
-                                                     _sentido_x))
+                       and chute.direcao_para_frente(tt.ball, alvo_chute, _sentido_x))
             print("[JG] PLACA r%d papel=%s xx=%.0f yy=%.0f arma=%s dispara=%s"
                   % (rid, papel, _xx, _yy, arma,
                      chute.na_janela_de_disparo(_xx, _yy)), flush=True)
             print("[JG] arma=%s frente=%s d=%.0f tipo=%s"
                   % (arma, _frente, d_bola, tipo_alvo), flush=True)
-        cmd.kick = forca if arma else 0.0
+        cmd.kick = forca        # chutar_em ja devolve 0 quando nao armado
         # a bola so e obstaculo para quem NAO vai disputa-la
         cmd.ball = (papel != PAPEL_PORTADOR)
         cmd.field_border = True

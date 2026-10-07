@@ -11,6 +11,11 @@
 #      ./ararabots.sh preparar        so monta o ambiente e confere a cadeia
 #      ./ararabots.sh cenario <nome>  monta UM cenario e deixa pronto para gravar
 #      ./ararabots.sh validar [n]     roda todos os cenarios n vezes -> validacao.csv
+#      ./ararabots.sh lotes [func...] CAMPANHA DE ANTES E DEPOIS, inteira: cinco
+#                                     funcionalidades x tres cenarios x duas
+#                                     condicoes. Imprime cada par quando acaba e
+#                                     escreve docs/lotes-<data>.md.
+#                                     N=3 ./ararabots.sh lotes  -> 3 repeticoes
 #      ./ararabots.sh ajustes on|off|status [tracker|filtro|tudo]
 #                                     correcoes fora de src/strategy/
 #      MIRA_CANTO=1 ./ararabots.sh ...  mira no canto em vez do centro
@@ -172,7 +177,7 @@ DDS_ENV=""
 [ -n "${MOVIMENTO_ANTIGO:-}" ] && MOVIMENTO_NOVO=""
 export MOVIMENTO_NOVO
 
-ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 # GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
 #
 # O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
@@ -188,7 +193,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -634,9 +639,18 @@ cmd_parar() {
 #
 # Agora o numero vem do CENARIO e e garantido em toda montagem.
 robos_do_cenario() {
-    case "$1" in
-        jogo) echo 4 ;;                      # goleiro + TRES de linha
-        *)    echo "${ARARABOTS_ROBOS:-3}" ;;
+    # QUEM SABE QUANTOS ROBOS O CENARIO EXIGE E O CENARIO.
+    #
+    # Isto era uma lista fixa: 'jogo' => 4, todo o resto 3. Cenario novo com
+    # quatro robos rodava com TRES e o quarto nao existia em campo - o replay do
+    # primeiro lote de 'orientacao_meio' mostrou os robos 0, 1 e 2 e nenhum 3.
+    # Com um a menos a distribuicao de papeis muda, e o cenario passa a medir
+    # outra coisa sem avisar.
+    local n
+    n="$(python3 "$PY" robos "$1" 2>/dev/null)"
+    case "$n" in
+        ''|*[!0-9]*) echo "${ARARABOTS_ROBOS:-3}" ;;   # ararabots.py nao respondeu
+        *)           echo "$n" ;;
     esac
 }
 
@@ -1312,6 +1326,219 @@ cmd_validar() {
 
 
 # ============================================================================
+#  LOTES: A CAMPANHA DE ANTES E DEPOIS, INTEIRA, NUM COMANDO.
+# ============================================================================
+#
+#      ./ararabots.sh lotes                   as cinco funcionalidades
+#      ./ararabots.sh lotes MIRA_FIRME        so uma (ou varias, separadas por espaco)
+#      N=3 ./ararabots.sh lotes               3 repeticoes por condicao
+#
+# POR QUE ISTO E UM SUBCOMANDO, e nao um script a parte: a regra do projeto e
+# UMA ferramenta. O lote de 03/10 foi rodado por um script solto e cada
+# armadilha teve de ser aprendida de novo - a trava orfa do 'validar', a chave
+# de experimento vazando de uma condicao para a outra, o arbitro emudecendo no
+# meio. As tres estao resolvidas aqui dentro, de uma vez.
+#
+# O QUE ELE FAZ, por funcionalidade: tres cenarios, cada um rodado DUAS vezes -
+# com a modificacao desligada (antes) e ligada (depois) -, medindo o AVANCO
+# ASSINADO da bola no eixo de ataque. Ao fim de cada par ele imprime a linha e
+# acrescenta ao relatorio, entao da para acompanhar sem esperar o fim.
+#
+# A METRICA. 'avanco' e o deslocamento da bola no eixo de ataque, COM SINAL:
+# positivo e para o gol deles. O CSV guarda o modulo ('andou'), e foi o modulo
+# que inverteu a leitura do lote de 03/10 - a orbita parecia pior quando o que
+# ela fazia era deixar de empurrar a bola 1087 mm para o NOSSO campo.
+
+# funcionalidade | como se desliga | tres cenarios | o que ela faz
+LOTES_TABELA=(
+"MIRA_FIRME|chave|mira_gol_fechado mira_apoio_que_entra mira_dois_apoios|a mira escolhida vale 2 s, inclusive contra 'bloqueado'"
+"EMPURRAO|chave|empurrao_reto empurrao_terco empurrao_apos_contorno|no contato o alvo fica ALEM da bola, nao aquem"
+"FEEDFORWARD|ajuste|empurrao_reto orbita_frontal protecao_dois_lados|feedforward so onde ele concorda com o erro de posicao"
+"PRESSAO_BOLA|chave|pressao_na_bola pressao_na_bola_lateral pressao_na_bola_terco|pressao medida na BOLA, nao no corpo do robo"
+"PROTECAO|chave|protecao_frontal protecao_dois_lados protecao_contra_tres|saida sob pressao por varredura, fugindo de quem prensa"
+)
+
+# Confere se o arbitro ainda fala. Ele emudeceu no meio de DOIS lotes, e um
+# arbitro mudo faz a arvore recusar todas as jogadas: o time fica imovel e o
+# replay parece "tatica ruim". Ver o portao de medicao em cmd_cenario.
+_lotes_checa() {
+    ros_run "python3 /tmp/ararabots.py pronto arbitro 8" >/dev/null 2>&1 && return 0
+    echo "   !! o arbitro parou de responder - remontando o ambiente"
+    cmd_parar >/dev/null 2>&1
+    cmd_preparar --headless >/dev/null 2>&1 || {
+        echo "   XX nao consegui remontar"; return 1; }
+    return 0
+}
+
+# Roda UMA condicao e devolve as metricas de cada repeticao, uma por linha.
+#
+# ATENCAO, isto ja custou um lote: 'VAR=1 minha_funcao' em bash DEIXA a
+# variavel no ambiente depois de a funcao retornar - diferente de
+# 'VAR=1 programa'. Por isso a chave entra por 'env', numa linha so.
+_lotes_roda() {
+    local cen="$1" chave="${2:-}" saida replays
+    if [ -n "$chave" ]; then
+        saida="$(env ARARABOTS_INIMIGO_PARADO=1 "ARARABOTS_SEM_${chave}=1" \
+                 bash "$0" validar "$LOTES_N" "$cen" 2>&1)"
+    else
+        saida="$(env ARARABOTS_INIMIGO_PARADO=1 \
+                 bash "$0" validar "$LOTES_N" "$cen" 2>&1)"
+    fi
+    replays="$(echo "$saida" | grep -oE "REPLAY: .*\.html" | sed 's/REPLAY: //')"
+    if [ -z "$replays" ]; then
+        echo "SEM_REPLAY"
+        echo "$saida" | grep -E "XX|BLOQUEADO|nao montou" | head -2 | sed 's/^/      /' >&2
+        return 1
+    fi
+    # shellcheck disable=SC2086
+    python3 "$PY" medir $replays
+}
+
+# Uma linha do relatorio: mediana do avanco nas repeticoes, e quantas chutaram.
+_lotes_resume() {
+    python3 - "$@" <<'PYEOF'
+import sys, statistics as st
+linhas = [l for l in sys.argv[1:] if "=" in l]
+if not linhas:
+    print("sem leitura")
+    raise SystemExit
+ms = [dict(p.split("=", 1) for p in l.split("|")) for l in linhas]
+av = [int(m["avanco"]) for m in ms]
+ct = [int(m["contato_pct"]) for m in ms]
+pm = [int(m["portador_min"]) for m in ms if m.get("portador_min") not in (None, "None")]
+fora = sum(int(m["descartados"]) for m in ms)
+print("%+6d | %5d | %4d%% | %5s | %d/%d%s" % (
+    round(st.median(av)), round(st.median([int(m["liquido"]) for m in ms])),
+    round(st.median(ct)), (round(st.median(pm)) if pm else "-"),
+    sum(1 for m in ms if m["disparou"] == "True"), len(ms),
+    ("  !%d quadros de outra visao" % fora) if fora else ""))
+PYEOF
+}
+
+cmd_lotes() {
+    LOTES_N="${N:-1}"
+    local pedidos=("$@")
+    local REL="$SCRIPT_DIR/lotes-$(date +%Y%m%d-%H%M).md"
+
+    # TRAVA ORFA DO 'validar'. Se um lote anterior foi interrompido, o diretorio
+    # de trava fica para tras e TODO 'validar' seguinte recusa em silencio - o
+    # lote inteiro sai vazio e a unica pista e uma linha no meio do log.
+    if [ -d /tmp/ararabots_validar.lock ]; then
+        if pgrep -f "[a]rarabots.sh validar" >/dev/null; then
+            echo "XX ja existe um 'validar' rodando. Espere ou mate-o antes."
+            return 1
+        fi
+        echo ">> removendo trava orfa de um lote interrompido"
+        rmdir /tmp/ararabots_validar.lock 2>/dev/null
+    fi
+
+    # Ambiente de pe? Se nao, sobe headless - medir com janela nao vale.
+    if [ -z "$(docker ps -q -f name=^vice$)" ] || ! pgrep -f "[g]rSim" >/dev/null; then
+        echo ">> o ambiente nao esta de pe; subindo headless"
+        cmd_preparar --headless || return 1
+    fi
+
+    local total=0 n_func=0
+    local linha func modo cens desc
+    for linha in "${LOTES_TABELA[@]}"; do
+        func="${linha%%|*}"
+        if [ ${#pedidos[@]} -gt 0 ] && ! printf '%s\n' "${pedidos[@]}" | grep -qx "$func"; then
+            continue
+        fi
+        n_func=$((n_func+1))
+        cens="$(echo "$linha" | cut -d'|' -f3)"
+        total=$((total + $(echo "$cens" | wc -w) * 2 * LOTES_N))
+    done
+    if [ "$n_func" = 0 ]; then
+        echo "XX nenhuma funcionalidade reconhecida. As cinco sao:"
+        printf '   %s\n' "${LOTES_TABELA[@]%%|*}"
+        return 1
+    fi
+
+    {
+        echo "# Lotes de antes e depois — $(date '+%Y-%m-%d %H:%M')"
+        echo
+        echo "\`$LOTES_N\` repetição(ões) por condição, adversário parado, mesmo binário"
+        echo "nas duas rodadas. **avanço** é o deslocamento da bola no eixo de ataque,"
+        echo "**com sinal**: positivo é para o gol deles."
+        echo
+    } > "$REL"
+
+    echo "==============================================================="
+    echo "  LOTES: $n_func funcionalidade(s), $total execucoes, N=$LOTES_N"
+    echo "  relatorio: $REL"
+    echo "==============================================================="
+
+    local feitas=0
+    for linha in "${LOTES_TABELA[@]}"; do
+        func="${linha%%|*}"
+        if [ ${#pedidos[@]} -gt 0 ] && ! printf '%s\n' "${pedidos[@]}" | grep -qx "$func"; then
+            continue
+        fi
+        modo="$(echo "$linha" | cut -d'|' -f2)"
+        cens="$(echo "$linha" | cut -d'|' -f3)"
+        desc="$(echo "$linha" | cut -d'|' -f4)"
+
+        echo
+        echo "#################### $func"
+        echo "   $desc"
+        {
+            echo "## $func"
+            echo
+            echo "$desc"
+            echo
+            echo "| cenário | condição | avanço | líquido | contato | portador min | chutou |"
+            echo "|---|---|---:|---:|---:|---:|---:|"
+        } >> "$REL"
+
+        local cen cond res
+        for cen in $cens; do
+            for cond in antes depois; do
+                _lotes_checa || return 1
+                echo "   --- $cen [$cond]  $(date +%H:%M:%S)"
+                if [ "$modo" = ajuste ]; then
+                    # o 'antes' aqui e o codigo COMMITADO (feedforward cru) e o
+                    # 'depois' e o ajuste; a variavel garante que uma remontagem
+                    # no meio do lote nao troque a condicao silenciosamente.
+                    if [ "$cond" = antes ]; then
+                        export ARARABOTS_AJUSTE=off
+                        cmd_ajustes off controle >/dev/null 2>&1
+                    else
+                        export ARARABOTS_AJUSTE=on
+                        cmd_ajustes on controle >/dev/null 2>&1
+                    fi
+                    res="$(_lotes_roda "$cen")"
+                else
+                    export ARARABOTS_AJUSTE=on
+                    cmd_ajustes on controle >/dev/null 2>&1
+                    if [ "$cond" = antes ]; then
+                        res="$(_lotes_roda "$cen" "$func")"
+                    else
+                        res="$(_lotes_roda "$cen")"
+                    fi
+                fi
+                feitas=$((feitas + LOTES_N))
+                local resumo
+                # shellcheck disable=SC2086
+                resumo="$(_lotes_resume $res)"
+                printf "       %-6s %s\n" "$cond" "$resumo"
+                echo "| \`$cen\` | $cond | $(echo "$resumo" | tr -d ' ' | awk -F'|' '{printf "%s | %s | %s | %s | %s", $1, $2, $3, $4, $5}') |" >> "$REL"
+                echo "   ($feitas de $total execucoes)"
+            done
+        done
+        echo >> "$REL"
+    done
+
+    echo
+    echo "==============================================================="
+    echo "  FIM - $feitas execucoes"
+    echo "  relatorio em $REL"
+    echo "==============================================================="
+    cat "$REL"
+}
+
+
+# ============================================================================
 cmd_menu() {
     DURACAO=25
     MODO="janela"
@@ -1868,6 +2095,7 @@ case "${1:-menu}" in
     preparar)  shift; cmd_preparar "$@" ;;
     cenario)   shift; cmd_cenario  "$@" ;;
     validar)   shift; cmd_validar  "$@" ;;
+    lotes)     shift; cmd_lotes    "$@" ;;
     limpar)    shift; cmd_limpar   "$@" ;;
     grsim)     shift; cmd_grsim    "$@" ;;
     parar)     shift; cmd_parar    "$@" ;;

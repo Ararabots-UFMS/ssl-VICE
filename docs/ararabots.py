@@ -59,6 +59,10 @@ PRE_VARREDURA = 5.0
 # Gol: bola cruzando a linha com |y| dentro da largura do gol (Division B: 1 m).
 GOL_X = 4500.0
 GOL_MEIA_LARGURA = 500.0
+# Tolerancia entre o relogio de captura da visao e o nosso, em segundos. Acima
+# disto o pacote vem de OUTRO remetente no mesmo grupo multicast - ver a guarda
+# em Gravador._visao_crua, e o estrago que ela evita.
+TOL_RELOGIO = 2.0
 
 # ===============================================================
 # CONFIGURAÇÕES E FLUXOS DO ÁRBITRO
@@ -87,8 +91,30 @@ FLUXOS_ARBITRAGEM = {
 #   1 cobrador               1 barreira (>= 500 mm da bola, regra 5.3.3)
 #   2 apoio / linha de passe 2 marcador
 #   3 cobertura / recuo
+# OS CENARIOS SAO AGRUPADOS POR TIPO.
+#
+# Cada entrada tem "tipo", e a interface (painel da GUI) pede primeiro o tipo e
+# depois o cenario. Sem isso a lista tinha 33 nomes numa coluna so, misturando
+# cobranca de falta com teste de orientacao.
+#
+#   bola_parada  cobranca de falta: a parte mais madura (5 gols em 6)
+#   kickoff      inicio de partida, a favor e contra
+#   jogo         jogo corrido
+#   orientacao   o corpo nao vira as costas para a bola      (03/10/2026)
+#   orbita       bola atras de nos: contorna e pega por tras (03/10/2026)
+#   pressao      pressao medida na bola, nao no corpo        (03/10/2026)
+#   protecao     saida sob pressao fugindo de quem prensa    (03/10/2026)
+#   robustez     contagem de robos: casos limite que ja quebraram o no
+#
+# REMOVIDOS EM 03/10/2026, e por que:
+#   limiar               testava o 'limiar de chute' (kick_threshold), que virou codigo morto: a decisao de chutar hoje e de alvo_do_chute + linha_livre
+#   meio                 mesmo motivo: o criterio dele era 'o chute deve ficar DESATIVADO aquem do limiar', e esse limiar nao existe mais
+#   regressao_cobranca   era copia exata de 'um_so_cobrador' (mesma bola, mesmos robos). A regressao da bola parada usa o original
+#
+# AO ACRESCENTAR UM CENARIO: ponha o "tipo" e descreva no documento
+# docs/cenarios.md - que existe para isto e tem de ser atualizado junto.
 CENARIOS = {
-    "ataque": {
+    "ataque": {        "tipo": "bola_parada",
         "titulo": "Nosso freekick no ataque",
         "descricao": (
             "Bola no terco de ataque, alem do limiar. Esperado: o cobrador (1) "
@@ -102,19 +128,7 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, 3050, 0, 180), (2, 2900, 1100, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
-    "meio": {
-        "titulo": "Nosso freekick no meio-campo",
-        "descricao": (
-            "Bola no centro, aquem do limiar. Mesmo posicionamento do cobrador, "
-            "porem o chute deve ficar DESATIVADO."
-        ),
-        "bola": (500.0, 800.0),
-        "azuis": [(0, -4300, 0, 0), (1, -100, 900, 0),
-                  (2, -300, 2000, 0)],
-        "amarelos": [(0, 4300, 0, 180), (1, 1050, 800, 180), (2, 1400, 1900, 180)],
-        "comando": ("DIRECT", "BLUE"),
-    },
-    "passe": {
+    "passe": {        "tipo": "bola_parada",
         "titulo": "Falta longe do gol: tem de sair PASSE, nao chute",
         "descricao": (
             "Bola no meio-campo, aquem do limiar de chute, com um companheiro "
@@ -129,7 +143,7 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
-    "defesa": {
+    "defesa": {        "tipo": "bola_parada",
         "titulo": "Nosso freekick no campo de defesa",
         "descricao": (
             "Bola perto do nosso gol. O cobrador deve afastar a bola do perigo "
@@ -141,20 +155,7 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, -2250, -800, 180), (2, -1400, 200, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
-    "limiar": {
-        "titulo": "Bola ENTRE os dois limiares de chute",
-        "descricao": (
-            "Bola em x=1600. Com as medidas do repositorio (limiar 1125) o chute "
-            "LIGA; com as da Division B (limiar 2250) NAO liga. E o caso que "
-            "separa os dois perfis de campo."
-        ),
-        "bola": (1600.0, 0.0),
-        "azuis": [(0, -4300, 0, 0), (1, 1000, 100, 0),
-                  (2, 900, 1500, 0)],
-        "amarelos": [(0, 4300, 0, 180), (1, 2150, 0, 180), (2, 2400, 1200, 180)],
-        "comando": ("DIRECT", "BLUE"),
-    },
-    "lateral": {
+    "lateral": {        "tipo": "bola_parada",
         "titulo": "Bola junto a linha lateral",
         "descricao": (
             "Bola quase na lateral (y=2700 de 3000). Caso de borda: o ponto de "
@@ -166,7 +167,7 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, 2500, 2450, 180), (2, 2900, 1500, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
-    "canto": {
+    "canto": {        "tipo": "bola_parada",
         "titulo": "Bola no canto do campo de ataque",
         "descricao": (
             "Bola no canto ofensivo. A linha bola->gol fica bem inclinada e o "
@@ -178,7 +179,7 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, 3950, 2050, 180), (2, 3900, 900, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
-    "deles_meio": {
+    "deles_meio": {        "tipo": "bola_parada",
         "titulo": "Freekick DELES no meio-campo",
         "descricao": (
             "Cobranca amarela no centro, com cobrador a 600 mm da bola e um "
@@ -192,7 +193,7 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, 600, 0, 180), (2, 1400, 900, 180)],
         "comando": ("DIRECT", "YELLOW"),
     },
-    "deles_perto_gol": {
+    "deles_perto_gol": {        "tipo": "bola_parada",
         "titulo": "Freekick DELES perto do nosso gol",
         "descricao": (
             "Perigo maximo: cobranca rente a nossa area. Esperado: bloqueio "
@@ -212,7 +213,7 @@ CENARIOS = {
     #  sobre o resto. Variar quem esta em campo exercita caminhos que os
     #  cenarios cheios nunca tocam - inclusive o de lista vazia.
     # ---------------------------------------------------------------------
-    "dois_goleiro_e_cobrador": {
+    "dois_goleiro_e_cobrador": {        "tipo": "robustez",
         "titulo": "Dois em campo: goleiro + cobrador",
         "descricao": (
             "So o robo 0 (goleiro) e o robo 1 (cobrador). Esperado: goleiro na "
@@ -225,7 +226,7 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, 3050, 0, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
-    "dois_sem_goleiro": {
+    "dois_sem_goleiro": {        "tipo": "robustez",
         "titulo": "Dois em campo, SEM goleiro",
         "descricao": (
             "Robos 1 e 2, sem o robo 0. Testa o caminho em que "
@@ -238,7 +239,7 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, 3050, 0, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
-    "um_so_cobrador": {
+    "um_so_cobrador": {        "tipo": "bola_parada",
         "titulo": "Um em campo: apenas o cobrador",
         "descricao": (
             "Somente o robo 1. Sem goleiro e sem apoio: e o caso minimo em que a "
@@ -262,7 +263,7 @@ CENARIOS = {
     #  Sem este cenario, "o resultado esta positivo" nao diz nada sobre essa
     #  perda: nao ha teste que a toque.
     # ------------------------------------------------------------------
-    "cobrador_na_frente": {
+    "cobrador_na_frente": {        "tipo": "bola_parada",
         "titulo": "Cobrador do LADO ERRADO: exige contornar a bola",
         "descricao": (
             "O cobrador nasce ENTRE a bola e o gol adversario, que e a pior "
@@ -289,7 +290,7 @@ CENARIOS = {
     #
     #  Os dois times completos, em formacao de saida, com a bola no centro.
     # ------------------------------------------------------------------
-    "jogo": {
+    "jogo": {        "tipo": "jogo",
         "titulo": "Jogo corrido: os dois times, bola ao centro",
         "descricao": (
             "FORCE_START com os dois times em campo. A arvore cai em "
@@ -322,7 +323,7 @@ CENARIOS = {
         "comando": ("FORCE_START", "BLUE"),
     },
 
-    "um_so_goleiro": {
+    "um_so_goleiro": {        "tipo": "robustez",
         "titulo": "Um em campo: apenas o goleiro",
         "descricao": (
             "Somente o robo 0. Nao ha quem cobre a falta. Esperado: um unico "
@@ -334,7 +335,7 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
-    "campo_vazio": {
+    "campo_vazio": {        "tipo": "robustez",
         "titulo": "Ninguem em campo do nosso time",
         "descricao": (
             "Nenhum robo aliado. Caso limite: com ally_robots vazio a acao "
@@ -346,8 +347,366 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, 3050, 0, 180)],
         "comando": ("DIRECT", "BLUE"),
     },
+    # ======================================================================
+    #  CENARIOS DAS MODIFICACOES DE 03/10/2026  (tres por modificacao)
+    # ======================================================================
+    #
+    # COMO USAR: cada trio mede UMA modificacao. Rode o lote com a chave LIGADA
+    # (= modificacao desligada, linha de base) e depois sem ela:
+    #
+    #   ARARABOTS_SEM_ORBITA=1 ./ararabots.sh validar 3 orbita_frontal   (antes)
+    #                          ./ararabots.sh validar 3 orbita_frontal   (depois)
+    #
+    # As demais modificacoes ficam no estado NOVO nas duas rodadas - e o que faz
+    # o delta medir so a que esta sendo testada. Ver skills/experimento.py.
+    #
+    # ISOLAMENTO: 'orientacao_*' poe o robo na faixa de 600 a 700 mm da bola, em
+    # que a regra de orientacao vale e a orbita (que exige d < RAIO_ENCAIXE=600)
+    # NAO dispara. Nos cenarios de orbita o robo entra a menos de 600 mm, e a
+    # orientacao muda junto - as duas tratam a mesma condicao ("lado errado"), e
+    # separa-las por geometria nao da; o que separa e a METRICA de cada lote.
+
+    # --- 1. ORIENTACAO: o corpo nao vira as costas para a bola ---------------
+    "orientacao_meio": {        "tipo": "orientacao",
+        "titulo": "Lado errado a 650 mm, bola no meio: o corpo olha a bola?",
+        "descricao": (
+            "O robo 1 esta ENTRE a bola e o gol adversario, a 650 mm dela - "
+            "dentro do raio de orientacao (700) e fora do raio da orbita (600). "
+            "Com a chave LIGADA ele recebe ordem de apontar para o gol, de "
+            "costas para a bola. Sem a chave, olha para a bola e contorna."
+        ),
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, 650, 0, 0),
+                  (2, 2000, 1500, 0), (3, -1500, -500, 0)],
+        "amarelos": [(0, 4400, 1500, 180), (1, 2500, -800, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "orientacao_lateral": {        "tipo": "orientacao",
+        "titulo": "Lado errado a 650 mm, bola na lateral",
+        "descricao": (
+            "Mesma geometria com a bola fora do eixo: o alvo do chute muda de "
+            "direcao e a ordem antiga gira o corpo junto, sem olhar onde o robo "
+            "esta."
+        ),
+        "bola": (800.0, 1900.0),
+        "azuis": [(0, -4300, 0, 0), (1, 1430, 1950, 0),
+                  (2, 2200, 300, 0), (3, -1000, 900, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 3000, 1500, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "orientacao_terco": {        "tipo": "orientacao",
+        "titulo": "Lado errado a 650 mm, bola no nosso terco",
+        "descricao": (
+            "No nosso terco a saida de bola escolhe a direcao, entao a ordem "
+            "antiga pode apontar o corpo para a lateral com a bola atras. E o "
+            "caso mais perigoso: de costas para a bola na frente da nossa area."
+        ),
+        "bola": (-2900.0, 400.0),
+        "azuis": [(0, -4300, 0, 0), (1, -2260, 450, 0),
+                  (2, -800, 1200, 0), (3, -1800, -900, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, -1900, 900, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
+    # --- 2. ORBITA: bola atras de nos -> contorna e pega por tras -----------
+    "orbita_frontal": {        "tipo": "orbita",
+        "titulo": "Bola ATRAS do robo, na linha de tiro: contorna?",
+        "descricao": (
+            "O robo 1 esta a 260 mm da bola, exatamente entre ela e o gol "
+            "adversario - o pior caso medido (175 graus de erro). Com a chave "
+            "LIGADA ele empurra a bola para o nosso campo; sem ela, orbita e "
+            "pega por tras."
+        ),
+        "bola": (1500.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, 1760, 0, 0),
+                  (2, 2800, 1400, 0), (3, 0, -900, 0)],
+        "amarelos": [(0, 4400, 1500, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "orbita_diagonal": {        "tipo": "orbita",
+        "titulo": "Bola atras na diagonal, 400 mm",
+        "descricao": (
+            "Lado errado por 135 graus, nao 180: o contorno tem de escolher o "
+            "sentido mais curto do arco. Com a chave LIGADA o alvo perto puxa "
+            "para a linha de tiro atravessando a bola."
+        ),
+        "bola": (500.0, -600.0),
+        "azuis": [(0, -4300, 0, 0), (1, 783, -317, 0),
+                  (2, 2400, 800, 0), (3, -1200, -1200, 0)],
+        "amarelos": [(0, 4400, 1200, 180), (1, 2600, -1600, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "orbita_colado": {        "tipo": "orbita",
+        "titulo": "Bola atras e COLADO (150 mm): da a volta sem empurrar?",
+        "descricao": (
+            "A 150 mm o robo ja esta praticamente em contato. O risco e ele "
+            "empurrar a bola para tras enquanto decide. O arco tem raio 260, "
+            "entao o primeiro alvo o afasta da bola antes de contornar."
+        ),
+        "bola": (2200.0, 300.0),
+        "azuis": [(0, -4300, 0, 0), (1, 2350, 300, 0),
+                  (2, 1000, -800, 0), (3, -500, 1000, 0)],
+        "amarelos": [(0, 4400, -1200, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
+    # --- 3. PRESSAO MEDIDA NA BOLA ------------------------------------------
+    #
+    # Em todos os tres: os adversarios estao a MENOS de 400 mm da BOLA e a MAIS
+    # de 400 mm do nosso portador. Com a chave LIGADA (conta so o corpo do robo)
+    # o alivio NAO dispara e 'alvo_chute' fica bloqueado; sem a chave, dispara.
+    "pressao_na_bola": {        "tipo": "pressao",
+        "titulo": "Dois prensando a BOLA, longe do nosso corpo",
+        "descricao": (
+            "Portador atras da bola (a posicao certa para empurrar); os dois "
+            "amarelos a ~310 e ~350 mm da BOLA e a ~460 mm do robo. Com a chave "
+            "LIGADA, zero adversarios 'perto' e o portador posiciona para sempre."
+        ),
+        "bola": (1200.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, 1000, 0, 0),
+                  (2, 2600, 1500, 0), (3, -900, -900, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 1500, 60, 180), (2, 1450, -260, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "pressao_na_bola_lateral": {        "tipo": "pressao",
+        "titulo": "Prensa na bola junto a lateral",
+        "descricao": (
+            "Mesma assimetria com a bola perto da linha: a saida tem menos "
+            "opcoes, o que torna o disparo do alivio mais decisivo."
+        ),
+        "bola": (600.0, 2300.0),
+        "azuis": [(0, -4300, 0, 0), (1, 380, 2300, 0),
+                  (2, 2400, 900, 0), (3, -800, 1200, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 900, 2380, 180), (2, 850, 2050, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "pressao_na_bola_terco": {        "tipo": "pressao",
+        "titulo": "Prensa na bola no nosso terco",
+        "descricao": (
+            "Aqui a SAIDA DE BOLA tem precedencia sobre o alivio, entao o "
+            "esperado e que a chave mude pouco - serve de controle negativo do "
+            "trio. Se mudar muito, a precedencia esta errada."
+        ),
+        "bola": (-2600.0, 300.0),
+        "azuis": [(0, -4300, 0, 0), (1, -2820, 300, 0),
+                  (2, 0, 1200, 0), (3, -1200, -800, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, -2350, 420, 180), (2, -2300, 80, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
+    # --- 4. PROTECAO DE POSSE (varredura fugindo de quem prensa) ------------
+    #
+    # Nos tres o alivio DISPARA nas duas rodadas (a pressao e sentida tambem no
+    # corpo), entao o que a chave muda e so a DIRECAO escolhida: lateral fixa
+    # contra varredura que foge da ameaca.
+    "protecao_frontal": {        "tipo": "protecao",
+        "titulo": "Prensa colada: o corpo fica entre o adversario e a bola?",
+        "descricao": (
+            "Adversario a 240 mm do portador E da bola: o alivio dispara nas "
+            "duas rodadas. Com a chave LIGADA a bola vai para a lateral fixa; "
+            "sem ela, para o lado oposto a quem prensa, com o casco no meio."
+        ),
+        "bola": (1000.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, 880, 0, 0),
+                  (2, 2600, 1400, 0), (3, -600, -1000, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 1150, 180, 180), (2, 1200, -200, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "protecao_dois_lados": {        "tipo": "protecao",
+        "titulo": "Prensado por dois lados: sobra direcao boa?",
+        "descricao": (
+            "Dois adversarios em flancos opostos. A varredura tem de achar a "
+            "unica direcao com folga; a lateral fixa pode jogar em cima de um "
+            "deles."
+        ),
+        "bola": (300.0, 800.0),
+        "azuis": [(0, -4300, 0, 0), (1, 120, 800, 0),
+                  (2, 2200, -400, 0), (3, -1000, 1600, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 480, 1060, 180), (2, 520, 540, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "protecao_contra_tres": {        "tipo": "protecao",
+        "titulo": "Tres em cima: a direcao de maior folga ainda existe?",
+        "descricao": (
+            "O caso medido em jogo ('eles chegam com tres e nos com um'). "
+            "Nenhuma direcao esta limpa - a varredura escolhe a MENOS pior, que "
+            "e o principio da saida de bola. Mede se isso vale a pena."
+        ),
+        "bola": (1800.0, -400.0),
+        "azuis": [(0, -4300, 0, 0), (1, 1650, -400, 0),
+                  (2, 2600, 1200, 0), (3, 200, -1400, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 2050, -200, 180),
+                     (2, 2000, -700, 180), (3, 1750, -50, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
+    # ======================================================================
+    #  CENARIOS DAS MODIFICACOES DE 07/10/2026  (tres por modificacao)
+    # ======================================================================
+    #
+    # As duas nasceram da LEITURA DOS REPLAYS do lote de 03/10, nao de hipotese:
+    # os quatro trios anteriores nao mostraram ganho de RESULTADO porque a bola
+    # nao saia do lugar em NENHUMA das condicoes, e a sonda guiada por replay
+    # mostrou por que. Ver documentacao/estrategia/RESULTADOS-07-10.md.
+
+    # --- 6. MIRA FIRME: a mira vale 2 s mesmo contra 'bloqueado' ------------
+    #
+    # O QUE OS TRES PRECISAM PRODUZIR: o tipo de mira ALTERNANDO. Com a chave
+    # LIGADA (trava antiga, que so valia entre dois alvos validos) a alternancia
+    # passa livre e a linha de tiro gira; sem a chave, a mira escolhida segura.
+    # Medido em 'orientacao_terco': 65 trocas de mira em 245 ciclos -> 8.
+    #
+    # Como se produz a alternancia com adversario PARADO: o que se move e o
+    # NOSSO apoio. O amarelo fica a pouco mais de FOLGA_LINHA (180 mm) da reta
+    # bola->apoio, entao a linha abre e fecha conforme o apoio anda.
+    "mira_gol_fechado": {        "tipo": "mira",
+        "titulo": "Gol fechado e passe piscando: a mira para de girar?",
+        "descricao": (
+            "O gol esta tapado por um amarelo na linha, entao 'gol' nunca "
+            "vale. O apoio (robo 2) esta a frente e um amarelo fica rente a "
+            "reta bola->apoio: o tipo alterna passe <-> bloqueado a cada poucos "
+            "ciclos. Como TODA direcao do ciclo sai da mira, o portador orbita "
+            "a bola sem encostar nela. Metrica: trocas de mira e distancia "
+            "minima do portador a bola."
+        ),
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, -700, 0, 0),
+                  (2, 1700, 900, 0), (3, -1600, -800, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 2200, 0, 180), (2, 950, 700, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "mira_apoio_que_entra": {        "tipo": "mira",
+        "titulo": "Apoio na fronteira do avanco minimo: a mira aguenta?",
+        "descricao": (
+            "O apoio comeca a 620 mm a frente da bola, rente ao limite de "
+            "AVANCO_MINIMO_PASSE (600). Qualquer recuo dele invalida o passe e "
+            "o tipo cai para 'bloqueado'; qualquer avanco o revalida. E a "
+            "fronteira que mais pisca, e a trava antiga nao a cobria."
+        ),
+        "bola": (-400.0, 600.0),
+        "azuis": [(0, -4300, 0, 0), (1, -1100, 600, 0),
+                  (2, 220, 1100, 0), (3, -2000, -400, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 1800, 400, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "mira_dois_apoios": {        "tipo": "mira",
+        "titulo": "Dois candidatos a receber: o alvo do passe fica quieto?",
+        "descricao": (
+            "Dois aliados a frente, os dois elegiveis. O papel de apoio tem "
+            "histerese, mas o ALVO do passe seguia o apoio da vez - e o "
+            "congelamento era descartado a cada ciclo em que a linha fechava. "
+            "Com o gol tapado, o portador tem de escolher um e manter."
+        ),
+        "bola": (600.0, -200.0),
+        "azuis": [(0, -4300, 0, 0), (1, -100, -200, 0),
+                  (2, 2100, 700, 0), (3, 2000, -1100, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 2600, -200, 180),
+                     (2, 1400, 300, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
+    # --- 7. EMPURRAO: no contato, o alvo fica ALEM da bola ------------------
+    #
+    # O QUE OS TRES PRECISAM PRODUZIR: o portador CHEGANDO ALINHADO na bola com
+    # espaco a frente. Com a chave LIGADA o alvo fica 53 mm AQUEM da bola, que
+    # e inalcancavel (casco 90 + bola 21 = 111 mm): sobra erro de ~58 mm, ou
+    # 0,13 m/s de comando, e a bola nao sai do lugar. Sem a chave o alvo fica
+    # 180 mm ALEM e o comando vira ~0,67 m/s.
+    #
+    # Metrica do trio: AVANCO DA BOLA no eixo de ataque (nao o modulo do
+    # deslocamento - foi isso que escondeu o resultado do lote de 03/10) e
+    # velocidade maxima da bola.
+    "empurrao_reto": {        "tipo": "empurrao",
+        "titulo": "Atras da bola, alinhado, gol livre: a bola anda?",
+        "descricao": (
+            "A geometria mais simples que existe: portador 400 mm atras da "
+            "bola, na linha do gol, campo livre a frente. Se a bola nao andar "
+            "aqui, nao anda em lugar nenhum."
+        ),
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, -400, 0, 0),
+                  (2, 1800, 1200, 0), (3, -1500, -900, 0)],
+        "amarelos": [(0, 4400, 1200, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "empurrao_terco": {        "tipo": "empurrao",
+        "titulo": "Saida do nosso terco: a bola sai da area?",
+        "descricao": (
+            "Bola no nosso terco com o gol deles fechado - a direcao vem do "
+            "afastamento, nao do gol. Aqui o empurrao e o que tira a bola de "
+            "casa: medimos quantos milimetros ela avanca no eixo de ataque."
+        ),
+        "bola": (-2900.0, 300.0),
+        "azuis": [(0, -4300, 0, 0), (1, -3350, 300, 0),
+                  (2, -1200, 1100, 0), (3, -2600, -1000, 0)],
+        "amarelos": [(0, 4400, 0, 180), (1, 500, 300, 180), (2, 1600, 0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "empurrao_apos_contorno": {        "tipo": "empurrao",
+        "titulo": "Contorna e depois empurra: o arranque existe?",
+        "descricao": (
+            "Portador do lado errado a 300 mm: ele tem de orbitar e so depois "
+            "empurrar. Mede o que o lote de 03/10 nao conseguiu separar - a "
+            "orbita entregava o robo no lado certo e ali ele ficava, porque o "
+            "alvo de contato nao mandava atravessar a bola."
+        ),
+        "bola": (1200.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, 1500, 0, 0),
+                  (2, 2600, 1300, 0), (3, 0, -1000, 0)],
+        "amarelos": [(0, 4400, 1400, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
+    # --- 5. chutar_em: REGRESSAO, nao comportamento novo --------------------
+    #
+    # A consolidacao dos tres canais num 'chutar_em' nao muda decisao - ela
+    # junta orientacao, armamento e forca numa chamada. Nao existe "antes e
+    # depois" de comportamento para medir: o que importa e que o que JA
+    # funcionava continue funcionando. Por isso o trio reaproveita as
+    # geometrias com resultado conhecido, e o critério e NAO PIORAR.
+    "regressao_chute_livre": {        "tipo": "jogo",
+        "titulo": "Chute com o gol livre (resultado conhecido: 3 de 3)",
+        "descricao": (
+            "Campo limpo, goleiro adversario fora da reta. Em campo limpo o "
+            "chute saiu em 3 de 3 com 5555-5944 mm/s. O lote tem de repetir."
+        ),
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, -600, 0, 0)],
+        "amarelos": [(0, 4400, 1500, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "regressao_passe": {        "tipo": "jogo",
+        "titulo": "Passe com o gol fechado (resultado conhecido: passe sai)",
+        "descricao": (
+            "Gol bloqueado, apoio adiantado e livre: o esperado e passe com "
+            "forca de passe (~2,5 m/s), nao chute de 6."
+        ),
+        "bola": (500.0, -800.0),
+        # TRES ROBOS DE LINHA, e nao dois.
+        #
+        # Com dois, a distribuicao de papeis da PORTADOR ao mais proximo e
+        # COBERTURA ao outro (a prioridade e portador -> cobertura -> apoio,
+        # porque deixar a linha do gol descoberta custa mais). Sem APOIO nao ha
+        # receptor, e 'alvo_do_chute' nunca escolhe passe: o pre-voo mostrou
+        # 'tipo=bloqueado' num cenario chamado 'regressao_passe'.
+        #
+        # Isto e consequencia conhecida da regra de papeis, nao defeito deste
+        # cenario - mas vale a anotacao: EM JOGO COM DOIS ROBOS DE LINHA O TIME
+        # NAO PASSA.
+        "azuis": [(0, -4300, 0, 0), (1, 100, -900, 0), (2, 2400, 800, 0),
+                  (3, -600, 600, 0)],
+        # OS AMARELOS TAPAM O GOL, NAO A LINHA DE PASSE.
+        #
+        # A primeira versao os punha em (1600,-500) e (2000,-200), em cima da
+        # reta bola->apoio: o pre-voo mostrou 'tipo=bloqueado' em vez de
+        # 'passe', isto e, o cenario nao testava o que diz o nome. Agora eles
+        # ficam no corredor do gol e a linha de passe fica limpa.
+        "amarelos": [(0, 4300, 0, 180), (1, 2200, -900, 180), (2, 3000, -600, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
     # NOVOS CENÁRIOS DE KICKOFF
-    "kickoff_favor": {
+    "kickoff_favor": {        "tipo": "kickoff",
         "titulo": "Nosso Kickoff",
         "descricao": "Kickoff a favor no centro do campo",
         "bola": (0.0, 0.0),
@@ -363,7 +722,7 @@ CENARIOS = {
             (2, 1000.0, 500.0, 3.14),   # Robo 2: Defesa amarela
         ],
     },
-    "kickoff_contra": {
+    "kickoff_contra": {        "tipo": "kickoff",
         "titulo": "Kickoff Adversario",
         "descricao": "Kickoff deles no centro do campo",
         "bola": (0.0, 0.0),
@@ -1105,6 +1464,11 @@ def _criar_gravador():
             self.visao_crua = []
             self.robos_crus = []
             self.amarelos_crus = []
+            # SEGUNDA FONTE DE VISAO NO MESMO GRUPO MULTICAST: ancora do relogio
+            # de captura, para rejeitar quadros que nao sao desta execucao.
+            self._tc0 = None
+            self._tn0 = None
+            self.quadros_fora_do_relogio = 0
             # Todas as transicoes do pedido de chute, nao so a primeira.
             self.janelas_kick = []
             self._kick_anterior = {}
@@ -1209,6 +1573,35 @@ def _criar_gravador():
                 if not pkt.HasField("detection"):
                     continue
                 tc = round(float(pkt.detection.t_capture), 6)
+
+                # UM SO RELOGIO DE CAPTURA POR EXECUCAO.
+                #
+                # DEFEITO QUE ISTO CORRIGE, e ele invalidou metricas de 17 dos
+                # 30 replays do lote de 03/10/2026. O grupo multicast da visao
+                # nao e nosso: qualquer outro grSim ou ssl-vision na maquina (ou
+                # na rede) manda pacotes para ca, com o RELOGIO DELE. Medido nos
+                # replays: depois de t = 24,5 s aparecia um bloco de quadros com
+                # t_capture ~45.000 s, SEIS robos amarelos (a configuracao
+                # default do grSim, nao a do cenario) e a bola parada em
+                # (-4778, 1980), fora do campo.
+                #
+                # O que isso fazia com os numeros: 'a bola andou 6359 mm' no
+                # cenario 'protecao_frontal', quando a bola real nao saiu do
+                # lugar (deslocamento liquido de 7 mm em 24,5 s). A conclusao
+                # tirada dai - "a protecao nao tem efeito visivel" - estava
+                # certa por acidente; a de que "a orbita e pior" estava ERRADA,
+                # porque comparava modulo de deslocamento poluido.
+                #
+                # O criterio nao e o valor do t_capture (nao sabemos a epoca que
+                # o remetente usa) e sim a TAXA: o relogio de captura tem de
+                # andar junto com o nosso. Quem divergir mais que TOL_RELOGIO
+                # desde o primeiro pacote aceito e outro remetente.
+                _tn = time.monotonic() - self.t0
+                if self._tc0 is None:
+                    self._tc0, self._tn0 = tc, _tn
+                elif abs((tc - self._tc0) - (_tn - self._tn0)) > TOL_RELOGIO:
+                    self.quadros_fora_do_relogio += 1
+                    continue
 
                 # A BOLA E OPCIONAL NESTE PACOTE - os ROBOS nao sao.
                 #
@@ -3095,6 +3488,19 @@ def rodar(nome, duracao=12.0):
         # proprio replay diz. Replays antigos nao tem o campo - o visualizador
         # entao nao mostra o selo, em vez de inventar um default.
         "ajuste_pid": _ajuste_pid_ligado(),
+        # PARA QUE LADO ATACAMOS nesta execucao, para o avanco ter sinal.
+        "sentido_ataque": 1.0 if const["goal_x"] >= 0 else -1.0,
+        # QUANTOS QUADROS VIERAM DE OUTRO REMETENTE (ver TOL_RELOGIO). Zero e o
+        # normal; qualquer numero grande invalida as metricas de deslocamento.
+        "quadros_fora_do_relogio": getattr(no, "quadros_fora_do_relogio", 0),
+        # QUAIS CHAVES DE EXPERIMENTO ESTAVAM LIGADAS.
+        #
+        # A planilha nao registrava a condicao do codigo, e foi assim que um
+        # lote de 5 gols em 6 ficou tres semanas sem ninguem saber que tinha
+        # rodado sem adversario. Agora a propria execucao carrega as chaves.
+        "chaves_desligadas": sorted(
+            k[len("ARARABOTS_SEM_"):] for k in os.environ
+            if k.startswith("ARARABOTS_SEM_") and os.environ[k]),
     }
 
     os.makedirs(SAIDA_DIR, exist_ok=True)
@@ -3181,6 +3587,23 @@ def rodar(nome, duracao=12.0):
             db = math.hypot(b1["x"] - b0["x"], b1["y"] - b0["y"])
             print(f"      BOLA: ({b0['x']:.0f},{b0['y']:.0f}) -> "
                   f"({b1['x']:.0f},{b1['y']:.0f})   andou {db:.0f}")
+            # AVANCO ASSINADO, no eixo de ataque.
+            #
+            # 'andou' e modulo, e modulo nao distingue "a bola foi para o gol
+            # deles" de "a bola foi para o NOSSO". Foi exatamente o que escondeu
+            # o resultado do lote de 03/10: a orbita aparecia como 'pior'
+            # (139 mm contra 1302) quando o que ela tinha feito era deixar de
+            # empurrar a bola 1087 mm PARA O NOSSO CAMPO.
+            _sent = 1.0 if resultado.get("sentido_ataque", 1.0) >= 0 else -1.0
+            print(f"      AVANCO (eixo de ataque): "
+                  f"{(b1['x'] - b0['x']) * _sent:+.0f} mm")
+
+    _fora = resultado.get("quadros_fora_do_relogio") or 0
+    if _fora:
+        print(f"   !! {_fora} quadros de visao DESCARTADOS: outro remetente no "
+              f"grupo multicast (relogio de captura divergente).")
+        print("      Se este numero for grande, ha um segundo grSim/ssl-vision "
+              "de pe - ver TOL_RELOGIO.")
 
     print(f"   salvo em {destino}")
     try:
@@ -3770,6 +4193,94 @@ def _ler_replay(caminho):
         return json.loads(txt[i + 10:j])
     except Exception:
         return None
+
+
+# ============================================================================
+#  MEDIR UM REPLAY: as metricas de RESULTADO de uma execucao, numa linha.
+# ============================================================================
+#
+# POR QUE ISTO EXISTE, e por que nao usa o CSV: o CSV guarda 'andou', que e o
+# MODULO do deslocamento da bola - e modulo nao distingue "a bola foi para o gol
+# deles" de "a bola foi para o NOSSO". Foi isso que inverteu a conclusao do lote
+# de 03/10/2026: a orbita aparecia como pior (139 mm contra 1302) quando o que
+# ela tinha feito era deixar de empurrar a bola 1087 mm para o nosso campo.
+#
+# As duas armadilhas que esta funcao resolve:
+#
+#   1. SEGUNDA FONTE DE VISAO. 17 dos 30 replays daquele lote tem, depois do
+#      fim da gravacao, um bloco de quadros com outro relogio de captura, seis
+#      amarelos e a bola fora do campo - outro grSim no mesmo grupo multicast.
+#      Aqui o replay e cortado no primeiro SALTO de tempo; replays gravados a
+#      partir de 07/10 ja nascem limpos (ver TOL_RELOGIO).
+#   2. TREMOR DA VISAO SOMADO. Somar o passo da bola quadro a quadro da ~7200 mm
+#      numa execucao em que ela nao saiu do lugar (~5 mm por quadro de tremor a
+#      58 quadros/s). Por isso o numero que vale e o LIQUIDO e o AVANCO.
+SALTO_REPLAY = 5.0          # s; acima disto, outro relogio
+CONTATO_RAIO = 130.0        # mm; casco 90 + bola 21 = 111, com folga de rastreio
+
+
+def _trecho_valido(quadros):
+    """Quadros ate o primeiro salto de tempo, e quantos ficaram de fora."""
+    fim = len(quadros)
+    for i, (a, b) in enumerate(zip(quadros, quadros[1:])):
+        if b["t"] - a["t"] > SALTO_REPLAY:
+            fim = i + 1
+            break
+    return quadros[:fim], len(quadros) - fim
+
+
+def metricas_do_replay(caminho):
+    """Metricas de resultado de UMA execucao, lidas do replay. Dicionario."""
+    d = _ler_replay(caminho)
+    if not d or not d.get("quadros"):
+        return None
+    q, descartados = _trecho_valido(d["quadros"])
+    if not q:
+        return None
+    sent = 1.0 if (d.get("sentido_ataque") or 1.0) >= 0 else -1.0
+    bx0, by0 = q[0]["b"][0], q[0]["b"][1]
+    bxf, byf = q[-1]["b"][0], q[-1]["b"][1]
+    rid = d.get("cobrador")
+    dists, contato = [], 0
+    for f in q:
+        bx, by = f["b"][0], f["b"][1]
+        perto = min((math.hypot(r[1] - bx, r[2] - by) for r in f["r"]),
+                    default=9e9)
+        if perto < CONTATO_RAIO:
+            contato += 1
+        if rid is not None:
+            for r in f["r"]:
+                if r[0] == rid:
+                    dists.append(math.hypot(r[1] - bx, r[2] - by))
+    return {
+        "cenario": d.get("cenario"),
+        "quadros": len(q),
+        "descartados": descartados,
+        "dur": round(q[-1]["t"], 1),
+        "avanco": round((bxf - bx0) * sent),
+        "liquido": round(math.hypot(bxf - bx0, byf - by0)),
+        "contato_pct": round(100.0 * contato / len(q)),
+        "portador_min": round(min(dists)) if dists else None,
+        "portador_max": round(max(dists)) if dists else None,
+        "disparou": bool(d.get("disparou")),
+        "gol": d.get("gol"),
+        "chaves": ",".join(d.get("chaves_desligadas") or []) or "-",
+    }
+
+
+def _ferramenta_medir():
+    """medir <replay.html> [...]  - uma linha por replay, para o 'lotes'."""
+    alvos = sys.argv[2:]
+    if not alvos:
+        print("uso: ararabots.py medir <replay.html> [...]")
+        return 1
+    for c in alvos:
+        m = metricas_do_replay(c)
+        if m is None:
+            print("ERRO|%s" % c)
+            continue
+        print("|".join("%s=%s" % (k, v) for k, v in m.items()))
+    return 0
 
 
 def _ferramenta_painel():
@@ -4621,6 +5132,28 @@ def _ferramenta_sonda():
 if __name__ == "__main__":
     acao = sys.argv[1] if len(sys.argv) > 1 else ""
 
+    if acao == "robos":
+        # QUANTOS ROBOS POR TIME O CENARIO EXIGE.
+        #
+        # O shell tinha isto fixo: 'jogo' => 4, todo o resto 3. Qualquer cenario
+        # novo com quatro robos rodava com TRES, e o quarto simplesmente nao
+        # existia em campo - medido no primeiro lote de 'orientacao_meio': o
+        # replay mostrou os robos 0, 1 e 2, e o 3 nunca apareceu. Com um robo a
+        # menos a distribuicao de papeis muda (sem apoio nao ha passe), ou seja
+        # o cenario media outra coisa.
+        #
+        # Quem sabe a resposta e o proprio cenario: o maior id usado, mais um.
+        # Nunca MENOS que o default, para nao mudar a configuracao dos cenarios
+        # historicos - a cobranca de falta foi medida com tres.
+        nome = sys.argv[2] if len(sys.argv) > 2 else ""
+        cen = CENARIOS.get(nome)
+        piso = int(os.environ.get("ARARABOTS_ROBOS", "3"))
+        if not cen:
+            print(piso); sys.exit(0)
+        ids = [r[0] for r in cen.get("azuis", [])] + [r[0] for r in cen.get("amarelos", [])]
+        print(max(piso, (max(ids) + 1) if ids else piso))
+        sys.exit(0)
+
     if acao == "listar":
         for nome, c in CENARIOS.items():
             print("%s|%s" % (nome, c["titulo"]))
@@ -4654,6 +5187,7 @@ if __name__ == "__main__":
     elif acao == "sonda":    sys.exit(_ferramenta_sonda())
     elif acao == "mov-bruto": sys.exit(_ferramenta_mov_bruto())
     elif acao == "painel":   sys.exit(_ferramenta_painel())
+    elif acao == "medir":    sys.exit(_ferramenta_medir())
     elif acao == "sonda-chute": sys.exit(_ferramenta_sonda_chute())
     elif acao == "narrar": sys.exit(_ferramenta_narrar())
     elif acao == "jogo-analise": sys.exit(_ferramenta_jogo_analise())
