@@ -280,12 +280,11 @@ CENARIOS = {
     },
 
     # ------------------------------------------------------------------
-    #  JOGO CORRIDO - o unico cenario que NAO e uma bola parada.
+    #  JOGO CORRIDO - os dois times completos.
     #
-    #  Todos os outros terminam num DIRECT/KICKOFF e medem uma cobranca. Este
-    #  usa FORCE_START: a arvore cai em NormalStart (plays/running.py) e o time
-    #  joga. Serve para VER COMPORTAMENTO, nao para medir cobranca - nao ha
-    #  criterio de sucesso aqui, so observacao.
+    #  Este usa FORCE_START: a arvore cai em NormalStart (plays/running.py) e
+    #  o time joga. Serve para VER COMPORTAMENTO, nao para medir cobranca -
+    #  nao ha criterio de sucesso aqui, so observacao.
     #
     #  Os dois times completos, em formacao de saida, com a bola no centro.
     # ------------------------------------------------------------------
@@ -319,6 +318,63 @@ CENARIOS = {
                      (1, 1200, 0, 180),
                      (2, 2200, -1200, 180),
                      (3, 2200, 1200, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zc_centro": {
+        "titulo": "Cobertura e bola no centro",
+        "descricao": "So o zagueiro azul busca a bola livre no centro.",
+        "bola": (0.0, 0.0),
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zc_lateral": {
+        "titulo": "Cobertura e bola na lateral do nosso campo",
+        "descricao": "So o zagueiro azul busca a bola livre na lateral.",
+        "bola": (-2400.0, 1600.0),
+        "azuis": [(1, -3200.0, -200.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zc_bola_indo": {
+        "titulo": "Cobertura e bola indo ao nosso gol",
+        "descricao": "So o zagueiro azul busca a bola em movimento.",
+        "bola": (-800.0, 200.0),
+        "bola_vel": (-1600.0, 0.0),
+        "azuis": [(1, -2800.0, 650.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zc_perto_gol": {
+        "titulo": "Cobertura e bola perto do nosso gol",
+        "descricao": "So o zagueiro azul busca a bola perto da nossa meta.",
+        "bola": (-3200.0, 200.0),
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zg_centro": {
+        "titulo": "Zagueiro e goleiro com bola no centro",
+        "descricao": "Goleiro azul protege a meta enquanto o zagueiro busca a bola.",
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zg_lateral": {
+        "titulo": "Zagueiro e goleiro com bola na lateral",
+        "descricao": "Goleiro azul protege a meta e o zagueiro busca a bola lateral.",
+        "bola": (-2400.0, 1600.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3200.0, -200.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zg_perto_gol": {
+        "titulo": "Zagueiro e goleiro com bola perto do gol",
+        "descricao": "Goleiro azul protege a meta e o zagueiro busca a bola proxima.",
+        "bola": (-3200.0, 200.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0)],
+        "amarelos": [],
         "comando": ("FORCE_START", "BLUE"),
     },
     "zagueiro_vs_dois": {

@@ -32,7 +32,9 @@ O casco tem raio 90 mm e a bola 21: tocando o casco REDONDO a distancia trava em
 
 from math import atan2, cos, hypot, pi, sin
 
-from strategy.skills.geometria import norm_ang
+from strategy.skills.geometria import (
+    FOLGA_LINHA, folga_lateral, livre_do_lado, no_campo, norm_ang,
+)
 
 # --- a geometria do chutador, medida no grSim -----------------------------
 CENTRO_ATE_PLACA = 73.0
@@ -71,6 +73,32 @@ FORCA_PASSE = 2.5
 FORCA_SAIDA = 4.5
 
 
+def alvo_de_afastamento(ball, nosso_gol, inimigos):
+    """Afasta pelo corredor de maior folga, mesmo quando todos estao ocupados."""
+    bx, by = ball.position_x, ball.position_y
+    sentido = -1.0 if nosso_gol.x > 0 else 1.0
+    candidatos = []
+    for graus in range(-75, 76, 15):
+        ang = graus * pi / 180.0
+        x, y = no_campo(bx + sentido * 2200.0 * cos(ang),
+                       by + 2200.0 * sin(ang))
+        dx, dy = x - bx, y - by
+        alcance = hypot(dx, dy)
+        # Toda a trajetoria deve aumentar a distancia da nossa meta.
+        if (alcance < 300.0 or dx * sentido <= 0
+                or (bx - nosso_gol.x) * dx + (by - nosso_gol.y) * dy < 0):
+            continue
+        folga = folga_lateral(bx, by, dx / alcance, dy / alcance,
+                             alcance, inimigos)
+        livre = folga >= FOLGA_LINHA and livre_do_lado(x, y, inimigos)
+        candidatos.append((livre, folga,
+                           hypot(x - nosso_gol.x, y - nosso_gol.y), x, y))
+    if not candidatos:
+        return None
+    _, _, _, x, y = max(candidatos)
+    return x, y
+
+
 def geometria_do_chutador(robo, ball):
     """(xx, yy, frente) da bola no referencial do corpo do robo.
 
@@ -107,6 +135,30 @@ def direcao_para_frente(ball, alvo_chute, sentido_ataque):
     return abs(norm_ang(ang_saida - referencia)) < TOL_PARA_TRAS
 
 
+def corpo_pode_afastar(robo, ball, alvo_chute, nosso_gol, inimigos):
+    """O eixo real do chutador afasta da meta com folga suficiente?
+
+    O tiro sai pelo corpo, nao pela mira. Aceita um corredor livre diferente
+    do alvo; sob pressao exige pelo menos a folga do melhor corredor escolhido.
+    """
+    if alvo_chute is None:
+        return False
+    ux, uy = cos(robo.orientation), sin(robo.orientation)
+    bx, by = ball.position_x, ball.position_y
+    sentido = -1.0 if nosso_gol.x > 0 else 1.0
+    if ux * sentido <= 0 or (bx - nosso_gol.x) * ux + (by - nosso_gol.y) * uy < 0:
+        return False
+    dx, dy = alvo_chute[0] - bx, alvo_chute[1] - by
+    alcance = hypot(dx, dy)
+    if alcance < 1.0:
+        return False
+    folga_alvo = folga_lateral(bx, by, dx / alcance, dy / alcance,
+                               alcance, inimigos)
+    folga_corpo = folga_lateral(bx, by, ux, uy, alcance, inimigos)
+    # Versores equivalentes podem diferir alguns ulps ao passar por atan2/cos.
+    return folga_corpo + 1e-6 >= min(FOLGA_LINHA, folga_alvo)
+
+
 def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid):
     """Decide se o chute deste robo fica ARMADO neste ciclo.
 
@@ -124,7 +176,9 @@ def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid):
     """
     d_bola = hypot(robo.position_x - ball.position_x,
                    robo.position_y - ball.position_y)
-    if alvo_chute is None or d_bola >= FORCA_CHUTE_ALCANCE:
+    alcance = ALCANCE_SOLTA_TRAVA if travas.get(rid) else FORCA_CHUTE_ALCANCE
+    if alvo_chute is None or d_bola >= alcance:
+        travas[rid] = False
         return False
 
     # xx JA e a distancia a placa com sinal: negativo = bola atras da placa.

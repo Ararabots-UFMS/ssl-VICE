@@ -368,6 +368,9 @@ RAIO_POSSE_PORTADOR = 200.0
 # Dentro disto o portador disputa a bola sempre, independente do rotulo da
 # situacao - que oscila com o rastreio. 450 mm e o dobro do raio de posse.
 ENGAJA_RAIO = 450.0
+COBERTURA_RAIO_BOLA = 450.0
+# O contorno pode afastar o robo mais que o raio que iniciou a aproximacao.
+COBERTURA_RAIO_SOLTA = 1000.0
 # Com a bola a menos disto do nosso gol, a cobertura para de cobrir a linha e
 # vai NA bola. 2500 mm cobre o nosso terco defensivo (campo de 9000).
 COBERTURA_MATA = 2500.0
@@ -409,6 +412,51 @@ TOL_PARA_TRAS = chute.TOL_PARA_TRAS
 ALCANCE_CONTATO = chute.ALCANCE_CONTATO
 ALCANCE_SOLTA_TRAVA = chute.ALCANCE_SOLTA_TRAVA
 linha_livre = geometria.linha_livre
+
+
+def alvo_da_cobertura(rid, ball, ally_robots, enemy_robots, nosso_gol, estado=None):
+    """Passe ao companheiro mais proximo; sem passe livre, afasta a bola."""
+    robo = ally_robots[rid]
+    companheiros = [i for i in ally_robots if i != rid]
+    if companheiros:
+        receptor = min(companheiros, key=lambda i: (
+            hypot(ally_robots[i].position_x - robo.position_x,
+                  ally_robots[i].position_y - robo.position_y), i))
+        alvo = ally_robots[receptor]
+        if (hypot(alvo.position_x - ball.position_x,
+                  alvo.position_y - ball.position_y) > 1.0
+                and linha_livre(ball.position_x, ball.position_y,
+                                alvo.position_x, alvo.position_y, enemy_robots)):
+            ponto = (alvo.position_x, alvo.position_y, "passe", receptor)
+            if estado is not None:
+                anterior = estado.get(rid)
+                if (anterior is not None and anterior[2:] == ponto[2:]
+                        and hypot(anterior[0] - alvo.position_x,
+                                  anterior[1] - alvo.position_y) < 300.0
+                        and linha_livre(ball.position_x, ball.position_y,
+                                        anterior[0], anterior[1], enemy_robots)):
+                    ponto = anterior
+                estado[rid] = ponto
+            return ponto[:3]
+    saida = chute.alvo_de_afastamento(ball, nosso_gol, enemy_robots)
+    if saida is not None:
+        ponto = (saida[0], saida[1], "saida", None)
+        if estado is not None:
+            anterior = estado.get(rid)
+            if (anterior is not None and anterior[2] == "saida"
+                    and chute.direcao_para_frente(ball, anterior[:2],
+                                                  -1 if nosso_gol.x > 0 else 1)
+                    and (ball.position_x - nosso_gol.x) * (anterior[0] - ball.position_x)
+                    + (ball.position_y - nosso_gol.y) * (anterior[1] - ball.position_y) >= 0
+                    and linha_livre(ball.position_x, ball.position_y,
+                                    anterior[0], anterior[1], enemy_robots)
+                    and geometria.livre_do_lado(anterior[0], anterior[1], enemy_robots)):
+                ponto = anterior
+            estado[rid] = ponto
+        return ponto[:3]
+    if estado is not None:
+        estado.pop(rid, None)
+    return None, None, "bloqueado"
 
 
 def alvo_do_chute(ball, gol_ataque, ally_robots, enemy_robots, papeis, estado=None):
@@ -510,7 +558,8 @@ APOIO_RECUO = posicionamento.APOIO_RECUO
 APOIO_AVANCO = posicionamento.APOIO_AVANCO
 APOIO_ABERTURA = posicionamento.APOIO_ABERTURA
 def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol,
-                  ordem=0, alvo_chute=None, inimigos=None, bloqueado=False):
+                 ordem=0, alvo_chute=None, inimigos=None, bloqueado=False,
+                 tipo_chute=None, buscar_bola=False):
     """Para onde cada robo vai, por (situacao, papel). Devolve (x, y, chuta).
 
     A matriz esta em documentacao/estrategia/CASOS_DE_JOGO.md.
@@ -617,6 +666,12 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
 
 
     if papel == PAPEL_COBERTURA:
+        if ((buscar_bola or hypot(rx - bx, ry - by) <= COBERTURA_RAIO_SOLTA)
+                and bx * nosso_gol.x >= 0 and alvo_chute is not None):
+            x, y = aproximacao.ponto_de_aproximacao_segura(
+                r, bx, by, alvo_chute)
+            lado = 1.0 if nosso_gol.x > 0 else -1.0
+            return lado * max(150.0, lado * x), y, True
         return posicionamento.cobertura_defensiva(
             bx, by, nosso_gol, ordem) + (False,)
 
@@ -895,16 +950,39 @@ def montar_comandos(tt):
               (tipo_alvo, len(tt.enemy_robots or {}), situacao), flush=True)
 
     comandos = []
+    miras_cobertura = tt.estado.setdefault("miras_cobertura", {}) \
+        if hasattr(tt, "estado") and tt.estado is not None else {}
+    cobertura_sozinha = (not tt.enemy_robots
+                         and sum(robot_id != 0 for robot_id in tt.ally_robots) == 1)
     ordem = {PAPEL_PORTADOR: 0, PAPEL_APOIO: 0, PAPEL_COBERTURA: 0}
     for rid in sorted(tt.ally_robots):
         if rid == 0:
             continue
         papel = papeis.get(rid, PAPEL_COBERTURA)
+        alvo_robo, tipo_robo = alvo_chute, tipo_alvo
+        if papel == PAPEL_COBERTURA:
+            alvo_robo, tipo_robo = None, "bloqueado"
+            r = tt.ally_robots[rid]
+            raio = COBERTURA_RAIO_SOLTA if rid in miras_cobertura else COBERTURA_RAIO_BOLA
+            if ((cobertura_sozinha or hypot(r.position_x - tt.ball.position_x,
+                                            r.position_y - tt.ball.position_y) <= raio)
+                    and tt.ball.position_x * nosso_gol.x >= 0):
+                cx, cy, tipo_robo = alvo_da_cobertura(
+                    rid, tt.ball, {rid: r} if cobertura_sozinha else tt.ally_robots,
+                    tt.enemy_robots, nosso_gol,
+                    miras_cobertura)
+                if cx is not None:
+                    alvo_robo = (cx, cy)
+            else:
+                miras_cobertura.pop(rid, None)
+        else:
+            miras_cobertura.pop(rid, None)
         o = ordem.get(papel, 0)
         alvo_x, alvo_y, chuta = alvo_do_papel(
             papel, situacao, rid, tt.ally_robots, tt.ball,
-            gol_ataque, nosso_gol, ordem=o, alvo_chute=alvo_chute,
-            inimigos=tt.enemy_robots, bloqueado=(tipo_alvo == "bloqueado"))
+            gol_ataque, nosso_gol, ordem=o, alvo_chute=alvo_robo,
+            inimigos=tt.enemy_robots, bloqueado=(tipo_robo == "bloqueado"),
+            tipo_chute=tipo_robo, buscar_bola=cobertura_sozinha)
         alvo_x, alvo_y = posicionamento.fora_da_area_penal(alvo_x, alvo_y, nosso_gol)
         if papel in ordem:
             ordem[papel] += 1
@@ -950,7 +1028,7 @@ def montar_comandos(tt):
         # Quem esta indo a bola usa a direcao do CHUTE. Os outros seguem olhando
         # para ela, que e o certo para receber e para cobrir.
         if _dperto < RAIO_ORIENTA_CHUTE:
-            _mira = alvo_chute or (gol_ataque.x, gol_ataque.y)
+            _mira = alvo_robo or (gol_ataque.x, gol_ataque.y)
             ang = atan2(_mira[1] - tt.ball.position_y,
                         _mira[0] - tt.ball.position_x)
         else:
@@ -994,7 +1072,7 @@ def montar_comandos(tt):
         # passe curto e 2,5 (forca de gol atravessa o receptor); saida e
         # media, para a bola PARAR no campo deles e nao sair pela linha de
         # fundo - Aimless Kick, Division B.
-        forca = chute.forca_por_alvo(tipo_alvo)
+        forca = chute.forca_por_alvo(tipo_robo)
         # ARMAR PELO CORPO, NAO PELA POSICAO.
         #
         # O portao era 'chuta', que exige o robo ATRAS da bola e a menos de
@@ -1010,7 +1088,7 @@ def montar_comandos(tt):
         # o proibia.
         if os.environ.get("DIAG_JOGO") and _com_a_bola:
             print("[JG] COM_A_BOLA r%d papel=%s d=%.0f alvo=%s"
-                  % (rid, papel, d_bola, tipo_alvo), flush=True)
+                  % (rid, papel, d_bola, tipo_robo), flush=True)
         # O PORTAO DE CHUTE VIVE NA CAMADA DE SKILLS: skills/chute.py.
         #
         # Lá estão as tres licoes que a bola parada pagou e o jogo corrido teve
@@ -1021,25 +1099,35 @@ def montar_comandos(tt):
         _sentido_x = -1.0 if tt.on_positive_half else 1.0
         _travas = tt.estado.setdefault("chute_armado", {}) \
             if hasattr(tt, "estado") and tt.estado is not None else {}
-        arma = chute.armar_chute(r, tt.ball, alvo_chute, _sentido_x,
-                                 tipo_alvo, _travas, rid)
+        arma = chute.armar_chute(r, tt.ball, alvo_robo, _sentido_x,
+                                 tipo_robo, _travas, rid)
+        if papel == PAPEL_COBERTURA:
+            mira = (atan2(alvo_robo[1] - tt.ball.position_y,
+                          alvo_robo[0] - tt.ball.position_x)
+                    if alvo_robo is not None else 0.0)
+            direcao_segura = (abs(_norm_ang(r.orientation - mira)) <= TOL_FACE
+                              if tipo_robo == "passe" else
+                              chute.corpo_pode_afastar(r, tt.ball, alvo_robo,
+                                                       nosso_gol, tt.enemy_robots))
+            arma = arma and chuta and direcao_segura
+            _travas[rid] = arma
         if os.environ.get("DIAG_JOGO"):
             # GEOMETRIA NO REFERENCIAL DO ROBO, que e o que o grSim arbitra:
             # ele dispara com 0 <= xx < 31,5 mm (placa) e |yy| < 40 mm.
             # Ver robot.cpp:120-128 e skills/chute.py. Sem isto nao da para
             # saber SE a bola chega na placa - so que o robo esta "perto".
             _xx, _yy, _ = chute.geometria_do_chutador(r, tt.ball)
-            _frente = (alvo_chute is not None
-                       and chute.direcao_para_frente(tt.ball, alvo_chute,
+            _frente = (alvo_robo is not None
+                       and chute.direcao_para_frente(tt.ball, alvo_robo,
                                                      _sentido_x))
             print("[JG] PLACA r%d papel=%s xx=%.0f yy=%.0f arma=%s dispara=%s"
                   % (rid, papel, _xx, _yy, arma,
                      chute.na_janela_de_disparo(_xx, _yy)), flush=True)
             print("[JG] arma=%s frente=%s d=%.0f tipo=%s"
-                  % (arma, _frente, d_bola, tipo_alvo), flush=True)
+                  % (arma, _frente, d_bola, tipo_robo), flush=True)
         cmd.kick = forca if arma else 0.0
         # a bola so e obstaculo para quem NAO vai disputa-la
-        cmd.ball = (papel != PAPEL_PORTADOR)
+        cmd.ball = not (papel == PAPEL_PORTADOR or (papel == PAPEL_COBERTURA and chuta))
         cmd.field_border = True
         cmd.penalty_area = True
         comandos.append(cmd)
