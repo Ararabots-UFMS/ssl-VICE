@@ -2,7 +2,7 @@ import rclpy
 from control.cbf_osqp_core import CBFOsqpCore
 from rclpy.node import Node
 from new_movement.entities.States import State, Vector2D
-from system_interfaces.msg import GameState, FilterCommand, TeamCommand, RobotCommand
+from system_interfaces.msg import GameState, TeamCommand, RobotCommand
 from system_interfaces.srv import GetGameConfig, UpdateCbfParams
 
 class AsifFilter(Node):

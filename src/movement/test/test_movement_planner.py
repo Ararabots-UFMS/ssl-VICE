@@ -27,6 +27,8 @@ DEFAULT_PARAMS = {
     "planner_freq": 50.0,
     "max_threads": 8,
     "overhead_max_age": 0.5,
+    "overhead_max_future": 0.35,
+    "vision_handoff_latency": 0.03,
     "accept_radius": 50.0,
 }
 
@@ -222,7 +224,10 @@ class TestPlanForRobot:
 
         result = planner_node.plan_for_robot(target)
 
-        assert result == (1, trajectory, 0.0)
+        robot_id, returned_trajectory, handoff_stamp = result
+        assert robot_id == 1
+        assert returned_trajectory is trajectory
+        assert handoff_stamp == pytest.approx(DEFAULT_PARAMS["vision_handoff_latency"])
         start_state, goal_state, obstacles, _previous_via = planner_node.planner.find.call_args[0]
         assert isinstance(start_state, MotionState)
         assert start_state.position == Vector2D(0, 0)
@@ -261,9 +266,16 @@ class TestPlanForRobot:
 
         result = planner_node.plan_for_robot(target)
 
-        assert result == (1, trajectory, 0.0)
+        robot_id, returned_trajectory, handoff_stamp = result
+        assert robot_id == 1
+        assert returned_trajectory is trajectory
+        assert handoff_stamp == pytest.approx(100.0 + DEFAULT_PARAMS["vision_handoff_latency"])
         start_state = planner_node.planner.find.call_args[0][0]
-        assert start_state.position == Vector2D(0, 0)
+        latency = DEFAULT_PARAMS["vision_handoff_latency"]
+        # Estado propagado por `latency` segundos (handoff_stamp - now_sec)
+        # a velocidade constante (1, 2) m/s.
+        assert start_state.position.x == pytest.approx(1 * latency)
+        assert start_state.position.y == pytest.approx(2 * latency)
         assert start_state.velocity == Vector2D(1, 2)
 
     def test_a_robot_already_at_its_goal_is_left_alone(self, planner_node):

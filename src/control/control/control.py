@@ -248,7 +248,7 @@ class Controller(Node):
 
             out = RobotCommand(robot_id=rid)
             out.linear_velocity_x = float(safe_vel.x)
-            out.linear_velociity_y = float(safe_vel.y)
+            out.linear_velocity_y = float(safe_vel.y)
             out.angular_velocity = float(vel_ang_cmd)
             out.orientation = cur.orientation
             out.kick = float(self.kick_cache.get(rid, 0.0))

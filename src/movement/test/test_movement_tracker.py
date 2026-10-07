@@ -21,6 +21,7 @@ from utils.math_util import Vector2D
 DEFAULT_PARAMS = {
     "lookahead_time": 0.2,
     "improvement_threshold": 0.1,
+    "reprojection_enabled": False,
     "change_radius": 10,
     "divergence_radius": 400.0,
     "divergence_frames": 3,
