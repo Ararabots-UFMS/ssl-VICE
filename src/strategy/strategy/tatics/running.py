@@ -111,6 +111,10 @@ SITUACAO_SOLTA = "SOLTA"
 #   PORTADOR    quem tem a bola ou vai busca-la. UM por ciclo.
 #   APOIO       quem ajuda sem a bola: ataque (oferece-se) ou marcacao.
 #   COBERTURA   entre a bola e o nosso gol; segunda a ir a bola em DELES/DISPUTA.
+# Inimigo a menos disto da bola e considerado atacando (zagueiro fica na frente).
+RAIO_ATAQUE_BOLA = 1500.0
+# Bola a menos disto do nosso gol: o zagueiro chuta pro gol deles.
+RAIO_PERTO_AREA = 2000.0
 PAPEL_PORTADOR = "portador"
 PAPEL_APOIO = "apoio"
 PAPEL_COBERTURA = "cobertura"
@@ -246,6 +250,11 @@ def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
     # A bandeira e um ARQUIVO, nao uma variavel de ambiente: variavel lida pela
     # ESTRATEGIA precisa ser exportada no 'ros_d' do ararabots.sh, que fica fora
     # de src/strategy/.
+    # TESTE: com o arquivo /tmp/ararabots_forcar_cobertura, todo robo de linha
+    # vira cobertura - permite testar o zagueiro sozinho.
+    if os.path.exists("/tmp/ararabots_forcar_cobertura"):
+        return {rid: PAPEL_COBERTURA for rid in linha}
+
     if (os.environ.get("ARARABOTS_PAPEIS_FIXOS")
             or os.path.exists("/tmp/ararabots_papeis_fixos")):
         papeis_fixos = {}
@@ -616,6 +625,11 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         # buscador: sem dribbler, a direcao do empurrao e dada pela POSICAO de
         # quem encosta, entao dois angulos de ataque dao duas saidas possiveis
         # em vez de uma. O portador segue adiantado, esperando a recuperacao.
+        # BOLA PERTO DA NOSSA AREA: vai atras dela, virado pro gol deles, e chuta.
+        if hypot(bx - nosso_gol.x, by - nosso_gol.y) < RAIO_PERTO_AREA:
+            dgx, dgy = gol_ataque.x - bx, gol_ataque.y - by
+            ng = hypot(dgx, dgy) or 1.0
+            return _no_campo(bx - dgx / ng * 180.0, by - dgy / ng * 180.0) + (True,)
         if situacao == SITUACAO_DISPUTA:
             # AFASTAR: aproxima da bola por tras, em relacao ao lado DELES, e
             # chuta pra frente, tirando a bola do nosso campo.
@@ -624,61 +638,15 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
             alvo_afasta = (bx + 2000.0 * sent, by + 900.0 * lado_y)
             return aproximacao.ponto_de_aproximacao(
                 rx, ry, bx, by, alvo_afasta, aproximacao.AVANCO_PORTADOR) + (True,)
-        if situacao == SITUACAO_DELES:
-            lado_c = 1.0 if (ordem % 2 == 0) else -1.0
-            return _no_campo(bx + px * 240.0 * lado_c + ux * 100.0,
-                             by + py * 240.0 * lado_c + uy * 100.0) + (True,)
-
-        # SOBRE A LINHA DE TIRO, nao ao lado dela.
-        #
-        # O ponto base ja era o meio do caminho entre a bola e o nosso gol - o
-        # lugar certo. Mas o deslocamento para nao empilhar era PERPENDICULAR a
-        # essa linha (-uy, +ux), ou seja tirava a cobertura de cima dela de
-        # proposito, em 800 mm ou mais. Ela ficava ao lado do corredor por onde
-        # o chute passa.
-        #
-        # Medido nos tres replays: o amarelo chuta do meio-campo a 5300-5400
-        # mm/s, a bola percorre 4122, 5437 e 4205 mm em linha reta ate a nossa
-        # linha de fundo, atravessa o time inteiro, e o unico que toca nela e o
-        # GOLEIRO. Nenhum robo de linha estava na trajetoria.
-        #
-        # Agora o primeiro fica EM CIMA da reta bola->nosso gol. Quem sobra se
-        # espalha AO LONGO dela, mais perto do gol, em vez de para os lados:
-        # dois corpos no mesmo corredor cobrem o rebote, dois ao lado nao cobrem
-        # nada.
-
-        # Vale em TODAS as situacoes, inclusive bola solta: antes ela mantinha
-        # a posicao na bola solta, o que a deixava fora da linha justamente
-        # quando o chute vem.
-        # DEFESA QUE MATA A JOGADA, em vez de esperar o chute.
-        #
-        # Pedido do Felipe: "a cobertura, depois de chegar a linha de fundo, tem
-        # que chegar pra matar na bola, para impedir totalmente o chute".
-        #
-        # Ficar na reta bola->gol e bom contra bola rolando, e inutil contra um
-        # chute que cobre o campo em 0,8 s: medimos a bola percorrendo 4122,
-        # 5437 e 4205 mm em linha reta ate a nossa linha de fundo, atravessando
-        # o time inteiro. Bloquear a 45% da linha nao chega a tempo.
-        #
-        # Com a bola no NOSSO terco defensivo nao ha o que esperar - a unica
-        # defesa que funciona e tirar o espaco de chute encostando nela. Fora
-        # dali ela volta a cobrir a linha, que e o certo com a bola longe.
-        dist_gol = hypot(bx - nosso_gol.x, by - nosso_gol.y)
-        if dist_gol < COBERTURA_MATA and ordem == 0:
-            # vai NA bola, nao na linha - e alem dela, para nao chegar freando
-            dxm, dym = bx - rx, by - ry
-            n_m = hypot(dxm, dym) or 1.0
-            return _no_campo(bx + (dxm / n_m) * 400.0,
-                             by + (dym / n_m) * 400.0) + (True,)
-
-        # ZAGUEIRO: sempre do nosso lado, bloqueando a bola e o ataque deles.
-        # O papel e atribuido pelo proprio codigo (distribuir_papeis); aqui so
-        # definimos a posicao defensiva de quem recebeu a cobertura.
-        if 0 in ally_robots:
-            return posicionamento.bloqueio_do_lado_nosso(
-                ally_robots[0], rx, ry, bx, by, nosso_gol, inimigos) + (False,)
-        return posicionamento.cobertura_na_linha(
-            bx, by, nosso_gol, recuo_extra=500.0 * ordem) + (False,)
+        # ZAGUEIRO SEM INIMIGO ATACANDO: aproxima da bola por tras e empurra pra
+        # frente, pro lado deles. Com inimigo atacando, fica na frente da bola.
+        if not any(hypot(e.position_x - bx, e.position_y - by) < RAIO_ATAQUE_BOLA
+                   for e in (inimigos or {}).values()):
+            sent = 1.0 if gol_ataque.x >= 0 else -1.0
+            alvo_frente = (bx + 2000.0 * sent, by)
+            return aproximacao.ponto_de_aproximacao(
+                rx, ry, bx, by, alvo_frente, aproximacao.AVANCO_PORTADOR) + (True,)
+        return posicionamento.frente_da_bola(bx, by, nosso_gol) + (False,)
 
     # -------------------------------------------------------------- APOIO
     #

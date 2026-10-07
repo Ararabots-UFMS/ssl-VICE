@@ -165,20 +165,33 @@ def fora_da_area_penal(x, y, nosso_gol):
     return x, mover_y
 
 
+# Sem goleiro, a cobertura se posta na frente do gol: a esta distancia da linha.
+PROFUNDIDADE_FRENTE_GOL = 1200.0
+
+
+def ponto_frente_do_gol(bx, by, nosso_gol):
+    """Sem goleiro: na reta centro-do-gol -> bola, a no maximo 1200 mm da linha."""
+    ux, uy, n = versor(nosso_gol.x, nosso_gol.y, bx, by)
+    d = min(n * FRACAO_BLOQUEIO, PROFUNDIDADE_FRENTE_GOL)
+    return no_campo(nosso_gol.x + ux * d, nosso_gol.y + uy * d)
+
+
 def bloqueio_do_lado_nosso(goleiro, rx, ry, bx, by, nosso_gol, inimigos):
     """Posicao defensiva do zagueiro: sempre do nosso lado, entre o perigo e o gol.
 
     Com um adversario ameacando no nosso campo, encosta nele pelo lado do nosso
     gol (bloqueia o passe). Sem ameaca, fica no corredor goleiro->bola. Nunca
-    cruza a linha central. Se o caminho direto ate o alvo passa por um inimigo,
+    cruza a linha central. Sem goleiro, a ancora e o centro do gol. Se o caminho direto ate o alvo passa por um inimigo,
     desloca o alvo lateralmente ate achar um caminho livre: o planejador nao
     contorna inimigos bem, e um alvo do outro lado de um atacante trava o robo.
     """
     ameaca = ameaca_mais_perigosa(inimigos, nosso_gol)
     if ameaca is not None:
         x, y = marcar(ameaca, nosso_gol)
-    else:
+    elif goleiro is not None:
         x, y = ponto_no_corredor(goleiro, bx, by, FRACAO_BLOQUEIO)
+    else:
+        x, y = ponto_frente_do_gol(bx, by, nosso_gol)
     if x * nosso_gol.x < 0:
         x = 0.0
     if not linha_livre(rx, ry, x, y, inimigos):
@@ -187,3 +200,17 @@ def bloqueio_do_lado_nosso(goleiro, rx, ry, bx, by, nosso_gol, inimigos):
             if linha_livre(rx, ry, cx, cy, inimigos):
                 return cx, cy
     return x, y
+
+
+# Distancia da bola, em direcao ao nosso gol, em que o zagueiro se posta
+# quando ha inimigo atacando.
+DISTANCIA_FRENTE_BOLA = 500.0
+
+
+def frente_da_bola(bx, by, nosso_gol):
+    """Na frente da bola, entre ela e o nosso gol, do nosso lado do campo."""
+    ux, uy, _ = versor(bx, by, nosso_gol.x, nosso_gol.y)
+    x, y = bx + ux * DISTANCIA_FRENTE_BOLA, by + uy * DISTANCIA_FRENTE_BOLA
+    if x * nosso_gol.x < 0:
+        x = 0.0
+    return no_campo(x, y)
