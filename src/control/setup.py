@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             "controller = control.control:main",
+            "asif_filter = control.asif_filter:main"
         ],
     },
 )

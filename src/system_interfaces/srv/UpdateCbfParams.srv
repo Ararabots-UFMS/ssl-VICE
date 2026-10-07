@@ -1,0 +1,8 @@
+float32 gamma_field
+float32 gamma_prohibited
+float32 gamma_robot
+float32 d_min
+float32 robot_margin
+float32 rho
+---
+bool success

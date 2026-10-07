@@ -3,8 +3,10 @@ flask-socketio
 pyserial
 protobuf==3.20.*
 numpy<2
+osqp
+scipy
 matplotlib
-pytest<8
+pytest==7.*
 pytest-mock
 pytest-cov
 inputs
