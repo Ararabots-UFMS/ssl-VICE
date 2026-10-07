@@ -3401,8 +3401,7 @@ def rodar(nome, duracao=12.0):
     
 def _ferramenta_cadeia():
     """Conta mensagens em cada topico e diz o que esta vivo na cadeia."""
-
-
+    from movement_interfaces.msg import MovementCommandArray
 
     JANELA = 5.0
 
@@ -3416,12 +3415,14 @@ def _ferramenta_cadeia():
             self.comando_arbitro = None
 
             self.topicos = ["visionTopic", "game_state", "refereeTopic",
-                            "control_command", "commandTopic"]
+                            "movement_manager/commands", "commandTopic"]
             self.subs = [
                 self.create_subscription(VisionMessage, "visionTopic", self._visao, 10),
                 self.create_subscription(GameState, "game_state", self._estado, 10),
                 self.create_subscription(RefereeMessage, "refereeTopic", self._arbitro, 10),
-                _assinar_setpoint(self, self._controle_novo),
+                self.create_subscription(
+                    MovementCommandArray, "movement_manager/commands",
+                    lambda m: self._controle_novo() if m.commands else None, 10),
                 self.create_subscription(TeamCommand, "commandTopic", self._time, 10),
             ]
 
@@ -3789,7 +3790,7 @@ def _ferramenta_pronto():
         elif alvo == "arbitro":
             estado = {"ok": False}
             no.create_subscription(RefereeMessage, "refereeTopic",
-                                   lambda _m: estado.__setitem__("ok", True), 10)
+                                   lambda m: estado.__setitem__("ok", bool(m.command)), 10)
             while time.time() - t0 < limite and not estado["ok"]:
                 rclpy.spin_once(no, timeout_sec=0.1)
             achou = estado["ok"]
@@ -3814,7 +3815,7 @@ def _ferramenta_pronto():
             precisa = _servicos_exigidos()
             estado = {"arbitro": False, "comandos": 0}
             no.create_subscription(RefereeMessage, "refereeTopic",
-                                   lambda _m: estado.__setitem__("arbitro", True), 10)
+                                   lambda m: estado.__setitem__("arbitro", bool(m.command)), 10)
             _assinar_setpoint(
                 no, lambda: estado.__setitem__("comandos", estado["comandos"] + 1))
             servicos = False

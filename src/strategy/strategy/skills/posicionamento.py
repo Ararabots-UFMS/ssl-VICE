@@ -122,8 +122,25 @@ def cobertura_na_linha(bx, by, nosso_gol, fracao=COBERTURA_FRACAO,
     dois corpos no mesmo corredor cobrem o rebote, dois ao lado nao cobrem nada.
     """
     ux, uy, n = versor(bx, by, nosso_gol.x, nosso_gol.y)
-    alvo = min(n * fracao + recuo_extra, n - margem)
+    alvo = max(0.0, min(n * fracao + recuo_extra, n - margem))
     return no_campo(bx + ux * alvo, by + uy * alvo)
+
+
+def cobertura_defensiva(bx, by, nosso_gol, ordem=0):
+    """Cover the ball-goal segment without crossing the halfway line.
+
+    Retreat along the segment when its usual 45% point is in the attacking
+    half. Penalty-area exclusion takes precedence when the ball is inside it.
+    """
+    side = 1.0 if nosso_gol.x > 0 else -1.0
+    dx, dy = nosso_gol.x - bx, nosso_gol.y - by
+    length = hypot(dx, dy)
+    fraction = min(1.0, COBERTURA_FRACAO + 400.0 * ordem / max(length, 1.0))
+    if side * bx < 150.0 and side * dx > 0:
+        fraction = max(fraction, (150.0 - side * bx) / (side * dx))
+    fraction = max(0.0, min(1.0, fraction))
+    x, y = no_campo(bx + fraction * dx, by + fraction * dy)
+    return fora_da_area_penal(x, y, nosso_gol)
 
 
 # Fracao do caminho goleiro->bola em que o zagueiro se posta.

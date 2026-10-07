@@ -535,6 +535,16 @@ cmd_limpar() {
 # ============================================================================
 cmd_grsim() {
     BIN="$RAIZ/grSim/bin/grSim"
+    local campo_config="$VICE/src/simulation/configure_division_b.py"
+    # O grSim ja cria paredes visiveis com colisao. Fixamos as dimensoes
+    # SSL B antes de iniciar: campo 9x6 m, margem de 0,3 m ate as paredes.
+    if ! python3 "$campo_config" --check; then
+        if pgrep -x grSim >/dev/null; then
+            echo "Geometria diferente da SSL B. Execute ./ararabots.sh parar e tente novamente."
+            return 1
+        fi
+        python3 "$campo_config" || return 1
+    fi
 
     MODO="janela"
     ARGS=()
@@ -1176,6 +1186,12 @@ cmd_cenario() {
     # (111 mm = raio do robo 90 + raio da bola 21,5). Nao resolve o alinhamento
     # lateral, mas e estritamente melhor que o padrao - e nao exige tocar em
     # arquivo nenhum, so o servico que o proprio control.py expoe.
+    # A UI HTTP pode continuar viva quando o socket UDP do GC fica preso
+    # numa interface antiga apos uma troca de rede. Confira a entrega no ROS.
+    if ! ros_run "python3 /tmp/ararabots.py pronto arbitro 10"; then
+        echo "   ! arbitro sem mensagens no ROS; reiniciando ssl-gc para reabrir o UDP"
+        docker restart ssl-gc || return 2
+    fi
     if ! ros_run "python3 /tmp/ararabots.py pronto tudo 70"; then
         echo "   !! a cadeia nao ficou pronta - o resultado NAO vale"
         return 2
@@ -1312,6 +1328,10 @@ cmd_validar() {
 
 
 # ============================================================================
+listar_cenarios() {
+    python3 "$PY" listar
+}
+
 cmd_menu() {
     DURACAO=25
     MODO="janela"
@@ -1355,7 +1375,7 @@ cmd_menu() {
     fi
 
     # ------------------------------------------------------- lista de cenarios
-    mapfile -t CENARIOS < <(python3 "$PY" listar)
+    mapfile -t CENARIOS < <(listar_cenarios)
     [ ${#CENARIOS[@]} -eq 0 ] && { echo "XX nao consegui ler os cenarios"; return 1; }
 
     rodar_um() {
@@ -1371,42 +1391,44 @@ cmd_menu() {
         local st=$?
         [ $st -eq 1 ] && { echo "   XX o cenario nao montou"; return 1; }
         [ $st -eq 3 ] && { echo "   XX bloqueado pelo portao de medicao (acima)"; return 1; }
-        [ $st -eq 2 ] && echo "   !! a estrategia nao comandou - o resultado abaixo NAO vale"
-        ros_run "python3 /tmp/ararabots.py rodar $nome $DURACAO"
+        [ $st -eq 2 ] && { echo "   XX cadeia indisponivel; gravacao cancelada"; return 1; }
+        ros_run "python3 /tmp/ararabots.py rodar $nome $DURACAO" || return 1
     grsim_sobreviveu
     copiar_replays
     }
 
     rodar_dispersao() {
         local nome="$1" n="$2"
-        # APAGA OS RESULTADOS ANTIGOS ANTES DE COMECAR.
-        #
-        # BUG QUE ISTO CORRIGE: o resumo lia TODOS os JSON da pasta, entao
-        # execucoes de lotes anteriores entravam na conta. No lote de 12 do
-        # Felipe, 7 repeticoes foram bloqueadas pelo portao e mesmo assim o
-        # resumo mostrou "10 execucoes" e "GOLS: 1 de 10" - o gol era de um lote
-        # de uma hora antes. Um resumo que mistura lotes e pior que nenhum.
-        docker exec vice sh -c "rm -f /tmp/cenarios_freekick/*disp_*.json /tmp/cenarios_freekick/*disp_*.html" >/dev/null 2>&1 || true
+        # Cada lote tem seu proprio rotulo; resultados anteriores sao preservados.
+        local rotulo="disp_$(date +%Y%m%d_%H%M%S)_$$"
         echo
         echo "=============================================================="
         echo "  DISPERSAO: $nome  x$n"
         echo "=============================================================="
-        local BLOQ=0
+        local BLOQ=0 concluidas=0
         for i in $(seq 1 "$n"); do
             echo; echo "----- repeticao $i/$n -----"
-            cmd_cenario "$nome" >/dev/null
+            cmd_cenario "$nome"
             local st=$?
             [ $st -eq 1 ] && { echo "   XX o cenario nao montou"; continue; }
             [ $st -eq 3 ] && { echo "   XX bloqueado pelo portao de medicao"; BLOQ=$((BLOQ+1)); continue; }
-            [ $st -eq 2 ] && echo "   !! a estrategia nao comandou - resultado suspeito"
-            ros_run "BRANCH=disp_$i python3 /tmp/ararabots.py rodar $nome $DURACAO" \
-                | grep -E "GOL|sem gol|DISPARO|RASTREIO|acima de 200|laco a |abriu em|nunca abriu|robo [0-9]:|BOLA:" | sed 's/^/   /'
+            [ $st -eq 2 ] && { echo "   XX cadeia indisponivel; repeticao cancelada"; BLOQ=$((BLOQ+1)); continue; }
+            if ! ros_run "BRANCH=${rotulo}_$i python3 /tmp/ararabots.py rodar $nome $DURACAO"; then
+                echo "   XX gravacao falhou; veja o erro acima"
+                continue
+            fi
+            concluidas=$((concluidas+1))
             grsim_sobreviveu
             copiar_replays
         done
         echo
-        rm -rf "$SCRIPT_DIR/saida" && docker cp vice:/tmp/cenarios_freekick "$SCRIPT_DIR/saida" >/dev/null 2>&1
-        python3 "$PY" resumo disp
+        if [ "$concluidas" -eq 0 ]; then
+            echo "   XX nenhuma repeticao concluida; resumo nao gerado. Veja as falhas acima."
+            return 1
+        fi
+        mkdir -p "$SCRIPT_DIR/saida"
+        docker cp vice:/tmp/cenarios_freekick/. "$SCRIPT_DIR/saida/" || return 1
+        python3 "$PY" resumo "$rotulo" || return 1
         if [ "${BLOQ:-0}" -gt 0 ]; then
             echo
             echo "  !! $BLOQ de $n repeticoes foram BLOQUEADAS pelo portao de medicao."
@@ -1861,6 +1883,10 @@ PY
 # ==============================================================================
 #  Despachante
 # ==============================================================================
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+    return 0
+fi
+
 uso() { sed -n '2,40p' "$0"; }
 
 case "${1:-menu}" in

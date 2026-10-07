@@ -54,6 +54,7 @@ class MovementHandler:
         cmd.planning_options.avoid_penalty_area = bool(skill.penalty_area)
         cmd.planning_options.avoid_center_area = bool(skill.center_area)
         cmd.planning_options.avoid_ball = bool(skill.ball)
+        cmd.planning_options.defensive_half = skill.defensive_half
         return cmd
 
     def _send_movement(self, commands: list[MovementCommand]) -> None:

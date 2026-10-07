@@ -1,6 +1,7 @@
 from typing import Dict, Optional
 
 from movement.entities.obstacle.field_border_obstacle import FieldBorderObstacle
+from movement.entities.obstacle.half_field_obstacle import HalfFieldObstacle
 from movement.entities.obstacle.penalty_area_obstacle import PenaltyAreaObstacle
 from movement.entities.obstacle.generic_circle_obstacle import GenericCircleObstacle
 from movement.entities.obstacle.ally_robot_obstacle import AllyRobotObstacle
@@ -46,6 +47,9 @@ class ObstacleFactory:
 
         # 2. Toggleable Penalty Area
         planning_opts = getattr(config, 'planning_options', config)
+        defensive_half = getattr(planning_opts, 'defensive_half', 0)
+        if defensive_half in (-1, 1):
+            obstacles.append(HalfFieldObstacle(defensive_half))
 
         # Safety critical as well: entering the penalty area is a foul, so a broken
         # obstacle must abort planning rather than silently allow the shortcut.

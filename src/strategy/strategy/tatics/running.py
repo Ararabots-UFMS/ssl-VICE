@@ -616,37 +616,8 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
 
 
     if papel == PAPEL_COBERTURA:
-        # entre a bola e o NOSSO gol, espalhado para nao empilhar.
-        # Na bola solta ela MANTEM a posicao - correr atras de bola solta e
-        # deixar o contra-ataque aberto.
-        # DELES e DISPUTA: a COBERTURA e o SEGUNDO a ir a bola.
-        #
-        # "Quando for deles vao dois". Ela entra pelo lado oposto ao do
-        # buscador: sem dribbler, a direcao do empurrao e dada pela POSICAO de
-        # quem encosta, entao dois angulos de ataque dao duas saidas possiveis
-        # em vez de uma. O portador segue adiantado, esperando a recuperacao.
-        # BOLA PERTO DA NOSSA AREA: vai atras dela, virado pro gol deles, e chuta.
-        if hypot(bx - nosso_gol.x, by - nosso_gol.y) < RAIO_PERTO_AREA:
-            dgx, dgy = gol_ataque.x - bx, gol_ataque.y - by
-            ng = hypot(dgx, dgy) or 1.0
-            return _no_campo(bx - dgx / ng * 180.0, by - dgy / ng * 180.0) + (True,)
-        if situacao == SITUACAO_DISPUTA:
-            # AFASTAR: aproxima da bola por tras, em relacao ao lado DELES, e
-            # chuta pra frente, tirando a bola do nosso campo.
-            sent = 1.0 if gol_ataque.x >= 0 else -1.0
-            lado_y = 1.0 if by >= 0 else -1.0
-            alvo_afasta = (bx + 2000.0 * sent, by + 900.0 * lado_y)
-            return aproximacao.ponto_de_aproximacao(
-                rx, ry, bx, by, alvo_afasta, aproximacao.AVANCO_PORTADOR) + (True,)
-        # ZAGUEIRO SEM INIMIGO ATACANDO: aproxima da bola por tras e empurra pra
-        # frente, pro lado deles. Com inimigo atacando, fica na frente da bola.
-        if not any(hypot(e.position_x - bx, e.position_y - by) < RAIO_ATAQUE_BOLA
-                   for e in (inimigos or {}).values()):
-            sent = 1.0 if gol_ataque.x >= 0 else -1.0
-            alvo_frente = (bx + 2000.0 * sent, by)
-            return aproximacao.ponto_de_aproximacao(
-                rx, ry, bx, by, alvo_frente, aproximacao.AVANCO_PORTADOR) + (True,)
-        return posicionamento.frente_da_bola(bx, by, nosso_gol) + (False,)
+        return posicionamento.cobertura_defensiva(
+            bx, by, nosso_gol, ordem) + (False,)
 
     # -------------------------------------------------------------- APOIO
     #
@@ -1005,6 +976,8 @@ def montar_comandos(tt):
             vel_x=0.0, vel_y=0.0, angle=ang,
         )
         r = tt.ally_robots[rid]
+        if papel == PAPEL_COBERTURA:
+            cmd.defensive_half = 1 if tt.on_positive_half else -1
         d_bola = hypot(r.position_x - tt.ball.position_x,
                        r.position_y - tt.ball.position_y)
         # NAO ARMA COM A LINHA BLOQUEADA.
