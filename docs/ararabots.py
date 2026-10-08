@@ -322,7 +322,7 @@ CENARIOS = {
     },
     "zc_centro": {
         "titulo": "Cobertura e bola no centro",
-        "descricao": "So o zagueiro azul busca a bola livre no centro.",
+        "descricao": "So o zagueiro azul fecha a abertura do nosso gol vista da bola no centro.",
         "bola": (0.0, 0.0),
         "azuis": [(1, -3000.0, 600.0, 0.0)],
         "amarelos": [],
@@ -330,7 +330,7 @@ CENARIOS = {
     },
     "zc_lateral": {
         "titulo": "Cobertura e bola na lateral do nosso campo",
-        "descricao": "So o zagueiro azul busca a bola livre na lateral.",
+        "descricao": "So o zagueiro azul reduz a abertura do nosso gol vista da bola lateral.",
         "bola": (-2400.0, 1600.0),
         "azuis": [(1, -3200.0, -200.0, 0.0)],
         "amarelos": [],
@@ -338,7 +338,7 @@ CENARIOS = {
     },
     "zc_bola_indo": {
         "titulo": "Cobertura e bola indo ao nosso gol",
-        "descricao": "So o zagueiro azul busca a bola em movimento.",
+        "descricao": "So o zagueiro azul acompanha a abertura do gol enquanto a bola se move.",
         "bola": (-800.0, 200.0),
         "bola_vel": (-1600.0, 0.0),
         "azuis": [(1, -2800.0, 650.0, 0.0)],
@@ -347,7 +347,7 @@ CENARIOS = {
     },
     "zc_perto_gol": {
         "titulo": "Cobertura e bola perto do nosso gol",
-        "descricao": "So o zagueiro azul busca a bola perto da nossa meta.",
+        "descricao": "So o zagueiro azul protege a abertura do gol sem disputar a bola proxima.",
         "bola": (-3200.0, 200.0),
         "azuis": [(1, -3000.0, 600.0, 0.0)],
         "amarelos": [],
@@ -355,7 +355,7 @@ CENARIOS = {
     },
     "zg_centro": {
         "titulo": "Zagueiro e goleiro com bola no centro",
-        "descricao": "Goleiro azul protege a meta enquanto o zagueiro busca a bola.",
+        "descricao": "Goleiro azul protege a meta e o zagueiro fecha a abertura de chute.",
         "bola": (0.0, 0.0),
         "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0)],
         "amarelos": [],
@@ -363,7 +363,7 @@ CENARIOS = {
     },
     "zg_lateral": {
         "titulo": "Zagueiro e goleiro com bola na lateral",
-        "descricao": "Goleiro azul protege a meta e o zagueiro busca a bola lateral.",
+        "descricao": "Goleiro azul protege a meta e o zagueiro reduz a abertura lateral.",
         "bola": (-2400.0, 1600.0),
         "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3200.0, -200.0, 0.0)],
         "amarelos": [],
@@ -371,7 +371,7 @@ CENARIOS = {
     },
     "zg_perto_gol": {
         "titulo": "Zagueiro e goleiro com bola perto do gol",
-        "descricao": "Goleiro azul protege a meta e o zagueiro busca a bola proxima.",
+        "descricao": "Goleiro azul protege a meta e o zagueiro cobre sem disputar a bola.",
         "bola": (-3200.0, 200.0),
         "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0)],
         "amarelos": [],
@@ -442,7 +442,7 @@ CENARIOS = {
     },
     "zv_marcacao": {
         "titulo": "Zagueiro: atacante deles perto do nosso gol, bola solta (marcacao)",
-        "descricao": "Verificacao de acao: cobertura deve marcar o atacante mais perigoso.",
+        "descricao": "Verificacao de acao: cobertura fecha a abertura do gol diante dos atacantes.",
         "bola": (-3000.0, -1500.0),
         "azuis": [(1, -3000.0, 600.0, 0.0)],
         "amarelos": [(1, -2400, 300, 180), (2, -1500, 1200, 180), (3, -1500, -1200, 180)],
@@ -450,7 +450,7 @@ CENARIOS = {
     },
     "zv_corredor": {
         "titulo": "Zagueiro: sem ameaca no nosso campo, bola solta (corredor)",
-        "descricao": "Verificacao de acao: zagueiro sozinho deve ficar no corredor nosso gol->bola.",
+        "descricao": "Verificacao de acao: zagueiro sozinho fecha a abertura do gol vista da bola.",
         "bola": (0.0, 0.0),
         "azuis": [(1, -3000.0, 600.0, 0.0)],
         "amarelos": [(1, 2500, 1000, 180), (2, 2500, -1000, 180), (3, 1000, 1500, 180)],
@@ -458,7 +458,7 @@ CENARIOS = {
     },
     "zv_disputa": {
         "titulo": "Zagueiro: disputa da bola (nosso robo e inimigo juntos)",
-        "descricao": "Verificacao de acao: em DISPUTA a cobertura deve afastar a bola pra frente.",
+        "descricao": "Verificacao de acao: em DISPUTA a cobertura deve fechar a abertura do gol.",
         "bola": (-2600.0, 0.0),
         "azuis": [(1, -2760.0, 100.0, 0.0)],
         "amarelos": [(1, -2800, -150, 180)],
@@ -466,15 +466,15 @@ CENARIOS = {
     },
     "zv_deles": {
         "titulo": "Zagueiro: inimigo com a bola (posse deles)",
-        "descricao": "Verificacao de acao: em DELES a cobertura deve reagir a posse deles.",
+        "descricao": "Verificacao de acao: em DELES a cobertura fecha a abertura do gol.",
         "bola": (-2600.0, 0.0),
         "azuis": [(1, -3000.0, 600.0, 0.0)],
         "amarelos": [(1, -2700, -100, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
     "zv_mata": {
-        "titulo": "Zagueiro: bola perto do nosso gol, solta (mata a jogada)",
-        "descricao": "Verificacao de acao: bola a menos de 2500 mm do nosso gol, cobertura deve ir na bola.",
+        "titulo": "Zagueiro: bola perto do nosso gol, cobertura da abertura",
+        "descricao": "Verificacao de acao: bola perto do nosso gol, cobertura reduz a abertura de chute.",
         "bola": (-3200.0, 200.0),
         "azuis": [(1, -3000.0, 600.0, 0.0)],
         "amarelos": [(1, 1500, 1000, 180), (2, 1500, -1000, 180), (3, 1000, 1500, 180)],
@@ -1984,6 +1984,8 @@ kbd{background:var(--carta2);border:1px solid var(--linha);border-bottom-width:2
     <summary>Como ler este campo &middot; atalhos</summary>
     <div class="leg-corpo">
       <span><i style="background:#ff9f1c"></i>bola</span>
+      <span id="leg-sombra" hidden><i style="background:#ffb347;border-radius:2px"></i>
+        sombra de chute hipotético a 6 m/s: área até o nosso gol, limitada a 4,22 m</span>
       <span><i style="background:#4da3ff"></i>nossos robôs — a <b>face chanfrada</b> é o chutador</span>
       <span><i style="background:#ffd166"></i>adversários (mesma forma)</span>
       <span><i style="background:#ffd166"></i>setpoint comandado — a linha tracejada é o <b>erro de rastreio</b></span>
@@ -2017,6 +2019,32 @@ svg.appendChild(el('circle',{cx:0,cy:0,r:500,fill:'none',stroke:'#3a6b52','strok
 for(const s of [-1,1]){
   svg.appendChild(el('rect',{x:s>0?4500:-4680,y:-500,width:180,height:1000,fill:'none',stroke:'#5b8f74','stroke-width':16}));
   svg.appendChild(el('rect',{x:s>0?3500:-4500,y:-1000,width:1000,height:2000,fill:'none',stroke:'#3a6b52','stroke-width':12}));
+}
+// Sombra de TODAS as direcoes em que um chute da bola pode entrar na nossa
+// meta. O alcance de 4220 mm e a medida do grSim para um chute de 6 m/s;
+// isto mostra uma possibilidade geometrica, nao a trajetoria atual da bola.
+// Amostramos a boca do gol para formar tambem o arco do limite de alcance.
+const SOMBRA_ZAGUEIRO = D.forcar_cobertura || /^(zc_|zg_|zv_)/.test(D.cenario || '');
+const ALCANCE_SOMBRA = 4220, NOSSO_GOL_X = -4500, MEIA_BOCA_GOL = 500;
+const sombra = el('path',{fill:'#ffb347','fill-opacity':.17,
+  stroke:'#ffb347','stroke-opacity':.55,'stroke-width':8,'stroke-linejoin':'round'});
+if (SOMBRA_ZAGUEIRO) svg.appendChild(sombra);
+document.getElementById('leg-sombra').hidden = !SOMBRA_ZAGUEIRO;
+function desenhaSombra(b){
+  if (!SOMBRA_ZAGUEIRO) return;
+  const bx = Number(b[0]), by = Number(b[1]);
+  if (!Number.isFinite(bx) || !Number.isFinite(by) || bx <= NOSSO_GOL_X){
+    sombra.setAttribute('d', '');
+    return;
+  }
+  const borda = [];
+  for (let j=0; j<=32; j++){
+    const gy = -MEIA_BOCA_GOL + 2*MEIA_BOCA_GOL*j/32;
+    const dx = NOSSO_GOL_X-bx, dy = gy-by;
+    const f = Math.min(1, ALCANCE_SOMBRA/Math.hypot(dx,dy));
+    borda.push('L'+(bx+dx*f).toFixed(1)+' '+(by+dy*f).toFixed(1));
+  }
+  sombra.setAttribute('d', 'M'+bx+' '+by+' '+borda.join(' ')+' Z');
 }
 // TRILHA DO GOLEIRO ADVERSARIO.
 // O replay so desenhava a bola e UM robo nosso: o goleiro deles nunca apareceu
@@ -2275,6 +2303,7 @@ let pB='', pR='';
 function desenha(i){
   const q = Q[i];
   document.getElementById('t').textContent = q.t.toFixed(2);
+  desenhaSombra(q.b);
   bola.setAttribute('cx', q.b[0]); bola.setAttribute('cy', q.b[1]);
   pB = (i===0?'M':'L') + q.b[0] + ' ' + q.b[1] + (i===0?'':' ');
   // TODOS OS NOSSOS ROBOS, cada um com O SEU setpoint.

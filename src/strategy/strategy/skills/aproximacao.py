@@ -54,9 +54,6 @@ ATRAVESSA_CHUTE = -53.0
 # Avanco alem da bola/ponto de interceptacao, por situacao.
 AVANCO_PORTADOR = 500.0
 AVANCO_SOLTA = 1600.0
-# Uma corda de 45 graus neste raio ainda deixa o casco longe da bola.
-RAIO_CONTORNO_SEGURO = 220.0
-TOL_APROXIMACAO_SEGURA = 0.35
 
 # Ate quanto tempo no futuro vale procurar um ponto de bloqueio. Acima disso a
 # bola ja teria atravessado o campo inteiro (9000 mm a 900 mm/s = 10s, mas um
@@ -204,31 +201,3 @@ def ponto_de_aproximacao(rx, ry, bx, by, dir_alvo, avanco_base):
     lat = LATERAL_CONTORNO * (1.0 - t) * lado * c + VIES_LATERAL
     return no_campo(bx + ux_a * off - uy_a * lat,
                     by + uy_a * off + ux_a * lat)
-
-
-def ponto_de_aproximacao_segura(robo, bx, by, dir_alvo):
-    """Contorna sem atravessar a bola; gira antes de avancar para o contato.
-
-    A cobertura pode receber a bola pelo lado oposto ao passe. O ajuste de
-    chegada da aproximacao continua elimina o contorno perto da bola e, nesse
-    caso, empurra a bola com o corpo ainda virado para a propria meta.
-    """
-    rx, ry = robo.position_x, robo.position_y
-    mira = atan2(dir_alvo[1] - by, dir_alvo[0] - bx)
-    radial = atan2(ry - by, rx - bx)
-    erro_posicao = norm_ang(mira + pi - radial)
-    erro_corpo = abs(norm_ang(robo.orientation - mira))
-    distancia = hypot(rx - bx, ry - by)
-    if abs(erro_posicao) > TOL_APROXIMACAO_SEGURA:
-        # Primeiro sai do contato; depois contorna em cordas curtas que nao
-        # cruzam a bola, mesmo quando o planejador nao a trata como obstaculo.
-        passo = max(-pi / 4, min(pi / 4, erro_posicao)) if distancia >= 180.0 else 0.0
-        angulo = radial + passo
-        return no_campo(bx + RAIO_CONTORNO_SEGURO * cos(angulo),
-                        by + RAIO_CONTORNO_SEGURO * sin(angulo))
-    if erro_corpo > TOL_APROXIMACAO_SEGURA:
-        if distancia < 180.0:
-            return no_campo(bx + RAIO_CONTORNO_SEGURO * cos(radial),
-                            by + RAIO_CONTORNO_SEGURO * sin(radial))
-        return rx, ry
-    return ponto_de_aproximacao(rx, ry, bx, by, dir_alvo, AVANCO_SOLTA)

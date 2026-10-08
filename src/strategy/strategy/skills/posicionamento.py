@@ -44,6 +44,9 @@ BLOQUEIO_DIST = 600.0
 MARCACAO_DIST = 400.0
 # Fracao do caminho bola->nosso gol em que a cobertura se planta.
 COBERTURA_FRACAO = 0.45
+# A cobertura fecha o angulo do gol sem entrar em contato com a bola.
+DISTANCIA_SOMBRA_BOLA = 700.0
+MEIA_LARGURA_GOL = 500.0  # Division B
 
 
 def a_frente_da_bola(robo, bx, by, gol_ataque):
@@ -127,19 +130,30 @@ def cobertura_na_linha(bx, by, nosso_gol, fracao=COBERTURA_FRACAO,
 
 
 def cobertura_defensiva(bx, by, nosso_gol, ordem=0):
-    """Cover the ball-goal segment without crossing the halfway line.
+    """Fecha a abertura angular do gol vista da bola, sem disputar a posse.
 
-    Retreat along the segment when its usual 45% point is in the attacking
-    half. Penalty-area exclusion takes precedence when the ball is inside it.
+    O ponto fica no bissetor dos raios que ligam a bola aos dois postes. Ficar
+    mais perto da bola aumenta a parcela do gol ocultada pelo casco, mas a
+    distancia escolhida evita uma tentativa deliberada de contato. Meio-campo
+    e area penal continuam sendo limites para o jogador de linha; junto a area
+    ou a linha de fundo, pode nao existir um ponto legal entre a bola e o gol.
     """
     side = 1.0 if nosso_gol.x > 0 else -1.0
-    dx, dy = nosso_gol.x - bx, nosso_gol.y - by
-    length = hypot(dx, dy)
-    fraction = min(1.0, COBERTURA_FRACAO + 400.0 * ordem / max(length, 1.0))
-    if side * bx < 150.0 and side * dx > 0:
-        fraction = max(fraction, (150.0 - side * bx) / (side * dx))
-    fraction = max(0.0, min(1.0, fraction))
-    x, y = no_campo(bx + fraction * dx, by + fraction * dy)
+    dx = nosso_gol.x - bx
+    inferior = -MEIA_LARGURA_GOL - by
+    superior = MEIA_LARGURA_GOL - by
+    n_inf = hypot(dx, inferior) or 1.0
+    n_sup = hypot(dx, superior) or 1.0
+    ux = dx / n_inf + dx / n_sup
+    uy = inferior / n_inf + superior / n_sup
+    n = hypot(ux, uy) or 1.0
+    ux, uy = ux / n, uy / n
+    distancia = DISTANCIA_SOMBRA_BOLA + 400.0 * ordem
+    if side * bx < 150.0 and side * ux > 0:
+        distancia = max(distancia, (150.0 - side * bx) / (side * ux))
+    if side * ux > 0:
+        distancia = min(distancia, max(0.0, dx / ux - 200.0))
+    x, y = no_campo(bx + ux * distancia, by + uy * distancia)
     return fora_da_area_penal(x, y, nosso_gol)
 
 

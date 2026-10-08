@@ -25,13 +25,15 @@ def test_lone_defender_role_in_test_menu(monkeypatch, forced, expected, situatio
 
 @pytest.mark.parametrize("side", [-1, 1])
 @pytest.mark.parametrize("ball_x,ball_y", [(-4400, 2200), (0, 0), (2000, 800)])
-def test_coverage_stays_on_segment_and_in_own_half(side, ball_x, ball_y):
+def test_coverage_stays_inside_shot_cone_and_in_own_half(side, ball_x, ball_y):
     goal = SimpleNamespace(x=side * 4500.0, y=0.0)
     bx = side * ball_x
     x, y = cobertura_defensiva(bx, ball_y, goal)
     assert side * x >= 150.0 - 1e-6
-    assert abs((x - bx) * (goal.y - ball_y) - (y - ball_y) * (goal.x - bx)) < 1e-6
-    assert 0 <= (x - bx) / (goal.x - bx) <= 1
+    fraction = (x - bx) / (goal.x - bx)
+    assert 0 <= fraction <= 1
+    assert ball_y + (-500 - ball_y) * fraction <= y
+    assert y <= ball_y + (500 - ball_y) * fraction
 
 
 @pytest.mark.parametrize("side", [-1, 1])
