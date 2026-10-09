@@ -604,7 +604,7 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
 
     if papel == PAPEL_COBERTURA:
         return posicionamento.cobertura_defensiva(
-            bx, by, nosso_gol, ordem) + (False,)
+            bx, by, nosso_gol, ordem, r) + (False,)
 
     # -------------------------------------------------------------- APOIO
     #
@@ -882,18 +882,44 @@ def montar_comandos(tt):
 
     comandos = []
     ordem = {PAPEL_PORTADOR: 0, PAPEL_APOIO: 0, PAPEL_COBERTURA: 0}
+    # Em ensaios com um unico zagueiro (e em recuperacoes sem portador), a
+    # cobertura precisa afastar a bola quando ela chega a seus pes. Histerese
+    # evita alternar entre o ponto de bloqueio e a travessia da bola.
+    sem_portador = PAPEL_PORTADOR not in papeis.values()
+    limpezas = _est.setdefault("cobertura_limpar", {}) if _est is not None else {}
     for rid in sorted(tt.ally_robots):
         if rid == 0:
             continue
         papel = papeis.get(rid, PAPEL_COBERTURA)
         alvo_robo, tipo_robo = alvo_chute, tipo_alvo
-        if papel == PAPEL_COBERTURA:
+        r = tt.ally_robots[rid]
+        perto_bola = hypot(r.position_x - tt.ball.position_x,
+                           r.position_y - tt.ball.position_y)
+        sentido_ataque = -1.0 if tt.on_positive_half else 1.0
+        atras_da_bola = ((tt.ball.position_x - r.position_x)
+                         * sentido_ataque > 60.0)
+        limpar = (papel == PAPEL_COBERTURA and sem_portador
+                  and _dist_nosso_gol < TERCO_DEFENSIVO
+                  and atras_da_bola
+                  and perto_bola < (550.0 if limpezas.get(rid) else 360.0))
+        limpezas[rid] = limpar
+        if papel == PAPEL_COBERTURA and not limpar:
             alvo_robo, tipo_robo = None, "bloqueado"
+        elif limpar and (alvo_robo is None or not chute.direcao_para_frente(
+                tt.ball, alvo_robo, sentido_ataque)):
+            alvo_robo = (tt.ball.position_x + 1800.0 * sentido_ataque,
+                         tt.ball.position_y)
+            tipo_robo = "saida"
         o = ordem.get(papel, 0)
         alvo_x, alvo_y, _ = alvo_do_papel(
             papel, situacao, rid, tt.ally_robots, tt.ball,
             gol_ataque, nosso_gol, ordem=o, alvo_chute=alvo_robo,
             inimigos=tt.enemy_robots, bloqueado=(tipo_robo == "bloqueado"))
+        if limpar:
+            alvo_x, alvo_y = aproximacao.ponto_de_aproximacao(
+                r.position_x, r.position_y,
+                tt.ball.position_x, tt.ball.position_y,
+                alvo_robo, aproximacao.AVANCO_PORTADOR)
         alvo_x, alvo_y = posicionamento.fora_da_area_penal(alvo_x, alvo_y, nosso_gol)
         if papel in ordem:
             ordem[papel] += 1
@@ -938,7 +964,7 @@ def montar_comandos(tt):
         #
         # Quem esta indo a bola usa a direcao do CHUTE. Os outros seguem olhando
         # para ela, que e o certo para receber e para cobrir.
-        if papel != PAPEL_COBERTURA and _dperto < RAIO_ORIENTA_CHUTE:
+        if (papel != PAPEL_COBERTURA or limpar) and _dperto < RAIO_ORIENTA_CHUTE:
             _mira = alvo_robo or (gol_ataque.x, gol_ataque.y)
             ang = atan2(_mira[1] - tt.ball.position_y,
                         _mira[0] - tt.ball.position_x)
@@ -1010,7 +1036,7 @@ def montar_comandos(tt):
         _sentido_x = -1.0 if tt.on_positive_half else 1.0
         _travas = tt.estado.setdefault("chute_armado", {}) \
             if hasattr(tt, "estado") and tt.estado is not None else {}
-        if papel == PAPEL_COBERTURA:
+        if papel == PAPEL_COBERTURA and not limpar:
             _travas.pop(rid, None)
             arma = False
         else:
@@ -1031,8 +1057,8 @@ def montar_comandos(tt):
             print("[JG] arma=%s frente=%s d=%.0f tipo=%s"
                   % (arma, _frente, d_bola, tipo_robo), flush=True)
         cmd.kick = forca if arma else 0.0
-        # A cobertura nao disputa a bola: protege a abertura do gol.
-        cmd.ball = papel != PAPEL_PORTADOR
+        # Ao afastar, a cobertura atravessa a bola com o chutador armado.
+        cmd.ball = papel != PAPEL_PORTADOR and not limpar
         cmd.field_border = True
         cmd.penalty_area = True
         comandos.append(cmd)

@@ -46,7 +46,7 @@ MARCACAO_DIST = 400.0
 COBERTURA_FRACAO = 0.45
 # A cobertura fecha o angulo do gol sem entrar em contato com a bola.
 DISTANCIA_SOMBRA_BOLA = 700.0
-MEIA_LARGURA_GOL = 500.0  # Division B
+TOL_CENTRO_SOMBRA = 60.0  # mm: evita avancar antes de cruzar o meio da abertura
 
 
 def a_frente_da_bola(robo, bx, by, gol_ataque):
@@ -129,32 +129,45 @@ def cobertura_na_linha(bx, by, nosso_gol, fracao=COBERTURA_FRACAO,
     return no_campo(bx + ux * alvo, by + uy * alvo)
 
 
-def cobertura_defensiva(bx, by, nosso_gol, ordem=0):
-    """Fecha a abertura angular do gol vista da bola, sem disputar a posse.
+def cobertura_defensiva(bx, by, nosso_gol, ordem=0, robo=None):
+    """Entra primeiro no meio da sombra; depois avanca para fechar a abertura.
 
-    O ponto fica no bissetor dos raios que ligam a bola aos dois postes. Ficar
-    mais perto da bola aumenta a parcela do gol ocultada pelo casco, mas a
-    distancia escolhida evita uma tentativa deliberada de contato. Meio-campo
-    e area penal continuam sendo limites para o jogador de linha; junto a area
-    ou a linha de fundo, pode nao existir um ponto legal entre a bola e o gol.
+    O eixo central liga a bola ao meio da boca do gol: em cada largura da
+    sombra ele fica exatamente entre os dois bordos. A projecao ortogonal
+    do robo nesse eixo e o ponto de entrada mais proximo dele. So apos chegar
+    ao eixo ele segue rumo a bola, ate o ponto de bloqueio. Meio-campo e area
+    penal limitam ambos os alvos; junto a area pode nao haver eixo legal.
     """
     side = 1.0 if nosso_gol.x > 0 else -1.0
     dx = nosso_gol.x - bx
-    inferior = -MEIA_LARGURA_GOL - by
-    superior = MEIA_LARGURA_GOL - by
-    n_inf = hypot(dx, inferior) or 1.0
-    n_sup = hypot(dx, superior) or 1.0
-    ux = dx / n_inf + dx / n_sup
-    uy = inferior / n_inf + superior / n_sup
-    n = hypot(ux, uy) or 1.0
-    ux, uy = ux / n, uy / n
+    ux, uy, _ = versor(bx, by, nosso_gol.x, nosso_gol.y)
     distancia = DISTANCIA_SOMBRA_BOLA + 400.0 * ordem
     if side * bx < 150.0 and side * ux > 0:
         distancia = max(distancia, (150.0 - side * bx) / (side * ux))
     if side * ux > 0:
         distancia = min(distancia, max(0.0, dx / ux - 200.0))
     x, y = no_campo(bx + ux * distancia, by + uy * distancia)
-    return fora_da_area_penal(x, y, nosso_gol)
+    bloqueio = fora_da_area_penal(x, y, nosso_gol)
+    if robo is None or side * ux <= 0:
+        return bloqueio
+
+    # O centro da sombra so e alcancavel fora da area penal. Limitar o trecho
+    # ao plano frontal da area preserva o eixo, sem jogar o alvo para a lateral.
+    frente_area_x = nosso_gol.x - side * (PROFUNDIDADE_AREA + MARGEM_ROBO)
+    fim_eixo = min(dx / ux - 200.0, (frente_area_x - bx) / ux)
+    if fim_eixo < distancia:
+        return bloqueio
+
+    projecao = ((robo.position_x - bx) * ux
+                + (robo.position_y - by) * uy)
+    entrada = max(distancia, min(projecao, fim_eixo))
+    centro_x, centro_y = no_campo(bx + ux * entrada, by + uy * entrada)
+    erro_lateral = abs((robo.position_x - bx) * uy
+                       - (robo.position_y - by) * ux)
+    if (erro_lateral > TOL_CENTRO_SOMBRA
+            or abs(projecao - entrada) > TOL_CENTRO_SOMBRA):
+        return centro_x, centro_y
+    return bloqueio
 
 
 # Fracao do caminho goleiro->bola em que o zagueiro se posta.
@@ -173,7 +186,9 @@ def ponto_no_corredor(goleiro, bx, by, fracao):
 # entrar nela; so o goleiro. A margem cobre o raio do robo (90 mm).
 PROFUNDIDADE_AREA = 1000.0
 MEIA_LARGURA_AREA = 1000.0
-MARGEM_ROBO = 100.0
+# A area e expandida em 90 mm pelo planner (raio do robo). Mais 60 mm evitam
+# que erro de rastreio e frenagem deixem o alvo exatamente sobre essa borda.
+MARGEM_ROBO = 150.0
 
 
 def fora_da_area_penal(x, y, nosso_gol):

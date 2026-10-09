@@ -1227,7 +1227,7 @@ cmd_cenario() {
     # nao chegou a existir. Ali foi um assert de script que falhou calado; aqui
     # seria uma chamada de servico. Agora conferimos a resposta.
     local saida_pid
-    saida_pid="$(ros_run "timeout 15 ros2 service call /update_pid system_interfaces/srv/ControlParams '{id: 0, kp: 1.5, ki: 0.0, kd: 0.3}'" 2>&1)"
+    saida_pid="$(ros_run "timeout 35 ros2 service call /update_pid system_interfaces/srv/ControlParams '{id: 0, kp: 1.5, ki: 0.0, kd: 0.3}'" 2>&1)"
     if ! printf '%s' "$saida_pid" | grep -q "success=True"; then
         echo "   !! o ganho kp=1.5 NAO foi aplicado - o resultado NAO vale"
         echo "      (a execucao rodaria com o kp=2,3 do repositorio)"

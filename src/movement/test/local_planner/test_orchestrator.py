@@ -131,6 +131,79 @@ class TestOrchestrator:
         assert planner.validate_continuity(traj) is True
 
 
+@pytest.mark.parametrize("side", [FieldSide.LEFT, FieldSide.RIGHT])
+def test_penalty_area_bypass_hugs_front_edge_without_recovery(side):
+    """Crossing from one side of the area needs two repeatable corner turns."""
+    geometry = _geometry()
+    area = PenaltyAreaObstacle(geometry, side)
+    obstacles = [FieldBorderObstacle(geometry), area]
+    sign = -1 if side is FieldSide.LEFT else 1
+    start = MotionState(Vector2D(sign * 4000.0, -1400.0), Vector2D(0, 0))
+    goal = MotionState(Vector2D(sign * 4000.0, 1400.0), Vector2D(0, 0))
+    planner = Orchestrator(SolverConfig(max_iterations=0))
+
+    trajectory = planner.find(start, goal, obstacles)
+
+    assert trajectory.status == PlanningStatus.BYPASS_FOUND
+    assert trajectory.get_destination().position.distance(goal.position) < 1e-6
+    assert planner.validate_continuity(trajectory)
+    front_x = area._bounds()[1 if side is FieldSide.LEFT else 0]
+    assert abs(trajectory.via_state.position.x - front_x) == pytest.approx(50.0)
+    segment = trajectory.root
+    while segment is not None:
+        assert not CollisionEngine.is_collision(segment, obstacles)
+        segment = segment.child
+
+
+def test_replanning_at_penalty_corners_keeps_moving():
+    geometry = _geometry()
+    obstacles = [
+        FieldBorderObstacle(geometry),
+        PenaltyAreaObstacle(geometry, FieldSide.LEFT),
+    ]
+    planner = Orchestrator(SolverConfig(max_iterations=0))
+    state = MotionState(Vector2D(-4000.0, -1400.0), Vector2D(0, 0))
+    goal = MotionState(Vector2D(-4000.0, 1400.0), Vector2D(0, 0))
+
+    for _ in range(40):
+        trajectory = planner.find(state, goal, obstacles)
+        assert trajectory.status != PlanningStatus.RECOVERY
+        sampler = TrajectorySampler(trajectory.root)
+        t = min(0.1, sampler.duration)
+        position = sampler.positions(np.array([t]))[0]
+        velocity = sampler.velocities(np.array([t]))[0]
+        state = MotionState(Vector2D(*position), Vector2D(*velocity))
+        assert not any(obstacle.isCollidingAt(state.position) for obstacle in obstacles)
+        if state.position.distance(goal.position) < 20.0:
+            break
+
+    assert state.position.distance(goal.position) < 20.0
+
+
+def test_escape_from_penalty_edge_reaches_nearby_legal_coverage_point():
+    """Replay: a cobertura ficou 4 mm dentro da margem da area em x=-3414."""
+    from types import SimpleNamespace as S
+
+    lines = [
+        S(name="LeftFieldRightPenaltyStretch", x1=-4500, y1=1000,
+          x2=-3500, y2=1000),
+        S(name="LeftFieldLeftPenaltyStretch", x1=-4500, y1=-1000,
+          x2=-3500, y2=-1000),
+    ]
+    geometry = S(field_lines=lines, field_length=9000, field_width=6000)
+    area = PenaltyAreaObstacle(geometry, FieldSide.LEFT)
+    border = FieldBorderObstacle(geometry)
+    start = MotionState(Vector2D(-3414, 134), Vector2D(0, 0))
+    goal = MotionState(Vector2D(-3350, 134), Vector2D(0, 0))
+    planner = Orchestrator(SolverConfig(max_iterations=0))
+
+    trajectory = planner.find(start, goal, [border, area])
+
+    assert trajectory.status == PlanningStatus.DIRECT_PATH
+    assert trajectory.get_destination().position.distance(goal.position) < 1e-3
+    assert not area.isCollidingAt(trajectory.get_destination().position)
+
+
 class TestEscapingObstacles:
     """
     A robot pressed against another robot had every candidate path collide at t=0, so

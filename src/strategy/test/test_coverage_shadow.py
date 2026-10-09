@@ -40,7 +40,7 @@ def test_cobertura_reduz_abertura_descoberta_do_gol(side, bx, by):
 @pytest.mark.parametrize("side", [-1, 1])
 @pytest.mark.parametrize("goalkeeper", [False, True])
 @pytest.mark.parametrize("near_ball", [False, True])
-def test_cobertura_so_posiciona_e_nunca_chuta(monkeypatch, side, goalkeeper, near_ball):
+def test_cobertura_so_afasta_a_bola_quando_esta_atras_e_perto(monkeypatch, side, goalkeeper, near_ball):
     monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
     monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
     ball = robo(side * 2600, 200)
@@ -54,14 +54,85 @@ def test_cobertura_so_posiciona_e_nunca_chuta(monkeypatch, side, goalkeeper, nea
            goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
                          GOAL_NEGATIVE=S(x=-4500.0, y=0.0)),
            skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
-           estado={"chute_armado": {1: True}})
+           estado={"chute_armado": {}})
     cmd = next(c for c in running.montar_comandos(tt) if c.robot_id == 1)
-    expected = posicionamento.cobertura_defensiva(ball.position_x,
-                                                   ball.position_y, goal)
-    assert (cmd.target_x, cmd.target_y) == expected
-    assert cmd.ball
+    if near_ball:
+        assert abs(cmd.target_x - ball.position_x) < 300.0
+        assert not cmd.ball
+        assert cmd.kick > 0
+        assert tt.estado["chute_armado"][1]
+    else:
+        expected = posicionamento.cobertura_defensiva(ball.position_x,
+                                                       ball.position_y, goal,
+                                                       robo=allies[1])
+        assert (cmd.target_x, cmd.target_y) == expected
+        assert cmd.ball
+        assert cmd.kick == 0
+        assert 1 not in tt.estado["chute_armado"]
+
+
+@pytest.mark.parametrize("side", [-1, 1])
+def test_cobertura_nao_chuta_para_propria_meta(monkeypatch, side):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
+    ball = robo(side * 2600, 200)
+    # O robo esta do lado do ataque: a bola fica atras dele.
+    allies = {1: robo(side * 2500, 200, 0 if side < 0 else pi)}
+    tt = S(ally_robots=allies, enemy_robots={}, ball=ball,
+           on_positive_half=side > 0,
+           goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
+                         GOAL_NEGATIVE=S(x=-4500.0, y=0.0)),
+           skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
+           estado={})
+    cmd = running.montar_comandos(tt)[0]
     assert cmd.kick == 0
-    assert 1 not in tt.estado["chute_armado"]
+    assert cmd.ball
+
+
+def test_cobertura_arma_chute_na_posicao_travada_do_replay(monkeypatch):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
+    ball = robo(-3200.0, 200.0)
+    # Ultimo quadro de zg_perto_gol__original: 224 mm da bola, orientado
+    # para frente, mas o comando antigo anulava kick por ser cobertura.
+    r = robo(-3414.3069, 133.9566, 0.29894)
+    tt = S(ally_robots={1: r}, enemy_robots={}, ball=ball,
+           on_positive_half=False,
+           goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
+                         GOAL_NEGATIVE=S(x=-4500.0, y=0.0)),
+           skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
+           estado={})
+
+    cmd = running.montar_comandos(tt)[0]
+
+    assert cmd.kick > 0
+    assert not cmd.ball
+    assert cmd.target_x > r.position_x
+
+
+@pytest.mark.parametrize("side", [-1, 1])
+def test_cobertura_entra_no_centro_antes_de_avancar(side):
+    gol = S(x=side * 4500.0, y=0.0)
+    bx, by = side * 1000.0, 0.0
+    r = robo(side * 2500.0, 600.0)
+    x, y = posicionamento.cobertura_defensiva(bx, by, gol, robo=r)
+    assert x == pytest.approx(r.position_x)
+    assert y == pytest.approx(0.0)
+    assert (x, y) != posicionamento.cobertura_defensiva(bx, by, gol)
+
+    # Uma vez no meio da largura, pode avancar para fechar a sombra.
+    r.position_y = 0.0
+    assert posicionamento.cobertura_defensiva(bx, by, gol, robo=r) == (
+        posicionamento.cobertura_defensiva(bx, by, gol))
+
+
+@pytest.mark.parametrize("side", [-1, 1])
+def test_cobertura_respeita_area_ao_entrar_na_sombra(side):
+    gol = S(x=side * 4500.0, y=0.0)
+    r = robo(side * 4000.0, 500.0)
+    x, y = posicionamento.cobertura_defensiva(side * 500.0, 0.0, gol, robo=r)
+    assert side * x == pytest.approx(3350.0)
+    assert y == pytest.approx(0.0)
 
 
 def test_kick_latch_survives_contact_noise_and_resets_when_ball_leaves():

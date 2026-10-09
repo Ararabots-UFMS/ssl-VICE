@@ -347,7 +347,7 @@ CENARIOS = {
     },
     "zc_perto_gol": {
         "titulo": "Cobertura e bola perto do nosso gol",
-        "descricao": "So o zagueiro azul protege a abertura do gol sem disputar a bola proxima.",
+        "descricao": "O zagueiro protege a abertura e afasta a bola com chute quando ela chega perto.",
         "bola": (-3200.0, 200.0),
         "azuis": [(1, -3000.0, 600.0, 0.0)],
         "amarelos": [],
@@ -371,7 +371,7 @@ CENARIOS = {
     },
     "zg_perto_gol": {
         "titulo": "Zagueiro e goleiro com bola perto do gol",
-        "descricao": "Goleiro azul protege a meta e o zagueiro cobre sem disputar a bola.",
+        "descricao": "Goleiro protege a meta; zagueiro cobre e chuta para afastar a bola proxima.",
         "bola": (-3200.0, 200.0),
         "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0)],
         "amarelos": [],
