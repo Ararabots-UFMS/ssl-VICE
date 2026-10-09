@@ -400,6 +400,11 @@ class Strategy(Node):
             # Velocidade final no alvo; 0 para parar nele (ver Skills.move_through).
             cmd.target_vel.x = float(skill.vel_x)
             cmd.target_vel.y = float(skill.vel_y)
+            # Os obstaculos por robo vao NA MENSAGEM. Sem isto o planejador nunca
+            # recebe 'ball' e o robo atravessa a bola ao se posicionar atras dela.
+            cmd.planning_options.avoid_penalty_area = bool(skill.penalty_area)
+            cmd.planning_options.avoid_center_area = bool(skill.center_area)
+            cmd.planning_options.avoid_ball = bool(skill.ball)
             if self._lote_mov is None:
                 self._lote_mov = []
             self._lote_mov.append(cmd)
@@ -425,14 +430,9 @@ class Strategy(Node):
         )
 
     def _send_obstacles(self, skill: Skill) -> None:
-        # No caminho NOVO nao existe obstaculo por robo: o MovementManager so
-        # aceita border_area/center_area globais (SetStaticObstacles) e deriva o
-        # resto do game_state. Os campos por robo que a tatica usa - sobretudo
-        # 'ball' - nao tem equivalente, entao nao ha o que enviar aqui.
-        #
-        # ISTO E UMA PERDA DE COMPORTAMENTO, e esta medida no HANDOVER: a fase
-        # de contorno depende da bola ser obstaculo para nao passar por cima
-        # dela. Anotado para a comparacao; nao invento equivalente.
+        # No caminho NOVO os obstaculos por robo (ball, penalty_area, center_area)
+        # vao no planning_options de cada MovementCommand - ver _send_move. Nao
+        # ha servico separado, entao nao ha o que enviar aqui.
         if self.movimento_novo:
             return
 
