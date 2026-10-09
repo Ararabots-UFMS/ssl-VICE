@@ -167,3 +167,51 @@ class TestBounds:
             if obstacle.isCollidingAt(point):
                 assert min_x <= point.x <= max_x
                 assert min_y <= point.y <= max_y
+
+
+class TestRoomForAPassingRoute:
+    """
+    Time-optimal routes graze whatever they go round, so any tracking error put the
+    robot inside the obstacle and the next plan began with an escape.
+    """
+
+    CENTRE = Vector2D(0.0, 0.0)
+
+    def _ball(self, clearance=70.0):
+        return GenericCircleObstacle(self.CENTRE, 60, clearance=clearance)   # edge at 150
+
+    def test_a_route_passing_by_sees_it_grown_by_the_clearance(self):
+        routed = self._ball().for_route(Vector2D(-2000.0, 0.0), Vector2D(2000.0, 0.0))
+
+        assert routed.radius == pytest.approx(220.0)
+
+    def test_the_obstacle_itself_is_left_as_it_was(self):
+        ball = self._ball()
+        ball.for_route(Vector2D(-2000.0, 0.0), Vector2D(2000.0, 0.0))
+
+        assert ball.radius == pytest.approx(150.0)
+
+    def test_it_never_grows_over_the_goal(self):
+        goal = Vector2D(-180.0, 0.0)
+
+        routed = self._ball().for_route(Vector2D(-2000.0, 0.0), goal)
+
+        assert 150.0 < routed.radius < 180.0
+        assert not routed.isCollidingAt(goal)
+
+    def test_it_never_grows_over_the_robot(self):
+        robot = Vector2D(0.0, 190.0)
+
+        routed = self._ball().for_route(robot, Vector2D(-2000.0, 0.0))
+
+        assert not routed.isCollidingAt(robot)
+
+    def test_a_robot_on_the_edge_keeps_the_plain_obstacle(self):
+        ball = self._ball()
+
+        assert ball.for_route(Vector2D(0.0, 152.0), Vector2D(-2000.0, 0.0)) is ball
+
+    def test_without_a_clearance_nothing_changes(self):
+        ball = self._ball(clearance=0.0)
+
+        assert ball.for_route(Vector2D(-2000.0, 0.0), Vector2D(2000.0, 0.0)) is ball

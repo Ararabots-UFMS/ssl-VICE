@@ -172,3 +172,54 @@ class TestRobotCollections:
 
     def test_empty_collections_are_still_fine(self):
         assert self._obstacles([], []) == []
+
+
+class TestKeepOutAtTheBall:
+    """
+    At 200mm an opponent with the ball on its kicker leaves 4mm between its zone and
+    the spot we kick from, and a robot already there is pushed back off the ball.
+    """
+
+    BALL = (0.0, 0.0)
+
+    def _enemy_radius(self, enemy_xy, avoid_ball, balls=None):
+        obstacles = ObstacleFactory().create_obstacles(
+            robot_id=1,
+            config=_make_config(avoid_penalty_area=False, avoid_ball=avoid_ball),
+            geometry=None,
+            balls=[_make_ball(*self.BALL)] if balls is None else balls,
+            enemy_robots=[_Robot(7, *enemy_xy)],
+            ally_robots=[],
+        )
+        (enemy,) = [o for o in obstacles if isinstance(o, EnemyRobotObstacle)]
+        return enemy.radius
+
+    def test_an_opponent_on_the_ball_gets_a_tighter_zone_from_the_robot_going_for_it(self):
+        assert self._enemy_radius((102.0, 0.0), avoid_ball=False) == 185.0
+
+    def test_it_never_goes_below_touching_distance(self):
+        assert self._enemy_radius((102.0, 0.0), avoid_ball=False) > 180.0
+
+    def test_a_robot_keeping_off_the_ball_keeps_the_full_margin(self):
+        assert self._enemy_radius((102.0, 0.0), avoid_ball=True) == 200.0
+
+    def test_an_opponent_away_from_the_ball_keeps_the_full_margin(self):
+        assert self._enemy_radius((1000.0, 0.0), avoid_ball=False) == 200.0
+
+    def test_without_a_ball_nothing_changes(self):
+        assert self._enemy_radius((102.0, 0.0), avoid_ball=False, balls=[]) == 200.0
+
+
+def test_the_ball_asks_routes_for_room():
+    obstacles = ObstacleFactory().create_obstacles(
+        robot_id=1,
+        config=_make_config(avoid_penalty_area=False, avoid_ball=True),
+        geometry=None,
+        balls=[_make_ball(0.0, 0.0)],
+        enemy_robots=[],
+        ally_robots=[],
+    )
+
+    (ball,) = obstacles
+    assert ball.radius == 150.0
+    assert ball.clearance > 0.0

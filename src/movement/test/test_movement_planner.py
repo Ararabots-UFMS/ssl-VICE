@@ -71,9 +71,11 @@ def planner_node():
 
 
 def _make_target(robot_id=1, initial_pos=(0, 0), initial_vel=(0, 0),
-                  target_pos=(1000, 0), target_vel=(0, 0), vision_stamp=0.0):
+                  target_pos=(1000, 0), target_vel=(0, 0), vision_stamp=0.0,
+                  aggressiveness=0.0):
     target = MagicMock()
     target.robot_id = robot_id
+    target.planning_options.aggressiveness = aggressiveness
     target.initial_pos = MagicMock(x=initial_pos[0], y=initial_pos[1])
     target.initial_vel = MagicMock(x=initial_vel[0], y=initial_vel[1])
     target.target_pos = MagicMock(x=target_pos[0], y=target_pos[1])
@@ -502,3 +504,29 @@ class TestPlanningFromVision:
 
         assert state.position.x == pytest.approx(500.0)
         assert state.position.y == pytest.approx(-200.0)
+
+
+class TestSpeedChannel:
+    """
+    PlanningOptions.aggressiveness was copied by the manager and read by nobody, so
+    strategy had no way to ask for less speed - not even the 1.5m/s of a STOP.
+    """
+
+    def _scale_sent_for(self, planner_node, aggressiveness):
+        planner_node.game_state = MagicMock()
+        planner_node.factory.create_obstacles.return_value = []
+        planner_node.planner.find.return_value = MagicMock(root=MagicMock(), via_state=None)
+
+        planner_node.plan_for_robot(_make_target(aggressiveness=aggressiveness))
+
+        return planner_node.planner.find.call_args.kwargs["speed_scale"]
+
+    def test_a_fraction_reaches_the_solver(self, planner_node):
+        assert self._scale_sent_for(planner_node, 0.6) == pytest.approx(0.6)
+
+    def test_a_command_that_never_set_it_is_not_slowed_down(self, planner_node):
+        assert self._scale_sent_for(planner_node, 0.0) == 1.0
+
+    @pytest.mark.parametrize("value", [1.0, 3.0, -0.5, float("nan")])
+    def test_anything_out_of_range_means_no_cap(self, planner_node, value):
+        assert self._scale_sent_for(planner_node, value) == 1.0

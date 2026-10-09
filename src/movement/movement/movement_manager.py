@@ -89,8 +89,10 @@ class MovementManager(Node):
             options.aggressiveness = cmd.planning_options.aggressiveness
             options.avoid_center_area = cmd.planning_options.avoid_center_area
 
-            if self._static_obstacles is not None:
-                options.avoid_center_area = self._static_obstacles['center_area']
+            # The team-wide switch adds the centre circle; it never cancels a robot's own
+            # request. Strategy sets it False at start-up, which did exactly that.
+            if self._static_obstacles is not None and self._static_obstacles['center_area']:
+                options.avoid_center_area = True
 
             # Decided here rather than inherited from the command. Entering the penalty
             # area is a foul, and the field defaults to False when a publisher leaves it

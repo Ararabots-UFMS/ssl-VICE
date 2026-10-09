@@ -179,6 +179,18 @@ class MovementPlanner(Node):
             Vector2D(state.velocity.x * scale, state.velocity.y * scale),
         )
 
+    @staticmethod
+    def _speed_scale(aggressiveness: float) -> float:
+        """
+        PlanningOptions.aggressiveness as the fraction of top speed this robot may use.
+
+        The field is 0 on every command that never set it, so 0 means no cap, as do
+        values that are out of range or not a number.
+        """
+        if not 0.0 < aggressiveness < 1.0:
+            return 1.0
+        return float(aggressiveness)
+
     def _is_parked(self, robot_id: int, goal_pos: Vector2D, measured_pos: Vector2D) -> bool:
         radius = float(self.get_parameter('accept_radius').value)
         parked_at = self._parked.get(robot_id)
@@ -257,6 +269,7 @@ class MovementPlanner(Node):
             )
 
         target_state = MotionState(goal_pos, goal_vel)
+        speed_scale = self._speed_scale(target.planning_options.aggressiveness)
 
         try:
             obstacles = self.factory.create_obstacles(
@@ -278,7 +291,7 @@ class MovementPlanner(Node):
         previous_via = self.last_vias.get(robot_id)
         try:
             trajectory = self.planner.find(
-                initial_state, target_state, obstacles, previous_via
+                initial_state, target_state, obstacles, previous_via, speed_scale=speed_scale
             )
             if trajectory and trajectory.root:
                 if trajectory.status == PlanningStatus.RECOVERY:

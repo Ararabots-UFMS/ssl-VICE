@@ -54,3 +54,20 @@ class TestTrajectoryOptimizer:
 
         optimized_traj = optimizer.optimize(traj, generator, obstacles)
         assert not CollisionEngine.is_collision(optimized_traj.root, obstacles)
+
+
+class TestOnlyRealShortcuts:
+    def test_a_slower_re_solve_is_not_swapped_in(self, generator):
+        """The steer is not exactly time-optimal, so a re-solved stretch can be slower."""
+        from movement.entities.motion import MotionConstraints
+        from movement.local_planner import TrajectoryGenerator
+
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(1000, 0), Vector2D(0, 0))
+        traj = Trajectory(generator.generate(start, goal))
+        before = traj.get_total_duration()
+        crawling = TrajectoryGenerator(MotionConstraints(Vector2D(50, 50), Vector2D(20, 20)))
+
+        optimized = TrajectoryOptimizer(trys=20, early_stop=20).optimize(traj, crawling, [])
+
+        assert optimized.get_total_duration() == before

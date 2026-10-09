@@ -11,6 +11,17 @@ from movement.entities.trajectory.trajectory import Trajectory
 from utils.math_util import Vector2D
 from utils.field_util import FieldSide
 
+# 90 (enemy robot) + 90 (own robot) + 20 (safety).
+ENEMY_KEEP_OUT = 200.0
+# The margin left for an opponent on a ball this robot is going for. At 200 two robots
+# head-on at the same ball sit 204mm apart, one noisy frame from being pushed off it.
+ENEMY_KEEP_OUT_AT_BALL = 185.0
+# How near the ball an opponent counts as on it: the keep-out plus a robot at the ball.
+CONTEST_RANGE = 300.0
+# Room a route keeps from the ball's disc. Without it routes graze the edge, and the
+# tracking error measured going round the ball (p90 70mm) puts the robot inside it.
+BALL_ROUTE_CLEARANCE = 70.0
+
 
 class ObstacleFactory:
     def __init__(self, logger=None):
@@ -24,6 +35,15 @@ class ObstacleFactory:
     def _as_robot_list(robots) -> list:
         """GameState's Robots[] sequences, tolerating the empty case."""
         return list(robots or [])
+
+    @staticmethod
+    def _enemy_keep_out(enemy: MotionState, contested_ball) -> float:
+        if contested_ball is None:
+            return ENEMY_KEEP_OUT
+        ball = Vector2D(contested_ball.position_x, contested_ball.position_y)
+        if enemy.position.distance(ball) < CONTEST_RANGE:
+            return ENEMY_KEEP_OUT_AT_BALL
+        return ENEMY_KEEP_OUT
 
     def create_obstacles(
         self,
@@ -61,24 +81,34 @@ class ObstacleFactory:
                 self._warn(f"Could not build the center area obstacle: {e}")
 
         # 4. Ball (Usually always on)
-        if getattr(planning_opts, 'avoid_ball', True) and balls:
+        avoid_ball = getattr(planning_opts, 'avoid_ball', True)
+        if avoid_ball and balls:
             try:
                 ball = balls[0]
                 obstacles.append(
-                    GenericCircleObstacle(Vector2D(ball.position_x, ball.position_y), 60)
+                    GenericCircleObstacle(
+                        Vector2D(ball.position_x, ball.position_y),
+                        60,
+                        clearance=BALL_ROUTE_CLEARANCE,
+                    )
                 )
             except Exception as e:
                 self._warn(f"Could not build the ball obstacle: {e}")
 
         # 5. Enemy Robots (Always on)
+        # A robot that is not avoiding the ball is going for it.
+        contested_ball = balls[0] if balls and not avoid_ball else None
         for enemy in self._as_robot_list(enemy_robots):
             try:
                 state = MotionState(
                     Vector2D(enemy.position_x, enemy.position_y),
                     Vector2D(enemy.velocity_x, enemy.velocity_y),
                 )
-                # radius = 90 (enemy robot) + 90 (own robot) + 20 (safety) = 200
-                obstacles.append(EnemyRobotObstacle(state, radius=200))
+                obstacles.append(
+                    EnemyRobotObstacle(
+                        state, radius=self._enemy_keep_out(state, contested_ball)
+                    )
+                )
             except Exception as e:
                 self._warn(f"Could not build the obstacle for enemy robot: {e}")
 

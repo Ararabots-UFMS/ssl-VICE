@@ -87,14 +87,16 @@ class BypassSolver(BaseSolver):
         generator: TrajectoryGenerator,
         via_state: MotionState,
     ) -> Optional[Trajectory]:
-        """Two segments through via_state, or None if either one collides."""
+        """Two segments through via_state, or None if either one collides or falls short."""
         segment_1 = generator.generate(start, via_state)
         segment_2 = generator.generate(via_state, goal)
 
         # The steering solver returns a zero-duration path parked at its own start when
         # it cannot reach a state, and chaining that raises out of add_child. A via we
         # cannot steer to is just a candidate that did not work out.
-        if not self._reaches(segment_1, via_state):
+        # Both legs: an unsolved second one has no duration, so it collides with nothing
+        # and makes the candidate look like the fastest route there is.
+        if not self._reaches(segment_1, via_state) or not self._reaches(segment_2, goal):
             return None
 
         if not self._is_safe(segment_1, obstacles) or not self._is_safe(segment_2, obstacles):

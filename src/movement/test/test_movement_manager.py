@@ -285,3 +285,17 @@ def test_the_static_obstacle_override_wins_over_the_command(manager, test_robot1
     options = manager._build_target_array().targets[0].planning_options
 
     assert options.avoid_center_area is True
+
+
+def test_a_switched_off_override_does_not_cancel_the_commands_own_request(manager, test_robot1):
+    """
+    Strategy calls SetStaticObstacles(center_area=False) once at start-up. Applied as a
+    plain overwrite, that dropped the centre-circle flag of every kickoff robot.
+    """
+    manager._movement_commands = [_make_command(1, (100.0, 200.0), avoid_center_area=True)]
+    manager._robots = [test_robot1]
+    manager._static_obstacles = {'center_area': False, 'border_area': True}
+
+    options = manager._build_target_array().targets[0].planning_options
+
+    assert options.avoid_center_area is True

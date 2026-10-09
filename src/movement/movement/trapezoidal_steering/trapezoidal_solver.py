@@ -9,8 +9,9 @@ class TrapezoidalSolver:
 
     # How far a stretched profile may sit from the duration it was asked for. The axes
     # are clipped to the shortest when merged, so anything looser trims the end off the
-    # longer one.
-    duration_tolerance = 1.0e-6
+    # longer one. At 1e-6 that trim left the path 0.003 short, past the 1e-3 the planner
+    # allows when it chains segments.
+    duration_tolerance = 1.0e-9
 
     def __init__(self, bang_bang=None, time_epsilon=1.0e-7):
         self.bang_bang = bang_bang or BangBangSolver(time_epsilon)
@@ -28,6 +29,10 @@ class TrapezoidalSolver:
             return bang_bang
         cruise = vmax if peak > vmax else vmin
         first_acceleration, third_acceleration = (umax, umin) if peak > vmax else (umin, umax)
+        # Already past the limit (it was lowered mid-move): brake into it. Speeding up
+        # to reach it gives a negative time below and the unbounded profile is returned.
+        if (iv - cruise) * cruise > 0:
+            first_acceleration = third_acceleration
         first_time = (cruise - iv) / first_acceleration if first_acceleration else 0
         first_distance = iv * first_time + 0.5 * first_acceleration * first_time ** 2
         third_time = (gv - cruise) / third_acceleration if third_acceleration else 0

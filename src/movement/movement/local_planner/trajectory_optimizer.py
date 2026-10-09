@@ -53,6 +53,12 @@ class TrajectoryOptimizer:
 
             optimized_segment = generator.generate(firstState, secondState)
 
+            # A shortcut is only one if it is quicker: the steer is not exactly
+            # time-optimal, so a re-solved stretch can come out slower than it was.
+            if optimized_segment.get_local_duration() > second_time - first_time:
+                early_stop_count += 1
+                continue
+
             if not CollisionEngine.is_collision(optimized_segment, obstacles):
                 curSegment = trajectory.root
                 curTime = second_time

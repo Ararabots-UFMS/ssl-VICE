@@ -19,6 +19,9 @@ class SolverConfig:
     # How far past an obstacle's boundary to place an escape point: adaptDestination
     # returns the boundary itself, where isCollidingAt is still true.
     escape_margin: float = 20.0
+    # How far short of an occupied goal's obstacle to stop. Under escape_margin, so a
+    # robot resting there is not read as inside by vision noise and escaped back out.
+    approach_clearance: float = 10.0
     # Collision sampling step, ~80 mm of travel at full speed.
     collision_time_step: float = 0.04
 
