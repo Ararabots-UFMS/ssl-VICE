@@ -1,5 +1,6 @@
 from strategy.skills.skills import Skills
 from strategy.skills import geometria, posicionamento
+from strategy.skills.bola import prever_direcao_chute
 from utils.math_util import Vector2D
 from math import atan2, hypot
 
@@ -163,6 +164,20 @@ class Goalkeeper:
             dentro_x = self.ball.position_x < goal_x + AREA_PROFUNDIDADE + self.padding
         return dentro_x and abs(self.ball.position_y) < AREA_MEIA_LARGURA + self.padding
 
+    def _previsao_chute_iminente(self, goal_x: float):
+        """Checa se um atacante adversario provavelmente vai chutar ao gol."""
+        melhor = None
+        if not self.enemy_robots:
+            return None
+
+        for enemy in self.enemy_robots.values():
+            prev = prever_direcao_chute(enemy, self.ball, goal_x)
+            if prev is None:
+                continue
+            if melhor is None or prev["tempo"] < melhor["tempo"]:
+                melhor = prev
+        return melhor
+
     def execute(self, goal_position: Vector2D, ball: Vector2D):
         """
         Quando a bola está na área do gol, o goleiro segue a lógica de ataque:
@@ -185,6 +200,25 @@ class Goalkeeper:
         in_area = self._bola_na_area(goal_x)
 
         if in_area:
+            chute_iminente = self._previsao_chute_iminente(goal_x)
+            if chute_iminente is not None:
+                target_y = max(-400.0, min(400.0, chute_iminente["target_y"]))
+                robot_command = self.skills_factory.move_with_angle(
+                    robot_id=0,
+                    target_x=goal_x,
+                    target_y=target_y,
+                    vel_x=0.0,
+                    vel_y=0.0,
+                    angle=angle,
+                )
+                robot_command.field_border = True
+                robot_command.ally_ids = []
+                try:
+                    robot_command.deactivate_kick()
+                except Exception:
+                    pass
+                return robot_command
+
             bx, by = ball.position_x, ball.position_y
 
             # direção para empurrar: do centro da meta para a bola (ou seja, do gol para fora)

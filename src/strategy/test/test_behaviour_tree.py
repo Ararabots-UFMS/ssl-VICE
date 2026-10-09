@@ -15,6 +15,7 @@ from strategy.commons.check_state import CheckState
 from strategy.commons.task_status import TaskStatus
 from strategy.context import GameConfig, TickContext, TreeDeps
 from strategy.root import RootTree
+from strategy.skills.bola import prever_direcao_chute
 
 
 @dataclass
@@ -144,6 +145,27 @@ def test_context_is_frozen():
 def test_ball_is_none_when_vision_reports_no_ball():
     assert TickContext().ball is None
     assert TickContext().has_robots_and_ball() is False
+
+
+def test_prever_direcao_chute_detecta_angulo_para_o_gol():
+    shooter = FakeRobot(id=7, position_x=500.0, position_y=0.0, orientation=3.141592653589793)
+    ball = FakeBall(position_x=1000.0, position_y=0.0)
+
+    shot = prever_direcao_chute(shooter, ball, goal_x=-4500.0)
+
+    assert shot is not None
+    assert shot["tipo"] == "gol"
+    assert shot["target_x"] == -4500.0
+    assert abs(shot["target_y"]) <= 1000.0
+
+
+def test_prever_direcao_chute_nao_acerta_quando_robo_mira_ao_lado():
+    shooter = FakeRobot(id=7, position_x=500.0, position_y=0.0, orientation=0.0)
+    ball = FakeBall(position_x=1000.0, position_y=0.0)
+
+    shot = prever_direcao_chute(shooter, ball, goal_x=-4500.0)
+
+    assert shot is None
 
 
 def test_config_fields_are_none_until_the_service_answers():
