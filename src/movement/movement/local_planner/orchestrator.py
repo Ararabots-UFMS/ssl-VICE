@@ -55,10 +55,10 @@ class Orchestrator:
         previous_via is the via point of the last plan for this robot, if any. The caller
         owns that cache so this stays reentrant across the planner's worker threads.
         """
+        goal = MotionState(goal.position, self._feasible_velocity(goal.velocity))
         start, goal, safety_trajectory = self._handle_start_and_goal_collisions(
             start, goal, obstacles
         )
-
 
         # 1. Try direct path
         direct_seg = self.generator.generate(start, goal)
@@ -82,6 +82,22 @@ class Orchestrator:
         recovery = self._get_recovery_trajectory(start)
         recovery.status = PlanningStatus.RECOVERY
         return recovery
+
+    def _feasible_velocity(self, velocity: Vector2D) -> Vector2D:
+        """
+        Scale a goal velocity down until both axes fit max_velocity, keeping its heading.
+
+        The steering solver cannot end above the limit and returns an empty plan.
+        """
+        limit = self.config.max_velocity
+        scale = 1.0
+        if abs(velocity.x) > limit.x:
+            scale = min(scale, limit.x / abs(velocity.x))
+        if abs(velocity.y) > limit.y:
+            scale = min(scale, limit.y / abs(velocity.y))
+        if scale == 1.0:
+            return velocity
+        return Vector2D(velocity.x * scale, velocity.y * scale)
 
     def _collides_at(self, obs: Obstacle, position: Vector2D) -> bool:
         """Whether this obstacle occupies a point, static or dynamic alike."""
