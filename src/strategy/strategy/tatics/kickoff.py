@@ -58,8 +58,6 @@ class OurKickoff:
             self.gk_target = self.goal_center.GOAL_NEGATIVE
             self.side = -1.0
 
-        self.base_pos = self._get_border_circle()
-
     def _get_formation_offsets(self):
         """
         Retorna posições relativas (x_offset, y) dentro do campo aliado.
@@ -104,7 +102,9 @@ class OurKickoff:
                 angle=self.angle,
             )
             robot_command.field_border = True
-            robot_command.center_area = True
+            # O chutador fica DENTRO do circulo: com a flag, o planejador tira o
+            # alvo dele de la e a cobranca nao acontece.
+            robot_command.center_area = idx != 0
             robot_command.penalty_area = True
 
             robots_commands.append(robot_command)
@@ -128,8 +128,6 @@ class TheirKickoff:
             self.angle = 0.0
             self.gk_target = self.goal_center.GOAL_NEGATIVE
             self.side = -1.0
-
-        self.base_pos = self._get_border_circle()
 
     def _get_formation_offsets(self):
         """

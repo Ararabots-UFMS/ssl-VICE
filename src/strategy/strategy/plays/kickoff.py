@@ -175,7 +175,7 @@ class TheirKickoffAction(LeafNode):
         if not self.ally_robots or self.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        executor = TheirKickoffAction(
+        executor = TheirKickoff(
             ally_robots=self.ally_robots, on_positive_half=self.on_positive_half)
 
         return TaskStatus.SUCCESS, executor.execute()
