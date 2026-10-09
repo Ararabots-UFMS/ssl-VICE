@@ -529,3 +529,57 @@ b1_inimigo_com_bola,1,GOL A FAVOR,nao ativado,NAO,62,0,200,0,0,,1443.9,23.0,,,,,
 b1_parada,1,sem gol,ATIVADO,SIM,62,42,277,8,4,4855,25.9,4.9,1620,,,,,,4.59,
 b1_perto_area,1,GOL CONTRA,nao ativado,NAO,62,64,197,0,0,5278,293.1,97.7,635,,,,,,6.21,
 zv_mata,1,GOL A FAVOR,ATIVADO,NAO,62,6,96,0,0,1167,6.3,60.6,7269,,,,,,7.88,
+zc_centro,1,sem gol,nao ativado,NAO,,,,0,0,,2924.5,600.0,,,,,,,2.40,
+zc_centro,2,sem gol,nao ativado,NAO,,,,0,0,,2924.5,600.0,,,,,,,1.95,
+zc_lateral,1,sem gol,nao ativado,NAO,,,,0,0,,724.5,1800.0,,,,,,,3.14,
+zc_lateral,2,sem gol,nao ativado,NAO,,,,0,0,,724.5,1800.0,,,,,,,1.80,
+zc_bola_indo,1,sem gol,nao ativado,NAO,,,,0,0,28336,977.2,450.0,6,,,,,,2.95,
+zc_bola_indo,2,sem gol,nao ativado,NAO,,,,0,0,28336,977.0,450.0,6,,,,,,2.41,
+zc_perto_gol,1,sem gol,nao ativado,NAO,,,,0,0,,275.5,400.0,,,,,,,4.02,
+zc_perto_gol,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 4 Hz (minimo 8)"
+zg_centro,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_centro,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_lateral,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_lateral,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_perto_gol,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_perto_gol,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zc_centro,1,sem gol,ATIVADO,NAO,62,0,192,0,0,,74.5,30.6,,,,,,,3.72,
+zc_centro,2,sem gol,ATIVADO,NAO,62,0,190,0,0,,74.5,30.4,,,,,,,6.09,
+zc_lateral,1,sem gol,ATIVADO,SIM,62,37,212,0,0,4247,5.6,60.0,7425,,,,,,5.56,
+zc_lateral,2,sem gol,ATIVADO,SIM,62,14,252,0,0,4242,38.5,3.1,7422,,,,,,4.07,
+zc_bola_indo,1,GOL A FAVOR,ATIVADO,SIM,63,16,218,0,0,4311,32.5,9.9,7444,,,,,,3.10,
+zc_bola_indo,2,GOL A FAVOR,ATIVADO,SIM,62,2,191,0,0,4311,31.6,15.3,7444,,,,,,2.92,
+zc_perto_gol,1,sem gol,ATIVADO,SIM,62,9,173,0,0,4288,33.8,5.9,7441,,,,,,3.78,
+zc_perto_gol,2,sem gol,ATIVADO,SIM,63,6,177,0,0,4290,33.4,3.6,7441,,,,,,4.38,
+zg_centro,1,sem gol,ATIVADO,NAO,62,0,64,0,0,,4224.5,0.0,,,,,,,3.62,
+zg_centro,2,sem gol,ATIVADO,NAO,62,0,64,0,0,,4224.5,0.0,,,,,,,6.62,
+zg_lateral,1,sem gol,ATIVADO,SIM,58,0,169,0,0,4242,2201.5,0.1,7423,,,,,,5.85,
+zg_lateral,2,sem gol,ATIVADO,SIM,62,0,148,0,0,4242,2201.6,0.2,7423,,,,,,7.14,
+zg_perto_gol,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 7 Hz (minimo 8)"
+zg_perto_gol,2,sem gol,ATIVADO,SIM,62,0,85,0,0,4293,1024.5,200.0,7442,,,,,,7.73,
+zc_centro,1,sem gol,nao ativado,NAO,77,312,3634,0,0,,8.3,9.1,,,,,,,2.26,
+zc_centro,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zc_lateral,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zc_lateral,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 4 Hz (minimo 8)"
+zc_bola_indo,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zc_bola_indo,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"algum topico sem dados"
+zc_perto_gol,1,sem gol,ATIVADO,NAO,72,2340,5334,0,0,,71.6,15.5,,,,,,,4.82,
+zc_perto_gol,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_centro,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 7 Hz (minimo 8)"
+zg_centro,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_lateral,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_lateral,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_perto_gol,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zg_perto_gol,2,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 0 Hz (minimo 8)"
+zc_centro,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 7 Hz (minimo 8)"
+zc_centro,2,sem gol,nao ativado,NAO,62,1,199,0,0,,624.5,0.0,,,,,,,3.30,
+zc_lateral,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 7 Hz (minimo 8)"
+zc_lateral,2,sem gol,nao ativado,NAO,62,0,102,0,0,,624.5,0.0,,,,,,,3.25,
+zc_bola_indo,1,sem gol,nao ativado,NAO,63,0,66,0,0,28336,624.5,0.0,6,,,,,,6.40,
+zc_bola_indo,2,sem gol,nao ativado,NAO,63,0,68,0,0,28336,624.5,0.0,6,,,,,,6.08,
+zc_perto_gol,1,sem gol,ATIVADO,SIM,62,66,212,0,0,5737,38.9,39.5,13198,,,,,,7.06,
+zc_perto_gol,2,sem gol,ATIVADO,SIM,62,71,265,0,0,5737,38.0,22.7,13198,,,,,,6.25,
+zg_centro,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 7 Hz (minimo 8)"
+zg_centro,2,sem gol,nao ativado,NAO,62,0,72,0,0,,4224.5,0.0,,,,,,,4.85,
+zg_lateral,1,sem gol,nao ativado,NAO,62,0,58,0,0,,2201.4,0.0,,,,,,,5.48,
+zg_lateral,2,sem gol,nao ativado,NAO,62,0,58,0,0,,2201.4,0.0,,,,,,,5.84,

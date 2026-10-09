@@ -377,36 +377,6 @@ CENARIOS = {
         "amarelos": [],
         "comando": ("FORCE_START", "BLUE"),
     },
-    "zagueiro_vs_dois": {
-        "titulo": "Zagueiro sozinho contra dois atacantes adversarios",
-        "descricao": (
-            "Dois atacantes deles com a bola no nosso campo, em jogo "
-            "corrido. Apenas nosso zagueiro, sem goleiros ou companheiros. "
-            "Mede se o zagueiro barra o "
-            "avanco e o chute, sem subir pra atacar."
-        ),
-        "bola": (-1200.0, 200.0),
-        "azuis": [(1, -2600.0, 400.0, 0.0)],
-        "amarelos": [(1, -1300, 250, 180),
-                     (2, -1800, -900, 180)],
-        "comando": ("FORCE_START", "BLUE"),
-    },
-    "defesa_3v3": {
-        "titulo": "Zagueiro sozinho contra tres atacantes: bola indo ao nosso gol",
-        "descricao": (
-            "Jogo corrido 1v3, sem goleiros. A bola vem "
-            "do meio-campo ja em movimento na direcao do nosso gol, com os tres "
-            "atacantes deles por perto. Mede se o zagueiro barra o avanco e o chute "
-            "sem sair do nosso lado do campo."
-        ),
-        "bola": (-1800.0, 300.0),
-        "bola_vel": (-1500.0, -100.0),
-        "azuis": [(1, -3000.0, 600.0, 0.0)],
-        "amarelos": [(1, -2600, 300, 180),
-                     (2, -2200, -900, 180),
-                     (3, -1500, 1100, 180)],
-        "comando": ("FORCE_START", "BLUE"),
-    },
     "b1_perto_area": {
         "titulo": "Basico 1x1: bola perto da nossa area, zagueiro deve chutar pro gol deles",
         "descricao": "Bola a 1200 mm da linha do nosso gol, um robo nosso e um deles.",
@@ -440,22 +410,6 @@ CENARIOS = {
         "amarelos": [(1, -1620.0, 0.0, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
-    "zv_marcacao": {
-        "titulo": "Zagueiro: atacante deles perto do nosso gol, bola solta (marcacao)",
-        "descricao": "Verificacao de acao: cobertura fecha a abertura do gol diante dos atacantes.",
-        "bola": (-3000.0, -1500.0),
-        "azuis": [(1, -3000.0, 600.0, 0.0)],
-        "amarelos": [(1, -2400, 300, 180), (2, -1500, 1200, 180), (3, -1500, -1200, 180)],
-        "comando": ("FORCE_START", "BLUE"),
-    },
-    "zv_corredor": {
-        "titulo": "Zagueiro: sem ameaca no nosso campo, bola solta (corredor)",
-        "descricao": "Verificacao de acao: zagueiro sozinho fecha a abertura do gol vista da bola.",
-        "bola": (0.0, 0.0),
-        "azuis": [(1, -3000.0, 600.0, 0.0)],
-        "amarelos": [(1, 2500, 1000, 180), (2, 2500, -1000, 180), (3, 1000, 1500, 180)],
-        "comando": ("FORCE_START", "BLUE"),
-    },
     "zv_disputa": {
         "titulo": "Zagueiro: disputa da bola (nosso robo e inimigo juntos)",
         "descricao": "Verificacao de acao: em DISPUTA a cobertura deve fechar a abertura do gol.",
@@ -470,14 +424,6 @@ CENARIOS = {
         "bola": (-2600.0, 0.0),
         "azuis": [(1, -3000.0, 600.0, 0.0)],
         "amarelos": [(1, -2700, -100, 180)],
-        "comando": ("FORCE_START", "BLUE"),
-    },
-    "zv_mata": {
-        "titulo": "Zagueiro: bola perto do nosso gol, cobertura da abertura",
-        "descricao": "Verificacao de acao: bola perto do nosso gol, cobertura reduz a abertura de chute.",
-        "bola": (-3200.0, 200.0),
-        "azuis": [(1, -3000.0, 600.0, 0.0)],
-        "amarelos": [(1, 1500, 1000, 180), (2, 1500, -1000, 180), (3, 1000, 1500, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
     "cobertura_chute_longe": {
