@@ -104,6 +104,215 @@ RAIO_ORBITA = 260.0
 PASSO_ORBITA = 0.9             # rad
 
 
+# ===========================================================================
+#  QUEM CONTORNA E O PLANEJADOR, NAO A TATICA
+# ===========================================================================
+#
+# ISTO SUBSTITUI O ARCO FEITO A MAO (ver RAIO_ORBITA abaixo), e a razao e a que
+# o Felipe apontou em 09/10/2026: "o contorno e inerente a movimentacao, ela ja
+# faz isso". E verdade, e o caminho estava DESLIGADO por nos:
+#
+#   movement_interfaces/msg/PlanningOptions.msg tem 'avoid_ball';
+#   local_planner/obstacle_factory.py:64 transforma a bola em obstaculo
+#       GenericCircleObstacle(bola, 60), e o padding default do
+#       GenericCircleObstacle e 90 (o raio do robo) - ou seja, o planejador
+#       mantem o CENTRO do robo a 150 mm do centro da bola e desvia com um
+#       caminho continuo, replanejado de forma coerente;
+#   tatics/running.py:1230 fazia 'cmd.ball = (papel != PAPEL_PORTADOR)' -
+#       justamente para o PORTADOR a bola NAO era obstaculo.
+#
+# Ou seja: desligavamos o desvio do planejador e reimplementavamos "dar a volta"
+# na tatica, com um alvo que pulava 0,9 rad por ciclo. Os sintomas vistos no
+# lote do portador (09/10) sao os dessa escolha, nao de ajuste de constante:
+# tremor, giro incompleto, bater na bola com a LATERAL em vez da placa, e errar
+# a bola de raspao.
+#
+# O DESENHO AGORA TEM DUAS FASES, e o que decide e geometria pura:
+#
+#   CONTORNAR  o robo nao esta atras da bola em relacao ao alvo. O destino e um
+#              ponto FIXO atras da bola, na linha de tiro, fora do obstaculo
+#              (ver APROXIMACAO_ATRAS), e a bola entra como obstaculo. O
+#              planejador faz a volta inteira - curta ou longa, nao e assunto
+#              nosso.
+#   EMPURRAR   o robo ja esta no corredor atras da bola. A bola deixa de ser
+#              obstaculo e o alvo passa a ser ALEM dela (EMPURRAO), que e o que
+#              atravessa a janela de disparo.
+#
+# POR QUE O ALVO DA FASE DE CONTORNO NAO DEPENDE DE ONDE O ROBO ESTA: era essa
+# dependencia que tremia. O arco era calculado a partir do angulo ATUAL do robo,
+# entao cada ciclo pedia um ponto diferente e o rastreador replanejava para um
+# lugar novo 10 vezes por segundo. O ponto de espera depende so da bola e da
+# mira - ele fica parado enquanto o robo se mexe.
+
+# O planejador mantem o centro do robo a 60 + 90 = 150 mm do centro da bola, e
+# 'adaptDestination' empurra para 180 mm qualquer destino que caia dentro disso.
+# O ponto de espera tem de ficar FORA, senao o proprio planejador o desloca e o
+# robo para num lugar que a tatica nao escolheu.
+RAIO_BOLA_PLANEJADOR = 180.0
+# Ponto de espera atras da bola: fora do obstaculo do planejador (180), com
+# folga para ele chegar vindo de qualquer lado.
+#
+# JA FOI 450, E VOLTOU PARA 300 POR MEDICAO. Com 450 e a regra de "nao contornar
+# dentro de 400 mm", a aproximacao final ficava impossivel: o robo so podia se
+# aproximar se JA estivesse alinhado dentro de 20 graus, e no caminho de volta
+# ele chegava a 95 mm quase alinhado, a regra o jogava para fora, e ele
+# orbitava. Medido em 'portador_bola_lado_esq': pmin 95 mm (a placa e 94), bola
+# andou 27 mm em 24,5 s, 1689 graus de giro, nenhum chute - contra +4248 mm e
+# chute na configuracao de 300.
+APROXIMACAO_ATRAS = 300.0
+# O CORREDOR E EM MILIMETROS, NAO EM GRAUS.
+#
+# DEFEITO QUE ISTO CORRIGE, e ele explica "ele erra para onde vai e nao vai
+# atras da bola". O teste era angular - 0,35 rad (20 graus) entre a direcao
+# bola->robo e "exatamente atras da bola". Angulo nao e erro: o MESMO angulo
+# vale desvios laterais completamente diferentes conforme a distancia.
+#
+#     distancia a bola     desvio lateral que 20 graus aceita
+#               150 mm                     51 mm
+#               300 mm                    103 mm
+#               400 mm                    137 mm
+#               700 mm                    240 mm
+#              1200 mm                    411 mm
+#              4000 mm                   1372 mm
+#              6675 mm                   2289 mm
+#
+# O contato robo-bola e a 111 mm (casco 90 + bola 21). Ou seja: a partir de uns
+# 700 mm o teste ja declarava "estou atras da bola" com o robo FORA do alcance
+# de contato, e a 4 m aceitava 1,4 m de erro. Entrando na fase de empurrar
+# nessa condicao, o robo segue em frente - e passa LONGE da bola.
+#
+# MEDIDO no lote do destino longo (09/10/2026): 'portador_longe_atras' terminou
+# a 811 mm da linha de tiro, pmin 160 mm, ZERO por cento de contato - rapido,
+# liso, e sem nunca tocar na bola.
+#
+# Agora o criterio e o desvio lateral em mm, que e a grandeza que decide se
+# seguir em frente acerta a bola: 90 mm (o raio do casco) para entrar, 160 para
+# sair. Em graus isso se aperta sozinho com a distancia, que e o que se quer.
+DESVIO_ENCAIXE = 90.0
+DESVIO_SOLTA = 160.0
+
+
+# Encostado na bola e do lado errado, a primeira coisa a fazer e SAIR DE CIMA
+# DELA. 300 mm: fora do obstaculo do planejador (180) com folga para ele achar
+# caminho a partir dali.
+#
+# A TENTATIVA DE SAIR MAIS LARGO (450 mm, com "nao contornar dentro de 400")
+# FOI MEDIDA E DESCARTADA. A ideia era por a volta fora da faixa em que a berma
+# do planejador (39 mm) e menor que o erro de rastreio (p90 70 mm). O efeito
+# colateral matou o ganho: com a aproximacao final barrada por raio, o robo
+# passava a precisar estar JA alinhado para encostar.
+#
+#     configuracao          atras_150   lado_esq        diagonal   longe_atras
+#     espera 300 / sai 180      -2680      +4248           +4745        +6049
+#     espera 300 / sai 450      -1886         -3               -             -
+#     espera 450 / sai 450      -1777        +27               -             -
+#
+# O caso que sobra - 'portador_bola_atras_150', unico em que o robo NASCE
+# dentro do obstaculo da bola - nao se resolve daqui: qualquer rota do lado
+# errado para o lado certo passa rente a bola, e a berma de 39 mm e menor que o
+# erro de execucao. A correcao e no pacote movement (raio do obstaculo da bola
+# em 60; o do robo adversario e 200, com o comentario "90 + 90 + 20").
+RAIO_DESENCOSTA = 300.0
+
+
+def fase_de_aproximacao(rx, ry, bx, by, dir_alvo, fase_anterior=None):
+    """'desencostar', 'contornar' ou 'empurrar', por geometria pura.
+
+    'fase_anterior' aplica a histerese: quem ja esta empurrando segue
+    empurrando ate sair do corredor largo.
+    """
+    a_alvo = atan2(dir_alvo[1] - by, dir_alvo[0] - bx)
+    ux, uy = cos(a_alvo), sin(a_alvo)
+    # Desvio LATERAL do robo em relacao a reta bola->alvo, e de que lado da bola
+    # ele esta. Para empurrar, as duas coisas: perto da reta E atras da bola.
+    lateral = abs((rx - bx) * uy - (ry - by) * ux)
+    atras = ((rx - bx) * ux + (ry - by) * uy) < 0.0
+    limite = DESVIO_SOLTA if fase_anterior == "empurrar" else DESVIO_ENCAIXE
+    if atras and lateral <= limite:
+        return "empurrar"
+
+    # ENCOSTADO E DO LADO ERRADO: SAI DE CIMA DA BOLA PRIMEIRO.
+    #
+    # DEFEITO QUE ISTO CORRIGE, medido no replay de 'portador_bola_lado_esq'
+    # (09/10/2026), e ele era pior que tudo o que existia antes:
+    #
+    #     t= 2 s  robo a 141 mm da bola, indo nela
+    #     t= 4 s  bola empurrada 660 mm para o NOSSO campo, robo a 103 mm
+    #     t=14 s em diante  d = 55 a 68 mm - a bola DENTRO do casco - e os dois
+    #             viajam juntos ate (-4161, 2334), o nosso canto
+    #     resultado: avanco -4156 mm, 41% do tempo em contato
+    #
+    # O laco se fecha assim: com a bola encostada, "va para um ponto 300 mm
+    # ATRAS da bola" e um ponto atras do PROPRIO ROBO, porque a bola esta em
+    # cima dele. Ele anda para tras, a bola vem grudada (o grSim nao resolve a
+    # sobreposicao, so empurra), e a cada ciclo o alvo recua de novo. O robo
+    # leva a bola para o nosso fundo sem nunca errar uma ordem.
+    #
+    # Enquanto o centro do robo estiver dentro do obstaculo da bola, a unica
+    # ordem que nao a arrasta e RADIAL: afastar-se na direcao em que ele ja
+    # esta. Fora dali o planejador assume e faz a volta.
+    if hypot(rx - bx, ry - by) < RAIO_BOLA_PLANEJADOR:
+        return "desencostar"
+    return "contornar"
+
+
+def ponto_de_desencoste(rx, ry, bx, by, raio=RAIO_DESENCOSTA):
+    """Afasta-se da bola pela linha que ja liga os dois - nunca a atravessa."""
+    ang = atan2(ry - by, rx - bx)
+    return no_campo(bx + cos(ang) * raio, by + sin(ang) * raio)
+
+
+def ponto_de_espera(bx, by, dir_alvo, recuo=APROXIMACAO_ATRAS):
+    """O ponto atras da bola na linha de tiro - destino da fase de contorno.
+
+    Nao depende da posicao do robo, de proposito (ver o cabecalho da secao).
+    """
+    a_alvo = atan2(dir_alvo[1] - by, dir_alvo[0] - bx)
+    d = max(recuo, RAIO_BOLA_PLANEJADOR + 60.0)
+    return no_campo(bx - cos(a_alvo) * d, by - sin(a_alvo) * d)
+
+
+def destino_de_empurrao(bx, by, dir_alvo):
+    """Na fase de empurrar, o destino e o PROPRIO ALVO - atraves da bola.
+
+    POR QUE ISTO SUBSTITUI O ALVO CONTINUO (ponto_de_aproximacao)
+    ------------------------------------------------------------
+    O alvo continuo depende da POSICAO DO ROBO em todos os seus termos: 'c' vem
+    da distancia dele a bola, 't' do angulo de chegada dele, o desvio lateral do
+    lado em que ele esta. Consequencia: o destino FOGE enquanto ele persegue.
+    
+    MEDIDO (09/10/2026), recomputando a decisao sobre os quadros gravados, a
+    10 Hz como a estrategia:
+
+        cenario       alvo que depende da posicao   alvo que nao depende
+        lado_esq      17 mm/ciclo  (p90 59)          6 mm/ciclo (p90 26)
+        longe_atras   17 mm/ciclo  (p90 86)          6 mm/ciclo (p90 55)
+        diagonal      18 mm/ciclo  (p90 48)          7 mm/ciclo (p90 38)
+
+    Os 6 mm sao o tremor da propria visao: e o piso. Ou seja, dois tercos do
+    movimento do destino eram NOSSOS, e o planejador recebia um problema novo a
+    cada 100 ms.
+
+    E HA O SEGUNDO EFEITO, que e o maior: alvo curto limita a velocidade por
+    construcao. Perfil do solver (a = 1500 mm/s^2, teto 2000 mm/s), medido:
+
+        alvo a  300 mm   pico  671 mm/s   media  335
+        alvo a  450 mm   pico  822        media  411
+        alvo a 1600 mm   pico 1549        media  775
+        alvo a 4000 mm   pico 2000        media 1200
+        alvo a 6675 mm   pico 2000        media 1429
+
+    Pedir "va 300 mm e pare" dez vezes por segundo e o que produz os 251 mm/s
+    medidos em campo - e e a diferenca com a GUI, onde um clique a 4 m da 1200
+    mm/s de media com UM plano, executado inteiro.
+
+    O destino aqui depende so da bola e da mira, e fica longe: a linha reta
+    bola->alvo, que e exatamente por onde a bola tem de sair. Atravessar a bola
+    deixa de ser um truque de alvo e passa a ser o caminho.
+    """
+    return no_campo(dir_alvo[0], dir_alvo[1])
+
+
 def ponto_de_interceptacao(rx, ry, ball, avanco, segundos=0.5):
     """Onde ir quando a bola JA esta viajando: o ponto previsto, e alem dele.
 

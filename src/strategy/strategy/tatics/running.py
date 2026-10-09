@@ -341,6 +341,26 @@ CICLOS_MIN_PAPEL = 20
 # A mira segura o tipo escolhido por 2 s, como os papeis. Ver a nota em
 # alvo_do_chute sobre o giro medido.
 CICLOS_MIN_MIRA = 20
+# Velocidade pedida na CHEGADA da fase de empurrar, na direcao de saida da bola.
+#
+# 600 mm/s: o perfil do solver sobe a media de 335 para 456 mm/s num alvo de
+# 300 mm (medido), e e menos que o empurrao que o proprio contato produz - a
+# ideia e nao chegar freando, nao atropelar. Acima disso o risco e a bola
+# escapar da placa antes de o grSim arbitrar o disparo (janela |yy| < 40 mm).
+VEL_CHEGADA_EMPURRAO = 600.0
+# Velocidade pedida na chegada ao PONTO DE ESPERA, apontando para a bola. 400
+# mm/s foi o valor medido na sonda do planejador: com ele a direcao de chegada
+# vai de -121/-142 graus para -6/-8. Baixo de proposito - o ponto de espera e
+# para parar nele, nao para passar.
+VEL_CHEGADA_CONTORNO = 400.0
+# Erro de corpo que ainda justifica parar para mirar. 0,25 rad = 14 graus: menos
+# que a trava do disparo (20) para ele sair da mira JA dentro dela, com folga.
+TOL_CORPO_MIRA = 0.25
+# So vale parar para mirar perto da bola; longe, girar enquanto anda nao custa.
+RAIO_MIRA_PARADO = 600.0
+# Teto para nao travar: 2 s a 10 Hz. Se a orientacao nao converge nisso, empurra
+# torto - parado e pior, porque ninguem disputa a bola.
+CICLOS_MAX_MIRANDO = 20
 RAIO_POSSE_PORTADOR = 200.0
 # Dentro disto o portador disputa a bola sempre, independente do rotulo da
 # situacao - que oscila com o rastreio. 450 mm e o dobro do raio de posse.
@@ -577,7 +597,8 @@ APOIO_RECUO = posicionamento.APOIO_RECUO
 APOIO_AVANCO = posicionamento.APOIO_AVANCO
 APOIO_ABERTURA = posicionamento.APOIO_ABERTURA
 def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol,
-                  ordem=0, alvo_chute=None, inimigos=None, bloqueado=False):
+                  ordem=0, alvo_chute=None, inimigos=None, bloqueado=False,
+                  estado=None):
     """Para onde cada robo vai, por (situacao, papel). Devolve (x, y, chuta).
 
     A matriz esta em documentacao/estrategia/CASOS_DE_JOGO.md.
@@ -664,6 +685,49 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         # Com a bola viajando nao ha o que contornar: o lado por onde se chega
         # deixa de ser escolha nossa e passa a ser a trajetoria dela. Mirar o
         # ponto de interceptacao, e alem dele para nao chegar freando.
+        # A PERSEGUICAO SO VALE DE QUEM JA ESTA ATRAS DA BOLA.
+        #
+        # Este ramo mira o ponto previsto MAIS 1600 mm alem dele, e vinha ANTES
+        # de qualquer decisao de lado - entao bastava a bola passar de 250 mm/s
+        # para o portador investir atraves dela, de onde estivesse.
+        #
+        # EU DIAGNOSTIQUEI ISSO COMO DEFEITO ("investida fantasma") E A MEDICAO
+        # ME REFUTOU. Tentei trocar o limiar por 600 mm/s e o avanco fixo por
+        # meio segundo de bola; o resultado, nos mesmos cenarios:
+        #
+        #     cenario       com o avanco de 1600   com avanco proporcional
+        #     lado_esq      +4248 e CHUTE          +1112, sem chute
+        #     diagonal      +4745 e CHUTE          +1626, sem chute
+        #     longe_atras   +6049 e CHUTE          +5438 e chute
+        #     atras_150     -2680 (arrastava)      +144
+        #
+        # O avanco grande nao e ruido: e o SEGUIMENTO que atravessa a bola e faz
+        # o chute sair. Sem ele o robo fica cuidando da bola a 15% de contato e
+        # nunca dispara. O que estava errado nao era o tamanho do avanco - era
+        # ele valer para quem esta do LADO ERRADO: ai o seguimento empurra a
+        # bola para o nosso campo (os -2680 de 'atras_150').
+        #
+        # Entao o ramo continua igual e so passa a ser condicionado a fase: quem
+        # esta atras da bola persegue com seguimento inteiro; quem nao esta,
+        # contorna primeiro. A decisao de lado vem antes da de velocidade.
+        # CONDICIONAR A PERSEGUICAO A FASE TAMBEM FOI MEDIDO E DESCARTADO.
+        #
+        # A ideia era boa no papel - "a decisao de lado vem antes da de
+        # velocidade" - e custou o chute nos dois cenarios que mais chutavam:
+        #
+        #     cenario       perseguicao livre   condicionada a fase
+        #     lado_esq      +4248 e CHUTE       +1028, sem chute
+        #     diagonal      +4745 e CHUTE       +905,  sem chute
+        #
+        # O seguimento de 1,6 m e o que atravessa a bola e produz o disparo, e
+        # ele e necessario tambem quando o robo esta POUCO fora do corredor de
+        # 20 graus - que e onde ele chega na maior parte das vezes. Condicionar a
+        # fase so o deixa disponivel quando ja nao e preciso.
+        #
+        # O caso em que a perseguicao livre machuca segue sendo o 'atras_150'
+        # (-2680): robo nascendo dentro do obstaculo da bola. A correcao daquele
+        # caso nao esta aqui - esta na berma do planejador, que e do pacote
+        # movement.
         if bola_ja_saiu(ball):
             _avanco_int = (AVANCO_SOLTA if situacao == SITUACAO_SOLTA
                            else AVANCO_PORTADOR)
@@ -693,6 +757,126 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         _dir_alvo = alvo_chute if alvo_chute is not None else (
             bx + ux * 1000.0, by + uy * 1000.0)
         avanco_base = AVANCO_SOLTA if situacao == SITUACAO_SOLTA else AVANCO_PORTADOR
+
+        # CONTORNO: QUEM FAZ E O PLANEJADOR.
+        #
+        # Duas fases, decididas por geometria pura em
+        # skills/aproximacao.fase_de_aproximacao - e o racional medido esta no
+        # cabecalho daquela secao. Aqui so o essencial: na fase de CONTORNO o
+        # destino e um ponto FIXO atras da bola e a bola entra como obstaculo
+        # (montar_comandos liga o 'cmd.ball'), entao a volta e tarefa do
+        # planejador, que e quem tem o desvio continuo. Na fase de EMPURRAR o
+        # maquinario antigo assume, porque ali o que se quer e exatamente
+        # atravessar a bola.
+        if not experimento.desligado("PLANEJADOR"):
+            _fase_ant = (estado or {}).get("fase_portador")
+            _fase = aproximacao.fase_de_aproximacao(
+                rx, ry, bx, by, _dir_alvo, _fase_ant)
+            # MODO DIAGNOSTICO: SO POSICIONAR, NAO EMPURRAR.
+            #
+            # ARARABOTS_SO_POSICIONAR=1 prende o portador na fase de contorno:
+            # ele vai para o ponto atras da bola, na linha de tiro, e PARA ali.
+            # Nada de atravessar, nada de chutar (a trava de alinhamento ja
+            # barra o disparo fora da fase de empurrar).
+            #
+            # POR QUE ISTO EXISTE: enquanto o robo empurra, o erro de
+            # posicionamento e o efeito do contato ficam somados no mesmo
+            # numero. Parado, sobra so o posicionamento - o quanto ele erra a
+            # linha robo-bola-gol. Pedido do Felipe em 09/10/2026.
+            if os.environ.get("ARARABOTS_SO_POSICIONAR") and _fase == "empurrar":
+                _fase = "contornar"
+            # PARA, MIRA, E SO DEPOIS ANDA.
+            #
+            # DEFEITO QUE ISTO CORRIGE, e e o "por que ele erra a bola": o alvo
+            # de movimento e a ordem de orientacao saem no MESMO ciclo, mas
+            # chegam em tempos diferentes. A orientacao e um controlador P com
+            # teto de 2 rad/s (control.py, PController(kp=1, max_output=2)):
+            # girar 90 graus leva ~0,8 s. Andando a 0,25-0,6 m/s, nesse tempo
+            # ele percorre 200 a 500 mm - ou seja, ELE CHEGA NA BOLA ANTES DE
+            # TERMINAR DE GIRAR, e encosta com a placa torta.
+            #
+            # MEDIDO no instante de maior aproximacao:
+            #     portador_longe_atras     corpo a 120 graus da linha de tiro
+            #     portador_bola_diagonal   corpo a  28 graus
+            #
+            # A trava de disparo (chute.TOL_CORPO_DISPARO) impede o chute torto,
+            # mas nao impede o ENCOSTAO torto - e e o encostao que manda a bola
+            # para o lado.
+            #
+            # Agora ha uma fase entre chegar e empurrar: ele segura a posicao no
+            # ponto de espera, gira ate a linha de tiro, e so entao anda. Isto
+            # so e possivel porque o canal de comando NAO morre quando o robo
+            # chega - o comentario antigo de chute.py dizia que morria (era o
+            # driver antigo). Medido: control.py:139 itera 'control_references',
+            # que e um dicionario que nunca e limpo, e o setpoint chega em 99%
+            # dos quadros mesmo com o robo paradissimo.
+            #
+            # O teto de ciclos existe para nao travar: se a orientacao nao
+            # converge, ele empurra torto em vez de ficar parado para sempre -
+            # parado e pior, porque ninguem disputa a bola.
+            if (_fase == "empurrar"
+                    and not experimento.desligado("PARAR_E_MIRAR")):
+                _r_m = ally_robots[rid]
+                _ang_saida = atan2(_dir_alvo[1] - by, _dir_alvo[0] - bx)
+                _erro_corpo = abs(geometria.norm_ang(
+                    _r_m.orientation - _ang_saida))
+                _d_m = hypot(rx - bx, ry - by)
+                _n_mira = (estado or {}).get("ciclos_mirando", 0)
+                if (_erro_corpo > TOL_CORPO_MIRA and _d_m < RAIO_MIRA_PARADO
+                        and _n_mira < CICLOS_MAX_MIRANDO):
+                    _fase = "mirar"
+                    if estado is not None:
+                        estado["ciclos_mirando"] = _n_mira + 1
+                elif estado is not None:
+                    estado["ciclos_mirando"] = 0
+            elif estado is not None:
+                estado["ciclos_mirando"] = 0
+
+            if estado is not None:
+                estado["fase_portador"] = _fase
+            if _fase == "mirar":
+                # Segura a posicao na linha de tiro e gira. O ponto de espera
+                # esta na linha e ele ja esta praticamente nele.
+                return aproximacao.ponto_de_espera(bx, by, _dir_alvo) + (False,)
+            if _fase == "desencostar":
+                # Sair de cima da bola antes de qualquer coisa: alvo RADIAL.
+                # Ver o racional medido em skills/aproximacao.
+                return aproximacao.ponto_de_desencoste(rx, ry, bx, by) + (False,)
+            if _fase == "contornar":
+                return aproximacao.ponto_de_espera(bx, by, _dir_alvo) + (True,)
+        # FASE DE EMPURRAR: O DESTINO E O ALVO, ATRAVES DA BOLA.
+        #
+        # Alvo longo e que nao depende da posicao do robo - o racional medido
+        # (17 mm/ciclo de fuga do destino, e o perfil que limita a media a
+        # 335 mm/s num alvo de 300 mm) esta em
+        # skills/aproximacao.destino_de_empurrao.
+        # MEDIDO E DESLIGADO (09/10/2026). A chave LIGA, nao desliga.
+        #
+        #   cenario            destino longo    melhor medido antes
+        #   lado_esq                     +36    +4248 e chute
+        #   diagonal                    +409    +4745 e chute
+        #   longe_atras                   +7    +6049 e chute
+        #   atras_150                   -210    +722
+        #   atravessa_campo               +4    +2 (igual)
+        #
+        # O mecanismo que ele prometia, ele entregou: a fuga do destino foi de
+        # 27/25/12 para ZERO mm por ciclo, e o giro acumulado caiu de 2300+ para
+        # 560-710 em tres cenarios - o movimento ficou MESMO mais liso.
+        #
+        # O que ele perdeu foi a BOLA. Com o gol como destino o robo trata a
+        # bola como coisa no caminho, nao como a coisa a carregar: em
+        # 'longe_atras' ele nem encosta (pmin 160 mm, 0% de contato). O alvo
+        # curto que depende da posicao - que parecia truque - carrega a tarefa
+        # de ficar COM a bola.
+        #
+        # E refutou a minha propria explicacao da lentidao: com destino a 6,7 m,
+        # 'atravessa_campo' andou 6,2 m em 24,5 s, ou 248 mm/s - os mesmos
+        # 251 mm/s de antes. Alvo curto NAO era o que limitava a velocidade; o
+        # limite esta na malha de controle consumindo a referencia, nao no plano.
+        if (os.environ.get("ARARABOTS_COM_DESTINO_LONGO")
+                and not experimento.desligado("PLANEJADOR")):
+            return aproximacao.destino_de_empurrao(bx, by, _dir_alvo) + (True,)
+
         # O contorno continuo, o ponto de chute e o desvio lateral que zera na
         # chegada vivem em skills/aproximacao.py, com as medicoes que os geraram.
         return aproximacao.ponto_de_aproximacao(
@@ -1098,7 +1282,8 @@ def montar_comandos(tt):
         alvo_x, alvo_y, chuta = alvo_do_papel(
             papel, situacao, rid, tt.ally_robots, tt.ball,
             gol_ataque, nosso_gol, ordem=o, alvo_chute=alvo_chute,
-            inimigos=tt.enemy_robots, bloqueado=(tipo_alvo == "bloqueado"))
+            inimigos=tt.enemy_robots, bloqueado=(tipo_alvo == "bloqueado"),
+            estado=getattr(tt, "estado", None))
         if papel in ordem:
             ordem[papel] += 1
 
@@ -1160,7 +1345,14 @@ def montar_comandos(tt):
             _r_o, tt.ball, alvo_chute, tipo_alvo, _sentido_x, _travas, rid,
             (gol_ataque.x, gol_ataque.y),
             so_lado_certo=not experimento.desligado("ORIENTACAO_LADO"),
-            pode_armar=not _mira_emprestada)
+            pode_armar=not _mira_emprestada,
+            # A fase vale para o PORTADOR: e ele que contorna. Os outros papeis
+            # seguem a regra de lado de sempre.
+            exigir_corpo_alinhado=not experimento.desligado("DISPARO_ALINHADO"),
+            fase=((tt.estado or {}).get("fase_portador")
+                  if (papel == PAPEL_PORTADOR
+                      and getattr(tt, "estado", None) is not None
+                      and not experimento.desligado("PLANEJADOR")) else None))
 
         # Quem esta efetivamente com a bola: o nosso mais proximo dentro do raio
         # de posse. Serve so para o diagnostico - a decisao de chutar e do
@@ -1177,9 +1369,93 @@ def montar_comandos(tt):
                   % (rid, papel, _rr.position_x, _rr.position_y, alvo_x, alvo_y,
                      hypot(alvo_x - _rr.position_x, alvo_y - _rr.position_y)),
                   flush=True)
+        # CHEGAR EM MOVIMENTO, quando a intencao e ATRAVESSAR a bola.
+        #
+        # 'target_vel' existe no MovementCommand, esta ligado de ponta a ponta
+        # (movement_handler.py:53 -> movement_manager -> solver) e nos mandavamos
+        # ZERO em todas as chamadas desta tatica. Ou seja: todo alvo era "chegue
+        # aqui e PARE", dez vezes por segundo.
+        #
+        # O QUE ISSO CUSTA, medido no perfil do proprio solver
+        # (a = 1500 mm/s^2, teto 2000 mm/s):
+        #
+        #     alvo a 300 mm, chegada parada    v_pico 671   v_media 335 mm/s
+        #     alvo a 300 mm, chegada a 600     v_pico 790   v_media 456
+        #     alvo a 450 mm, chegada parada    v_pico 822   v_media 411
+        #     alvo a 450 mm, chegada a 600     v_pico 923   v_media 540
+        #
+        # E a velocidade medida em campo foi de 251 mm/s - compativel com
+        # executar so o primeiro fragmento de um plano curto de parar.
+        #
+        # So na fase de EMPURRAR, e so para o portador: ali o alvo esta alem da
+        # bola e a intencao e justamente atravessar. Nas outras fases (contornar,
+        # desencostar) chegar parado e o certo - o ponto de espera e um lugar
+        # para ESTAR, nao para passar.
+        # MEDIDO E DESCARTADO (09/10/2026). Par limpo, mesmo codigo, so a chave
+        # mudando - e o resultado foi o contrario do esperado:
+        #
+        #     cenario       chegada parada     chegada a 600 mm/s
+        #     lado_esq      +1028, recuo -33   +265, recuo -465
+        #     diagonal      +905,  recuo  -8   +377, recuo   -1
+        #     longe_atras   +5914, chute       +6043, chute
+        #
+        # A perda e de ~60% do avanco nos dois cenarios de meia distancia, e em
+        # 'lado_esq' a bola foi 465 mm PARA O NOSSO CAMPO. O mecanismo e o
+        # oposto do que eu previ: pedir chegada em movimento na direcao de saida
+        # faz o planejador deixar de ASSENTAR na linha de tiro - ele cruza a
+        # linha com momento lateral, e a bola escapa da placa em vez de ser
+        # empurrada. O ganho de perfil (media de 335 para 456 mm/s) existe e nao
+        # compensa.
+        #
+        # Fica desligado por padrao. A chave LIGA (nao desliga), ao contrario das
+        # outras, porque o comportamento medido como bom e o antigo.
+        _vel_x = _vel_y = 0.0
+
+        # A CURVA TEM DE TERMINAR APONTADA PARA A BOLA.
+        #
+        # DEFEITO QUE ISTO CORRIGE: o ponto de espera era uma POSICAO sem
+        # direcao. O planejador o atendia pelo caminho mais barato, e o mais
+        # barato chega por qualquer lado - inclusive cruzando a linha de tiro e
+        # parando de costas para ela. A "curva" acabava do lado errado, e a
+        # aproximacao seguinte comecava torta.
+        #
+        # MEDIDO com o planejador real (sonda offline, bola na origem, gol em
+        # +x, chegada ideal = 0 graus):
+        #
+        #   geometria      chegada com vel=0    chegada com vel=400 na linha
+        #   180 a  400 mm        +128 graus              +5 graus
+        #   180 a 4000 mm        -132                   +53
+        #    90 a  400 mm        -121                    -6
+        #   135 a  424 mm        -142                    -8
+        #
+        # Pedir velocidade de chegada NA DIRECAO DA BOLA transforma o ponto num
+        # ESTADO (posicao + direcao), e e o unico jeito de dizer ao planejador
+        # "venha por tras". E o "alinhar depois de chegar" do Felipe, escrito
+        # como restricao que o planejador sabe honrar.
+        #
+        # ATENCAO - isto NAO vale na fase de empurrar: ali a mesma ideia foi
+        # medida e fez a bola escapar da placa (ver o bloco abaixo). No contorno
+        # a chegada e um meio; no empurrao, um fim.
+        if (papel == PAPEL_PORTADOR and alvo_chute is not None
+                and not experimento.desligado("CHEGADA_ALINHADA")
+                and (tt.estado or {}).get("fase_portador") == "contornar"):
+            _cx = tt.ball.position_x - alvo_x
+            _cy = tt.ball.position_y - alvo_y
+            _cn = hypot(_cx, _cy) or 1.0
+            _vel_x = _cx / _cn * VEL_CHEGADA_CONTORNO
+            _vel_y = _cy / _cn * VEL_CHEGADA_CONTORNO
+
+        if (papel == PAPEL_PORTADOR and alvo_chute is not None
+                and os.environ.get("ARARABOTS_COM_CHEGADA_EM_MOVIMENTO")
+                and (tt.estado or {}).get("fase_portador") == "empurrar"):
+            _ax = alvo_chute[0] - tt.ball.position_x
+            _ay = alvo_chute[1] - tt.ball.position_y
+            _an = hypot(_ax, _ay) or 1.0
+            _vel_x = _ax / _an * VEL_CHEGADA_EMPURRAO
+            _vel_y = _ay / _an * VEL_CHEGADA_EMPURRAO
         cmd = tt.skills_factory.move_with_angle(
             robot_id=rid, target_x=alvo_x, target_y=alvo_y,
-            vel_x=0.0, vel_y=0.0, angle=ang,
+            vel_x=_vel_x, vel_y=_vel_y, angle=ang,
         )
         r = tt.ally_robots[rid]
         d_bola = hypot(r.position_x - tt.ball.position_x,
@@ -1226,8 +1502,38 @@ def montar_comandos(tt):
             print("[JG] arma=%s frente=%s d=%.0f tipo=%s"
                   % (arma, _frente, d_bola, tipo_alvo), flush=True)
         cmd.kick = forca        # chutar_em ja devolve 0 quando nao armado
-        # a bola so e obstaculo para quem NAO vai disputa-la
-        cmd.ball = (papel != PAPEL_PORTADOR)
+        # A BOLA E OBSTACULO ATE O ROBO ESTAR ATRAS DELA.
+        #
+        # Era 'cmd.ball = (papel != PAPEL_PORTADOR)': para o portador a bola
+        # nunca era obstaculo, e com isso o planejador ia RETO nela por qualquer
+        # lado. Era a razao de existir o arco feito a mao na tatica - e o arco
+        # tremia, nao fechava o giro e batia com a lateral (medido no lote do
+        # portador, 09/10/2026).
+        #
+        # Agora o portador tambem desvia da bola ENQUANTO CONTORNA, e so deixa
+        # de desviar quando ja esta no corredor atras dela, que e quando
+        # atravessar e o certo. Ver skills/aproximacao.
+        if papel == PAPEL_PORTADOR and not experimento.desligado("PLANEJADOR"):
+            # A BOLA E OBSTACULO EM TODA A APROXIMACAO, E SO DEIXA DE SER NO
+            # EMPURRAO.
+            #
+            # Regra dita pelo Felipe em 09/10/2026, e e a divisao certa: durante
+            # a volta e a mira a bola e coisa a NAO tocar; no empurrao ela e
+            # justamente o que se vai atravessar.
+            #
+            # A fase de MIRA estava de fora por acidente - o teste era so
+            # 'contornar'. Mirar e parte da aproximacao: ele esta a 300 mm da
+            # bola girando o corpo, e sem o obstaculo o planejador pode cortar
+            # por cima dela ao ajustar a posicao.
+            #
+            # 'desencostar' fica de fora de proposito: ali o robo esta DENTRO do
+            # obstaculo, e o planejador gastaria o plano tentando 'escapar' em
+            # vez de obedecer o alvo radial, que ja e a saida certa.
+            _fase_cmd = ((tt.estado or {}).get("fase_portador")
+                         if getattr(tt, "estado", None) is not None else None)
+            cmd.ball = _fase_cmd in ("contornar", "mirar")
+        else:
+            cmd.ball = (papel != PAPEL_PORTADOR)
         cmd.field_border = True
         cmd.penalty_area = True
         comandos.append(cmd)

@@ -70,9 +70,13 @@ class PIDController:
 
         feedforward = target_velocity
 
-        # >>> ARARABOTS_AJUSTE   (ligado/desligado por: ararabots.sh ajustes on|off controle)
+        # O FEEDFORWARD VALE SO ONDE CONCORDA COM O ERRO DE POSICAO.
         #
-        # O FEEDFORWARD DOMINA E APONTA PARA O LUGAR ERRADO.
+        # Isto ja foi um ajuste de teste (bloco ARARABOTS_AJUSTE, ligado pelo
+        # ararabots.sh). Virou codigo em 07/10/2026, porque as duas versoes que
+        # ele alternava estao medidas e as duas estao erradas.
+        #
+        # 1. FEEDFORWARD CRU: DOMINA E APONTA PARA O LUGAR ERRADO.
         #
         # 'target_velocity' vem de trajectory.get_state(time_offset) no driver.
         # Como replan() zera o time_offset a cada chamada (driver.py:331) e
@@ -86,55 +90,58 @@ class PIDController:
         #     o erro de posicao:                      145 graus e 136 graus
         #
         # Ou seja: o robo acompanha o feedforward e anda ~140 graus AO CONTRARIO
-        # de onde o erro de posicao manda. Ele foge do alvo.
+        # de onde o erro de posicao manda. Ele foge do alvo. Magnitudes na mesma
+        # faixa, o que explica a dominancia: velocidade do setpoint com p90 de
+        # 223-451 mm/s e maximo de 695, contra kp*erro = 1,5 * 0,3 m = 450 mm/s.
         #
-        # Magnitudes na mesma faixa, o que explica a dominancia: velocidade do
-        # setpoint com p90 de 223-451 mm/s e maximo de 695, contra kp*erro =
-        # 1,5 * 0,3 m = 450 mm/s. Com o erro pequeno, o feedforward vence.
+        # 2. SEM FEEDFORWARD: O ROBO NAO EMPURRA MAIS NADA.
         #
-        # Sem o feedforward sobra a malha fechada na posicao medida, que e o que
-        # se quer aqui. O termo faz sentido quando a trajetoria e confiavel -
-        # nao e o caso enquanto o time_offset zerar a cada ciclo.
-        # ------------------------------------------------------------------
-        # REV. 07/10/2026: DESLIGAR O FEEDFORWARD CUSTOU A VELOCIDADE INTEIRA.
+        # Foi a correcao de 25/08 (A/B de 4 contra 12 execucoes: yy de 82,0 para
+        # 28,5 mm de mediana), e ela custou a velocidade inteira. Sem o termo
+        # sobra 'kp * erro_de_posicao' - e o erro contra o REFERENCIAL DO
+        # RASTREADOR e minusculo por construcao: ele emite um ponto logo a frente
+        # do robo e replaneja a cada ciclo.
         #
-        # Sem ele sobra 'kp * erro_de_posicao' - e o erro de posicao contra o
-        # REFERENCIAL DO RASTREADOR e minusculo por construcao: o rastreador
-        # emite um ponto logo a frente do robo e replaneja a cada ciclo.
-        #
-        # MEDIDO no replay de 'empurrao_reto' (07/10/2026, uma execucao, chave
-        # nova ligada), robo em contato com a bola de t = 9,6 s ao fim:
+        # MEDIDO no replay de 'empurrao_reto' (07/10/2026), robo em contato com
+        # a bola de t = 9,6 s ao fim da execucao:
         #     distancia robo -> setpoint do rastreador   4 a 50 mm (mediana ~35)
         #     kp * erro  =  2,3 * 0,035                  = 0,08 m/s
-        #     a bola andou                               829 mm em 24,5 s (~34 mm/s)
+        #     a bola andou                               829 mm em 24,5 s
         #     o robo passou 71% da execucao EM CONTATO com a bola
         #
-        # Ou seja: o alvo da estrategia pode estar 291 mm adiante (ver
-        # skills/aproximacao.EMPURRAO) e nao muda nada, porque quem fala com o
-        # PID e o rastreador, nao a estrategia. O canal que carrega a VELOCIDADE
-        # planejada e justamente o feedforward - e ele estava zerado.
+        # O alvo da estrategia pode estar 291 mm adiante (skills/aproximacao.py,
+        # EMPURRAO) e nao muda nada, porque quem fala com o PID e o rastreador,
+        # nao a estrategia. O canal que carrega a velocidade PLANEJADA e
+        # justamente o feedforward.
         #
-        # Os dois lados estavam errados:
-        #     feedforward cru      segue a velocidade do plano antigo, medida a
-        #                          ~140 graus do erro de posicao (acima)
-        #     sem feedforward      o robo anda a 0,08 m/s e nao empurra a bola
+        # 3. A GUARDA: mesmo termo, com uma comparacao de sinais.
         #
-        # A CORRECAO: manter o feedforward apenas onde ele CONCORDA com o erro
-        # de posicao. Por eixo, isso e uma comparacao de sinais - e basta: com
-        # os ~140 graus medidos, o eixo que aponta para o lado errado e zerado e
-        # o outro sobrevive. Nao e filtro novo nem ganho novo: e o mesmo termo,
-        # com uma guarda de sinal.
+        # Mantem o feedforward apenas quando ele empurra para o mesmo lado que o
+        # erro de posicao. Com os ~140 graus medidos, o eixo que aponta para o
+        # lado errado e zerado e o outro sobrevive. Nao e ganho novo nem filtro
+        # novo.
+        #
+        # MEDIDO, mesma execucao de 'empurrao_reto', mesma geometria:
+        #                                sem feedforward     com a guarda
+        #     avanco da bola                      829 mm        4543 mm
+        #     chute                         nao disparou   5708 mm/s
+        #     tempo em contato                       71%             1%
+        #     erro de rastreio (med/p90)       26/136 mm      9/70 mm
+        #     yy na maior aproximacao             110 mm          15 mm
+        #                                                  (limite grSim: 40)
         #
         # Por que por eixo e nao vetorialmente: este controlador E escalar - o
         # Vector2DTrajectoryController chama x e y separadamente, cada um com o
         # seu integrador. Projetar no versor do erro exigiria mover a conta para
         # o nivel 2D, e isso muda a estrutura de um pacote que nao e nosso.
-        #AJUSTE# if feedforward * position_error > 0.0:
-            #AJUSTE# output = feedforward + proportional + integral_term + derivative
-        #AJUSTE# else:
-            #AJUSTE# output = proportional + integral_term + derivative
-        output = feedforward + proportional + integral_term + derivative
-        # <<< ARARABOTS_AJUSTE
+        #
+        # O QUE AINDA ESTA ERRADO, e nao e aqui: o rastreador replaneja a cada
+        # ciclo a partir do estado planejado. Esta guarda e remendo no
+        # consumidor; a correcao esta no produtor (pacote movement).
+        if feedforward * position_error > 0.0:
+            output = feedforward + proportional + integral_term + derivative
+        else:
+            output = proportional + integral_term + derivative
 
         output = max(-self.output_limit, min(self.output_limit, output))
 

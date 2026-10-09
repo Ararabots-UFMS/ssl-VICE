@@ -50,8 +50,38 @@ import os
 #                    contato medidos (sonda guiada por replay), e o casco
 #                    impede chegar a menos de 111 mm: o erro residual virava
 #                    ~0,13 m/s e a bola nao saia do lugar.
+#   PLANEJADOR       o contorno passa a ser do PLANEJADOR (avoid_ball), em vez
+#                    do arco feito a mao na tatica. Ver a secao de cabecalho em
+#                    skills/aproximacao.py: era o unico papel para o qual nos
+#                    DESLIGAVAMOS o desvio da bola, e reimplementavamos a volta
+#                    com um alvo que pulava 0,9 rad por ciclo.
+#   DISPARO_ALINHADO o chute exige o CORPO na linha de tiro. Sem isto o robo
+#                    dispara no meio do contorno, na direcao em que o corpo
+#                    estiver: medido 120 graus de erro em 'portador_longe_atras'
+#                    e 28 em 'portador_bola_diagonal', os dois com disparo.
+#   CHEGADA_EM_MOVIMENTO  na fase de empurrar, pede target_vel na direcao de
+#                     saida em vez de zero. Mandavamos "chegue e PARE" em todo
+#                     comando, e um alvo de 300 mm com chegada parada limita a
+#                     media a 335 mm/s por construcao.
+#   PARAR_E_MIRAR     para no ponto de espera, gira ate a linha de tiro, e so
+#                     entao empurra. O corpo chegava a 120 graus fora porque a
+#                     orientacao e um P de 2 rad/s e ele chega antes de girar.
+#   CHEGADA_ALINHADA  o ponto de espera deixa de ser posicao e passa a ser
+#                     ESTADO: chega-se nele apontado para a bola. Sem isto o
+#                     planejador chegava a -121/-142 graus da direcao certa.
+#   DESTINO_LONGO     na fase de empurrar, o destino e o ALVO (gol ou apoio),
+#                     nao um ponto a 300-500 mm que depende de onde o robo
+#                     esta. Mede o tremor do replanejamento e a velocidade de
+#                     cruzeiro de uma vez.
+#   PERSEGUICAO       so persegue bola REALMENTE viajando (600 mm/s, nao 250),
+#                     e mira so ate onde ela chega (meio segundo de bola, nao
+#                     1600 mm fixos). Era a "investida fantasma": 11% dos
+#                     quadros medidos entravam na perseguicao com a bola
+#                     praticamente parada.
 CHAVES = ("ORIENTACAO_LADO", "ORBITA", "PROTECAO", "PRESSAO_BOLA",
-          "MIRA_FIRME", "EMPURRAO")
+          "MIRA_FIRME", "EMPURRAO", "PLANEJADOR", "DISPARO_ALINHADO",
+          "PERSEGUICAO", "CHEGADA_EM_MOVIMENTO", "DESTINO_LONGO",
+          "CHEGADA_ALINHADA", "PARAR_E_MIRAR")
 
 
 def desligado(nome):

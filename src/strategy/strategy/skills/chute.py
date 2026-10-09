@@ -121,7 +121,7 @@ TOL_LADO_CERTO = pi / 2
 
 
 def orientacao_do_corpo(robo, ball, alvo_chute, gol_ataque_xy,
-                        so_lado_certo=True):
+                        so_lado_certo=True, fase=None):
     """Para onde o corpo deve apontar. Devolve (angulo, mira_o_chute).
 
     DEFEITO QUE ISTO CORRIGE - "o robo vira a bunda para a bola"
@@ -156,6 +156,28 @@ def orientacao_do_corpo(robo, ball, alvo_chute, gol_ataque_xy,
                           ball.position_x - robo.position_x)
     if d >= RAIO_ORIENTA_CHUTE:
         return ang_para_bola, False
+    # UMA DECISAO SO PARA O CORPO E PARA O ALVO.
+    #
+    # DEFEITO QUE ISTO CORRIGE: aqui havia um SEGUNDO criterio de "estou do lado
+    # certo?" - |ang_para_bola - ang_saida| < pi/2 - diferente do que escolhe o
+    # alvo de movimento (aproximacao.fase_de_aproximacao, 0,35 rad com
+    # histerese). Dois limiares para a mesma pergunta discordam numa faixa
+    # inteira de angulos, e na fronteira do pi/2 o corpo troca de ordem a cada
+    # ciclo: era parte do tremor que o Felipe viu no lote do portador
+    # (09/10/2026), junto com o alvo que pulava.
+    #
+    # Agora quem decide e a FASE, que ja tem histerese: contornando, o corpo
+    # olha para a bola (e o que deixa a placa pronta e nao perde o contato de
+    # vista); empurrando, o corpo assume a linha de tiro, porque o tiro sai no
+    # eixo dele.
+    if fase is not None:
+        # 'mirar' e a fase em que ele esta PARADO girando para a linha de tiro -
+        # entao a ordem e a linha de tiro, nao a bola. Se aqui devolvesse
+        # ang_para_bola, a fase de mira nunca sairia: ela existe justamente
+        # porque o corpo demora a chegar na ordem.
+        if fase in ("empurrar", "mirar"):
+            return ang_saida, True
+        return ang_para_bola, False
     if not so_lado_certo:
         # COMPORTAMENTO ANTIGO (chave ARARABOTS_SEM_ORIENTACAO_LADO): a direcao
         # do chute sempre, sem olhar de que lado do robo a bola esta. Metade das
@@ -169,7 +191,8 @@ def orientacao_do_corpo(robo, ball, alvo_chute, gol_ataque_xy,
 
 
 def chutar_em(robo, ball, ponto, tipo_alvo, sentido_ataque, travas, rid,
-              gol_ataque_xy=None, so_lado_certo=True, pode_armar=True):
+              gol_ataque_xy=None, so_lado_certo=True, pode_armar=True,
+              fase=None, exigir_corpo_alinhado=True):
     """"Chute a bola NAQUELE ponto": os tres canais, numa chamada.
 
     Devolve (angulo, armado, forca) - o que a estrategia precisa pedir para que
@@ -202,7 +225,8 @@ def chutar_em(robo, ball, ponto, tipo_alvo, sentido_ataque, travas, rid,
     """
     gol = gol_ataque_xy if gol_ataque_xy is not None else (
         (ball.position_x + 1000.0 * sentido_ataque, ball.position_y))
-    angulo, _mira = orientacao_do_corpo(robo, ball, ponto, gol, so_lado_certo)
+    angulo, _mira = orientacao_do_corpo(robo, ball, ponto, gol, so_lado_certo,
+                                        fase=fase)
     # 'pode_armar' SEPARA A MIRA DO GATILHO.
     #
     # A mira e segurada por 2 s para o corpo e a aproximacao nao girarem (ver
@@ -212,12 +236,25 @@ def chutar_em(robo, ball, ponto, tipo_alvo, sentido_ataque, travas, rid,
     # em quem estava no caminho (14 de 19 instantes de chute, 74%). Entao
     # quando a mira deste ciclo e a EMPRESTADA do ciclo anterior, o robo
     # continua chegando e apontando para o alvo, mas nao arma.
-    armado = pode_armar and armar_chute(
-        robo, ball, ponto, sentido_ataque, tipo_alvo, travas, rid)
+    # '_mira' diz se a ORDEM deste ciclo e mirar o tiro (em vez de olhar para a
+    # bola). Era computado e descartado; sem ele, o robo armava no meio do
+    # contorno. Ver o racional medido em armar_chute.
+    armado = pode_armar and _mira and armar_chute(
+        robo, ball, ponto, sentido_ataque, tipo_alvo, travas, rid,
+        exigir_corpo_alinhado=exigir_corpo_alinhado)
     return angulo, armado, (forca_por_alvo(tipo_alvo) if armado else 0.0)
 
 
-def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid):
+# O CORPO TEM DE ESTAR NA LINHA DE TIRO PARA O CHUTE SAIR.
+#
+# 0,35 rad = 20 graus. E a mesma tolerancia de mira do resto da tatica
+# (running.TOL_MIRA) e e menos que a meia-face do chutador (~29 graus): dentro
+# disto, a bola sai na direcao pedida com erro que o gol absorve.
+TOL_CORPO_DISPARO = 0.35
+
+
+def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid,
+                exigir_corpo_alinhado=True):
     """Decide se o chute deste robo fica ARMADO neste ciclo.
 
     'travas' e o dicionario de estado da jogada (estado["chute_armado"]): a
@@ -241,6 +278,41 @@ def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid):
     frente_placa, _, _ = geometria_do_chutador(robo, ball)
     para_frente = direcao_para_frente(ball, alvo_chute, sentido_ataque)
     ok_dir = para_frente or tipo_alvo == "passe"
+
+    # A BOLA SAI NO EIXO DO CORPO. SE O CORPO ESTA TORTO, O CHUTE SAI TORTO.
+    #
+    # DEFEITO QUE ISTO CORRIGE, e era a "investida fantasma": nada aqui olhava
+    # para onde o CORPO aponta. As condicoes eram "a bola esta na placa" e "o
+    # ALVO esta para a frente" - as duas podem valer com o robo virado para
+    # qualquer lado, porque a placa gira com ele. Resultado: o chute dispara na
+    # direcao do corpo, que nao e a direcao pedida.
+    #
+    # MEDIDO em 09/10/2026, no instante de maior aproximacao de dois replays
+    # (o corpo vem do 'th' da visao crua, nao de inferencia):
+    #
+    #   portador_longe_atras   d=119 mm  corpo 120 graus  linha de tiro   0 graus
+    #                          erro corpo-vs-tiro = 120 graus, e DISPAROU
+    #                          -> a bola percorreu 3,1 m PARA O NOSSO CAMPO
+    #   portador_bola_diagonal d=105 mm  corpo  24 graus  linha de tiro  -4 graus
+    #                          erro corpo-vs-tiro = 28 graus, e DISPAROU
+    #
+    # Nos dois o corpo estava apontando para A BOLA (erro de 19 e 1 grau em
+    # relacao a ela), nao para o alvo - ou seja, o robo chutou enquanto ainda
+    # estava contornando. O contorno em si funcionou: o que faltava era nao
+    # disparar no meio dele.
+    #
+    # A informacao ja existia e era JOGADA FORA: orientacao_do_corpo devolve
+    # (angulo, mira_o_chute), e 'chutar_em' escrevia 'angulo, _mira = ...' e
+    # nunca usava o segundo. Agora o disparo exige as duas coisas - a ORDEM de
+    # mirar o tiro e o corpo MEDIDO dentro da tolerancia -, porque a ordem
+    # chega antes de o corpo chegar (o controlador de orientacao e um P com
+    # 2 rad/s de teto: 90 graus levam ~0,8 s).
+    if exigir_corpo_alinhado:
+        ang_saida = atan2(alvo_chute[1] - ball.position_y,
+                          alvo_chute[0] - ball.position_x)
+        if abs(norm_ang(robo.orientation - ang_saida)) > TOL_CORPO_DISPARO:
+            travas[rid] = False
+            return False
     perto = d_bola < ALCANCE_CONTATO and frente_placa > MARGEM_FRENTE_PLACA
 
     if (travas.get(rid) and d_bola < ALCANCE_SOLTA_TRAVA

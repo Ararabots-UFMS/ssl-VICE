@@ -541,6 +541,211 @@ CENARIOS = {
     },
 
     # ======================================================================
+    #  O PORTADOR SOZINHO: so ele e a bola em campo  (07/10/2026)
+    # ======================================================================
+    #
+    # PEDIDO DO FELIPE: "teste so o portador, sozinho, com so ele e a bola em
+    # campo, com a bola em diversas posicoes diferentes, para testar a acao dele
+    # e principalmente se ele faz o contorno".
+    #
+    # POR QUE ISTO MEDE MELHOR QUE OS CENARIOS DE TIME. Nenhum amarelo em campo
+    # (os robos que o cenario nao lista ficam atras da linha de fundo e
+    # DESLIGADOS, fora da visao) e nenhum companheiro. Consequencias, todas
+    # desejadas aqui:
+    #
+    #   - 'linha_livre' ate o gol esta sempre limpa, entao a mira e sempre
+    #     'gol'. A mira nao pisca, e foi o piscar dela que escondeu as quatro
+    #     modificacoes de 03/10 (ver mira_firme);
+    #   - sem apoio nao ha passe, entao a direcao de saida e sempre bola->gol;
+    #   - sem adversario nao ha pressao, alivio nem disputa.
+    #
+    # Sobra UMA coisa sendo medida: o portador chegando na bola. E como a
+    # direcao de saida e fixa, o angulo da largada e a unica variavel.
+    #
+    # O QUE VARIA: o angulo entre "de onde eu venho" e "para onde a bola tem de
+    # ir". O robo fica em (0,0) e a bola se move em volta dele.
+    #
+    #     0 graus     bola a frente, na linha do gol      nao precisa contornar
+    #     90 graus    bola ao lado (os dois lados)        contorna um quarto
+    #     135 graus   bola na diagonal de tras            contorna, lado curto
+    #     180 graus   bola atras, na linha de tiro        contorna meia volta
+    #
+    # E a DISTANCIA, porque o contorno so existe dentro de RAIO_ENCAIXE (600 mm):
+    # a 150 e 400 mm o ramo da orbita dispara; a 1200 mm, nao - ali quem resolve
+    # e o recuo da aproximacao, e o cenario existe para mostrar a diferenca.
+    #
+    # METRICA DO TRIO: 'recuo' - o quanto a bola chegou a andar PARA O NOSSO
+    # CAMPO em algum momento da execucao. E o defeito que o contorno existe para
+    # evitar, e e o unico numero que distingue "contornou" de "empurrou para
+    # tras e depois corrigiu". 'avanco' sozinho nao distingue.
+    "portador_alinhado": {        "tipo": "portador",
+        "titulo": "Bola a frente, alinhada com o gol: o caso facil",
+        "descricao": (
+            "Zero graus: o robo ja esta atras da bola, na linha do gol, e nao "
+            "ha nada a contornar. E a referencia do trio - se a bola nao andar "
+            "AQUI, o problema nao e o contorno. Esperado: empurra e chuta."
+        ),
+        "bola": (700.0, 0.0),
+        "azuis": [(1, 0, 0, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "portador_bola_atras_400": {        "tipo": "portador",
+        "titulo": "Bola ATRAS a 400 mm: contorna meia volta?",
+        "descricao": (
+            "180 graus, dentro do raio do contorno (600). O robo esta entre a "
+            "bola e o gol: ir reto nela empurra para o NOSSO campo, porque sem "
+            "dribbler a bola sai na direcao robo->bola. Esperado: orbita ate o "
+            "lado certo e so depois empurra, com recuo perto de zero."
+        ),
+        "bola": (-400.0, 0.0),
+        "azuis": [(1, 0, 0, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "portador_bola_atras_150": {        "tipo": "portador",
+        "titulo": "Bola atras e COLADA (150 mm): da a volta sem empurrar?",
+        "descricao": (
+            "180 graus praticamente em contato - o casco tem 90 mm e a bola 21, "
+            "entao 111 mm ja e toque. O risco e empurrar enquanto decide. O arco "
+            "do contorno tem raio 260, logo o primeiro alvo AFASTA o robo da "
+            "bola antes de girar. Pior caso do trio."
+        ),
+        "bola": (-150.0, 0.0),
+        "azuis": [(1, 0, 0, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "portador_bola_lado_esq": {        "tipo": "portador",
+        "titulo": "Bola 90 graus a esquerda: um quarto de volta",
+        "descricao": (
+            "A bola esta ao lado, nao atras: o erro e de 90 graus, no limite em "
+            "que o ramo do contorno liga (ele exige mais de 90). Mede a "
+            "fronteira - e com ela o risco de ficar oscilando em cima do "
+            "limite, que e um defeito que esta aproximacao ja teve."
+        ),
+        "bola": (0.0, 400.0),
+        "azuis": [(1, 0, 0, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "portador_bola_lado_dir": {        "tipo": "portador",
+        "titulo": "Bola 90 graus a direita: o arco escolhe o lado curto?",
+        "descricao": (
+            "Espelho do anterior. Os dois juntos mostram se o contorno escolhe o "
+            "sentido MAIS CURTO do arco ou se tem um lado preferido - um erro de "
+            "sinal aqui so aparece comparando os dois."
+        ),
+        "bola": (0.0, -400.0),
+        "azuis": [(1, 0, 0, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "portador_bola_diagonal": {        "tipo": "portador",
+        "titulo": "Bola 135 graus atras: contorno parcial",
+        "descricao": (
+            "Lado errado por 135 graus, nao 180: o contorno tem de girar menos "
+            "de meia volta e entregar o robo alinhado. E o caso mais comum em "
+            "jogo - 180 exato quase nunca acontece."
+        ),
+        "bola": (-300.0, 300.0),
+        "azuis": [(1, 0, 0, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "portador_bola_atras_longe": {        "tipo": "portador",
+        "titulo": "Bola atras a 1200 mm: FORA do raio do contorno",
+        "descricao": (
+            "180 graus, mas a 1200 mm - o dobro do RAIO_ENCAIXE (600), onde o "
+            "ramo da orbita NAO dispara. Quem tem de resolver aqui e o recuo "
+            "continuo da aproximacao, mirando um ponto atras da bola. Se este "
+            "passar e os de 400 e 150 falharem, o defeito esta no contorno; se "
+            "este falhar tambem, esta na aproximacao de longe."
+        ),
+        "bola": (-1200.0, 0.0),
+        "azuis": [(1, 0, 0, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    # --- CONTORNO LONGO: a bola a metros de distancia, do lado errado -------
+    #
+    # PEDIDO DO FELIPE (09/10/2026): "quero cenarios onde ele esteja longe para
+    # vermos o contorno longo".
+    #
+    # POR QUE ELES MEDEM OUTRA COISA. Nos oito de cima o robo nasce a 150-1200
+    # mm da bola: a decisao de contornar e quase imediata e o que se ve e a
+    # chegada. Aqui ele nasce a 3-7 m, entao o caminho inteiro e o teste - e e
+    # onde se ve se o desvio e UM arco so, planejado, ou uma sequencia de
+    # correcoes. Com o contorno a cargo do planejador (avoid_ball), a volta e um
+    # caminho continuo; com o arco feito a mao, o alvo pulava 0,9 rad por ciclo
+    # e o robo perseguia uma cenoura - a distancia isso aparece como zigue-zague.
+    "portador_longe_atras": {        "tipo": "portador",
+        "titulo": "Bola a 4 m, atras do robo: o contorno longo",
+        "descricao": (
+            "180 graus a 4 m. O robo esta entre a bola e o gol, com o campo "
+            "todo para resolver: ele tem de chegar ATRAS dela, e o caminho "
+            "inteiro e a medida. Se ele for reto, encosta pelo lado errado e "
+            "empurra a bola para o nosso campo."
+        ),
+        "bola": (-1500.0, 0.0),
+        "azuis": [(1, 2500, 0, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "portador_longe_diagonal": {        "tipo": "portador",
+        "titulo": "Bola a 4,5 m na diagonal: contorno longo com angulo",
+        "descricao": (
+            "A bola esta longe E fora do eixo, entao a linha de tiro nao e a "
+            "linha de chegada. O ponto de espera fica atras da bola na direcao "
+            "do gol, e o caminho tem de terminar alinhado com ela - nao apenas "
+            "perto."
+        ),
+        "bola": (-1200.0, 1600.0),
+        "azuis": [(1, 2600, -1200, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "portador_longe_lado": {        "tipo": "portador",
+        "titulo": "Bola a 3,5 m, 90 graus: contorna ou corta?",
+        "descricao": (
+            "A 90 graus e longe, a tentacao e cortar reto e chegar pela "
+            "lateral. Com a bola como obstaculo do planejador, o caminho passa "
+            "por tras; sem ela, passa por cima - e a bola sai de raspao."
+        ),
+        "bola": (0.0, 0.0),
+        "azuis": [(1, 0, -3500, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "portador_atravessa_campo": {        "tipo": "portador",
+        "titulo": "Bola no terco de ataque, robo no nosso: 7 m de corrida",
+        "descricao": (
+            "A corrida mais longa que o campo permite, com a bola do lado certo "
+            "no fim. Mede a coisa mais basica e que nunca foi medida sozinha: o "
+            "robo atravessa o campo e chega em condicao de chutar, ou chega "
+            "freando e de lado?"
+        ),
+        "bola": (3000.0, 400.0),
+        "azuis": [(1, -3600, -600, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
+    "portador_bola_no_terco": {        "tipo": "portador",
+        "titulo": "Bola atras, no nosso terco: contorna ou tira na lateral?",
+        "descricao": (
+            "Mesma geometria de 180 graus, mas com a bola no nosso terco "
+            "defensivo, onde a saida de bola escolhe a direcao em vez do gol. "
+            "Aqui o contorno e a saida de bola se encontram: o alvo nao e mais "
+            "'o gol deles', e o lado certo de chegada muda com ele."
+        ),
+        "bola": (-3100.0, 300.0),
+        "azuis": [(1, -2600, 300, 0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+
+    # ======================================================================
     #  CENARIOS DAS MODIFICACOES DE 07/10/2026  (tres por modificacao)
     # ======================================================================
     #
@@ -2223,6 +2428,18 @@ const gCompanheiros = el('g'); svg.appendChild(gCompanheiros);
 const trilhaB = el('path',{fill:'none',stroke:'#ff9f1c','stroke-width':16,opacity:.45}); svg.appendChild(trilhaB);
 const trilhaR = el('path',{fill:'none',stroke:'#4da3ff','stroke-width':14,opacity:.35}); svg.appendChild(trilhaR);
 const linhaErro = el('line',{stroke:'var(--alvo)','stroke-width':12,'stroke-dasharray':'40 30',opacity:.9}); svg.appendChild(linhaErro);
+
+// A LINHA ROBO - BOLA - GOL, e o erro dela.
+//
+// Pedido do Felipe (09/10/2026): "trace uma linha entre o robo, a bola e o gol,
+// para ver o erro". Sao dois segmentos e nao um: bola->gol e a linha de tiro
+// (onde a bola TEM de sair) e robo->bola e de onde ele vai empurrar. Quando os
+// dois viram uma reta so, o posicionamento esta certo; o angulo entre eles E o
+// erro, e aparece sozinho no desenho.
+const linhaTiro = el('line',{stroke:'#8ef5a0','stroke-width':6,
+  'stroke-dasharray':'60 40',opacity:.55}); svg.appendChild(linhaTiro);
+const linhaEmpurrao = el('line',{stroke:'#f58e8e','stroke-width':6,
+  opacity:.7}); svg.appendChild(linhaEmpurrao);
 const alvo = el('g'); svg.appendChild(alvo);
 alvo.appendChild(el('circle',{r:70,fill:'none',stroke:'#ffd166','stroke-width':14}));
 alvo.appendChild(el('line',{x1:-110,y1:0,x2:110,y2:0,stroke:'#ffd166','stroke-width':10}));
@@ -2379,15 +2596,23 @@ const COBRADOR = (D.cobrador !== null && D.cobrador !== undefined) ? D.cobrador 
   const d = document.getElementById('selo-disp');
   d.textContent = D.disparou ? 'chutador disparou' : 'não disparou';
   d.className = 'selo ' + (D.disparou ? 'bom' : 'neutro');
-  // O ESTADO DO AJUSTE DO PID, quando gravado.
+  // EM QUE CONDICAO O FEEDFORWARD RODOU, quando gravado.
   //
   // Sem isto um numero velho nao dizia em que condicao rodou: o 'preparar'
-  // desligava o feedforward do controlador e nada registrava. Replays antigos
-  // nao tem o campo - ai o selo nao aparece, em vez de mentir um default.
-  if (D.ajuste_pid !== undefined && D.ajuste_pid !== null){
-    const a = document.getElementById('selo-ajuste');
-    a.textContent = D.ajuste_pid ? 'PID: sem feedforward' : 'PID: com feedforward';
-    a.className = 'selo neutro'; a.hidden = false;
+  // alterava o controlador e nada registrava. Replays antigos nao tem o campo -
+  // ai o selo nao aparece, em vez de mentir um default. Os de 03/10 e antes
+  // trazem 'ajuste_pid' booleano, que e a forma antiga do mesmo dado.
+  {
+    const ff = (D.feedforward !== undefined && D.feedforward !== null)
+      ? 'PID: feedforward ' + D.feedforward
+      : ((D.ajuste_pid !== undefined && D.ajuste_pid !== null)
+          ? (D.ajuste_pid ? 'PID: sem feedforward' : 'PID: feedforward cru')
+          : null);
+    if (ff){
+      const a = document.getElementById('selo-ajuste');
+      a.textContent = ff;
+      a.className = 'selo neutro'; a.hidden = false;
+    }
   }
 })();
 
@@ -2535,6 +2760,18 @@ function desenha(i){
     }
   });
   robo.style.display='none';   // o robo unico virou o laco acima
+
+  // os dois segmentos da linha de mira, do cobrador
+  if (meu && q.b){
+    const golX = (D.sentido_ataque === undefined || D.sentido_ataque === null)
+      ? 4500 : 4500 * (D.sentido_ataque >= 0 ? 1 : -1);
+    linhaTiro.setAttribute('x1',q.b[0]); linhaTiro.setAttribute('y1',q.b[1]);
+    linhaTiro.setAttribute('x2',golX);   linhaTiro.setAttribute('y2',0);
+    linhaTiro.style.display='';
+    linhaEmpurrao.setAttribute('x1',meu[1]); linhaEmpurrao.setAttribute('y1',meu[2]);
+    linhaEmpurrao.setAttribute('x2',q.b[0]); linhaEmpurrao.setAttribute('y2',q.b[1]);
+    linhaEmpurrao.style.display='';
+  } else { linhaTiro.style.display='none'; linhaEmpurrao.style.display='none'; }
 
   const alvoCob = meu ? (q.a || []).find(x => x[0] === COBRADOR) : null;
   if (alvoCob && meu){
@@ -2775,22 +3012,34 @@ toca();   // comeca tocando: nada de clicar para ver a execucao
 </script></body></html>"""
 
 
-def _ajuste_pid_ligado():
-    """O ajuste do PID (feedforward desligado) esta aplicado agora?
+def _estado_do_feedforward():
+    """Em que condicao o feedforward do PID rodou nesta execucao.
 
-    Le o marcador que o 'ararabots.sh ajustes' deixa no arquivo: quando o ajuste
-    esta LIGADO, a linha original fica comentada com '#ORIG#'. Devolve None se
-    nao der para ler - melhor nao registrar nada do que registrar um palpite.
+    POR QUE ISTO E REGISTRADO: sem o campo, um numero velho nao dizia em que
+    condicao rodou - o 'preparar' alterava o controlador e nada ficava gravado.
+
+    Tres estados possiveis, e os tres ja existiram nesta arvore:
+        "guarda de sinal"  codigo de 07/10/2026: o feedforward vale so onde
+                           concorda com o erro de posicao
+        "desligado"        o ajuste de 25/08 aplicado (o termo era zerado)
+        "cru"              o codigo sem ajuste nenhum, feedforward inteiro
+    Devolve None se nao der para ler - melhor nao registrar nada do que
+    registrar um palpite.
     """
     alvo = "/root/ssl-VICE/src/control/control/pid_controller.py"
     try:
         with open(alvo, encoding="utf-8") as fp:
-            for linha in fp:
-                if linha.strip().startswith("#ORIG#"):
-                    return True
-        return False
+            txt = fp.read()
     except OSError:
         return None
+    if "if feedforward * position_error > 0.0:" in txt:
+        # a guarda pode estar como codigo ou comentada por um ajuste antigo
+        for linha in txt.split("\n"):
+            if linha.strip().startswith("if feedforward * position_error"):
+                return "guarda de sinal"
+    if any(l.strip().startswith("#ORIG#") for l in txt.split("\n")):
+        return "desligado"
+    return "cru"
 
 
 def erro_de_rastreio(resultado):
@@ -3014,6 +3263,18 @@ def gerar_replay(resultado, destino):
         "bola_inicial": resultado.get("bola_inicial"),
         # Quem cobrou, para o replay destacar o robo certo em vez de adivinhar.
         "cobrador": resultado.get("cobrador"),
+        # EM QUE CONDICAO ISTO RODOU - o replay tem de dizer sozinho.
+        #
+        # Estes quatro campos existiam no JSON do resultado e NAO estavam aqui,
+        # entao o replay - que e o que o 'medir' le - nao sabia o lado do
+        # ataque, as chaves ligadas, nem se houve quadro de outra visao. O
+        # 'medir' caia no default (+x) e um lote com o lado trocado teria todo o
+        # sinal invertido sem ninguem notar. Mesma familia de armadilha do lote
+        # de 21/09, que rodou sem adversario sem a planilha dizer.
+        "sentido_ataque": resultado.get("sentido_ataque"),
+        "feedforward": resultado.get("feedforward"),
+        "chaves_desligadas": resultado.get("chaves_desligadas"),
+        "quadros_fora_do_relogio": resultado.get("quadros_fora_do_relogio"),
     }, separators=(",", ":"))
 
     with open(destino, "w") as f:
@@ -3315,6 +3576,42 @@ def rodar(nome, duracao=12.0):
                                   getattr(no, "azuis_pos", {}), modo_adv,
                                   getattr(no, "bola_vel", (0.0, 0.0)))
 
+        # A GEOMETRIA DO CENARIO TEM DE VALER NO INSTANTE t=0.
+        #
+        # DEFEITO QUE ISTO CORRIGE, medido em 07/10/2026 no lote do portador.
+        # Entre a confirmacao da bola e o inicio da gravacao havia duas janelas
+        # em que o jogo ja estava rodando: 1,5 s de STOP - e sob STOP a arvore
+        # manda todos os robos para um alvo FIXO em (2000,1400), ver o comentario
+        # do aquecimento - e ate 3 s esperando o comando aparecer no
+        # /refereeTopic. Com o robo longe da bola isso nao aparece; com ele
+        # perto, ele JOGA nessa janela.
+        #
+        # MEDIDO, deriva da bola entre o que o cenario pede e o quadro t=0:
+        #     portador_bola_atras_150     496 e 597 mm   (pedido: 150)
+        #     portador_bola_atras_400     289 e 398 mm   (pedido: 400)
+        #     os outros seis cenarios     0 a 6 mm
+        #
+        # Nos dois primeiros o robo chegava a t=0 JA EM CONTATO com a bola
+        # (115 e 144 mm), e as duas condicoes do par partiam de geometrias
+        # diferentes - o antes/depois media duas largadas, nao duas taticas.
+        #
+        # Reposicionar aqui, depois do STOP e antes de gravar, zera as duas
+        # janelas de uma vez: o que o cenario escreveu e o que o replay ve.
+        print("   reposicionando o cenario (a geometria tem de valer no t=0)")
+        posicionar(cen)
+        for _ in range(10):
+            _girar(no, 0.02)
+
+        # A GRAVACAO COMECA ANTES DO COMANDO, NAO DEPOIS.
+        #
+        # A espera pelo comando no /refereeTopic leva ate 3 s, e nessa janela o
+        # jogo JA ESTA RODANDO - era a maior das duas fontes de deriva medidas
+        # acima. Gravando antes, o replay guarda a geometria limpa em t=0 e a
+        # jogada inteira; a espera entra como um pre-rolo de poucos decimos em
+        # que nada se move, e o tempo gasto nela e devolvido ao fim da gravacao.
+        no.t0 = time.monotonic()
+        no.gravando = True
+
         # 2. SEÇÃO MODIFICADA: Envio do comando de arbitragem conforme a regra
         if tipo_cen in ("KICKOFF", "PREPARE_KICKOFF"):
             print(f"   comando do arbitro: PREPARE_KICKOFF {cor_cen} -> NORMAL_START")
@@ -3348,7 +3645,11 @@ def rodar(nome, duracao=12.0):
         #
         # Medido na ultima vez: 1328 ciclos com cmd=''. Agora falha na cara.
         cmd_visto = no.comando_arbitro if hasattr(no, "comando_arbitro") else None
-        t_esp = time.time() + 3.0
+        # QUANTO SE ESPEROU PELO ARBITRO: a gravacao ganha esse tempo de volta.
+        # Sem isto, cada segundo de espera era um segundo a menos de jogada
+        # gravada, e isso variava de execucao para execucao.
+        _t_ini_esp = time.time()
+        t_esp = _t_ini_esp + 3.0
         while time.time() < t_esp:
             rclpy.spin_once(no, timeout_sec=0.05)
             cmd_visto = getattr(no, "comando_arbitro", None)
@@ -3363,12 +3664,10 @@ def rodar(nome, duracao=12.0):
             print("      ./ararabots.sh parar && ./ararabots.sh preparar --headless")
             print()
             return 3
+        espera_cmd = time.time() - _t_ini_esp
 
         print(f"   gravando por {duracao:.0f}s (olhe a janela do grSim)...")
-        no.t0 = time.monotonic()
-        no.gravando = True
-
-        fim = time.time() + duracao
+        fim = time.time() + duracao + espera_cmd
         proximo_cmd = 0.0
         while time.time() < fim:
             # 0,02 s, e nao 0,1: a CADENCIA DO LACO e quem manda na taxa de
@@ -3487,7 +3786,7 @@ def rodar(nome, duracao=12.0):
         # dizia se veio do codigo commitado ou do codigo com o patch. Agora o
         # proprio replay diz. Replays antigos nao tem o campo - o visualizador
         # entao nao mostra o selo, em vez de inventar um default.
-        "ajuste_pid": _ajuste_pid_ligado(),
+        "feedforward": _estado_do_feedforward(),
         # PARA QUE LADO ATACAMOS nesta execucao, para o avanco ter sinal.
         "sentido_ataque": 1.0 if const["goal_x"] >= 0 else -1.0,
         # QUANTOS QUADROS VIERAM DE OUTRO REMETENTE (ver TOL_RELOGIO). Zero e o
@@ -4242,8 +4541,19 @@ def metricas_do_replay(caminho):
     bxf, byf = q[-1]["b"][0], q[-1]["b"][1]
     rid = d.get("cobrador")
     dists, contato = [], 0
+    # RECUO: o quanto a bola chegou a andar para o NOSSO campo em algum momento.
+    #
+    # E a metrica do contorno, e nenhuma outra serve. 'avanco' olha so o fim:
+    # uma execucao que empurra a bola 1 m para tras e depois a traz 1,2 m para a
+    # frente aparece como +200 mm, igual a uma que nunca errou o lado. O defeito
+    # que o contorno existe para evitar e exatamente o primeiro empurrao errado.
+    recuo = 0.0
+    # GIRO: quanto o robo andou EM VOLTA da bola, em graus acumulados. Diz se
+    # ele contornou de fato, em vez de inferir pelo resultado.
+    giro, ang_ant = 0.0, None
     for f in q:
         bx, by = f["b"][0], f["b"][1]
+        recuo = min(recuo, (bx - bx0) * sent)
         perto = min((math.hypot(r[1] - bx, r[2] - by) for r in f["r"]),
                     default=9e9)
         if perto < CONTATO_RAIO:
@@ -4252,12 +4562,77 @@ def metricas_do_replay(caminho):
             for r in f["r"]:
                 if r[0] == rid:
                     dists.append(math.hypot(r[1] - bx, r[2] - by))
+                    ang = math.atan2(r[2] - by, r[1] - bx)
+                    if ang_ant is not None:
+                        dif = ang - ang_ant
+                        while dif > math.pi:
+                            dif -= 2 * math.pi
+                        while dif < -math.pi:
+                            dif += 2 * math.pi
+                        giro += abs(dif)
+                    ang_ant = ang
+    # DERIVA: a bola no quadro t=0 estava onde o cenario pediu?
+    #
+    # Sem isto um par antes/depois pode comparar duas LARGADAS diferentes em vez
+    # de duas taticas - foi o que aconteceu em 'portador_bola_atras_400', com a
+    # bola 289 e 398 mm fora do lugar nas duas rodadas e o robo chegando ao t=0
+    # ja em contato com ela. Qualquer valor acima de umas poucas dezenas de mm
+    # invalida a comparacao.
+    ped = d.get("bola_inicial") or {}
+    deriva = None
+    if ped.get("x") is not None:
+        deriva = round(math.hypot(bx0 - ped["x"], by0 - ped["y"]))
+    # O ERRO DA LINHA ROBO-BOLA-GOL, no fim da execucao.
+    #
+    # Pedido do Felipe (09/10/2026): "faca ele parar em frente a bola e tracar
+    # uma linha entre o robo, a bola e o gol, para ver o erro". Com o portador
+    # parado atras da bola (ARARABOTS_SO_POSICIONAR=1), estes dois numeros sao
+    # TODO o posicionamento, sem o contato por cima:
+    #
+    #   erro_ang   quantos graus a direcao bola->robo esta de 'exatamente atras
+    #              da bola em relacao ao gol'. Zero = os tres em linha.
+    #   desvio     a que distancia o robo esta da RETA bola->gol, em mm. E o
+    #              erro que manda a bola para o lado quando ele encosta.
+    #
+    # Medidos no ultimo segundo gravado, que e onde ele ja parou.
+    erro_ang = desvio = None
+    gol_x = 4500.0 * sent
+    ult = [f for f in q if f["t"] >= q[-1]["t"] - 1.0]
+    amostras_fim = []
+    for f in ult:
+        bx, by = f["b"][0], f["b"][1]
+        for r in f["r"]:
+            if rid is not None and r[0] == rid:
+                amostras_fim.append((r[1], r[2], bx, by))
+    if amostras_fim:
+        angs, desvs = [], []
+        for rx, ry, bx, by in amostras_fim:
+            a_gol = math.atan2(0.0 - by, gol_x - bx)
+            a_robo = math.atan2(ry - by, rx - bx)
+            dif = a_robo - (a_gol + math.pi)
+            while dif > math.pi:
+                dif -= 2 * math.pi
+            while dif < -math.pi:
+                dif += 2 * math.pi
+            angs.append(abs(math.degrees(dif)))
+            # distancia do robo a reta bola->gol
+            vx, vy = gol_x - bx, 0.0 - by
+            n = math.hypot(vx, vy) or 1.0
+            desvs.append(abs((rx - bx) * (vy / n) - (ry - by) * (vx / n)))
+        angs.sort(); desvs.sort()
+        erro_ang = round(angs[len(angs) // 2], 1)
+        desvio = round(desvs[len(desvs) // 2])
     return {
         "cenario": d.get("cenario"),
         "quadros": len(q),
+        "deriva": deriva,
+        "erro_ang": erro_ang,
+        "desvio": desvio,
         "descartados": descartados,
         "dur": round(q[-1]["t"], 1),
         "avanco": round((bxf - bx0) * sent),
+        "recuo": round(recuo),
+        "giro": round(math.degrees(giro)),
         "liquido": round(math.hypot(bxf - bx0, byf - by0)),
         "contato_pct": round(100.0 * contato / len(q)),
         "portador_min": round(min(dists)) if dists else None,
