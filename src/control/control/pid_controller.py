@@ -129,11 +129,11 @@ class PIDController:
         # Vector2DTrajectoryController chama x e y separadamente, cada um com o
         # seu integrador. Projetar no versor do erro exigiria mover a conta para
         # o nivel 2D, e isso muda a estrutura de um pacote que nao e nosso.
-        if feedforward * position_error > 0.0:
-            output = feedforward + proportional + integral_term + derivative
-        else:
-            output = proportional + integral_term + derivative
-        #ORIG# output = feedforward + proportional + integral_term + derivative
+        #AJUSTE# if feedforward * position_error > 0.0:
+            #AJUSTE# output = feedforward + proportional + integral_term + derivative
+        #AJUSTE# else:
+            #AJUSTE# output = proportional + integral_term + derivative
+        output = feedforward + proportional + integral_term + derivative
         # <<< ARARABOTS_AJUSTE
 
         output = max(-self.output_limit, min(self.output_limit, output))
