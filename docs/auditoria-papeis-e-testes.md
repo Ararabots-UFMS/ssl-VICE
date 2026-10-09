@@ -124,8 +124,19 @@ Quem tem a bola ou vai buscá-la. Escolhido primeiro, o mais próximo dela
 - **Condução deliberada.** Hoje "levar a bola para frente" é efeito colateral de
   atravessá-la na direção do alvo. Falta tratar progressão como intenção, com
   limite de quantos metros se conduz antes de reavaliar.
-- **Proteção de posse sob pressão.** Com adversário a menos de `PRESSAO_RAIO`, o
-  corpo entre o adversário e a bola, em vez de só mirar o alívio lateral.
+- ✅ **Proteção de posse sob pressão** (03/10/2026). A direção de saída passou a
+  vir de varredura angular com as direções em que o adversário está descartadas,
+  o que põe o corpo entre ele e a bola — escudo de 66° de mediana na prensa
+  frontal, contra 74-163° antes. E a pressão passou a ser medida **na bola**:
+  com o portador atrás dela, o adversário que prensava a bola ficava fora do
+  `PRESSAO_RAIO` do robô e o alívio não disparava.
+- ✅ **O corpo não vira as costas para a bola** (03/10/2026). Dentro de 700 mm a
+  orientação era calculada no referencial da bola, igual para qualquer posição do
+  robô: medido, 18 de 36 posições em volta dela mandavam virar as costas, com até
+  180° de erro. Hoje 0 de 576.
+- ✅ **Bola atrás de nós ⇒ contorna e pega por trás** (03/10/2026). Perto e do
+  lado errado, o alvo passa a ser o arco em volta da bola. Antes, 22 de 72
+  largadas terminavam empurrando a bola para trás (175° no pior caso); hoje 0.
 
 **Skills**
 - ✅ **`chute.armar_chute(robô, bola, alvo, …, travas, rid)`** — feito: o portão do
@@ -136,8 +147,14 @@ Quem tem a bola ou vai buscá-la. Escolhido primeiro, o mais próximo dela
   unificar as duas é o próximo passo e exige lote medido.
 - ✅ **`aproximacao.ponto_de_interceptacao(…)`** — feito: o cálculo estava repetido
   em três ramos.
-- ⬜ **`chutar_em(robô, ponto)`** — não é expressável hoje (três canais distintos;
-  ver 6.2). Só depois de o laço do `control` ser corrigido.
+- ✅ **`chute.chutar_em(robô, bola, ponto, …)`** (03/10/2026) — uma chamada para
+  os três canais, devolvendo (ângulo, armado, força). O que **não** dá para
+  encapsular é a dependência do laço do `control`: o `TeamCommand` que leva kick
+  e orientação só é publicado enquanto o robô está indo a algum lugar, então o
+  alvo de movimento **nunca pode ser alcançável**. Esse invariante agora está
+  escrito num lugar só, na docstring da skill, em vez de espalhado em três
+  táticas. Quando `control.py:120,139` for corrigido, é de lá que o comentário
+  sai.
 
 ---
 

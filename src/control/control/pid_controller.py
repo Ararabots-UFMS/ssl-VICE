@@ -95,7 +95,44 @@ class PIDController:
         # Sem o feedforward sobra a malha fechada na posicao medida, que e o que
         # se quer aqui. O termo faz sentido quando a trajetoria e confiavel -
         # nao e o caso enquanto o time_offset zerar a cada ciclo.
-        output = proportional + integral_term + derivative
+        # ------------------------------------------------------------------
+        # REV. 07/10/2026: DESLIGAR O FEEDFORWARD CUSTOU A VELOCIDADE INTEIRA.
+        #
+        # Sem ele sobra 'kp * erro_de_posicao' - e o erro de posicao contra o
+        # REFERENCIAL DO RASTREADOR e minusculo por construcao: o rastreador
+        # emite um ponto logo a frente do robo e replaneja a cada ciclo.
+        #
+        # MEDIDO no replay de 'empurrao_reto' (07/10/2026, uma execucao, chave
+        # nova ligada), robo em contato com a bola de t = 9,6 s ao fim:
+        #     distancia robo -> setpoint do rastreador   4 a 50 mm (mediana ~35)
+        #     kp * erro  =  2,3 * 0,035                  = 0,08 m/s
+        #     a bola andou                               829 mm em 24,5 s (~34 mm/s)
+        #     o robo passou 71% da execucao EM CONTATO com a bola
+        #
+        # Ou seja: o alvo da estrategia pode estar 291 mm adiante (ver
+        # skills/aproximacao.EMPURRAO) e nao muda nada, porque quem fala com o
+        # PID e o rastreador, nao a estrategia. O canal que carrega a VELOCIDADE
+        # planejada e justamente o feedforward - e ele estava zerado.
+        #
+        # Os dois lados estavam errados:
+        #     feedforward cru      segue a velocidade do plano antigo, medida a
+        #                          ~140 graus do erro de posicao (acima)
+        #     sem feedforward      o robo anda a 0,08 m/s e nao empurra a bola
+        #
+        # A CORRECAO: manter o feedforward apenas onde ele CONCORDA com o erro
+        # de posicao. Por eixo, isso e uma comparacao de sinais - e basta: com
+        # os ~140 graus medidos, o eixo que aponta para o lado errado e zerado e
+        # o outro sobrevive. Nao e filtro novo nem ganho novo: e o mesmo termo,
+        # com uma guarda de sinal.
+        #
+        # Por que por eixo e nao vetorialmente: este controlador E escalar - o
+        # Vector2DTrajectoryController chama x e y separadamente, cada um com o
+        # seu integrador. Projetar no versor do erro exigiria mover a conta para
+        # o nivel 2D, e isso muda a estrutura de um pacote que nao e nosso.
+        if feedforward * position_error > 0.0:
+            output = feedforward + proportional + integral_term + derivative
+        else:
+            output = proportional + integral_term + derivative
         #ORIG# output = feedforward + proportional + integral_term + derivative
         # <<< ARARABOTS_AJUSTE
 

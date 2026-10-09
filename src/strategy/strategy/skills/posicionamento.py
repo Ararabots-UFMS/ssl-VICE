@@ -113,6 +113,79 @@ def ameaca_mais_perigosa(inimigos, nosso_gol):
                                                e.position_y - nosso_gol.y))
 
 
+# --- saida sob pressao -----------------------------------------------------
+# Alcance considerado ao pontuar uma direcao de saida. 1800 mm: o bastante para
+# a bola sair da prensa e ainda parar em campo.
+ALCANCE_SAIDA = 1800.0
+# Quanto a direcao da propria meta e proibida, em radianos. Um chute forte para
+# o nosso campo entrega a bola com velocidade onde eles chutam.
+CONE_PROIBIDO = 0.9
+# Peso do vies de ataque, em mm por radiano de desvio: a direcao mais aberta
+# ganha, mas entre duas parecidas vence a que aponta mais para o gol deles.
+PESO_ATAQUE = 260.0
+
+
+def saida_sob_pressao(bx, by, inimigos, gol_ataque, nosso_gol, ameaca=None,
+                      alcance=ALCANCE_SAIDA, passos=24):
+    """Para onde mandar a bola quando o portador esta prensado.
+
+    O QUE ISTO SUBSTITUI, e por que
+    -------------------------------
+    O alivio era FIXO: "joga na lateral", sempre no mesmo y limite, com 800 mm
+    de avanco. Tirava a bola da prensa, mas sem olhar se a lateral estava livre
+    - e, principalmente, sem relacao com ONDE o adversario esta. O pedido do
+    Felipe e o oposto: o corpo entre o adversario e a bola, em vez de so mirar
+    a lateral.
+
+    Aqui a direcao e escolhida por VARREDURA ANGULAR: pontua cada direcao pela
+    folga ate o adversario mais proximo da linha, com um vies para o lado do
+    ataque, e proibe o cone da propria meta. E o mesmo principio que a saida de
+    bola do terco defensivo ja usava, e o mesmo que o item B1 do plano quer para
+    o chute a gol.
+
+    O "CORPO ENTRE O ADVERSARIO E A BOLA" EXIGE RESTRINGIR A VARREDURA.
+    ------------------------------------------------------------------
+    Isto eu achei MEDINDO, depois de errar o raciocinio. Como o portador mira
+    ATRAVES da bola (ver alvo_do_papel), ele se posiciona do lado OPOSTO a
+    direcao de saida. Entao o corpo so fica entre o adversario e a bola se a
+    direcao de saida apontar para LONGE do adversario.
+    
+    Sem a restricao, a varredura escolhia a direcao mais aberta - que muitas
+    vezes nao e "fugir da pressao" - e o resultado media assim (sonda offline,
+    8 largadas x 3 cenas de prensa, escudo = angulo entre bola->robo e
+    bola->adversario; 0 e o casco no meio):
+    
+        prensa frontal         escudo mediano  74 graus
+        prensa lateral         escudo mediano 157 graus
+        prensa no nosso terco  escudo mediano 163 graus
+    
+    Ou seja: na metade dos casos o robo ia para o lado OPOSTO ao adversario -
+    protegia nada. Com 'ameaca' informada, as direcoes que empurram a bola na
+    direcao dela sao descartadas, e o corpo passa a ficar no meio por geometria.
+    """
+    from math import atan2, cos, sin
+    from strategy.skills.geometria import folga_lateral, no_campo, norm_ang
+
+    ang_ataque = atan2(gol_ataque.y - by, gol_ataque.x - bx)
+    ang_meta = atan2(nosso_gol.y - by, nosso_gol.x - bx)
+    ang_ameaca = None if ameaca is None else atan2(ameaca.position_y - by,
+                                                  ameaca.position_x - bx)
+    melhor, melhor_nota = None, None
+    for k in range(passos):
+        a = -3.14159265 + 2 * 3.14159265 * k / passos
+        if abs(norm_ang(a - ang_meta)) < CONE_PROIBIDO:
+            continue                      # nunca na direcao da propria meta
+        if ang_ameaca is not None and abs(norm_ang(a - ang_ameaca)) < 1.57:
+            continue                      # nunca para o lado de quem prensa
+        ux, uy = cos(a), sin(a)
+        folga = min(folga_lateral(bx, by, ux, uy, alcance, inimigos), 1500.0)
+        nota = folga - PESO_ATAQUE * abs(norm_ang(a - ang_ataque))
+        if melhor_nota is None or nota > melhor_nota:
+            melhor_nota = nota
+            melhor = no_campo(bx + ux * alcance, by + uy * alcance)
+    return melhor
+
+
 def cobertura_na_linha(bx, by, nosso_gol, fracao=COBERTURA_FRACAO,
                        recuo_extra=0.0, margem=200.0):
     """SOBRE a reta bola->nosso gol, nao ao lado dela.

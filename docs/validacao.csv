@@ -583,3 +583,5 @@ zg_centro,1,BLOQUEADO,,,,,,,,,,,,,,,,,,"/movement_manager/commands a 7 Hz (minim
 zg_centro,2,sem gol,nao ativado,NAO,62,0,72,0,0,,4224.5,0.0,,,,,,,4.85,
 zg_lateral,1,sem gol,nao ativado,NAO,62,0,58,0,0,,2201.4,0.0,,,,,,,5.48,
 zg_lateral,2,sem gol,nao ativado,NAO,62,0,58,0,0,,2201.4,0.0,,,,,,,5.84,
+zg_perto_gol,1,sem gol,ATIVADO,SIM,62,19,192,1,1,5735,1024.5,200.0,13206,,,,,,7.34,
+zg_perto_gol,2,ERRO,,,,,,,,,,,,,,,,,,"cenario nao montou"
