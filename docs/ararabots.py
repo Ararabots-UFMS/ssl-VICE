@@ -893,6 +893,7 @@ CENARIOS = {
         "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
+        "bola_sorteio": ((3500.0, 4250.0), (-850.0, 850.0)),
         "randomizar_area_goleiro": "normal",
     },
     "regressao_goleiro_central_sem_apoio": {        "tipo": "jogo",
@@ -900,14 +901,15 @@ CENARIOS = {
         "descricao": (
             "Goleiro amarelo centralizado na meta, sem apoio nem cobertura "
             "azul em campo. A estratégia escolhe quem vai à bola; observar no "
-            "replay se mira um canto livre ou mantém o chute bloqueado. Rode com "
-            "ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro imóvel. Não exige gol."
+            "replay se mira um canto livre ou mantém o chute bloqueado. Rode "
+            "com ARARABOTS_INIMIGO_PARADO=1. Não exige gol. A bola é sorteada "
+            "em x=1500..3200 e y=-800..800 mm (ver sortear_bola)."
         ),
-        "bola": (0.0, 0.0),
-        "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0)],
-        "amarelos": [(0, 4400, 0, 180)],
+        "bola": (2500.0, 0.0),                                  # valor nominal
+        "bola_sorteio": ((1500.0, 3200.0), (-800.0, 800.0)),    # (faixa x, faixa y)
+        "azuis": [(0, -4300, 0, 0), (1, 500, 0, 0)],            # inicio fixo
+        "amarelos": [(0, 4400, 0, 180)],                        # goleiro central e fixo
         "comando": ("FORCE_START", "BLUE"),
-        "randomizar_area_goleiro": "normal",
     },
     "regressao_goleiro_central_passe": {        "tipo": "jogo",
         "titulo": "Goleiro central parado, com opção de passe",
@@ -922,6 +924,7 @@ CENARIOS = {
                   (2, 1800, 900, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
+        "bola_sorteio": ((3500.0, 3650.0), (-850.0, 850.0)),
         "randomizar_area_goleiro": "passe",
     },
     "regressao_goleiro_bola_perto": {        "tipo": "jogo",
@@ -936,6 +939,7 @@ CENARIOS = {
         "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
+        "bola_sorteio": ((4100.0, 4300.0), (-850.0, 850.0)),
         "randomizar_area_goleiro": "perto",
     },
     "regressao_passe": {        "tipo": "jogo",
@@ -953,6 +957,7 @@ CENARIOS = {
         # Amarelos fecham o gol; o defensor amarelo nao deve bloquear o passe.
         "amarelos": [(0, 4300, 0, 180), (1, 2200, -900, 180), (2, 3000, -600, 180)],
         "comando": ("FORCE_START", "BLUE"),
+        "bola_sorteio": ((3500.0, 3650.0), (-850.0, 850.0)),
         "randomizar_area_goleiro": "passe",
     },
 
@@ -1426,6 +1431,35 @@ def mover_bola(x, y):
     _enviar(pacote)
 
 
+ARQ_SORTEIO = "/tmp/ararabots_sorteio.json"
+
+
+def sortear_bola(nome, cen):
+    """Sorteia a bola UMA vez no posicionar e grava para o rodar ler."""
+    faixa = cen.get("bola_sorteio")
+    if not faixa:
+        return cen
+    (x0, x1), (y0, y1) = faixa
+    bola = (round(random.uniform(x0, x1)), round(random.uniform(y0, y1)))
+    with open(ARQ_SORTEIO, "w") as f:
+        json.dump({"cenario": nome, "bola": bola}, f)
+    return {**cen, "bola": bola}
+
+
+def bola_sorteada(nome, cen):
+    """No rodar, reutiliza a bola sorteada pelo posicionar."""
+    if not cen.get("bola_sorteio"):
+        return cen
+    try:
+        with open(ARQ_SORTEIO) as f:
+            d = json.load(f)
+        if d.get("cenario") == nome:
+            return {**cen, "bola": tuple(d["bola"])}
+    except (OSError, ValueError, KeyError):
+        pass
+    return sortear_bola(nome, cen)
+
+
 def _instanciar_cenario(cenario):
     """Sorteia largadas dos testes de chute na area do goleiro adversario."""
     perfil = cenario.get("randomizar_area_goleiro")
@@ -1436,15 +1470,18 @@ def _instanciar_cenario(cenario):
     c["amarelos"] = list(cenario.get("amarelos", []))
     # Usa o retangulo de penalti do campo simulado: x=3500..4500, y=-1000..1000.
     # O gol adversario esta em +x; todos os sorteios ficam dentro dessa area.
-    if perfil == "perto":
-        bx = random.uniform(4100.0, 4300.0)
+    if cenario.get("bola_sorteio"):
+        bx, by = cenario["bola"]
+    elif perfil == "perto":
+        bx, by = random.uniform(4100.0, 4300.0), random.uniform(-850.0, 850.0)
     elif perfil == "passe":
         # Reserva espaco a frente para o zagueiro receber com avanco minimo.
-        bx = random.uniform(3500.0, 3650.0)
+        bx, by = random.uniform(3500.0, 3650.0), random.uniform(-850.0, 850.0)
     else:
-        bx = random.uniform(3500.0, 4250.0)
+        bx, by = random.uniform(3500.0, 4250.0), random.uniform(-850.0, 850.0)
     for _ in range(500):
-        by = random.uniform(-850.0, 850.0)
+        if not cenario.get("bola_sorteio"):
+            by = random.uniform(-850.0, 850.0)
         sx = random.uniform(3500.0, min(4250.0, bx + 250.0))
         sy = random.uniform(-850.0, 850.0)
         gx = random.uniform(4150.0, 4400.0)
@@ -3552,7 +3589,7 @@ def rodar(nome, duracao=12.0):
         print(f"Cenario desconhecido: {nome}", file=sys.stderr)
         return 2
 
-    cen = _instanciar_cenario(CENARIOS[nome])
+    cen = _instanciar_cenario(bola_sorteada(nome, CENARIOS[nome]))
     perfil = os.environ.get("CAMPO", "original")
 
     print(f"\n>> {cen['titulo']}")
@@ -5643,7 +5680,7 @@ if __name__ == "__main__":
     elif acao == "posicionar":
         if len(sys.argv) < 3 or sys.argv[2] not in CENARIOS:
             print("cenario invalido", file=sys.stderr); sys.exit(2)
-        cen = _instanciar_cenario(CENARIOS[sys.argv[2]])
+        cen = _instanciar_cenario(sortear_bola(sys.argv[2], CENARIOS[sys.argv[2]]))
         print(">> %s" % cen["titulo"])
         print("   %s" % cen["descricao"])
         print("   bola em x=%.0f y=%.0f mm" % (cen["bola"][0], cen["bola"][1]))
