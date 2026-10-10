@@ -115,50 +115,11 @@ RAIZ="$(_descobrir_raiz)"
 VICE="$RAIZ/ssl-VICE"
 PY="$SCRIPT_DIR/ararabots.py"
 
-# DESCOBERTA DO DDS EM LOOPBACK.
-#
-# ROS_LOCALHOST_ONLY=1 restringe a descoberta do DDS a interface de loopback.
-#
-# POR QUE: com o padrao (0) a descoberta sai por TODAS as interfaces, inclusive
-# o Wi-Fi. Todos os nodes rodam nesta mesma maquina, entao isso nao adiciona
-# nada e adiciona superficie de falha - o HANDOVER §15.7 ja registra sockets
-# multicast presos em interfaces antigas depois que o Wi-Fi reconectou.
-#
-# SINTOMA QUE ISTO CORRIGE, medido: driver e referee_node VIVOS, consumindo CPU,
-# com os logs limpos, e um node recem-criado enxergando ZERO publicadores nos
-# topicos deles - estavel por 12 s, ou seja nao era atraso de descoberta. O
-# gravador nasce, nao descobre /visionTopic e grava o nada: e o
-# "XX A BOLA NAO CHEGOU AO LUGAR PEDIDO / nenhuma leitura".
-#
-# Nao afeta a visao do grSim (224.5.23.2:10020) nem o arbitro
-# (224.5.23.1:11003): esses sao sockets da aplicacao, nao do DDS.
-#
-# PORTA 11003, e nao 10003, DESDE O MERGE DA DEV.
-# O referee_node antigo escutava 10003 e por isso subiamos o Game Controller
-# com -publishAddress ...:10003, contrariando o padrao dele (11003). A dev
-# refatorou o pacote referee e adotou 11003 - que ja era o padrao do GC. Os dois
-# lados agora concordam, e a divergencia que o HANDOVER §3 registrava acabou.
-# SINTOMA se isto sair de sincronia: /refereeTopic a 0 Hz e comando vazio, com
-# tudo o mais no ar. Nenhuma jogada roda, porque a arvore nunca sai do HALT.
-# ROS_LOCALHOST_ONLY: TODO MUNDO NO MESMO VALOR, OU NINGUEM SE ENXERGA.
-#
-# Este era o unico ponto que forcava =1, e so para as ferramentas - os nodes
-# subiam sem ele (conferido lendo /proc/<pid>/environ). Com os dois lados
-# divergindo, uma ferramenta com =1 nao ve um node com =0: o participante
-# restrito ignora a interface da bridge do Docker por onde o outro anuncia.
-#
-# SINTOMA, e ele mente feio: o painel [10/10] mostrava a cadeia inteira verde
-# (visao 60 Hz, arbitro 39 Hz) porque usava 'docker exec' cru, e logo em seguida
-# o 'pronto tudo' - que passa por ros_run - reprovava TUDO de uma vez
-# ("faltou: servicos arbitro estrategia-comandando"). Parecia a cadeia caindo
-# entre um passo e outro; era so a lente diferente.
-#
-# O menu escondia isso ha muito tempo porque redefinia ros_run localmente, sem
-# esta variavel. Ao remover aquela copia (que quebrava MOVIMENTO_NOVO), o
-# desalinhamento veio a tona.
-#
-# Vazio = todos usam o padrao do ROS. E maquina unica, tudo em loopback pela
-# bridge do container; nao ha ganho em restringir, e ha este custo.
+# O zagueiro restringe o DDS ao loopback para nao descobrir nodes de outros
+# computadores da rede. Todos os nodes e ferramentas precisam receber o mesmo
+# ROS_LOCALHOST_ONLY; ros_d/ros_run o exportam dentro do container. Os pacotes
+# UDP de visao e arbitro usam outro mecanismo e sao filtrados pela origem.
+# Os outros modos continuam com o padrao do ROS (0).
 DDS_ENV=""
 # O ros_d sobe o strategyNode, entao QUALQUER variavel que a estrategia leia
 # precisa ser exportada AQUI tambem - nao basta estar no ros_run. E o mesmo
@@ -177,7 +138,7 @@ DDS_ENV=""
 [ -n "${MOVIMENTO_ANTIGO:-}" ] && MOVIMENTO_NOVO=""
 export MOVIMENTO_NOVO
 
-ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_d()   { docker exec -d vice bash -c "export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 # GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
 #
 # O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
@@ -193,7 +154,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -402,6 +363,19 @@ portao_medicao() {
     topico_ctl="/movement_manager/commands"
     hz_ctl="$(printf '%s' "$relatorio" | grep -oE "${topico_ctl} +[0-9.]+" | grep -oE "[0-9.]+$" | cut -d. -f1)"
     fps="$(ros_run "python3 /tmp/ararabots.py fps" 2>/dev/null | grep -oE "[0-9]+ Hz" | grep -oE "^[0-9]+")"
+
+    # Uma amostra curta pode coincidir com o pico de inicializacao do cenario.
+    # Repetir uma vez exige os mesmos 8 Hz, sem liberar uma cadeia lenta.
+    if [ -n "$hz_ctl" ] && [ "$hz_ctl" -lt "$HZ_MIN_CONTROLE" ] 2>/dev/null; then
+        echo "   ! ${topico_ctl} a ${hz_ctl} Hz; conferindo de novo apos a montagem"
+        local nova_leitura novo_hz
+        nova_leitura="$(ros_run "python3 /tmp/ararabots.py cadeia" 2>/dev/null)"
+        novo_hz="$(printf '%s' "$nova_leitura" | grep -oE "${topico_ctl} +[0-9.]+" | grep -oE "[0-9.]+$" | cut -d. -f1)"
+        if [ -n "$novo_hz" ]; then
+            relatorio="$nova_leitura"
+            hz_ctl="$novo_hz"
+        fi
+    fi
 
     [ -n "$fps" ] && [ "$fps" -lt "$FPS_MIN_GRSIM" ] 2>/dev/null && \
         motivo="grSim a ${fps} Hz (minimo ${FPS_MIN_GRSIM})"
@@ -1020,31 +994,11 @@ except OSError: sys.exit(1)
     docker cp "$PY" vice:/tmp/ararabots.py >/dev/null 2>&1
     # Se o campo nao vier com 9000 mm, a estrategia calcula gol e limiar de chute
     # errados e nada funciona - por isso isto e verificado explicitamente.
-    # ros_run, e NAO 'docker exec' cru.
-    #
-    # Este era o ultimo lugar com a montagem feita a mao, e ele nao passava
-    # variavel nenhuma nem o ROS_LOCALHOST_ONLY. Sintoma: o painel rotulava a
-    # linha do setpoint como /control_command mesmo com a movimentacao NOVA, e
-    # entao mostrava 0,0 Hz num topico que e mudo por design - fazendo o
-    # ambiente parecer quebrado com tudo funcionando.
-    #
-    # E a mesma armadilha do HANDOVER (a variavel que nao atravessa o docker
-    # exec), agora num ponto que ninguem tinha olhado. Toda chamada ao container
-    # deve passar por ros_run/ros_d.
-    # docker exec CRU DE PROPOSITO, com as variaveis exportadas a mao.
-    #
-    # NAO troque por ros_run: o ros_run tras o DDS_ENV (ROS_LOCALHOST_ONLY=1) e
-    # os nodes deste ambiente rodam com ROS_LOCALHOST_ONLY=0 - conferido lendo
-    # /proc/<pid>/environ do visionNode. Com os dois lados divergindo, o
-    # verificador enxerga so /rosout e /parameter_events e declara a cadeia
-    # inteira parada com tudo funcionando. Ja fiz essa troca e ela quebrou o
-    # painel; esta anotada aqui para nao acontecer de novo.
-    #
-    # O que precisa atravessar e MOVIMENTO_NOVO, para o painel rotular a linha
-    # do setpoint com o topico certo (/control_command no caminho antigo,
-    # /movement_tracker/control_reference no novo).
+    # Esta chamada direta recebe a mesma configuracao DDS dos nodes, inclusive
+    # no zagueiro, para o painel enxergar a cadeia que acabou de subir.
     docker exec vice bash -c \
-        "export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; \
+        "export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; \
+         export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; \
          source /opt/ros/humble/setup.bash && \
          source /root/ssl-VICE/install/local_setup.bash && \
          python3 /tmp/ararabots.py cadeia" 2>/dev/null || falha "verificação não rodou"

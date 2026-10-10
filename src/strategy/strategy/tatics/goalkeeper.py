@@ -1,5 +1,5 @@
 from strategy.skills.skills import Skills
-from strategy.skills import geometria, posicionamento
+from strategy.skills import chute, geometria, posicionamento
 from strategy.skills.bola import prever_direcao_chute
 from utils.math_util import Vector2D
 from math import atan2, hypot
@@ -271,7 +271,10 @@ class Goalkeeper:
                     # FORCA PELA DISTANCIA: o atrito do grSim e abrupto - 3 m/s
                     # percorre 1633 mm, 5 m/s percorre 1803, 6 m/s percorre
                     # 4220. Passe curto com forca de gol atravessa o receptor.
-                    robot_command.kick = 2.5 if dist < 2500.0 else 4.0
+                    forca_passe = 2.5 if dist < 2500.0 else 4.0
+                    robot_command.kick = (
+                        forca_passe if chute.alinhado_ao_alvo(
+                            self.gk, self.ball, alvo) else 0.0)
                     return robot_command
 
                 # SEM COMPANHEIRO LIVRE: CHUTA PARA O ESPACO A FRENTE.
@@ -301,7 +304,9 @@ class Goalkeeper:
                     )
                     robot_command.field_border = True
                     robot_command.ally_ids = []
-                    robot_command.kick = 4.5
+                    robot_command.kick = (
+                        4.5 if chute.alinhado_ao_alvo(self.gk, self.ball, espaco)
+                        else 0.0)
                     return robot_command
 
                 push_dist = 220.0

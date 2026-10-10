@@ -1,6 +1,7 @@
 import socket
 import struct
 import logging
+import os
 from typing import Optional
 from rclpy.logging import get_logger
 
@@ -22,6 +23,7 @@ class Client:
         self.port = port
         self.interface_ip = interface_ip or ""
         self.timeout = timeout
+        self.allowed_source_ip = os.environ.get("ARARABOTS_SIM_SOURCE_IP") or None
         self.sock: Optional[socket.socket] = None
         self.logger = logger or logging.getLogger(__name__)
 
@@ -75,14 +77,17 @@ class Client:
         # Ensure socket is connected
         if self.sock is None:
             raise RuntimeError("Client socket not connected. Call connect() first.")
-        try:
-            # Max packet size for SSL-Vision is safely under 4096 bytes; allocate a bit more than old 2048.
-            data, _ = self.sock.recvfrom(MAX_PACKET_SIZE)
-        except (BlockingIOError, socket.timeout):
-            return None
-        except OSError as e:
-            self.logger.warning(f"Socket error: {e}")
-            return None
+        while True:
+            try:
+                # Ignore packets from other simulators on the shared multicast group.
+                data, addr = self.sock.recvfrom(MAX_PACKET_SIZE)
+            except (BlockingIOError, socket.timeout):
+                return None
+            except OSError as e:
+                self.logger.warning(f"Socket error: {e}")
+                return None
+            if not self.allowed_source_ip or addr[0] == self.allowed_source_ip:
+                break
 
         # Parse the protobuf message from the received data
         packet = SSL_WrapperPacket()

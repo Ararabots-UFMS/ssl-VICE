@@ -15,8 +15,8 @@ redescobrir meses depois:
   2. o teste do grSim e SIMETRICO (usa fabs no eixo do corpo), entao uma bola
      encostada nas COSTAS do robo satisfaz o mesmo criterio - e um companheiro
      viu em campo o robo chutando de traseira;
-  3. nao se exige alinhamento fino no instante do contato: medido, 'mirado'
-     falso em 96 de 96 ciclos com a bola, e o time nunca chutou.
+  3. a mira precisa de uma tolerancia compativel com o giro real: um portao
+     mais estreito deixou 'mirado' falso em 96 de 96 ciclos com a bola.
 
 Referencia obrigatoria antes de mexer aqui: documentacao/estrategia/CHUTE.md.
 
@@ -57,6 +57,9 @@ MARGEM_FRENTE_PLACA = -20.0
 # Quanto a direcao de saida pode divergir do ataque sem virar chute para a
 # propria meta. 1,75 rad ~ 100 graus para cada lado.
 TOL_PARA_TRAS = 1.75
+# Erro maximo entre o eixo real do robo e a linha bola->alvo para liberar o
+# chute. A cobranca de falta usa a mesma tolerancia (0,15 rad).
+TOLERANCIA_MIRA = 0.15
 
 # --- forca por tipo de alvo, em m/s --------------------------------------
 # 6,0 no gol: a cobranca de falta mediu o atrito do grSim - 3,0 m/s percorre
@@ -111,6 +114,15 @@ def direcao_para_frente(ball, alvo_chute, sentido_ataque):
                       alvo_chute[0] - ball.position_x)
     referencia = 0.0 if sentido_ataque > 0 else pi
     return abs(norm_ang(ang_saida - referencia)) < TOL_PARA_TRAS
+
+
+def alinhado_ao_alvo(robo, ball, alvo_chute):
+    """O corpo medido ja aponta para onde a bola deve sair?"""
+    if alvo_chute is None:
+        return False
+    ang_saida = atan2(alvo_chute[1] - ball.position_y,
+                      alvo_chute[0] - ball.position_x)
+    return abs(norm_ang(float(robo.orientation) - ang_saida)) <= TOLERANCIA_MIRA
 
 
 # Dentro disto o corpo mira a direcao do chute; fora, olha para a bola.
@@ -229,10 +241,12 @@ def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid):
     'travas' e o dicionario de estado da jogada (estado["chute_armado"]): a
     decisao e stateful de proposito, porque a janela de disparo dura uma amostra.
     Quem arbitra o disparo continua sendo o grSim, que so dispara com a bola na
-    placa - manter armado nao cria chute torto, so deixa de perder o chute certo.
+    placa. A trava de proximidade so vale enquanto o corpo continua mirando
+    o alvo.
 
     Regras, na ordem:
       sem alvo, ou bola longe        -> nao arma
+      corpo desalinhado do alvo       -> nao arma
       ja armado e ainda perto        -> SEGUE armado (a trava)
       bola na placa e direcao certa  -> arma
       bola nas costas                -> nunca arma
@@ -241,7 +255,8 @@ def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid):
     d_bola = hypot(robo.position_x - ball.position_x,
                    robo.position_y - ball.position_y)
     alcance = ALCANCE_SOLTA_TRAVA if travas.get(rid) else FORCA_CHUTE_ALCANCE
-    if alvo_chute is None or d_bola >= alcance:
+    if (alvo_chute is None or d_bola >= alcance
+            or not alinhado_ao_alvo(robo, ball, alvo_chute)):
         travas[rid] = False
         return False
 

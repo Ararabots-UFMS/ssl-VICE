@@ -575,6 +575,42 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
     return None, None, "bloqueado"
 
 
+def alvo_chute_zagueiro(ball, rid, aliados, inimigos, papeis, gol_ataque,
+                       ux_sombra, uy_sombra):
+    """Escolhe a mira do zagueiro sem alterar seu alvo de movimento.
+
+    O passe precisa caber na direcao pela qual o robo chega a bola. Uma mira
+    muito lateral tira a bola da placa do chutador; reposicionar o robo para
+    ela mudaria a trajetoria de cobertura.
+    """
+    bx, by = ball.position_x, ball.position_y
+    direcao_x, direcao_y = -ux_sombra, -uy_sombra
+    candidatos = []
+    for outro_id, papel in papeis.items():
+        if (outro_id in (0, rid)
+                or papel not in (PAPEL_PORTADOR, PAPEL_COBERTURA)
+                or outro_id not in aliados):
+            continue
+        receptor = aliados[outro_id]
+        if not posicionamento.pode_receber(receptor, bx, by, gol_ataque):
+            continue
+        if not linha_livre(bx, by, receptor.position_x,
+                           receptor.position_y, inimigos):
+            continue
+        vx, vy, distancia = geometria.versor(
+            bx, by, receptor.position_x, receptor.position_y)
+        desvio = atan2(abs(direcao_x * vy - direcao_y * vx),
+                      direcao_x * vx + direcao_y * vy)
+        if desvio > 0.35:  # ~20 graus; a bola continua na frente da placa
+            continue
+        prioridade = 0 if papel == PAPEL_PORTADOR else 1
+        candidatos.append(((prioridade, desvio, -distancia, outro_id),
+                           (receptor.position_x, receptor.position_y)))
+    if candidatos:
+        return min(candidatos)[1], "passe"
+    return (gol_ataque.x, gol_ataque.y), "gol"
+
+
 
 
 
@@ -1139,6 +1175,17 @@ def montar_comandos(tt):
         _r_o = tt.ally_robots[rid]
         _dperto = hypot(_r_o.position_x - tt.ball.position_x,
                         _r_o.position_y - tt.ball.position_y)
+        cobertura_perto = (
+            papel == PAPEL_COBERTURA
+            and _dperto < chute.ALCANCE_CONTATO
+            and (na_sombra or posicionamento.na_sombra_da_bola(
+                _r_o, tt.ball.position_x, tt.ball.position_y, nosso_gol)))
+        if cobertura_perto:
+            # So os canais de orientacao e chute mudam. alvo_x/alvo_y, ja
+            # calculados acima, continuam no eixo da sombra e na nossa metade.
+            alvo_robo, tipo_robo = alvo_chute_zagueiro(
+                tt.ball, rid, tt.ally_robots, tt.enemy_robots, papeis,
+                gol_ataque, ux_sombra, uy_sombra)
         # A RECEITA DO ADVERSARIO, QUE FUNCIONA.
         #
         # O perfil amarelo - a nossa estrategia antiga - chuta em toda partida,
@@ -1169,7 +1216,7 @@ def montar_comandos(tt):
             _r_o, tt.ball, alvo_robo, tipo_robo, _sentido_x, _travas, rid,
             (gol_ataque.x, gol_ataque.y),
             so_lado_certo=not experimento.desligado("ORIENTACAO_LADO"),
-            pode_armar=na_sombra or not _mira_emprestada)
+            pode_armar=cobertura_perto or na_sombra or not _mira_emprestada)
 
         # Quem esta efetivamente com a bola: o nosso mais proximo dentro do raio
         # de posse. Serve so para o diagnostico - a decisao de chutar e do
@@ -1490,7 +1537,12 @@ class Atack:
         # o simulador ignora ate haver contato. Recusar armar custa a jogada.
         _db = (hypot(rx - self.ball.position_x, ry - self.ball.position_y)
                if rx is not None else 9999.0)
-        robot_command.kick = FORCA_CHUTE if _db < FORCA_CHUTE_ALCANCE else 0.0
+        mira = (bx + dx, by + dy)
+        alinhado = (robot_id in self.ally_robots
+                    and chute.alinhado_ao_alvo(
+                        self.ally_robots[robot_id], self.ball, mira))
+        robot_command.kick = (FORCA_CHUTE
+                              if _db < FORCA_CHUTE_ALCANCE and alinhado else 0.0)
 
         return robot_command
 

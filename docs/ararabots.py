@@ -1628,6 +1628,7 @@ def _criar_gravador():
             self.estado_chutador = {}
             # Visao crua do grSim, por fora do tracker: [(t_capture, x, y, t_nosso)]
             self.sock_visao, self._WrapperPacket = _abrir_escuta_visao_crua()
+            self._source_ip = os.environ.get("ARARABOTS_SIM_SOURCE_IP") or None
             self.visao_crua = []
             self.robos_crus = []
             self.amarelos_crus = []
@@ -1729,9 +1730,11 @@ def _criar_gravador():
                 return
             while True:
                 try:
-                    dados, _ = self.sock_visao.recvfrom(65536)
+                    dados, addr = self.sock_visao.recvfrom(65536)
                 except (BlockingIOError, OSError):
                     return
+                if self._source_ip and addr[0] != self._source_ip:
+                    continue
                 if not self.gravando:
                     continue
                 try:
@@ -2244,9 +2247,16 @@ header{flex:none;display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;
 
 /* ------------------------------------------------------------------ campo */
 main{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 20px;gap:12px}
-.palco{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.palco{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative}
 svg{width:100%;height:100%;max-height:100%;display:block;background:var(--campo);
   border-radius:10px;border:1px solid var(--linha)}
+.indicador-gol{position:absolute;top:12px;right:12px;z-index:2;
+  padding:7px 11px;border-radius:6px;background:rgba(13,20,27,.9);
+  border:1px solid #5b8f74;color:#fff;font-size:15px;font-weight:700;
+  box-shadow:0 2px 8px #0008;pointer-events:none}
+.ameaca-gol.sim{color:var(--ruim)}
+.ameaca-gol.nao{color:var(--ok)}
+.gol-coberto{color:#ffd166}
 
 /* ----------------------------------------------------------- linha do tempo */
 .tempo{flex:none;background:var(--carta);border:1px solid var(--linha);
@@ -2329,7 +2339,14 @@ kbd{background:var(--carta2);border:1px solid var(--linha);border-bottom-width:2
 </dl>
 
 <main>
-  <div class="palco"><svg id="campo" viewBox="-5000 -3400 10000 6800"></svg></div>
+  <div class="palco">
+    <svg id="campo" viewBox="-5000 -3400 10000 6800"></svg>
+    <div class="indicador-gol num" id="indicador-gol" hidden
+      title="Ameaça: sombra de chute a 6 m/s alcança o gol azul. Cobertura: bloqueio dos robôs azuis visto da bola.">
+      <div class="ameaca-gol nao" id="ameaca-gol">Sombra não ameaça o gol</div>
+      <div class="gol-coberto" id="gol-coberto">Gol coberto: —</div>
+    </div>
+  </div>
 
   <div class="tempo">
     <div class="marcas" id="marcas"></div>
@@ -2357,7 +2374,8 @@ kbd{background:var(--carta2);border:1px solid var(--linha);border-bottom-width:2
     <div class="leg-corpo">
       <span><i style="background:#ff9f1c"></i>bola</span>
       <span id="leg-sombra" hidden><i style="background:#ffb347;border-radius:2px"></i>
-        sombra de chute hipotético a 6 m/s: área até o nosso gol, limitada a 4,22 m</span>
+        sombra de chute hipotético a 6 m/s: área até o nosso gol, limitada a 4,22 m;
+        o aviso fica vermelho quando ela alcança o gol; a porcentagem amarela mostra quanto os robôs azuis cobrem</span>
       <span><i style="background:#4da3ff"></i>nossos robôs — a <b>face chanfrada</b> é o chutador</span>
       <span><i style="background:#ffd166"></i>adversários (mesma forma)</span>
       <span><i style="background:#ffd166"></i>setpoint comandado — a linha tracejada é o <b>erro de rastreio</b></span>
@@ -2402,6 +2420,8 @@ const sombra = el('path',{fill:'#ffb347','fill-opacity':.17,
   stroke:'#ffb347','stroke-opacity':.55,'stroke-width':8,'stroke-linejoin':'round'});
 if (SOMBRA_ZAGUEIRO) svg.appendChild(sombra);
 document.getElementById('leg-sombra').hidden = !SOMBRA_ZAGUEIRO;
+const indicadorGol = document.getElementById('indicador-gol');
+indicadorGol.hidden = !SOMBRA_ZAGUEIRO;
 function desenhaSombra(b){
   if (!SOMBRA_ZAGUEIRO) return;
   const bx = Number(b[0]), by = Number(b[1]);
@@ -2417,6 +2437,31 @@ function desenhaSombra(b){
     borda.push('L'+(bx+dx*f).toFixed(1)+' '+(by+dy*f).toFixed(1));
   }
   sombra.setAttribute('d', 'M'+bx+' '+by+' '+borda.join(' ')+' Z');
+}
+function sombraAmeacaGol(b){
+  const bx = Number(b[0]), by = Number(b[1]);
+  if (!Number.isFinite(bx) || !Number.isFinite(by) || bx <= NOSSO_GOL_X) return false;
+  const pontoMaisProximo = Math.max(-MEIA_BOCA_GOL, Math.min(MEIA_BOCA_GOL, by));
+  return Math.hypot(bx-NOSSO_GOL_X, by-pontoMaisProximo) <= ALCANCE_SOMBRA;
+}
+function golCoberto(b, nossos){
+  const bx = Number(b[0]), by = Number(b[1]);
+  if (!Number.isFinite(bx) || !Number.isFinite(by) || bx <= NOSSO_GOL_X) return null;
+  const raio2 = 90 * 90;
+  const dx = NOSSO_GOL_X - bx, amostras = 400;
+  let cobertas = 0;
+  for (let i=0; i<amostras; i++){
+    const gy = -MEIA_BOCA_GOL + 2*MEIA_BOCA_GOL*(i+.5)/amostras;
+    const dy = gy - by, comprimento2 = dx*dx + dy*dy;
+    const bloqueado = nossos.some(r => {
+      const t = ((r[1]-bx)*dx + (r[2]-by)*dy) / comprimento2;
+      if (t < 0 || t > 1) return false;
+      const ex = r[1] - (bx+t*dx), ey = r[2] - (by+t*dy);
+      return ex*ex + ey*ey <= raio2;
+    });
+    if (bloqueado) cobertas++;
+  }
+  return Math.round(100*cobertas/amostras);
 }
 // TRILHA DO GOLEIRO ADVERSARIO.
 // O replay so desenhava a bola e UM robo nosso: o goleiro deles nunca apareceu
@@ -2698,6 +2743,15 @@ function desenha(i){
   trilhaR.setAttribute('d', trilhaDe(i, COBRADOR, false));
   gAzuis.textContent = '';
   const nossos = comMemoria(i);
+  if (SOMBRA_ZAGUEIRO){
+    const ameaca = sombraAmeacaGol(q.b);
+    const aviso = document.getElementById('ameaca-gol');
+    aviso.textContent = ameaca ? 'Sombra ameaça o gol' : 'Sombra não ameaça o gol';
+    aviso.className = 'ameaca-gol ' + (ameaca ? 'sim' : 'nao');
+    const pct = golCoberto(q.b, nossos);
+    document.getElementById('gol-coberto').textContent =
+      'Gol coberto: ' + (pct === null ? '—' : pct + '%');
+  }
   const meu = nossos.find(r => r[0] === COBRADOR) || null;
   nossos.forEach(r => {
     const ehCob = (r[0] === COBRADOR);
@@ -4216,10 +4270,13 @@ def _ferramenta_fps():
     s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
                  struct.pack("4sl", socket.inet_aton(grupo), socket.INADDR_ANY))
     s.settimeout(1.0)
+    source_ip = os.environ.get("ARARABOTS_SIM_SOURCE_IP") or None
     n, t0 = 0, time.time()
     while time.time() - t0 < 5.0:
         try:
-            s.recv(4096); n += 1
+            _, addr = s.recvfrom(4096)
+            if not source_ip or addr[0] == source_ip:
+                n += 1
         except socket.timeout:
             pass
     hz = n / 5.0
@@ -4298,8 +4355,15 @@ def _ferramenta_pronto():
             estado = {"arbitro": False, "comandos": 0}
             no.create_subscription(RefereeMessage, "refereeTopic",
                                    lambda m: estado.__setitem__("arbitro", bool(m.command)), 10)
-            _assinar_setpoint(
-                no, lambda: estado.__setitem__("comandos", estado["comandos"] + 1))
+            # O tracker pode continuar publicando control_reference enquanto a
+            # estrategia recem-criada ainda nao mandou nenhum comando. Contar
+            # esse topico liberava o cenario cedo demais; o portao seguinte
+            # media movement_manager/commands a 0 Hz e bloqueava a execucao.
+            from movement_interfaces.msg import MovementCommandArray
+            no.create_subscription(
+                MovementCommandArray, "movement_manager/commands",
+                lambda m: estado.__setitem__("comandos", estado["comandos"] + 1)
+                if m.commands else None, 10)
             servicos = False
             while time.time() - t0 < limite:
                 rclpy.spin_once(no, timeout_sec=0.05)
