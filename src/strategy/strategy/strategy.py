@@ -397,6 +397,9 @@ class Strategy(Node):
             cmd.robot_id = int(skill.robot_id)
             cmd.target_pos.x = float(skill.target_x or 0.0)
             cmd.target_pos.y = float(skill.target_y or 0.0)
+            # Preserve the coverage half-plane constraint through the active
+            # strategy publisher, so the planner also restricts the path.
+            cmd.planning_options.defensive_half = skill.defensive_half
             if self._lote_mov is None:
                 self._lote_mov = []
             self._lote_mov.append(cmd)

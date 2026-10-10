@@ -26,6 +26,7 @@ class Skill:
         self.field_border: Optional[bool] = False
         self.penalty_area: Optional[bool] = False
         self.center_area: Optional[bool] = False
+        self.defensive_half: int = 0
         self.ball: Optional[bool] = False
         self.enemy_ids: Optional[List[int]] = None
         self.ally_ids: Optional[List[int]] = None

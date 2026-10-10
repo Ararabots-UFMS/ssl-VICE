@@ -281,12 +281,11 @@ CENARIOS = {
     },
 
     # ------------------------------------------------------------------
-    #  JOGO CORRIDO - o unico cenario que NAO e uma bola parada.
+    #  JOGO CORRIDO - os dois times completos.
     #
-    #  Todos os outros terminam num DIRECT/KICKOFF e medem uma cobranca. Este
-    #  usa FORCE_START: a arvore cai em NormalStart (plays/running.py) e o time
-    #  joga. Serve para VER COMPORTAMENTO, nao para medir cobranca - nao ha
-    #  criterio de sucesso aqui, so observacao.
+    #  Este usa FORCE_START: a arvore cai em NormalStart (plays/running.py) e
+    #  o time joga. Serve para VER COMPORTAMENTO, nao para medir cobranca -
+    #  nao ha criterio de sucesso aqui, so observacao.
     #
     #  Os dois times completos, em formacao de saida, com a bola no centro.
     # ------------------------------------------------------------------
@@ -320,6 +319,161 @@ CENARIOS = {
                      (1, 1200, 0, 180),
                      (2, 2200, -1200, 180),
                      (3, 2200, 1200, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zc_centro": {
+        "titulo": "Cobertura e bola no centro",
+        "descricao": "So o zagueiro azul fecha a abertura do nosso gol vista da bola no centro.",
+        "bola": (0.0, 0.0),
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zc_lateral": {
+        "titulo": "Cobertura e bola na lateral do nosso campo",
+        "descricao": "So o zagueiro azul reduz a abertura do nosso gol vista da bola lateral.",
+        "bola": (-2400.0, 1600.0),
+        "azuis": [(1, -3200.0, -200.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zc_bola_indo": {
+        "titulo": "Cobertura e bola indo ao nosso gol",
+        "descricao": "So o zagueiro azul acompanha a abertura do gol enquanto a bola se move.",
+        "bola": (-800.0, 200.0),
+        "bola_vel": (-1600.0, 0.0),
+        "azuis": [(1, -2800.0, 650.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zc_perto_gol": {
+        "titulo": "Cobertura e bola perto do nosso gol",
+        "descricao": "O zagueiro protege a abertura e afasta a bola com chute quando ela chega perto.",
+        "bola": (-3200.0, 200.0),
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zg_centro": {
+        "titulo": "Zagueiro e goleiro com bola no centro",
+        "descricao": "Goleiro azul protege a meta e o zagueiro fecha a abertura de chute.",
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zg_lateral": {
+        "titulo": "Zagueiro e goleiro com bola na lateral",
+        "descricao": "Goleiro azul protege a meta e o zagueiro reduz a abertura lateral.",
+        "bola": (-2400.0, 1600.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3200.0, -200.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zg_perto_gol": {
+        "titulo": "Zagueiro e goleiro com bola perto do gol",
+        "descricao": "Goleiro protege a meta; zagueiro cobre e chuta para afastar a bola proxima.",
+        "bola": (-3200.0, 200.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 600.0, 0.0)],
+        "amarelos": [],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "b1_perto_area": {
+        "titulo": "Basico 1x1: bola perto da nossa area, zagueiro deve chutar pro gol deles",
+        "descricao": "Bola a 1200 mm da linha do nosso gol, um robo nosso e um deles.",
+        "bola": (-3300.0, 200.0),
+        "azuis": [(1, -2800.0, -700.0, 0.0)],
+        "amarelos": [(1, -2000.0, 900.0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "b1_parada": {
+        "titulo": "Basico 1x1: bola parada, um robo nosso e um deles",
+        "descricao": "Cenario mais simples: so a bola e um robo de cada lado.",
+        "bola": (-1500.0, 0.0),
+        "azuis": [(1, -3000.0, 0.0, 0.0)],
+        "amarelos": [(1, 1500.0, 0.0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "b1_bola_indo": {
+        "titulo": "Basico 1x1: bola indo ao nosso gol, um robo nosso no caminho",
+        "descricao": "Bola ja em movimento na direcao do nosso gol, um robo nosso e um deles.",
+        "bola": (-1500.0, 0.0),
+        "bola_vel": (-2000.0, 0.0),
+        "azuis": [(1, -3200.0, 0.0, 0.0)],
+        "amarelos": [(1, -1200.0, 300.0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "b1_inimigo_com_bola": {
+        "titulo": "Basico 1x1: robo deles com a bola, um robo nosso se aproximando",
+        "descricao": "Robo deles encostado na bola, um robo nosso vindo do nosso campo.",
+        "bola": (-1500.0, 0.0),
+        "azuis": [(1, -3000.0, 300.0, 0.0)],
+        "amarelos": [(1, -1620.0, 0.0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "b2_parada": {
+        "titulo": "Basico 2x1: zagueiro e goleiro, bola parada, um deles",
+        "descricao": "Zagueiro e goleiro azuis, bola parada, um robo amarelo.",
+        "bola": (-1500.0, 0.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 0.0, 0.0)],
+        "amarelos": [(1, 1500.0, 0.0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "b2_bola_indo": {
+        "titulo": "Basico 2x1: zagueiro e goleiro, bola indo ao nosso gol",
+        "descricao": "Bola ja em movimento na direcao do nosso gol, zagueiro e goleiro azuis, um amarelo.",
+        "bola": (-1500.0, 0.0),
+        "bola_vel": (-2000.0, 0.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3200.0, 0.0, 0.0)],
+        "amarelos": [(1, -1200.0, 300.0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "b2_perto_area": {
+        "titulo": "Basico 2x1: zagueiro e goleiro, bola perto da nossa area",
+        "descricao": "Bola a 1200 mm da linha do nosso gol, zagueiro e goleiro azuis, um amarelo.",
+        "bola": (-3300.0, 200.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -2800.0, -700.0, 0.0)],
+        "amarelos": [(1, -2000.0, 900.0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "b2_inimigo_com_bola": {
+        "titulo": "Basico 2x1: zagueiro e goleiro, robo deles com a bola",
+        "descricao": "Robo amarelo encostado na bola, zagueiro e goleiro azuis se aproximando.",
+        "bola": (-1500.0, 0.0),
+        "azuis": [(0, -4300.0, 0.0, 0.0), (1, -3000.0, 300.0, 0.0)],
+        "amarelos": [(1, -1620.0, 0.0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zv_disputa": {
+        "titulo": "Zagueiro: disputa da bola (nosso robo e inimigo juntos)",
+        "descricao": "Verificacao de acao: em DISPUTA a cobertura deve fechar a abertura do gol.",
+        "bola": (-2600.0, 0.0),
+        "azuis": [(1, -2760.0, 100.0, 0.0)],
+        "amarelos": [(1, -2800, -150, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "zv_deles": {
+        "titulo": "Zagueiro: inimigo com a bola (posse deles)",
+        "descricao": "Verificacao de acao: em DELES a cobertura fecha a abertura do gol.",
+        "bola": (-2600.0, 0.0),
+        "azuis": [(1, -3000.0, 600.0, 0.0)],
+        "amarelos": [(1, -2700, -100, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "cobertura_chute_longe": {
+        "titulo": "Chute deles do meio-campo; a cobertura chega a tempo?",
+        "descricao": (
+            "BASELINE para o item da cobertura (tempo de chegada). A bola nasce "
+            "ja em movimento (bola_vel), simulando o instante seguinte a um "
+            "chute do meio-campo na direcao do nosso gol. Apenas nosso zagueiro "
+            "e o adversario que chutou ficam em campo, sem goleiros. O zagueiro "
+            "comeca fora da reta bola->nosso-gol; o teste mede se ele chega "
+            "a tempo de interceptar o chute."
+        ),
+        "bola": (0.0, 0.0),
+        "bola_vel": (-4300.0, 150.0),
+        "azuis": [(1, -3000, 300, 0)],
+        "amarelos": [(1, 300, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
 
@@ -1182,14 +1336,14 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
     _enviar_agora(pacote)
 
 
-def mover_bola(x, y):
-    """Move so a bola, sem tocar nos robos."""
+def mover_bola(x, y, vx=0.0, vy=0.0):
+    """Move so a bola (posicao e velocidade), sem tocar nos robos."""
     pb = _carregar_protobuf()
     pacote = pb.grSim_Packet()
     pacote.replacement.ball.x = x / 1000.0
     pacote.replacement.ball.y = y / 1000.0
-    pacote.replacement.ball.vx = 0.0
-    pacote.replacement.ball.vy = 0.0
+    pacote.replacement.ball.vx = vx / 1000.0
+    pacote.replacement.ball.vy = vy / 1000.0
     _enviar(pacote)
 
 
@@ -1211,8 +1365,9 @@ def posicionar(cenario):
     bx, by = cenario["bola"]
     rep.ball.x = bx / 1000.0
     rep.ball.y = by / 1000.0
-    rep.ball.vx = 0.0
-    rep.ball.vy = 0.0
+    bvx, bvy = cenario.get("bola_vel", (0.0, 0.0))
+    rep.ball.vx = bvx / 1000.0
+    rep.ball.vy = bvy / 1000.0
 
     # CAMPO LIMPO: so os nossos.
     #
@@ -1449,6 +1604,18 @@ def _abrir_escuta_status():
         return None
 
 
+PAPEIS_ARQUIVO = "/tmp/ararabots_papeis.json"
+
+
+def _ler_papeis():
+    """Papel de cada robo publicado pela estrategia, ou None."""
+    try:
+        with open(PAPEIS_ARQUIVO) as f:
+            return {int(k): v for k, v in json.load(f).items()}
+    except (OSError, ValueError):
+        return None
+
+
 def _criar_gravador():
     """Cria o node que escuta visao e comandos. rclpy ja deve estar inicializado."""
     from rclpy.node import Node
@@ -1505,6 +1672,8 @@ def _criar_gravador():
             # ancora dele ja voltou a coincidir com a realidade.
             self.setpoints = {}
             self.alvos = []
+            self.papeis_hist = []
+            self._papeis_ultimo = None
             # SETPOINT: /movement_tracker/control_reference (TrajectoryPoint).
             #
             # O topico antigo (/control_command, do driver) ACABOU: a dev
@@ -1715,6 +1884,10 @@ def _criar_gravador():
             }
             if not self.gravando:
                 return
+            _pap = _ler_papeis()
+            if _pap is not None and _pap != self._papeis_ultimo:
+                self._papeis_ultimo = _pap
+                self.papeis_hist.append((round(time.monotonic() - self.t0, 4), _pap))
             self.amostras.append(
                 {
                     # 4 casas: com a bola a 6 m/s, 1 ms vale 6 mm. Arredondar em
@@ -2201,6 +2374,8 @@ kbd{background:var(--carta2);border:1px solid var(--linha);border-bottom-width:2
     <summary>Como ler este campo &middot; atalhos</summary>
     <div class="leg-corpo">
       <span><i style="background:#ff9f1c"></i>bola</span>
+      <span id="leg-sombra" hidden><i style="background:#ffb347;border-radius:2px"></i>
+        sombra de chute hipotético a 6 m/s: área até o nosso gol, limitada a 4,22 m</span>
       <span><i style="background:#4da3ff"></i>nossos robôs — a <b>face chanfrada</b> é o chutador</span>
       <span><i style="background:#ffd166"></i>adversários (mesma forma)</span>
       <span><i style="background:#ffd166"></i>setpoint comandado — a linha tracejada é o <b>erro de rastreio</b></span>
@@ -2224,12 +2399,42 @@ const svg = document.getElementById('campo');
 const NS = 'http://www.w3.org/2000/svg';
 function el(n, at){const e=document.createElementNS(NS,n);for(const k in at)e.setAttribute(k,at[k]);return e;}
 // campo Division B: 9000 x 6000, gols em x=+-4500 com 1000 de largura
+// Paredes fisicas do grSim: margem de 300 mm e espessura de 50 mm.
+const paredes = el('rect',{x:-4800,y:-3300,width:9600,height:6600,fill:'none',stroke:'#000000','stroke-width':50});
+const tituloParedes = el('title'); tituloParedes.textContent = 'Barreira física de borda do campo';
+paredes.appendChild(tituloParedes); svg.appendChild(paredes);
 svg.appendChild(el('rect',{x:-4500,y:-3000,width:9000,height:6000,fill:'none',stroke:'#3a6b52','stroke-width':20}));
 svg.appendChild(el('line',{x1:0,y1:-3000,x2:0,y2:3000,stroke:'#3a6b52','stroke-width':14}));
 svg.appendChild(el('circle',{cx:0,cy:0,r:500,fill:'none',stroke:'#3a6b52','stroke-width':14}));
 for(const s of [-1,1]){
   svg.appendChild(el('rect',{x:s>0?4500:-4680,y:-500,width:180,height:1000,fill:'none',stroke:'#5b8f74','stroke-width':16}));
   svg.appendChild(el('rect',{x:s>0?3500:-4500,y:-1000,width:1000,height:2000,fill:'none',stroke:'#3a6b52','stroke-width':12}));
+}
+// Sombra de TODAS as direcoes em que um chute da bola pode entrar na nossa
+// meta. O alcance de 4220 mm e a medida do grSim para um chute de 6 m/s;
+// isto mostra uma possibilidade geometrica, nao a trajetoria atual da bola.
+// Amostramos a boca do gol para formar tambem o arco do limite de alcance.
+const SOMBRA_ZAGUEIRO = D.forcar_cobertura || /^(zc_|zg_|zv_)/.test(D.cenario || '');
+const ALCANCE_SOMBRA = 4220, NOSSO_GOL_X = -4500, MEIA_BOCA_GOL = 500;
+const sombra = el('path',{fill:'#ffb347','fill-opacity':.17,
+  stroke:'#ffb347','stroke-opacity':.55,'stroke-width':8,'stroke-linejoin':'round'});
+if (SOMBRA_ZAGUEIRO) svg.appendChild(sombra);
+document.getElementById('leg-sombra').hidden = !SOMBRA_ZAGUEIRO;
+function desenhaSombra(b){
+  if (!SOMBRA_ZAGUEIRO) return;
+  const bx = Number(b[0]), by = Number(b[1]);
+  if (!Number.isFinite(bx) || !Number.isFinite(by) || bx <= NOSSO_GOL_X){
+    sombra.setAttribute('d', '');
+    return;
+  }
+  const borda = [];
+  for (let j=0; j<=32; j++){
+    const gy = -MEIA_BOCA_GOL + 2*MEIA_BOCA_GOL*j/32;
+    const dx = NOSSO_GOL_X-bx, dy = gy-by;
+    const f = Math.min(1, ALCANCE_SOMBRA/Math.hypot(dx,dy));
+    borda.push('L'+(bx+dx*f).toFixed(1)+' '+(by+dy*f).toFixed(1));
+  }
+  sombra.setAttribute('d', 'M'+bx+' '+by+' '+borda.join(' ')+' Z');
 }
 // TRILHA DO GOLEIRO ADVERSARIO.
 // O replay so desenhava a bola e UM robo nosso: o goleiro deles nunca apareceu
@@ -2282,9 +2487,14 @@ function situacaoDoQuadro(fr){
 }
 
 function papeisDoQuadro(fr){
+  if (fr.p && Object.keys(fr.p).length) return fr.p;
   const b = fr.b, linha = (fr.r||[]).filter(r => r[0] !== 0);
   const papeis = {};
   if (!linha.length) return papeis;
+  if (D.forcar_cobertura){
+    linha.forEach(r => { papeis[r[0]] = "cobertura"; });
+    return papeis;
+  }
   // portador: distancia QUANTIZADA em faixas de 500 mm, desempate por id -
   // e a mesma regra do eleger_atacante, e existe porque a distancia crua
   // alterna o vencedor a cada ciclo.
@@ -2483,6 +2693,7 @@ let pB='', pR='';
 function desenha(i){
   const q = Q[i];
   document.getElementById('t').textContent = q.t.toFixed(2);
+  desenhaSombra(q.b);
   bola.setAttribute('cx', q.b[0]); bola.setAttribute('cy', q.b[1]);
   pB = (i===0?'M':'L') + q.b[0] + ' ' + q.b[1] + (i===0?'':' ');
   // TODOS OS NOSSOS ROBOS, cada um com O SEU setpoint.
@@ -3007,9 +3218,16 @@ def gerar_replay(resultado, destino):
     # Some-se o outro defeito: o desenho usava q.r[0], "o primeiro robo da
     # lista", e essa lista vem de um dicionario - ou seja, QUAL robo aparecia
     # como 'o nosso' mudava de quadro em quadro.
+    # papeis gravados pela estrategia, no mesmo relogio dos quadros
+    ph = sorted((para_tc(tn), {str(k): v for k, v in p.items()})
+                for tn, p in (resultado.get("papeis_hist") or []))
+    ip, papel_vigente = 0, {}
     quadros = []
     ia, alvo_por_robo = 0, {}
     for t, x, y, _tn in vc:
+        while ip < len(ph) and ph[ip][0] <= t:
+            papel_vigente = ph[ip][1]
+            ip += 1
         while ia < len(alvos_t) and alvos_t[ia][0] <= t:
             rid, ax, ay = alvos_t[ia][1]
             alvo_por_robo[rid] = [rid, ax, ay]
@@ -3020,6 +3238,7 @@ def gerar_replay(resultado, destino):
             "r": robos_perto(t),
             "y": amarelos_perto(t),
             "a": list(alvo_por_robo.values()),
+            "p": papel_vigente,
         })
 
     dados = _json.dumps({
@@ -3030,6 +3249,7 @@ def gerar_replay(resultado, destino):
         "gol_em": resultado.get("gol_em"),
         "disparou": resultado.get("disparou"),
         "bola_inicial": resultado.get("bola_inicial"),
+        "forcar_cobertura": resultado.get("forcar_cobertura", False),
         # Quem cobrou, para o replay destacar o robo certo em vez de adivinhar.
         "cobrador": resultado.get("cobrador"),
     }, separators=(",", ":"))
@@ -3216,15 +3436,48 @@ def rodar(nome, duracao=12.0):
     rclpy.init()
     no = _criar_gravador()
 
+    # BOLA COM VELOCIDADE INICIAL (cenario["bola_vel"]): ela nunca fica em
+    # repouso no ponto pedido, entao 'conferir_teleporte' - que espera a
+    # LEITURA bater com o alvo - sempre falharia (ela ja esta do outro lado do
+    # campo quando a visao publica). E o 'cmd_cenario' que a teleportou, la na
+    # frente (ate 10s antes, esperando o manual_command sair e o launch
+    # subir) - tempo de sobra para ela atravessar o campo inteiro sozinha.
+    #
+    # Para velocidade, trocamos a CONFIRMACAO por um RETELEPORTE: halt para
+    # ancorar os robos (esperar_assentar so olha ROBOS, nao a bola - pode
+    # rodar igual). O RETELEPORTE DA BOLA EM SI fica para mais tarde, logo
+    # antes do comando real (FORCE_START/etc) - ver mais abaixo.
+    #
+    # BUG JA MEDIDO, e por isso o reteleporte NAO acontece aqui: havia uma
+    # transicao obrigatoria de 1,5s sob STOP entre este ponto e o comando
+    # real (linha "Transicao obrigatoria para STOP" abaixo). STOP nao trava
+    # a bola, so os robos - a 4300 mm/s isso sao mais de 6 METROS de voo
+    # livre antes da gravacao comecar de verdade. Reteleportar aqui e so
+    # confirmar presenca da bola aqui tem o mesmo defeito que o
+    # 'conferir_teleporte' original, so que mascarado: a leitura ficava boa,
+    # mas a bola ja tinha atravessado o campo quando o FORCE_START chegava.
+    vel_ini = cen.get("bola_vel", (0.0, 0.0))
+    bola_em_movimento = math.hypot(vel_ini[0], vel_ini[1]) > 1.0
+
     try:
         pedido = alvo
-        ok, onde, atraso = conferir_teleporte(no, alvo, limite=25.0)
-        if ok:
-            print(f"   cenario confirmado pela visao em {atraso:.1f}s")
-            print("   assentando sob HALT (driver reancora as trajetorias)...")
+        if bola_em_movimento:
+            print("   bola com velocidade inicial - pulando confirmacao de repouso")
             enviar_comando_arbitro("HALT")
             gasto = esperar_assentar(no, limite=ESPERA_HALT, piso=1.5)
-            print(f"   assentado em {gasto:.1f}s (teto era {ESPERA_HALT:.0f}s)")
+            print(f"   robos assentados em {gasto:.1f}s sob HALT (teto era {ESPERA_HALT:.0f}s)")
+            t0 = time.time()
+            while no.bola is None and time.time() - t0 < 10.0:
+                _girar(no, 0.1)
+            ok, onde, atraso = (no.bola is not None), no.bola, time.time() - t0
+        else:
+            ok, onde, atraso = conferir_teleporte(no, alvo, limite=25.0)
+            if ok:
+                print(f"   cenario confirmado pela visao em {atraso:.1f}s")
+                print("   assentando sob HALT (driver reancora as trajetorias)...")
+                enviar_comando_arbitro("HALT")
+                gasto = esperar_assentar(no, limite=ESPERA_HALT, piso=1.5)
+                print(f"   assentado em {gasto:.1f}s (teto era {ESPERA_HALT:.0f}s)")
 
         if not ok:
             visto = (
@@ -3382,6 +3635,16 @@ def rodar(nome, duracao=12.0):
             print()
             return 3
 
+        # RETELEPORTE DA BOLA EM MOVIMENTO, aqui - o mais tarde possivel, depois
+        # de TODA a espera de confirmacao do comando (handshake do websocket do
+        # arbitro + ate 3s esperando ele aparecer no topico). Reteleportar antes
+        # dessa espera - foi a primeira tentativa - ainda deixava a bola voar
+        # varios METROS de graca: medido, ela comecava a gravacao em x=-3333 em
+        # vez de 0. Agora o unico atraso que resta e a latencia da propria visao
+        # (1-2 quadros).
+        if bola_em_movimento:
+            mover_bola(pedido[0], pedido[1], vel_ini[0], vel_ini[1])
+
         print(f"   gravando por {duracao:.0f}s (olhe a janela do grSim)...")
         no.t0 = time.monotonic()
         no.gravando = True
@@ -3428,6 +3691,7 @@ def rodar(nome, duracao=12.0):
         pedido_chute = dict(no.t_pedido_chute)
         visao_crua = list(no.visao_crua)
         alvos = list(no.alvos)
+        papeis_hist = list(no.papeis_hist)
         robos_crus = list(no.robos_crus)
         amarelos_crus = list(no.amarelos_crus)
         janelas_kick = list(no.janelas_kick)
@@ -3492,6 +3756,8 @@ def rodar(nome, duracao=12.0):
         "robos_crus": robos_crus,
         "amarelos_crus": amarelos_crus,
         "alvos": alvos,
+        "papeis_hist": papeis_hist,
+        "forcar_cobertura": os.environ.get("ARARABOTS_FORCAR_COBERTURA") == "1",
         "janela_chutador": janela,
         "janelas_kick": janelas_kick,
         "rastreio": rastreio_calc,
@@ -3635,8 +3901,7 @@ def rodar(nome, duracao=12.0):
     
 def _ferramenta_cadeia():
     """Conta mensagens em cada topico e diz o que esta vivo na cadeia."""
-
-
+    from movement_interfaces.msg import MovementCommandArray
 
     JANELA = 5.0
 
@@ -3650,12 +3915,14 @@ def _ferramenta_cadeia():
             self.comando_arbitro = None
 
             self.topicos = ["visionTopic", "game_state", "refereeTopic",
-                            "control_command", "commandTopic"]
+                            "movement_manager/commands", "commandTopic"]
             self.subs = [
                 self.create_subscription(VisionMessage, "visionTopic", self._visao, 10),
                 self.create_subscription(GameState, "game_state", self._estado, 10),
                 self.create_subscription(RefereeMessage, "refereeTopic", self._arbitro, 10),
-                _assinar_setpoint(self, self._controle_novo),
+                self.create_subscription(
+                    MovementCommandArray, "movement_manager/commands",
+                    lambda m: self._controle_novo() if m.commands else None, 10),
                 self.create_subscription(TeamCommand, "commandTopic", self._time, 10),
             ]
 
@@ -4023,7 +4290,7 @@ def _ferramenta_pronto():
         elif alvo == "arbitro":
             estado = {"ok": False}
             no.create_subscription(RefereeMessage, "refereeTopic",
-                                   lambda _m: estado.__setitem__("ok", True), 10)
+                                   lambda m: estado.__setitem__("ok", bool(m.command)), 10)
             while time.time() - t0 < limite and not estado["ok"]:
                 rclpy.spin_once(no, timeout_sec=0.1)
             achou = estado["ok"]
@@ -4048,7 +4315,7 @@ def _ferramenta_pronto():
             precisa = _servicos_exigidos()
             estado = {"arbitro": False, "comandos": 0}
             no.create_subscription(RefereeMessage, "refereeTopic",
-                                   lambda _m: estado.__setitem__("arbitro", True), 10)
+                                   lambda m: estado.__setitem__("arbitro", bool(m.command)), 10)
             _assinar_setpoint(
                 no, lambda: estado.__setitem__("comandos", estado["comandos"] + 1))
             servicos = False

@@ -88,6 +88,7 @@ class MovementManager(Node):
             options.avoid_ball = cmd.planning_options.avoid_ball
             options.aggressiveness = cmd.planning_options.aggressiveness
             options.avoid_center_area = cmd.planning_options.avoid_center_area
+            options.defensive_half = cmd.planning_options.defensive_half
 
             if self._static_obstacles is not None:
                 options.avoid_center_area = self._static_obstacles['center_area']

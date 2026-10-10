@@ -88,6 +88,21 @@ def projecao_no_eixo(px, py, ox, oy, ux, uy):
     return (px - ox) * ux + (py - oy) * uy
 
 
+# Velocidade media que um robo realmente alcanca num lance, para estimar quanto
+# tempo ele leva para chegar a um ponto. MEDIDO no cenario 'cobertura_chute_longe'
+# (4 robos, velocidade media maxima por janela de 0,05-3 s): 755, 982 e 1127 mm/s.
+# A versao anterior assumia 2000 mm/s (o teto do solver, que o robo nao atinge
+# por causa da aceleracao) e a skill escolhia pontos inalcancaveis a tempo.
+VELOCIDADE_ROBO_ESTIMADA = 1000.0  # mm/s
+
+
+def tempo_de_chegada(ox, oy, px, py, velocidade=VELOCIDADE_ROBO_ESTIMADA):
+    """Tempo estimado (s) para ir de (o) a (p) em linha reta, a 'velocidade'."""
+    if velocidade <= 0:
+        return float("inf")
+    return dist(ox, oy, px, py) / velocidade
+
+
 def folga_lateral(ox, oy, ux, uy, alcance, inimigos):
     """Menor desvio lateral de um adversario em relacao ao raio o + t*u.
 

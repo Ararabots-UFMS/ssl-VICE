@@ -94,7 +94,13 @@ def forca_por_alvo(tipo_alvo):
     """Forca do chute conforme o que se quer fazer com a bola."""
     if tipo_alvo == "passe":
         return FORCA_PASSE
-    if tipo_alvo == "saida":
+    # 'alivio' e a saida sob pressao (running.saida_sob_pressao): mesma
+    # exigencia de FORCA_SAIDA - afastar sem a bola sair pela lateral ou pela
+    # linha de fundo. Sem este caso, cai no 'return FORCA_CHUTE' abaixo (a
+    # forca de GOL, 6.0) e e isso que mandava a bola pra fora em qualquer
+    # alivio lateral - bug presente desde que 'alivio' foi criado (d3bd09f),
+    # nunca testado sob pressao de inimigo de verdade antes dos b2_*.
+    if tipo_alvo in ("saida", "alivio"):
         return FORCA_SAIDA
     return FORCA_CHUTE
 
@@ -234,7 +240,9 @@ def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid):
     """
     d_bola = hypot(robo.position_x - ball.position_x,
                    robo.position_y - ball.position_y)
-    if alvo_chute is None or d_bola >= FORCA_CHUTE_ALCANCE:
+    alcance = ALCANCE_SOLTA_TRAVA if travas.get(rid) else FORCA_CHUTE_ALCANCE
+    if alvo_chute is None or d_bola >= alcance:
+        travas[rid] = False
         return False
 
     # xx JA e a distancia a placa com sinal: negativo = bola atras da placa.

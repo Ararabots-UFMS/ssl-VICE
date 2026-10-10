@@ -43,6 +43,7 @@ ensure_container() {
 
         echo ":: Starting new container '$CONTAINER_NAME'..."
         docker run -d --name $CONTAINER_NAME \
+            --init \
             --network host \
             --privileged \
             --device=/dev/input \

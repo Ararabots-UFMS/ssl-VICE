@@ -177,7 +177,7 @@ DDS_ENV=""
 [ -n "${MOVIMENTO_ANTIGO:-}" ] && MOVIMENTO_NOVO=""
 export MOVIMENTO_NOVO
 
-ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 # GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
 #
 # O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
@@ -193,7 +193,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -269,8 +269,8 @@ FPS_MIN_GRSIM="${ARARABOTS_MIN_FPS:-45}"      # fisica do grSim
 # significa que a cadeia foi reiniciada dezenas de vezes no mesmo container -
 # e ai vale mais recriar do que seguir medindo em cima.
 #
-# Correcao de raiz, no arquivo do time: 'init: true' no servico vice do
-# docker-compose.yml poe o tini como PID 1, que recolhe orfaos.
+# O container 'vice' nasce em scripts/vice com --init: o tini como PID 1
+# recolhe os orfaos entre montagens de cenario.
 MAX_ZUMBIS="${ARARABOTS_MAX_ZUMBIS:-200}"
 # Onde o portao deixa o motivo do bloqueio, para o 'validar' registrar no CSV.
 # Ver F-1 em documentacao/strategy-analysis/duvidas-e-testes.md: o motivo existe,
@@ -351,16 +351,14 @@ portao_medicao() {
     # pai. Entao aqui a gente so avisa - reiniciar a cadeia e decisao de quem le.
     # Zumbis: CONTA, nao lista, e nao bloqueia.
     #
-    # O PID 1 do container e 'tail -f /dev/null', que nao recolhe orfaos - entao
-    # todo node morto vira <defunct> permanente, com PPID=1. Sao inofensivos:
-    # nao consomem CPU nem memoria, so uma entrada de PID.
+    # Containers antigos nasceram com 'tail -f /dev/null' como PID 1, que nao
+    # recolhe orfaos. O scripts/vice agora usa --init para recolhe-los.
     #
     # A primeira versao LISTAVA os nomes e enchia a tela com a mesma lista
     # repetida nove vezes. Agora e uma linha, e so aparece quando ja passou de
     # uma centena - que e quando valeria recriar o container.
     #
-    # Correcao de raiz (arquivo do time, nao mexido): 'init: true' no serviço
-    # vice do docker-compose.yml poe o tini como PID 1, que recolhe.
+    # Um container antigo precisa ser recriado para receber o --init.
     local nz
     nz="$(docker exec vice ps -eo stat= 2>/dev/null | grep -c '^Z' || echo 0)"
     [ "${nz:-0}" -gt 100 ] 2>/dev/null && \
@@ -540,6 +538,16 @@ cmd_limpar() {
 # ============================================================================
 cmd_grsim() {
     BIN="$RAIZ/grSim/bin/grSim"
+    local campo_config="$VICE/src/simulation/configure_division_b.py"
+    # O grSim ja cria paredes visiveis com colisao. Fixamos as dimensoes
+    # SSL B antes de iniciar: campo 9x6 m, margem de 0,3 m ate as paredes.
+    if ! python3 "$campo_config" --check; then
+        if pgrep -x grSim >/dev/null; then
+            echo "Geometria diferente da SSL B. Execute ./ararabots.sh parar e tente novamente."
+            return 1
+        fi
+        python3 "$campo_config" || return 1
+    fi
 
     MODO="janela"
     ARGS=()
@@ -1058,6 +1066,19 @@ except OSError: sys.exit(1)
 
 
 # ============================================================================
+garantir_estrategia_cobertura() {
+    [ "${ARARABOTS_FORCAR_COBERTURA:-}" = "1" ] || return 0
+    local conferir="python3 -c 'from pathlib import Path; import sys; import strategy.tatics.running as running; sys.exit(Path(running.__file__).read_bytes() != Path(\"/root/ssl-VICE/src/strategy/strategy/tatics/running.py\").read_bytes())'"
+    if ! ros_run "$conferir"; then
+        echo "   estrategia instalada desatualizada - compilando o pacote strategy..."
+        ros_run "cd /root/ssl-VICE && colcon build --packages-select strategy" || return 1
+        ros_run "$conferir" || {
+            echo "   XX a estrategia instalada ainda difere do codigo de cobertura" >&2
+            return 1
+        }
+    fi
+}
+
 cmd_cenario() {
     CENARIO="${1:?informe o cenario}"
     PERFIL="${2:-${CAMPO:-codigo}}"
@@ -1104,6 +1125,8 @@ cmd_cenario() {
     fi
     [ "$faltou" = "1" ] && { echo "   (o ./ararabots.sh preparar reconstroi tudo isso)"; return 1; }
 
+    garantir_estrategia_cobertura || return 1
+
     # Os scripts auxiliares vao junto sempre - assim uma correcao neles vale na hora,
     # sem depender de lembrar de copiar.
     docker cp "$PY" vice:/tmp/ararabots.py >/dev/null 2>&1
@@ -1113,6 +1136,8 @@ cmd_cenario() {
 
     # ---------------------------------------------------------------- 2 e 3
     cmd_limpar >/dev/null 2>&1
+    # O gravador nao deve herdar o papel do teste anterior durante HALT.
+    docker exec vice rm -f /tmp/ararabots_papeis.json || return 1
     ros_d "ros2 launch /root/ssl-VICE/launch/sim_one.py > /tmp/sim.log 2>&1"
 
     # ---------------------------------------------------------------- 4
@@ -1190,6 +1215,12 @@ cmd_cenario() {
     # (111 mm = raio do robo 90 + raio da bola 21,5). Nao resolve o alinhamento
     # lateral, mas e estritamente melhor que o padrao - e nao exige tocar em
     # arquivo nenhum, so o servico que o proprio control.py expoe.
+    # A UI HTTP pode continuar viva quando o socket UDP do GC fica preso
+    # numa interface antiga apos uma troca de rede. Confira a entrega no ROS.
+    if ! ros_run "python3 /tmp/ararabots.py pronto arbitro 10"; then
+        echo "   ! arbitro sem mensagens no ROS; reiniciando ssl-gc para reabrir o UDP"
+        docker restart ssl-gc || return 2
+    fi
     if ! ros_run "python3 /tmp/ararabots.py pronto tudo 70"; then
         echo "   !! a cadeia nao ficou pronta - o resultado NAO vale"
         return 2
@@ -1208,7 +1239,7 @@ cmd_cenario() {
     # nao chegou a existir. Ali foi um assert de script que falhou calado; aqui
     # seria uma chamada de servico. Agora conferimos a resposta.
     local saida_pid
-    saida_pid="$(ros_run "timeout 15 ros2 service call /update_pid system_interfaces/srv/ControlParams '{id: 0, kp: 1.5, ki: 0.0, kd: 0.3}'" 2>&1)"
+    saida_pid="$(ros_run "timeout 35 ros2 service call /update_pid system_interfaces/srv/ControlParams '{id: 0, kp: 1.5, ki: 0.0, kd: 0.3}'" 2>&1)"
     if ! printf '%s' "$saida_pid" | grep -q "success=True"; then
         echo "   !! o ganho kp=1.5 NAO foi aplicado - o resultado NAO vale"
         echo "      (a execucao rodaria com o kp=2,3 do repositorio)"
@@ -1326,6 +1357,11 @@ cmd_validar() {
 
 
 # ============================================================================
+listar_cenarios() {
+    python3 "$PY" listar
+}
+
+
 #  LOTES: A CAMPANHA DE ANTES E DEPOIS, INTEIRA, NUM COMANDO.
 # ============================================================================
 #
@@ -1582,7 +1618,7 @@ cmd_menu() {
     fi
 
     # ------------------------------------------------------- lista de cenarios
-    mapfile -t CENARIOS < <(python3 "$PY" listar)
+    mapfile -t CENARIOS < <(listar_cenarios)
     [ ${#CENARIOS[@]} -eq 0 ] && { echo "XX nao consegui ler os cenarios"; return 1; }
 
     rodar_um() {
@@ -1598,42 +1634,44 @@ cmd_menu() {
         local st=$?
         [ $st -eq 1 ] && { echo "   XX o cenario nao montou"; return 1; }
         [ $st -eq 3 ] && { echo "   XX bloqueado pelo portao de medicao (acima)"; return 1; }
-        [ $st -eq 2 ] && echo "   !! a estrategia nao comandou - o resultado abaixo NAO vale"
-        ros_run "python3 /tmp/ararabots.py rodar $nome $DURACAO"
+        [ $st -eq 2 ] && { echo "   XX cadeia indisponivel; gravacao cancelada"; return 1; }
+        ros_run "python3 /tmp/ararabots.py rodar $nome $DURACAO" || return 1
     grsim_sobreviveu
     copiar_replays
     }
 
     rodar_dispersao() {
         local nome="$1" n="$2"
-        # APAGA OS RESULTADOS ANTIGOS ANTES DE COMECAR.
-        #
-        # BUG QUE ISTO CORRIGE: o resumo lia TODOS os JSON da pasta, entao
-        # execucoes de lotes anteriores entravam na conta. No lote de 12 do
-        # Felipe, 7 repeticoes foram bloqueadas pelo portao e mesmo assim o
-        # resumo mostrou "10 execucoes" e "GOLS: 1 de 10" - o gol era de um lote
-        # de uma hora antes. Um resumo que mistura lotes e pior que nenhum.
-        docker exec vice sh -c "rm -f /tmp/cenarios_freekick/*disp_*.json /tmp/cenarios_freekick/*disp_*.html" >/dev/null 2>&1 || true
+        # Cada lote tem seu proprio rotulo; resultados anteriores sao preservados.
+        local rotulo="disp_$(date +%Y%m%d_%H%M%S)_$$"
         echo
         echo "=============================================================="
         echo "  DISPERSAO: $nome  x$n"
         echo "=============================================================="
-        local BLOQ=0
+        local BLOQ=0 concluidas=0
         for i in $(seq 1 "$n"); do
             echo; echo "----- repeticao $i/$n -----"
-            cmd_cenario "$nome" >/dev/null
+            cmd_cenario "$nome"
             local st=$?
             [ $st -eq 1 ] && { echo "   XX o cenario nao montou"; continue; }
             [ $st -eq 3 ] && { echo "   XX bloqueado pelo portao de medicao"; BLOQ=$((BLOQ+1)); continue; }
-            [ $st -eq 2 ] && echo "   !! a estrategia nao comandou - resultado suspeito"
-            ros_run "BRANCH=disp_$i python3 /tmp/ararabots.py rodar $nome $DURACAO" \
-                | grep -E "GOL|sem gol|DISPARO|RASTREIO|acima de 200|laco a |abriu em|nunca abriu|robo [0-9]:|BOLA:" | sed 's/^/   /'
+            [ $st -eq 2 ] && { echo "   XX cadeia indisponivel; repeticao cancelada"; BLOQ=$((BLOQ+1)); continue; }
+            if ! ros_run "BRANCH=${rotulo}_$i python3 /tmp/ararabots.py rodar $nome $DURACAO"; then
+                echo "   XX gravacao falhou; veja o erro acima"
+                continue
+            fi
+            concluidas=$((concluidas+1))
             grsim_sobreviveu
             copiar_replays
         done
         echo
-        rm -rf "$SCRIPT_DIR/saida" && docker cp vice:/tmp/cenarios_freekick "$SCRIPT_DIR/saida" >/dev/null 2>&1
-        python3 "$PY" resumo disp
+        if [ "$concluidas" -eq 0 ]; then
+            echo "   XX nenhuma repeticao concluida; resumo nao gerado. Veja as falhas acima."
+            return 1
+        fi
+        mkdir -p "$SCRIPT_DIR/saida"
+        docker cp vice:/tmp/cenarios_freekick/. "$SCRIPT_DIR/saida/" || return 1
+        python3 "$PY" resumo "$rotulo" || return 1
         if [ "${BLOQ:-0}" -gt 0 ]; then
             echo
             echo "  !! $BLOQ de $n repeticoes foram BLOQUEADAS pelo portao de medicao."
@@ -2088,6 +2126,10 @@ PY
 # ==============================================================================
 #  Despachante
 # ==============================================================================
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+    return 0
+fi
+
 uso() { sed -n '2,40p' "$0"; }
 
 case "${1:-menu}" in

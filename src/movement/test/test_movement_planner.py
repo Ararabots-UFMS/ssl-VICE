@@ -28,6 +28,9 @@ DEFAULT_PARAMS = {
     "max_threads": 8,
     "overhead_max_age": 0.5,
     "accept_radius": 50.0,
+    # As declared by the node.
+    "overhead_max_future": 0.35,
+    "vision_handoff_latency": 0.03,
 }
 
 
@@ -222,7 +225,8 @@ class TestPlanForRobot:
 
         result = planner_node.plan_for_robot(target)
 
-        assert result == (1, trajectory, 0.0)
+        # Without an overhead point the plan takes effect a handoff latency from now.
+        assert result == (1, trajectory, 0.03)
         start_state, goal_state, obstacles, _previous_via = planner_node.planner.find.call_args[0]
         assert isinstance(start_state, MotionState)
         assert start_state.position == Vector2D(0, 0)
@@ -261,10 +265,53 @@ class TestPlanForRobot:
 
         result = planner_node.plan_for_robot(target)
 
-        assert result == (1, trajectory, 0.0)
+        assert result == (1, trajectory, pytest.approx(100.03))
         start_state = planner_node.planner.find.call_args[0][0]
-        assert start_state.position == Vector2D(0, 0)
+        # Carried forward over the handoff latency, and the overhead point is far too
+        # old to cap the speed, so the measured velocity stands.
+        assert start_state.position.x == pytest.approx(0.03)
+        assert start_state.position.y == pytest.approx(0.06)
         assert start_state.velocity == Vector2D(1, 2)
+
+    def test_the_fallback_start_speed_is_capped_by_a_recent_overhead_point(self, planner_node):
+        """
+        Vision velocity lags while the robot brakes, and planning from it is what made
+        the plans overshoot the goal and come back. A point stamped too far ahead to
+        plan from still describes the braking profile, so it bounds the start speed.
+        """
+        target = _make_target(robot_id=1, initial_pos=(0, 0), initial_vel=(100, 0),
+                              target_pos=(1000, 0))
+        # Further ahead than overhead_max_future, so the plan cannot start from it.
+        overhead = MagicMock(wall_stamp=100.5)
+        overhead.pos = MagicMock(x=0, y=0)
+        overhead.vel = MagicMock(x=10, y=0)
+        planner_node.cur_overhead_points = {1: overhead}
+        planner_node.game_state = MagicMock()
+        planner_node.get_clock = _clock(100.0)
+        self._solves_to(planner_node)
+
+        planner_node.plan_for_robot(target)
+
+        start_state = planner_node.planner.find.call_args[0][0]
+        assert start_state.velocity.x == pytest.approx(10.0)
+        assert start_state.velocity.y == pytest.approx(0.0)
+
+    def test_a_stale_overhead_point_does_not_cap_the_fallback_start_speed(self, planner_node):
+        """An old point describes some earlier move, so it says nothing about now."""
+        target = _make_target(robot_id=1, initial_pos=(0, 0), initial_vel=(100, 0),
+                              target_pos=(1000, 0))
+        overhead = MagicMock(wall_stamp=0.0)  # 100s old
+        overhead.pos = MagicMock(x=0, y=0)
+        overhead.vel = MagicMock(x=0, y=0)
+        planner_node.cur_overhead_points = {1: overhead}
+        planner_node.game_state = MagicMock()
+        planner_node.get_clock = _clock(100.0)
+        self._solves_to(planner_node)
+
+        planner_node.plan_for_robot(target)
+
+        start_state = planner_node.planner.find.call_args[0][0]
+        assert start_state.velocity.x == pytest.approx(100.0)
 
     def test_a_robot_already_at_its_goal_is_left_alone(self, planner_node):
         """

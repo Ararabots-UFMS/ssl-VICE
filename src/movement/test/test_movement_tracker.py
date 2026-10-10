@@ -26,6 +26,12 @@ DEFAULT_PARAMS = {
     "divergence_frames": 3,
     "recovery_frames": 10,
     "divergence_timeout_frames": 120,
+    # As declared by the node, so the reprojection path behaves here as it does live.
+    "reprojection_enabled": True,
+    "reprojection_window_before": 0.30,
+    "reprojection_window_after": 0.50,
+    "reprojection_max_correction": 0.03,
+    "reprojection_min_position_error": 20.0,
 }
 
 
@@ -53,6 +59,7 @@ def _tracker(now_sec: float = 0.0, **params) -> MovementTracker:
     tracker._recovery_streak = {}
     tracker._divergence_age = {}
     tracker._diverged = {}
+    tracker._last_reprojected_stamp = {}
 
     values = dict(DEFAULT_PARAMS, **params)
     tracker.get_parameter = lambda name: MagicMock(value=values[name])
@@ -365,6 +372,57 @@ class TestHandlePendingHandoff:
 
         assert tracker._diverged[1] is True
         assert tracker._recovery_streak[1] == 7
+
+
+class TestClosedLoopOffset:
+    """
+    The trajectory clock is advanced by dt and then pulled back toward where vision
+    last saw the robot. Everything below the reprojection_* parameters guards.
+    """
+
+    def _measure(self, tracker, position, stamp: float = 100.0):
+        tracker._measured[1] = (Vector2D(*position), Vector2D(0.0, 0.0), stamp)
+
+    def test_disabled_leaves_the_expected_offset_alone(self):
+        tracker = _tracker(reprojection_enabled=False)
+        trajectory = _trajectory(4000.0)
+        self._measure(tracker, (3000.0, 0.0))
+
+        assert tracker._closed_loop_offset(1, trajectory, 0.5, 100.0) == 0.5
+
+    def test_without_a_measurement_the_offset_is_unchanged(self, tracker):
+        trajectory = _trajectory(4000.0)
+
+        assert tracker._closed_loop_offset(1, trajectory, 0.5, 100.0) == 0.5
+
+    def test_an_error_under_the_threshold_is_not_worth_correcting(self, tracker):
+        trajectory = _trajectory(4000.0)
+        on_path = trajectory.get_state(0.5).position
+        self._measure(tracker, (on_path.x, on_path.y))
+
+        assert tracker._closed_loop_offset(1, trajectory, 0.5, 100.0) == 0.5
+
+    def test_a_robot_ahead_of_the_reference_pulls_the_clock_forward(self, tracker):
+        """Clamped to reprojection_max_correction, so one frame cannot jump the clock."""
+        trajectory = _trajectory(4000.0)
+        ahead = trajectory.get_state(0.9).position
+        self._measure(tracker, (ahead.x, ahead.y))
+
+        offset = tracker._closed_loop_offset(1, trajectory, 0.5, 100.0)
+
+        assert offset == pytest.approx(0.53)  # 0.5 + max_correction
+
+    def test_the_same_vision_frame_is_not_reprojected_twice(self, tracker):
+        """Vision is slower than this timer, so the same stamp arrives repeatedly."""
+        trajectory = _trajectory(4000.0)
+        ahead = trajectory.get_state(0.9).position
+        self._measure(tracker, (ahead.x, ahead.y), stamp=100.0)
+
+        first = tracker._closed_loop_offset(1, trajectory, 0.5, 100.0)
+        second = tracker._closed_loop_offset(1, trajectory, 0.53, 100.0)
+
+        assert first == pytest.approx(0.53)
+        assert second == 0.53
 
 
 class TestHandoffReprojection:

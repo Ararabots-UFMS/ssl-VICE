@@ -4,14 +4,20 @@ from movement.entities.trajectory.trajectory import Trajectory
 from movement.entities.trajectory.trajectory_segment import TrajectorySegment
 from movement.entities.motion.motion_state import MotionState
 from movement.entities.obstacle.obstacle import Obstacle
+from movement.entities.obstacle.penalty_area_obstacle import PenaltyAreaObstacle
 from movement.local_planner.collision_engine import CollisionEngine
 from movement.local_planner.informed_sampler import InformedSampler
 from movement.local_planner.trajectory_generator import TrajectoryGenerator
 from movement.local_planner.solver import BaseSolver
+from utils.field_util import FieldSide
+from utils.math_util import Vector2D
 
 # Perpendicular sampling sigma, as a fraction of the start-goal distance.
 MIN_SPREAD = 0.03
-MAX_SPREAD = 0.35
+MAX_SPREAD = 0.6  # desvio lateral maior: contornar um inimigo no meio do caminho
+# The penalty rectangle already includes the robot radius. This extra room keeps
+# the planned trajectory off its edge despite tracking and vision noise.
+PENALTY_CORNER_CLEARANCE = 50.0
 
 class BypassSolver(BaseSolver):
     """RRT-inspired solver for finding collision-free bypasses."""
@@ -38,17 +44,36 @@ class BypassSolver(BaseSolver):
         previous_via: Optional[MotionState] = None,
     ) -> Optional[Trajectory]:
         """
-        Attempts to find a via-point that clears all obstacles.
+        Attempts to find a route that clears all obstacles.
 
-        The previous cycle's via point is re-solved from the current start and defended
-        by cost_margin, so unchanged inputs keep returning the same route. Sampling
-        alone picks a different side of an obstacle every cycle.
+        Penalty areas get fixed corner routes. For other obstacles, the previous
+        cycle's via point is re-solved from the current start and defended by
+        cost_margin, so unchanged inputs keep returning the same route.
         """
+        challenger = None
+        direct_segment = generator.generate(start, goal)
+        for via_states in self._penalty_corner_routes(
+            start, goal, obstacles, direct_segment
+        ):
+            candidate = self._build_waypoints(
+                start, goal, obstacles, generator, via_states
+            )
+            if candidate is not None and (
+                challenger is None
+                or candidate.get_total_duration() < challenger.get_total_duration()
+            ):
+                challenger = candidate
+
+        # A valid corner route is deterministic and stays close to the padded
+        # obstacle. Random candidates tend to wander farther, and can choose a
+        # different side on successive cycles as the robot approaches the area.
+        if challenger is not None:
+            return challenger
+
         incumbent = None
         if previous_via is not None:
             incumbent = self._build(start, goal, obstacles, generator, previous_via)
 
-        challenger = None
         for attempt in range(self.max_iterations):
             # Progressive widening: the tight offsets that keep the route close to the
             # direct line are tried first, and only widen when they keep colliding.
@@ -78,6 +103,55 @@ class BypassSolver(BaseSolver):
 
         margin = incumbent.get_total_duration() * (1.0 - self.cost_margin)
         return challenger if challenger.get_total_duration() < margin else incumbent
+
+    def _penalty_corner_routes(self, start, goal, obstacles, direct_segment):
+        """Try the actual corners of a penalty area before random bypasses.
+
+        A single sampled via point often cannot go around both corners of the
+        rectangle. In that case every replan brakes at its edge. One or two
+        nearby corner points provide a repeatable route along its boundary.
+        """
+        for obstacle in obstacles:
+            if not isinstance(obstacle, PenaltyAreaObstacle):
+                continue
+            if not CollisionEngine.is_collision(
+                direct_segment, [obstacle], self.collision_time_step
+            ):
+                continue
+            min_x, max_x, min_y, max_y = obstacle._bounds()
+            room = PENALTY_CORNER_CLEARANCE
+            # The rear edge meets the field border, so only the two corners
+            # facing midfield can provide a legal route around this area.
+            front_x = max_x + room if obstacle.side is FieldSide.LEFT else min_x - room
+            lower = Vector2D(front_x, min_y - room)
+            upper = Vector2D(front_x, max_y + room)
+            for corner in (lower, upper):
+                yield [MotionState(corner, Vector2D(0.0, 0.0))]
+            # When crossing from one side to the other, travel along the front
+            # edge in the direction of the goal.
+            first, second = (
+                (lower, upper) if start.position.y < goal.position.y
+                else (upper, lower)
+            )
+            yield [
+                MotionState(first, Vector2D(0.0, 0.0)),
+                MotionState(second, Vector2D(0.0, 0.0)),
+            ]
+
+    def _build_waypoints(self, start, goal, obstacles, generator, waypoints):
+        states = [start, *waypoints, goal]
+        segments = []
+        for current, target in zip(states, states[1:]):
+            segment = generator.generate(current, target)
+            if not self._reaches(segment, target) or not self._is_safe(segment, obstacles):
+                return None
+            segments.append(segment)
+
+        for current, following in zip(segments, segments[1:]):
+            current.add_child(following)
+        trajectory = Trajectory(segments[0])
+        trajectory.via_state = waypoints[0]
+        return trajectory
 
     def _build(
         self,
