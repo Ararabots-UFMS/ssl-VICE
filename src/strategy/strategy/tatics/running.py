@@ -361,6 +361,9 @@ RAIO_MIRA_PARADO = 600.0
 # Teto para nao travar: 2 s a 10 Hz. Se a orientacao nao converge nisso, empurra
 # torto - parado e pior, porque ninguem disputa a bola.
 CICLOS_MAX_MIRANDO = 20
+# Quanto o erro de corpo tem de cair num ciclo para contar como "ainda girando".
+# 0,01 rad por ciclo = 0,1 rad/s, abaixo do giro mais lento perto da tolerancia.
+GIRO_MIN_MIRA = 0.01
 RAIO_POSSE_PORTADOR = 200.0
 # Dentro disto o portador disputa a bola sempre, independente do rotulo da
 # situacao - que oscila com o rastreio. 450 mm e o dobro do raio de posse.
@@ -828,15 +831,24 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
                     _r_m.orientation - _ang_saida))
                 _d_m = hypot(rx - bx, ry - by)
                 _n_mira = (estado or {}).get("ciclos_mirando", 0)
+                # O TETO SO CONTA CICLOS SEM GIRO. Contando todos, um giro lento
+                # (180 graus com kp=1 leva 2,5 s) estourava os 2 s e ele empurrava
+                # torto, que e o que a fase existe para impedir.
+                _erro_ant = (estado or {}).get("erro_mira")
+                if _erro_ant is not None and _erro_corpo < _erro_ant - GIRO_MIN_MIRA:
+                    _n_mira = 0
                 if (_erro_corpo > TOL_CORPO_MIRA and _d_m < RAIO_MIRA_PARADO
                         and _n_mira < CICLOS_MAX_MIRANDO):
                     _fase = "mirar"
                     if estado is not None:
                         estado["ciclos_mirando"] = _n_mira + 1
+                        estado["erro_mira"] = _erro_corpo
                 elif estado is not None:
                     estado["ciclos_mirando"] = 0
+                    estado.pop("erro_mira", None)
             elif estado is not None:
                 estado["ciclos_mirando"] = 0
+                estado.pop("erro_mira", None)
 
             if estado is not None:
                 estado["fase_portador"] = _fase

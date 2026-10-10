@@ -57,7 +57,7 @@ class Controller(Node):
 
         # Controllers
         self.robot_controller = RobotTrajectoryController()
-        self.orientation_controller = PController(kp=1, max_output=2)
+        self.orientation_controller = PController(kp=4, max_output=6)
         self.target_orientations = {}
 
         # ROS Interfaces
