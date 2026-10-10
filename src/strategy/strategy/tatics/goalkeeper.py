@@ -1,5 +1,6 @@
 from strategy.skills.skills import Skills
 from strategy.skills import geometria, posicionamento
+from strategy.skills.bola import prever_direcao_chute, cruzamento_da_bola
 from utils.math_util import Vector2D
 from math import atan2, hypot
 
@@ -19,6 +20,8 @@ AVANCO_MINIMO_PASSE = posicionamento.AVANCO_MINIMO_PASSE
 # Nao repetir estes numeros em outro lugar. Ver _bola_na_area.
 AREA_PROFUNDIDADE = 1000.0
 AREA_MEIA_LARGURA = 1000.0
+
+PODE_SAIR_DA_LINHA = False
 
 
 class Goalkeeper:
@@ -163,6 +166,28 @@ class Goalkeeper:
             dentro_x = self.ball.position_x < goal_x + AREA_PROFUNDIDADE + self.padding
         return dentro_x and abs(self.ball.position_y) < AREA_MEIA_LARGURA + self.padding
 
+    def _previsao_chute_iminente(self, goal_x: float):
+        """Checa se um atacante adversario provavelmente vai chutar ao gol."""
+        melhor = None
+        if not self.enemy_robots:
+            return None
+
+        for enemy in self.enemy_robots.values():
+            prev = prever_direcao_chute(enemy, self.ball, goal_x)
+            if prev is None:
+                continue
+            if melhor is None or prev["tempo"] < melhor["tempo"]:
+                melhor = prev
+        return melhor
+
+    def _y_do_chute(self, goal_x: float):
+        """y onde um chute (já feito ou iminente) cruza o gol, ou None."""
+        y = cruzamento_da_bola(self.ball, goal_x)
+        if y is not None:
+            return y
+        prev = self._previsao_chute_iminente(goal_x)
+        return prev["target_y"] if prev is not None else None
+
     def execute(self, goal_position: Vector2D, ball: Vector2D):
         """
         Quando a bola está na área do gol, o goleiro segue a lógica de ataque:
@@ -184,7 +209,26 @@ class Goalkeeper:
         goal_x = goal_position.x
         in_area = self._bola_na_area(goal_x)
 
-        if in_area:
+        y_chute = self._y_do_chute(goal_x)
+        if y_chute is not None:
+            robot_command = self.skills_factory.move_with_angle(
+                robot_id=0,
+                target_x=goal_x,
+                target_y=max(-400.0, min(400.0, y_chute)),
+                vel_x=0.0,
+                vel_y=0.0,
+                angle=angle,
+            )
+            robot_command.field_border = True
+            robot_command.ally_ids = []
+            try:
+                robot_command.deactivate_kick()
+            except Exception:
+                pass
+            return robot_command
+
+        if in_area and PODE_SAIR_DA_LINHA:
+
             bx, by = ball.position_x, ball.position_y
 
             # direção para empurrar: do centro da meta para a bola (ou seja, do gol para fora)

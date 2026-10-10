@@ -704,6 +704,24 @@ CENARIOS = {
         "amarelos": [(0, 4300, 0, 180), (1, 2200, -900, 180), (2, 3000, -600, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
+    "goleiro_sob_ataque": {        "tipo": "jogo",
+        "titulo": "Atacante adversário à frente da área do nosso goleiro",
+        "descricao": (
+            "O goleiro azul começa dentro da nossa área, a bola fica entre ele "
+            "e o atacante amarelo, posicionado logo à frente da área. Esperado: "
+            "o goleiro acompanha o y da bola sem sair da linha, conforme "
+            "PODE_SAIR_DA_LINHA=False."
+        ),
+        "bola": (-3000.0, 50.0),
+        "azuis": [
+            (0, -4300.0, 0.0, 0.0),  # Goleiro azul: dentro da área
+        ],
+        "amarelos": [
+            (0, 4300.0, 1500.0, 180),  # Goleiro amarelo
+            (1, -2800.0, 200.0, 180),    # Atacante: à frente da área azul
+        ],
+        "comando": ("FORCE_START", "BLUE"),
+    },
 
     # NOVOS CENÁRIOS DE KICKOFF
     "kickoff_favor": {        "tipo": "kickoff",
