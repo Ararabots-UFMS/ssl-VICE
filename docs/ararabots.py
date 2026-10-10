@@ -906,6 +906,33 @@ CENARIOS = {
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
+    "regressao_goleiro_central_passe": {        "tipo": "jogo",
+        "titulo": "Goleiro central parado, com opção de passe",
+        "descricao": (
+            "Goleiro amarelo no centro da meta. O portador tem apoio à frente "
+            "e cobertura azul recuada; avaliar no replay se tenta o canto ou "
+            "passa. Rode com ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro "
+            "imóvel. Não exige gol."
+        ),
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, -600, 0, 0),
+                  (2, 1800, 900, 0), (3, -1600, -900, 0)],
+        "amarelos": [(0, 4400, 0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "regressao_goleiro_bola_perto": {        "tipo": "jogo",
+        "titulo": "Goleiro central parado, bola perto da meta",
+        "descricao": (
+            "Bola a 2000 mm da linha do gol e goleiro amarelo no centro da "
+            "meta. Só o portador azul fica ativo; avaliar a decisão de chute "
+            "de perto. Rode com ARARABOTS_INIMIGO_PARADO=1 para manter o "
+            "goleiro imóvel. Não exige gol."
+        ),
+        "bola": (2400.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, 1800, 0, 0)],
+        "amarelos": [(0, 4400, 0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
     "regressao_passe": {        "tipo": "jogo",
         "titulo": "Passe com o gol fechado (resultado conhecido: passe sai)",
         "descricao": (
