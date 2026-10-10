@@ -631,7 +631,14 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
     # alterado: cada constante dele tem medicao no comentario. O que mudou e
     # o nome do papel e uma coisa de comportamento, logo abaixo (NOSSA).
     if papel == PAPEL_PORTADOR:
-        if situacao == SITUACAO_SOLTA:
+        # A FASE VALE SO PARA O CICLO QUE A DECIDIU. Os ramos abaixo que retornam
+        # antes (bola solta, interceptacao) nao a decidem, e a fase antiga
+        # continuava ligando 'cmd.ball' e a chegada em movimento para alvos deles.
+        _fase_ant = estado.pop("fase_portador", None) if estado is not None else None
+        # BOLA SOLTA TAMBEM PASSA PELAS FASES. Este retorno mandava atravessar a
+        # bola ate 250 mm dela, e so entao ela virava obstaculo: o planejador nao
+        # tinha mais como frear (6 chutes em 36 com a bandeira entregue, 33 assim).
+        if situacao == SITUACAO_SOLTA and experimento.desligado("PLANEJADOR"):
             # vai para onde a bola VAI PARAR, nao para onde ela esta: chegar
             # depois dela nao adianta.
             #
@@ -769,7 +776,6 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
         # maquinario antigo assume, porque ali o que se quer e exatamente
         # atravessar a bola.
         if not experimento.desligado("PLANEJADOR"):
-            _fase_ant = (estado or {}).get("fase_portador")
             _fase = aproximacao.fase_de_aproximacao(
                 rx, ry, bx, by, _dir_alvo, _fase_ant)
             # MODO DIAGNOSTICO: SO POSICIONAR, NAO EMPURRAR.
