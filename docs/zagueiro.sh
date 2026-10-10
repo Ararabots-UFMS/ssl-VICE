@@ -15,7 +15,9 @@ selecionar_categoria() {
       export CENARIO_ALVO=zc_centro ARARABOTS_SO_NOSSOS=1 ARARABOTS_ROBOS=2 ;;
     goleiro)
       ZAGUEIRO_CATEGORIA=zg_
-      export CENARIO_ALVO=zg_centro ARARABOTS_SO_NOSSOS=1 ARARABOTS_ROBOS=2 ;;
+      # SO_NOSSOS fica livre (nao forcado): os zg_* nao tem amarelo mesmo, e
+      # os b2_* (basico 2x1, zagueiro+goleiro vs um atacante) precisam dele.
+      export CENARIO_ALVO=zg_centro ARARABOTS_SO_NOSSOS= ARARABOTS_INIMIGO_PARADO= ARARABOTS_ROBOS=2 ;;
     atacante)
       ZAGUEIRO_CATEGORIA=atacante
       # zv_disputa e zv_deles usam quatro vagas por time no grSim.
@@ -28,7 +30,7 @@ listar_cenarios() {
   local nome titulo
   while IFS='|' read -r nome titulo; do
     case "$ZAGUEIRO_CATEGORIA:$nome" in
-      zc_:zc_*|zg_:zg_*|atacante:b1_*|atacante:zv_disputa|atacante:zv_deles)
+      zc_:zc_*|zg_:zg_*|zg_:b2_*|atacante:b1_*|atacante:zv_disputa|atacante:zv_deles)
         printf '%s|%s\n' "$nome" "$titulo" ;;
     esac
   done < <(python3 "$PY" listar)

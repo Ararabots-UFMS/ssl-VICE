@@ -47,6 +47,17 @@ COBERTURA_FRACAO = 0.45
 # A cobertura fecha o angulo do gol sem entrar em contato com a bola.
 DISTANCIA_SOMBRA_BOLA = 700.0
 TOL_CENTRO_SOMBRA = 60.0  # mm: evita avancar antes de cruzar o meio da abertura
+# Raio minimo entre o bloqueio e a bola, mesmo apos sair da area penal.
+#
+# MEDIDO: com a bola a so ~1200 mm do nosso gol, o ponto de sombra "puro" cai
+# bem dentro da area (ex.: -3990,85 com a bola em -3300,200 e o gol em
+# -4500,0). fora_da_area_penal entao troca a coordenada MAIS BARATA de
+# mover - as vezes o eixo x, pela frente da area - sem saber onde a bola
+# esta. Quando a bola tambem esta perto dessa borda, o resultado fica a
+# ~50 mm dela: o robo chega ali, encosta no corpo da bola e a empurra para
+# o proprio gol (GOL CONTRA reproduzido em cenarios/b1_perto_area, 2 de 3
+# execucoes). 90 (casco) + 21 (bola) + folga.
+MARGEM_SEGURANCA_BOLA = 250.0
 
 
 def a_frente_da_bola(robo, bx, by, gol_ataque):
@@ -221,6 +232,17 @@ def cobertura_defensiva(bx, by, nosso_gol, ordem=0, robo=None):
         distancia = min(distancia, max(0.0, dx / ux - 200.0))
     x, y = no_campo(bx + ux * distancia, by + uy * distancia)
     bloqueio = fora_da_area_penal(x, y, nosso_gol)
+    # fora_da_area_penal escolhe a saida de MENOR deslocamento, sem saber onde
+    # esta a bola - perto da nossa linha as duas podem ficar perto dela, e a
+    # mais barata nem sempre e a mais segura. Se a escolhida ainda viola a
+    # margem, tenta a lateral (y = +/- meia-largura): no mesmo regime ela fica
+    # bem mais afastada da bola do que a frente da area (x = gol + prof).
+    if hypot(bloqueio[0] - bx, bloqueio[1] - by) < MARGEM_SEGURANCA_BOLA:
+        lado_y = MEIA_LARGURA_AREA + MARGEM_ROBO
+        lateral = (x, lado_y if y >= 0.0 else -lado_y)
+        if (hypot(lateral[0] - bx, lateral[1] - by)
+                > hypot(bloqueio[0] - bx, bloqueio[1] - by)):
+            bloqueio = lateral
     if robo is None or side * ux <= 0:
         return bloqueio
 
