@@ -82,25 +82,18 @@ class Orchestrator:
         # whatever room they ask for.
         obstacles = [obs.for_route(start.position, goal.position) for obs in obstacles]
 
-        # 1. Try direct path
-        direct_seg = generator.generate(start, goal)
-        # An unsolved steer is empty, and an empty path collides with nothing.
-        if BypassSolver._reaches(direct_seg, goal) and not CollisionEngine.is_collision(
-            direct_seg, obstacles, self.config.collision_time_step
-        ):
-            self.status = PlanningStatus.DIRECT_PATH
-            safety_trajectory.status = PlanningStatus.DIRECT_PATH
-            safety_trajectory.append(direct_seg)
+        # 1 and 2. Direct, then round the obstacles.
+        if self._route(start, goal, obstacles, generator, solver, previous_via, safety_trajectory):
             return safety_trajectory
 
-        # 2. Try bypass solver
-        bypass_traj = solver.solve(start, goal, obstacles, generator, previous_via)
-        if bypass_traj and bypass_traj.root:
-            self.status = PlanningStatus.BYPASS_FOUND
-            safety_trajectory.status = PlanningStatus.BYPASS_FOUND
-            safety_trajectory.append(bypass_traj.root)
-            safety_trajectory.via_state = bypass_traj.via_state
-            return safety_trajectory
+        # The arrival velocity is a preference. Beside an obstacle it can be impossible
+        # (the run-up would start inside it), and stopping at the goal beats not going.
+        if goal.velocity.size() > 0.0:
+            at_rest = MotionState(goal.position, Vector2D(0.0, 0.0))
+            if self._route(start, at_rest, obstacles, generator, solver, None, safety_trajectory):
+                return safety_trajectory
+
+        direct_seg = generator.generate(start, goal)
 
         # 3. A robot is standing on the goal, so nothing can end there. Close in as far
         # as is free instead of stopping wherever we happen to be.
@@ -117,6 +110,36 @@ class Orchestrator:
         recovery = self._get_recovery_trajectory(start)
         recovery.status = PlanningStatus.RECOVERY
         return recovery
+
+    def _route(
+        self,
+        start: MotionState,
+        goal: MotionState,
+        obstacles: List[Obstacle],
+        generator: TrajectoryGenerator,
+        solver: BypassSolver,
+        previous_via: Optional[MotionState],
+        trajectory: Trajectory,
+    ) -> bool:
+        """Append a clear path to the goal, direct or by one via point. False if none."""
+        direct_seg = generator.generate(start, goal)
+        # An unsolved steer is empty, and an empty path collides with nothing.
+        if BypassSolver._reaches(direct_seg, goal) and not CollisionEngine.is_collision(
+            direct_seg, obstacles, self.config.collision_time_step
+        ):
+            self.status = PlanningStatus.DIRECT_PATH
+            trajectory.status = PlanningStatus.DIRECT_PATH
+            trajectory.append(direct_seg)
+            return True
+
+        bypass_traj = solver.solve(start, goal, obstacles, generator, previous_via)
+        if bypass_traj and bypass_traj.root:
+            self.status = PlanningStatus.BYPASS_FOUND
+            trajectory.status = PlanningStatus.BYPASS_FOUND
+            trajectory.append(bypass_traj.root)
+            trajectory.via_state = bypass_traj.via_state
+            return True
+        return False
 
     def _limited_to(self, speed_scale: float):
         """The generator, bypass solver and speed limit for a plan capped at speed_scale."""

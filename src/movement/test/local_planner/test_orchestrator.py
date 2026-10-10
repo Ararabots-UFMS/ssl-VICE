@@ -391,6 +391,20 @@ class TestFinalVelocity:
         assert end.velocity.size() == pytest.approx(config.max_velocity.x)
         assert end.velocity.y == pytest.approx(end.velocity.x / 2.0)
 
+    def test_an_arrival_velocity_with_no_room_for_its_run_up_gives_way_to_arriving(self):
+        """The goal sits 10mm off an obstacle, to be crossed moving away from it."""
+        np.random.seed(3)
+        planner = Orchestrator()
+        wall = GenericCircleObstacle(Vector2D(-1000.0, 0.0), 900)   # edge at x = -10
+        start = MotionState(Vector2D(1500.0, 0.0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(0.0, 0.0), Vector2D(400.0, 0.0))
+
+        end = planner.find(start, goal, [wall]).get_destination()
+
+        assert planner.status is not PlanningStatus.RECOVERY
+        assert end.position.distance(goal.position) == pytest.approx(0.0, abs=1e-3)
+        assert end.velocity.size() == pytest.approx(0.0, abs=1e-3)
+
 
 class TestOccupiedGoal:
     """
