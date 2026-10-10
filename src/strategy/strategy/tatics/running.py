@@ -1043,45 +1043,75 @@ def montar_comandos(tt):
 
     comandos = []
     ordem = {PAPEL_PORTADOR: 0, PAPEL_APOIO: 0, PAPEL_COBERTURA: 0}
-    # Em ensaios com um unico zagueiro (e em recuperacoes sem portador), a
-    # cobertura precisa afastar a bola quando ela chega a seus pes. Histerese
-    # evita alternar entre o ponto de bloqueio e a travessia da bola.
+    # Se nao ha portador, um zagueiro assume a busca da bola. Os demais
+    # continuam cobrindo, para nao mandar varios robos ao mesmo ponto.
     sem_portador = PAPEL_PORTADOR not in papeis.values()
-    limpezas = _est_m.setdefault("cobertura_limpar", {}) if _est_m is not None else {}
+    zagueiro_buscador = (eleger_atacante(tt.ally_robots, tt.ball)
+                         if sem_portador else None)
+    sombras = _est_m.setdefault("zagueiro_na_sombra", {}) if _est_m is not None else {}
     for rid in sorted(tt.ally_robots):
         if rid == 0:
             continue
         papel = papeis.get(rid, PAPEL_COBERTURA)
         alvo_robo, tipo_robo = alvo_chute, tipo_alvo
         r = tt.ally_robots[rid]
-        perto_bola = hypot(r.position_x - tt.ball.position_x,
-                           r.position_y - tt.ball.position_y)
+        buscar = papel == PAPEL_COBERTURA and rid == zagueiro_buscador
         sentido_ataque = -1.0 if tt.on_positive_half else 1.0
-        atras_da_bola = ((tt.ball.position_x - r.position_x)
-                         * sentido_ataque > 60.0)
-        limpar = (papel == PAPEL_COBERTURA and sem_portador
-                  and _dist_nosso_gol < TERCO_DEFENSIVO
-                  and atras_da_bola
-                  and perto_bola < (550.0 if limpezas.get(rid) else 360.0))
-        limpezas[rid] = limpar
-        if papel == PAPEL_COBERTURA and not limpar:
+        ux_sombra, uy_sombra, _ = geometria.versor(
+            tt.ball.position_x, tt.ball.position_y, nosso_gol.x, nosso_gol.y)
+        na_sombra = (buscar and posicionamento.na_sombra_da_bola(
+            r, tt.ball.position_x, tt.ball.position_y, nosso_gol,
+            tolerancia=(120.0 if sombras.get(rid) else
+                        posicionamento.TOL_CENTRO_SOMBRA)))
+        if buscar:
+            sombras[rid] = na_sombra
+        else:
+            sombras.pop(rid, None)
+        if na_sombra:
+            # Movimento e chute seguem o mesmo eixo da sombra. O alvo alem
+            # da bola mantem o rastreador ativo durante a janela de disparo.
+            alvo_robo = (tt.ball.position_x - 1800.0 * ux_sombra,
+                         tt.ball.position_y - 1800.0 * uy_sombra)
+            tipo_robo = "saida" if _dist_nosso_gol < TERCO_DEFENSIVO else "gol"
+        elif papel == PAPEL_COBERTURA:
             alvo_robo, tipo_robo = None, "bloqueado"
-        elif limpar and (alvo_robo is None or not chute.direcao_para_frente(
-                tt.ball, alvo_robo, sentido_ataque)):
-            alvo_robo = (tt.ball.position_x + 1800.0 * sentido_ataque,
-                         tt.ball.position_y)
-            tipo_robo = "saida"
         o = ordem.get(papel, 0)
-        alvo_x, alvo_y, _ = alvo_do_papel(
-            papel, situacao, rid, tt.ally_robots, tt.ball,
-            gol_ataque, nosso_gol, ordem=o, alvo_chute=alvo_robo,
-            inimigos=tt.enemy_robots, bloqueado=(tipo_robo == "bloqueado"))
-        if limpar:
-            alvo_x, alvo_y = aproximacao.ponto_de_aproximacao(
-                r.position_x, r.position_y,
-                tt.ball.position_x, tt.ball.position_y,
-                alvo_robo, aproximacao.AVANCO_PORTADOR)
+        if buscar and na_sombra:
+            alvo_x = tt.ball.position_x - aproximacao.EMPURRAO * ux_sombra
+            alvo_y = tt.ball.position_y - aproximacao.EMPURRAO * uy_sombra
+        elif buscar:
+            if ((r.position_x - tt.ball.position_x) * sentido_ataque > 0):
+                # Do lado do ataque, contorna a bola para entrar por tras.
+                direcao = (tt.ball.position_x - 1800.0 * ux_sombra,
+                           tt.ball.position_y - 1800.0 * uy_sombra)
+                alvo_x, alvo_y = aproximacao.ponto_de_aproximacao(
+                    r.position_x, r.position_y,
+                    tt.ball.position_x, tt.ball.position_y,
+                    direcao, aproximacao.AVANCO_PORTADOR)
+            else:
+                alvo_x, alvo_y = posicionamento.cobertura_defensiva(
+                    tt.ball.position_x, tt.ball.position_y, nosso_gol, o, r)
+        else:
+            alvo_x, alvo_y, _ = alvo_do_papel(
+                PAPEL_PORTADOR if buscar else papel,
+                situacao, rid, tt.ally_robots, tt.ball,
+                gol_ataque, nosso_gol, ordem=o, alvo_chute=alvo_robo,
+                inimigos=tt.enemy_robots, bloqueado=(tipo_robo == "bloqueado"))
         alvo_x, alvo_y = posicionamento.fora_da_area_penal(alvo_x, alvo_y, nosso_gol)
+        if papel == PAPEL_COBERTURA:
+            # O limite tambem vale para o alvo publicado, antes do planejador.
+            lado = 1.0 if tt.on_positive_half else -1.0
+            # A barreira do planejador exige centro a mais de 90 mm do meio.
+            # No centro, 150 mm deixava a bola fora da placa do chutador
+            # (contato requer centro a menos de ~107 mm). 100 mm preserva
+            # 10 mm de folga para a linha e permite o contato.
+            if lado * alvo_x < 100.0:
+                alvo_x = lado * 100.0
+                if buscar and abs(nosso_gol.x - tt.ball.position_x) > 1e-6:
+                    fracao = ((alvo_x - tt.ball.position_x)
+                              / (nosso_gol.x - tt.ball.position_x))
+                    alvo_y = (tt.ball.position_y
+                              + fracao * (nosso_gol.y - tt.ball.position_y))
         if papel in ordem:
             ordem[papel] += 1
 
@@ -1139,7 +1169,7 @@ def montar_comandos(tt):
             _r_o, tt.ball, alvo_robo, tipo_robo, _sentido_x, _travas, rid,
             (gol_ataque.x, gol_ataque.y),
             so_lado_certo=not experimento.desligado("ORIENTACAO_LADO"),
-            pode_armar=not _mira_emprestada)
+            pode_armar=na_sombra or not _mira_emprestada)
 
         # Quem esta efetivamente com a bola: o nosso mais proximo dentro do raio
         # de posse. Serve so para o diagnostico - a decisao de chutar e do
@@ -1208,9 +1238,8 @@ def montar_comandos(tt):
             print("[JG] arma=%s frente=%s d=%.0f tipo=%s"
                   % (arma, _frente, d_bola, tipo_robo), flush=True)
         cmd.kick = forca        # chutar_em ja devolve 0 quando nao armado
-        # Ao afastar, a cobertura atravessa a bola com o chutador armado;
-        # fora disso, so quem vai disputa-la trata a bola como obstaculo.
-        cmd.ball = papel != PAPEL_PORTADOR and not limpar
+        # A bola pode ser tocada por qualquer robo; nunca e obstaculo de rota.
+        cmd.ball = False
         cmd.field_border = True
         cmd.penalty_area = True
         comandos.append(cmd)

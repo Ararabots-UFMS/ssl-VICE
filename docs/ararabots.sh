@@ -269,8 +269,8 @@ FPS_MIN_GRSIM="${ARARABOTS_MIN_FPS:-45}"      # fisica do grSim
 # significa que a cadeia foi reiniciada dezenas de vezes no mesmo container -
 # e ai vale mais recriar do que seguir medindo em cima.
 #
-# Correcao de raiz, no arquivo do time: 'init: true' no servico vice do
-# docker-compose.yml poe o tini como PID 1, que recolhe orfaos.
+# O container 'vice' nasce em scripts/vice com --init: o tini como PID 1
+# recolhe os orfaos entre montagens de cenario.
 MAX_ZUMBIS="${ARARABOTS_MAX_ZUMBIS:-200}"
 # Onde o portao deixa o motivo do bloqueio, para o 'validar' registrar no CSV.
 # Ver F-1 em documentacao/strategy-analysis/duvidas-e-testes.md: o motivo existe,
@@ -351,16 +351,14 @@ portao_medicao() {
     # pai. Entao aqui a gente so avisa - reiniciar a cadeia e decisao de quem le.
     # Zumbis: CONTA, nao lista, e nao bloqueia.
     #
-    # O PID 1 do container e 'tail -f /dev/null', que nao recolhe orfaos - entao
-    # todo node morto vira <defunct> permanente, com PPID=1. Sao inofensivos:
-    # nao consomem CPU nem memoria, so uma entrada de PID.
+    # Containers antigos nasceram com 'tail -f /dev/null' como PID 1, que nao
+    # recolhe orfaos. O scripts/vice agora usa --init para recolhe-los.
     #
     # A primeira versao LISTAVA os nomes e enchia a tela com a mesma lista
     # repetida nove vezes. Agora e uma linha, e so aparece quando ja passou de
     # uma centena - que e quando valeria recriar o container.
     #
-    # Correcao de raiz (arquivo do time, nao mexido): 'init: true' no serviço
-    # vice do docker-compose.yml poe o tini como PID 1, que recolhe.
+    # Um container antigo precisa ser recriado para receber o --init.
     local nz
     nz="$(docker exec vice ps -eo stat= 2>/dev/null | grep -c '^Z' || echo 0)"
     [ "${nz:-0}" -gt 100 ] 2>/dev/null && \

@@ -40,7 +40,7 @@ def test_cobertura_reduz_abertura_descoberta_do_gol(side, bx, by):
 @pytest.mark.parametrize("side", [-1, 1])
 @pytest.mark.parametrize("goalkeeper", [False, True])
 @pytest.mark.parametrize("near_ball", [False, True])
-def test_cobertura_so_afasta_a_bola_quando_esta_atras_e_perto(monkeypatch, side, goalkeeper, near_ball):
+def test_zagueiro_busca_a_bola_e_mantem_chute_disponivel(monkeypatch, side, goalkeeper, near_ball):
     monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
     monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
     ball = robo(side * 2600, 200)
@@ -48,7 +48,6 @@ def test_cobertura_so_afasta_a_bola_quando_esta_atras_e_perto(monkeypatch, side,
     allies = {1: robo(x, 200, 0 if side < 0 else pi)}
     if goalkeeper:
         allies[0] = robo(side * 4300)
-    goal = S(x=side * 4500.0, y=0.0)
     tt = S(ally_robots=allies, enemy_robots={}, ball=ball,
            on_positive_half=side > 0,
            goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
@@ -56,19 +55,16 @@ def test_cobertura_so_afasta_a_bola_quando_esta_atras_e_perto(monkeypatch, side,
            skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
            estado={"chute_armado": {}})
     cmd = next(c for c in running.montar_comandos(tt) if c.robot_id == 1)
+    assert not cmd.ball
+    assert cmd.defensive_half == side
+    assert side * cmd.target_x < side * x
     if near_ball:
         assert abs(cmd.target_x - ball.position_x) < 300.0
-        assert not cmd.ball
         assert cmd.kick > 0
         assert tt.estado["chute_armado"][1]
     else:
-        expected = posicionamento.cobertura_defensiva(ball.position_x,
-                                                       ball.position_y, goal,
-                                                       robo=allies[1])
-        assert (cmd.target_x, cmd.target_y) == expected
-        assert cmd.ball
+        assert abs(cmd.target_x - ball.position_x) < 1700.0
         assert cmd.kick == 0
-        assert 1 not in tt.estado["chute_armado"]
 
 
 @pytest.mark.parametrize("side", [-1, 1])
@@ -86,7 +82,175 @@ def test_cobertura_nao_chuta_para_propria_meta(monkeypatch, side):
            estado={})
     cmd = running.montar_comandos(tt)[0]
     assert cmd.kick == 0
-    assert cmd.ball
+    assert not cmd.ball
+
+
+def test_zagueiro_armado_mesmo_sem_linha_livre(monkeypatch):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
+    monkeypatch.setattr(running, "alvo_do_chute", lambda *args: (None, None, "bloqueado"))
+    ball = robo(-2600.0)
+    allies = {1: robo(-2800.0)}
+    tt = S(ally_robots=allies, enemy_robots={}, ball=ball,
+           on_positive_half=False,
+           goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
+                         GOAL_NEGATIVE=S(x=-4500.0, y=0.0)),
+           skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
+           estado={})
+
+    cmd = running.montar_comandos(tt)[0]
+    assert cmd.target_x > ball.position_x
+    assert cmd.kick > 0
+    assert not cmd.ball
+
+
+def test_zagueiro_entra_na_sombra_antes_de_aproximar(monkeypatch):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
+    ball = robo(-2600.0, 200.0)
+    r = robo(-3500.0, 800.0)
+    goal = S(x=-4500.0, y=0.0)
+    tt = S(ally_robots={1: r}, enemy_robots={}, ball=ball,
+           on_positive_half=False,
+           goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
+                         GOAL_NEGATIVE=goal),
+           skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
+           estado={})
+
+    entrando = running.montar_comandos(tt)[0]
+    sombra = posicionamento.cobertura_defensiva(
+        ball.position_x, ball.position_y, goal, robo=r)
+    assert (entrando.target_x, entrando.target_y) == sombra
+    assert entrando.kick == 0
+    assert tt.estado["zagueiro_na_sombra"][1] is False
+
+    r.position_x, r.position_y = sombra
+    aproximando = running.montar_comandos(tt)[0]
+    assert tt.estado["zagueiro_na_sombra"][1] is True
+    assert aproximando.target_x > entrando.target_x
+    assert aproximando.defensive_half == -1
+    assert not aproximando.ball
+
+
+def test_zagueiro_contorna_bola_quando_esta_a_frente(monkeypatch):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
+    ball = robo(-2600.0, 200.0)
+    tt = S(ally_robots={1: robo(-2500.0, 200.0)}, enemy_robots={}, ball=ball,
+           on_positive_half=False,
+           goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
+                         GOAL_NEGATIVE=S(x=-4500.0, y=0.0)),
+           skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
+           estado={})
+
+    cmd = running.montar_comandos(tt)[0]
+    assert tt.estado["zagueiro_na_sombra"][1] is False
+    assert abs(cmd.target_y - ball.position_y) > 100.0
+    assert cmd.kick == 0
+    assert cmd.defensive_half == -1
+
+
+@pytest.mark.parametrize("side", [-1, 1])
+def test_aproximacao_do_zagueiro_permanece_no_eixo_da_sombra(monkeypatch, side):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
+    ball = robo(side * 2600.0, 700.0)
+    goal = S(x=side * 4500.0, y=0.0)
+    sx, sy = posicionamento.cobertura_defensiva(
+        ball.position_x, ball.position_y, goal)
+    r = robo(sx, sy)
+    tt = S(ally_robots={1: r}, enemy_robots={}, ball=ball,
+           on_positive_half=side > 0,
+           goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
+                         GOAL_NEGATIVE=S(x=-4500.0, y=0.0)),
+           skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
+           estado={})
+
+    cmd = running.montar_comandos(tt)[0]
+    ux, uy, _ = posicionamento.versor(ball.position_x, ball.position_y,
+                                     goal.x, goal.y)
+    assert tt.estado["zagueiro_na_sombra"][1]
+    assert abs((cmd.target_x - ball.position_x) * uy
+               - (cmd.target_y - ball.position_y) * ux) < 1e-6
+    assert (cmd.target_x - ball.position_x) * ux < 0
+    assert cmd.defensive_half == side
+
+
+def test_sombra_tolera_pequeno_deslocamento_da_bola(monkeypatch):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
+    ball = robo(-2600.0, 700.0)
+    goal = S(x=-4500.0, y=0.0)
+    sx, sy = posicionamento.cobertura_defensiva(
+        ball.position_x, ball.position_y, goal)
+    r = robo(sx, sy)
+    tt = S(ally_robots={1: r}, enemy_robots={}, ball=ball,
+           on_positive_half=False,
+           goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
+                         GOAL_NEGATIVE=goal),
+           skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
+           estado={})
+
+    running.montar_comandos(tt)
+    ball.position_y += 150.0
+    assert not posicionamento.na_sombra_da_bola(
+        r, ball.position_x, ball.position_y, goal)
+    cmd = running.montar_comandos(tt)[0]
+    assert tt.estado["zagueiro_na_sombra"][1]
+    ux, uy, _ = posicionamento.versor(ball.position_x, ball.position_y,
+                                     goal.x, goal.y)
+    assert abs((cmd.target_x - ball.position_x) * uy
+               - (cmd.target_y - ball.position_y) * ux) < 1e-6
+
+
+def test_apenas_zagueiro_mais_proximo_busca_bola(monkeypatch):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
+    ball = robo(-2600.0)
+    allies = {1: robo(-3500.0), 2: robo(-2900.0)}
+    tt = S(ally_robots=allies, enemy_robots={}, ball=ball,
+           on_positive_half=False,
+           goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
+                         GOAL_NEGATIVE=S(x=-4500.0, y=0.0)),
+           skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
+           estado={})
+
+    cmds = {c.robot_id: c for c in running.montar_comandos(tt)}
+    assert cmds[2].target_x > ball.position_x
+    assert (cmds[1].target_x, cmds[1].target_y) == posicionamento.cobertura_defensiva(
+        ball.position_x, ball.position_y, tt.goal_center.GOAL_NEGATIVE,
+        robo=allies[1])
+    assert cmds[1].kick == 0
+    assert not cmds[1].ball and not cmds[2].ball
+    assert cmds[1].defensive_half == -1
+    assert cmds[2].defensive_half == -1
+
+
+@pytest.mark.parametrize("side", [-1, 1])
+@pytest.mark.parametrize("distancia_bola", [0.0, 2000.0])
+def test_zagueiro_respeita_limite_da_metade_defensiva(monkeypatch, side, distancia_bola):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    monkeypatch.setattr(running, "_gravar_papeis", lambda _: None)
+    ball = robo(-side * distancia_bola, 700.0)
+    goal = S(x=side * 4500.0, y=0.0)
+    robo_x = side * 1000.0
+    fracao = (robo_x - ball.position_x) / (goal.x - ball.position_x)
+    allies = {1: robo(robo_x, ball.position_y * (1 - fracao))}
+    tt = S(ally_robots=allies, enemy_robots={}, ball=ball,
+           on_positive_half=side > 0,
+           goal_center=S(GOAL_POSITIVE=S(x=4500.0, y=0.0),
+                         GOAL_NEGATIVE=S(x=-4500.0, y=0.0)),
+           skills_factory=S(move_with_angle=lambda **kwargs: S(**kwargs)),
+           estado={})
+
+    cmd = running.montar_comandos(tt)[0]
+    assert cmd.defensive_half == side
+    assert side * cmd.target_x >= 100.0
+    if distancia_bola == 0.0:
+        assert side * cmd.target_x == 100.0
+    esperado_y = ball.position_y * (goal.x - cmd.target_x) / (goal.x - ball.position_x)
+    assert cmd.target_y == pytest.approx(esperado_y)
+    assert not cmd.ball
 
 
 def test_cobertura_arma_chute_na_posicao_travada_do_replay(monkeypatch):

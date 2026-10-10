@@ -213,6 +213,15 @@ def cobertura_na_linha(bx, by, nosso_gol, fracao=COBERTURA_FRACAO,
     return no_campo(bx + ux * alvo, by + uy * alvo)
 
 
+def na_sombra_da_bola(robo, bx, by, nosso_gol, tolerancia=TOL_CENTRO_SOMBRA):
+    """O robo esta no corredor bola -> centro do nosso gol, atras da bola?"""
+    ux, uy, comprimento = versor(bx, by, nosso_gol.x, nosso_gol.y)
+    dx, dy = robo.position_x - bx, robo.position_y - by
+    projecao = dx * ux + dy * uy
+    erro_lateral = abs(dx * uy - dy * ux)
+    return 0.0 < projecao < comprimento and erro_lateral <= tolerancia
+
+
 def cobertura_defensiva(bx, by, nosso_gol, ordem=0, robo=None):
     """Entra primeiro no meio da sombra; depois avanca para fechar a abertura.
 
