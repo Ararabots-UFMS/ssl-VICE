@@ -28,9 +28,9 @@ esta prevista e exige lote medido. Ver docs/auditoria-papeis-e-testes.md §6.3.
 
 from strategy.skills.skills import Skill, Skills
 
-from strategy.skills import aproximacao, bola, chute, geometria, posicionamento
+from strategy.skills import aproximacao, avaliacao_chute, bola, chute, geometria, posicionamento
 
 __all__ = [
     "Skill", "Skills",
-    "aproximacao", "bola", "chute", "geometria", "posicionamento",
+    "aproximacao", "avaliacao_chute", "bola", "chute", "geometria", "posicionamento",
 ]

@@ -4,7 +4,7 @@ import os
 from math import atan2, hypot
 
 from strategy.skills.skills import Skills
-from strategy.skills import aproximacao, chute, experimento, geometria, posicionamento
+from strategy.skills import aproximacao, avaliacao_chute, chute, experimento, geometria, posicionamento
 from strategy.skills import bola as skill_bola
 from strategy.tatics.goalkeeper import Goalkeeper
 
@@ -524,10 +524,12 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
          e normalmente para eles.
     """
     bx, by = ball.position_x, ball.position_y
-    if linha_livre(bx, by, gol_ataque.x, gol_ataque.y, enemy_robots):
+    gol_x, gol_y, nota_gol = avaliacao_chute.melhor_alvo(
+        ball, gol_ataque, enemy_robots)
+    if nota_gol > avaliacao_chute.NOTA_CHUTE_DIRETO:
         if estado is not None:
             estado.pop("alvo_passe", None)
-        return gol_ataque.x, gol_ataque.y, "gol"
+        return gol_x, gol_y, "gol"
 
     # PASSE COM ALVO CONGELADO.
     #
@@ -586,6 +588,12 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
             if estado is not None:
                 estado["alvo_passe"] = (a.position_x, a.position_y, rid)
             return a.position_x, a.position_y, "passe"
+
+    # Sem passe viavel, ainda tenta o maior vao quando a nota e baixa, mas nao nula.
+    if nota_gol > avaliacao_chute.NOTA_CHUTE_BAIXA_CHANCE:
+        if estado is not None:
+            estado.pop("alvo_passe", None)
+        return gol_x, gol_y, "gol"
     return None, None, "bloqueado"
 
 
