@@ -880,6 +880,20 @@ CENARIOS = {
         "amarelos": [(0, 4400, 1500, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
+    "regressao_goleiro_central": {        "tipo": "jogo",
+        "titulo": "Decisão de chute com goleiro no centro da meta",
+        "descricao": (
+            "Goleiro amarelo centralizado na meta bloqueia o chute reto. "
+            "O portador tem um apoio adiantado: observar no replay se a "
+            "estratégia escolhe um canto livre ou prefere passar. O cenário "
+            "não exige gol, pois o goleiro pode defender um chute correto."
+        ),
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, -600, 0, 0),
+                  (2, 1800, 900, 0), (3, -1600, -900, 0)],
+        "amarelos": [(0, 4400, 0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
     "regressao_passe": {        "tipo": "jogo",
         "titulo": "Passe com o gol fechado (resultado conhecido: passe sai)",
         "descricao": (
