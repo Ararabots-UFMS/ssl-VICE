@@ -894,6 +894,18 @@ CENARIOS = {
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
+    "regressao_goleiro_central_sem_apoio": {        "tipo": "jogo",
+        "titulo": "Chute com goleiro central, sem apoio",
+        "descricao": (
+            "Goleiro amarelo centralizado na meta, sem apoio nem cobertura "
+            "azul em campo. Isola a decisão do portador: observar no replay "
+            "se mira um canto livre ou mantém o chute bloqueado. Não exige gol."
+        ),
+        "bola": (0.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, -600, 0, 0)],
+        "amarelos": [(0, 4400, 0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
     "regressao_passe": {        "tipo": "jogo",
         "titulo": "Passe com o gol fechado (resultado conhecido: passe sai)",
         "descricao": (
