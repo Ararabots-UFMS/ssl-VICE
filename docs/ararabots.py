@@ -25,6 +25,7 @@ import glob
 import json
 import math
 import os
+import random
 import socket
 import struct
 import subprocess
@@ -884,16 +885,15 @@ CENARIOS = {
         "titulo": "Decisão de chute com goleiro no centro da meta",
         "descricao": (
             "Goleiro amarelo centralizado na meta bloqueia o chute reto. "
-            "Há um apoio adiantado; observar no replay se alguém do time "
-            "escolhe um canto livre ou prefere passar. A estratégia escolhe "
-            "automaticamente quem vai à bola. Rode com "
+            "Sem robô de apoio. A estratégia escolhe quem vai à bola e pode "
+            "mirar um canto ou manter o chute bloqueado. Rode com "
             "ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro imóvel. Não exige gol."
         ),
         "bola": (0.0, 0.0),
-        "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0),
-                  (2, 1800, 900, 0), (3, -1600, -900, 0)],
+        "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
+        "randomizar_area_goleiro": "normal",
     },
     "regressao_goleiro_central_sem_apoio": {        "tipo": "jogo",
         "titulo": "Chute com goleiro central, sem apoio",
@@ -907,20 +907,22 @@ CENARIOS = {
         "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
+        "randomizar_area_goleiro": "normal",
     },
     "regressao_goleiro_central_passe": {        "tipo": "jogo",
         "titulo": "Goleiro central parado, com opção de passe",
         "descricao": (
-            "Goleiro amarelo no centro da meta. Há um companheiro à frente "
-            "e outro recuado; avaliar no replay se alguém escolhe o canto ou "
-            "passa. A estratégia escolhe quem vai à bola. Rode com "
+            "Goleiro amarelo no centro da meta. O zagueiro azul (ID 2) é o "
+            "único companheiro de linha; se houver passe, ele é o receptor. "
+            "A estratégia escolhe quem vai à bola. Rode com "
             "ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro imóvel. Não exige gol."
         ),
         "bola": (0.0, 0.0),
         "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0),
-                  (2, 1800, 900, 0), (3, -2200, -1200, 0)],
+                  (2, 1800, 900, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
+        "randomizar_area_goleiro": "passe",
     },
     "regressao_goleiro_bola_perto": {        "tipo": "jogo",
         "titulo": "Goleiro central parado, bola perto da meta",
@@ -931,38 +933,27 @@ CENARIOS = {
             "goleiro imóvel. Não exige gol."
         ),
         "bola": (2400.0, 0.0),
-        "azuis": [(0, -4300, 0, 0), (1, 1000, 1000, 0)],
+        "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
+        "randomizar_area_goleiro": "perto",
     },
     "regressao_passe": {        "tipo": "jogo",
         "titulo": "Passe com o gol fechado (resultado conhecido: passe sai)",
         "descricao": (
-            "Gol bloqueado, apoio adiantado e livre: o esperado e passe com "
-            "forca de passe (~2,5 m/s), nao chute de 6."
+            "Goleiro central na meta e zagueiro azul (ID 2) como único "
+            "companheiro de linha. Se houver passe, deve ser para o zagueiro."
         ),
-        "bola": (500.0, -800.0),
-        # TRES ROBOS DE LINHA, e nao dois.
-        #
-        # Com dois, a distribuicao de papeis da PORTADOR ao mais proximo e
-        # COBERTURA ao outro (a prioridade e portador -> cobertura -> apoio,
-        # porque deixar a linha do gol descoberta custa mais). Sem APOIO nao ha
-        # receptor, e 'alvo_do_chute' nunca escolhe passe: o pre-voo mostrou
-        # 'tipo=bloqueado' num cenario chamado 'regressao_passe'.
-        #
-        # Isto e consequencia conhecida da regra de papeis, nao defeito deste
-        # cenario - mas vale a anotacao: EM JOGO COM DOIS ROBOS DE LINHA O TIME
-        # NAO PASSA.
-        "azuis": [(0, -4300, 0, 0), (1, 100, -900, 0), (2, 2400, 800, 0),
-                  (3, -600, 600, 0)],
-        # OS AMARELOS TAPAM O GOL, NAO A LINHA DE PASSE.
-        #
-        # A primeira versao os punha em (1600,-500) e (2000,-200), em cima da
-        # reta bola->apoio: o pre-voo mostrou 'tipo=bloqueado' em vez de
-        # 'passe', isto e, o cenario nao testava o que diz o nome. Agora eles
-        # ficam no corredor do gol e a linha de passe fica limpa.
+        "bola": (3600.0, 0.0),
+        # TRES ROBOS AZUIS: goleiro, jogador que disputa a bola e zagueiro.
+        # O zagueiro e o unico receptor possivel do passe; nao ha robo de apoio
+        # extra. A largada aleatoria mantem os tres papeis no teste.
+        "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0),
+                  (2, 1800, 900, 0)],
+        # Amarelos fecham o gol; o defensor amarelo nao deve bloquear o passe.
         "amarelos": [(0, 4300, 0, 180), (1, 2200, -900, 180), (2, 3000, -600, 180)],
         "comando": ("FORCE_START", "BLUE"),
+        "randomizar_area_goleiro": "passe",
     },
 
     # NOVOS CENÁRIOS DE KICKOFF
@@ -1433,6 +1424,67 @@ def mover_bola(x, y):
     pacote.replacement.ball.vx = 0.0
     pacote.replacement.ball.vy = 0.0
     _enviar(pacote)
+
+
+def _instanciar_cenario(cenario):
+    """Sorteia largadas dos testes de chute na area do goleiro adversario."""
+    perfil = cenario.get("randomizar_area_goleiro")
+    if not perfil:
+        return cenario
+    c = dict(cenario)
+    c["azuis"] = list(cenario.get("azuis", []))
+    c["amarelos"] = list(cenario.get("amarelos", []))
+    # Usa o retangulo de penalti do campo simulado: x=3500..4500, y=-1000..1000.
+    # O gol adversario esta em +x; todos os sorteios ficam dentro dessa area.
+    if perfil == "perto":
+        bx = random.uniform(4100.0, 4300.0)
+    elif perfil == "passe":
+        # Reserva espaco a frente para o zagueiro receber com avanco minimo.
+        bx = random.uniform(3500.0, 3650.0)
+    else:
+        bx = random.uniform(3500.0, 4250.0)
+    for _ in range(500):
+        by = random.uniform(-850.0, 850.0)
+        sx = random.uniform(3500.0, min(4250.0, bx + 250.0))
+        sy = random.uniform(-850.0, 850.0)
+        gx = random.uniform(4150.0, 4400.0)
+        gy = random.uniform(-450.0, 450.0)
+        db = math.hypot(sx - bx, sy - by)
+        if not 350.0 <= db <= 800.0:
+            continue
+        if math.hypot(gx - bx, gy - by) < 350.0:
+            continue
+        if math.hypot(gx - sx, gy - sy) < 350.0:
+            continue
+        defender = None
+        if perfil == "passe":
+            dx = min(4300.0, bx + random.uniform(700.0, 900.0))
+            side = random.choice((-1.0, 1.0))
+            dy = max(-2200.0, min(2200.0, by + side * random.uniform(900.0, 1300.0)))
+            if math.hypot(dx - gx, dy - gy) < 350.0:
+                continue
+            defender = (2, dx, dy, 0)
+        break
+    else:
+        raise RuntimeError("nao foi possivel sortear uma geometria sem sobreposicao")
+
+    c["bola"] = (bx, by)
+    blue = []
+    for rid, x, y, d in c.get("azuis", []):
+        if rid == 1:
+            blue.append((rid, sx, sy, 0))
+        elif rid == 2 and perfil == "passe":
+            blue.append(defender)
+        else:
+            blue.append((rid, x, y, d))
+    yellow = []
+    for rid, x, y, d in c.get("amarelos", []):
+        if rid == 0:
+            yellow.append((rid, gx, gy, 180))
+        else:
+            yellow.append((rid, x, y, d))
+    c["azuis"], c["amarelos"] = blue, yellow
+    return c
 
 
 def posicionar(cenario):
@@ -3500,7 +3552,7 @@ def rodar(nome, duracao=12.0):
         print(f"Cenario desconhecido: {nome}", file=sys.stderr)
         return 2
 
-    cen = CENARIOS[nome]
+    cen = _instanciar_cenario(CENARIOS[nome])
     perfil = os.environ.get("CAMPO", "original")
 
     print(f"\n>> {cen['titulo']}")
@@ -5591,7 +5643,7 @@ if __name__ == "__main__":
     elif acao == "posicionar":
         if len(sys.argv) < 3 or sys.argv[2] not in CENARIOS:
             print("cenario invalido", file=sys.stderr); sys.exit(2)
-        cen = CENARIOS[sys.argv[2]]
+        cen = _instanciar_cenario(CENARIOS[sys.argv[2]])
         print(">> %s" % cen["titulo"])
         print("   %s" % cen["descricao"])
         print("   bola em x=%.0f y=%.0f mm" % (cen["bola"][0], cen["bola"][1]))

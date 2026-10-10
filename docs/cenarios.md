@@ -40,11 +40,11 @@ No painel (aba `Tool` da GUI): bloco **2 · escolher e rodar** → tipo → cen�
 |---|---|---|
 | `jogo` | partida livre, quatro contra quatro, bola ao centro | É o cenário que decide se o time joga. Não tem critério de gol embutido: o que vale é o replay e o `jogo-analise` (alguém vai à bola, amontoam, a bola avança, o time ataca, alguém chuta). Quatro robôs por time, e não três, porque com dois de linha não há papéis — um é o portador e o outro faz todo o resto |
 | `regressao_chute_livre` | chute com o gol livre, campo limpo | Resultado conhecido: **3 de 3**, 5555–5944 mm/s. Serve para detectar quebra na cadeia do chute sem o ruído da disputa |
-| `regressao_goleiro_central` | goleiro centralizado na meta, apoio disponível | O chute reto está bloqueado. A estratégia escolhe quem vai à bola; inspecione no replay se mira um canto livre ou escolhe o passe; não se exige gol, pois o goleiro pode defender |
-| `regressao_goleiro_central_sem_apoio` | goleiro centralizado na meta, sem apoio nem cobertura azul | Só ficam o goleiro azul e um jogador de linha, que começa afastado da bola. Inspecione o replay para avaliar a decisão isolada de chute; não se exige gol |
-| `regressao_goleiro_central_passe` | goleiro central, apoio à frente e cobertura recuada | Mantenha os amarelos imóveis com `ARARABOTS_INIMIGO_PARADO=1`; inspecione se alguém do time escolhe o chute ou passa |
-| `regressao_goleiro_bola_perto` | bola a 2000 mm da meta e goleiro central | Mantenha o goleiro imóvel com `ARARABOTS_INIMIGO_PARADO=1`; mede a decisão de chute de perto |
-| `regressao_passe` | gol fechado, apoio adiantado e livre | Tem de sair **passe** (~2,5 m/s), não chute de 6. Três robôs de linha de propósito: com dois, a prioridade de papéis (portador → cobertura → apoio) deixa o time **sem apoio**, e sem apoio não existe receptor — o time nunca passa |
+| `regressao_goleiro_central` | goleiro, bola e jogador azul sorteados na área do goleiro adversário | Sem apoio. As largadas mudam em cada repetição; o goleiro amarelo fica dentro da própria área e parado com `ARARABOTS_INIMIGO_PARADO=1` |
+| `regressao_goleiro_central_sem_apoio` | goleiro, bola e jogador azul sorteados na área do goleiro adversário | Só ficam goleiro azul e jogador de linha, sem apoio; as largadas mudam em cada repetição |
+| `regressao_goleiro_central_passe` | goleiro, bola e atacante sorteados na área; zagueiro azul como único companheiro de linha | Sem apoio extra: se escolher passe, o alvo é o zagueiro (ID 2). Use `ARARABOTS_INIMIGO_PARADO=1` |
+| `regressao_goleiro_bola_perto` | bola, jogador azul e goleiro sorteados dentro da área, com a bola perto da linha do gol | Sem apoio; o goleiro amarelo permanece na própria área com `ARARABOTS_INIMIGO_PARADO=1` |
+| `regressao_passe` | goleiro, bola e atacante sorteados na área do goleiro adversário; zagueiro ID 2 como receptor | Só há goleiro, atacante e zagueiro azuis; se escolher passe, o alvo é o zagueiro. Goleiro amarelo parado com `ARARABOTS_INIMIGO_PARADO=1` |
 
 ---
 

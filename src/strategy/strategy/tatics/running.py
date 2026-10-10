@@ -474,7 +474,7 @@ def mira_firme(estado, ax, ay, tipo, papeis):
         segura = (ant_vale and n < CICLOS_MIN_MIRA
                   and tipo not in (None, "bloqueado"))
     else:
-        segura = ant_vale and n < CICLOS_MIN_MIRA and _mira_existe(ant_t, papeis)
+        segura = ant_vale and n < CICLOS_MIN_MIRA and _mira_existe(ant_t, papeis, estado)
 
     estado["mira_crua"] = tipo
     estado["mira_segurada"] = bool(segura)
@@ -488,14 +488,17 @@ def mira_firme(estado, ax, ay, tipo, papeis):
     return ax, ay, tipo
 
 
-def _mira_existe(tipo, papeis):
+def _mira_existe(tipo, papeis, estado=None):
     """A mira anterior ainda tem sentido? O gol nao se muda; o receptor sim.
 
     O ponto do passe ja vem congelado de _alvo_do_chute_cru, que o re-valida
     contra a posicao ATUAL do receptor. Aqui basta exigir que exista alguem no
-    papel de apoio - sem apoio nao ha passe para segurar.
+    papel de apoio, ou o zagueiro de cobertura escolhido como receptor.
     """
     if tipo != "passe":
+        return True
+    receptor = estado.get("alvo_passe") if estado is not None else None
+    if receptor is not None and papeis.get(receptor[2]) == PAPEL_COBERTURA:
         return True
     return any(p == PAPEL_APOIO for p in papeis.values())
 
@@ -518,8 +521,7 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
 
     ORDEM DE PREFERENCIA:
       1. o GOL, se a linha estiver limpa;
-      2. o APOIO, se a linha ate ele estiver limpa - e o passe que o Felipe
-         notou faltar mesmo com o apoio fazendo o pivo certo;
+      2. o APOIO, ou o zagueiro de COBERTURA se nao houver apoio, com linha limpa;
       3. NADA. Nao chutar e melhor que chutar no adversario: a bola volta solta
          e normalmente para eles.
     """
@@ -572,7 +574,7 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
         if congelado is not None:
             rid_c = congelado[2]
             atual = ally_robots.get(rid_c)
-            if (atual is not None and papeis.get(rid_c) == PAPEL_APOIO
+            if (atual is not None and papeis.get(rid_c) in (PAPEL_APOIO, PAPEL_COBERTURA)
                     and posicionamento.pode_receber(atual, bx, by, gol_ataque)
                     and linha_livre(bx, by, atual.position_x, atual.position_y,
                                     enemy_robots)):
@@ -581,6 +583,18 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
 
     for rid, papel in papeis.items():
         if papel != PAPEL_APOIO or rid not in ally_robots:
+            continue
+        a = ally_robots[rid]
+        if (posicionamento.pode_receber(a, bx, by, gol_ataque)
+                and linha_livre(bx, by, a.position_x, a.position_y, enemy_robots)):
+            if estado is not None:
+                estado["alvo_passe"] = (a.position_x, a.position_y, rid)
+            return a.position_x, a.position_y, "passe"
+
+    # Sem robo PAPEL_APOIO, o zagueiro (COBERTURA) pode receber o passe.
+    # A linha precisa estar livre e o companheiro precisa estar adiantado.
+    for rid, papel in papeis.items():
+        if papel != PAPEL_COBERTURA or rid not in ally_robots:
             continue
         a = ally_robots[rid]
         if (posicionamento.pode_receber(a, bx, by, gol_ataque)
@@ -912,6 +926,11 @@ def alvo_do_papel(papel, situacao, rid, ally_robots, ball, gol_ataque, nosso_gol
 
 
     if papel == PAPEL_COBERTURA:
+        # Quando este zagueiro e o alvo congelado de um passe, ele sai da linha
+        # defensiva e oferece o ponto de recepcao escolhido pela decisao.
+        alvo_passe = estado.get("alvo_passe") if estado is not None else None
+        if alvo_passe is not None and alvo_passe[2] == rid:
+            return _no_campo(alvo_passe[0], alvo_passe[1]) + (False,)
         # entre a bola e o NOSSO gol, espalhado para nao empilhar.
         # Na bola solta ela MANTEM a posicao - correr atras de bola solta e
         # deixar o contra-ataque aberto.
