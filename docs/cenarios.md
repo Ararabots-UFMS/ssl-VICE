@@ -40,9 +40,9 @@ No painel (aba `Tool` da GUI): bloco **2 · escolher e rodar** → tipo → cen�
 |---|---|---|
 | `jogo` | partida livre, quatro contra quatro, bola ao centro | É o cenário que decide se o time joga. Não tem critério de gol embutido: o que vale é o replay e o `jogo-analise` (alguém vai à bola, amontoam, a bola avança, o time ataca, alguém chuta). Quatro robôs por time, e não três, porque com dois de linha não há papéis — um é o portador e o outro faz todo o resto |
 | `regressao_chute_livre` | chute com o gol livre, campo limpo | Resultado conhecido: **3 de 3**, 5555–5944 mm/s. Serve para detectar quebra na cadeia do chute sem o ruído da disputa |
-| `regressao_goleiro_central` | goleiro centralizado na meta, portador e apoio disponíveis | O chute reto está bloqueado. Inspecione o replay para ver se a estratégia mira um canto livre ou escolhe o passe; não se exige gol, pois o goleiro pode defender |
-| `regressao_goleiro_central_sem_apoio` | goleiro centralizado na meta, sem apoio nem cobertura azul | Só ficam o goleiro azul e o portador. Inspecione o replay para avaliar a decisão isolada de chute; não se exige gol |
-| `regressao_goleiro_central_passe` | goleiro central, apoio à frente e cobertura recuada | Mantenha os amarelos imóveis com `ARARABOTS_INIMIGO_PARADO=1`; inspecione se o portador escolhe o chute ou passa |
+| `regressao_goleiro_central` | goleiro centralizado na meta, apoio disponível | O chute reto está bloqueado. A estratégia escolhe quem vai à bola; inspecione no replay se mira um canto livre ou escolhe o passe; não se exige gol, pois o goleiro pode defender |
+| `regressao_goleiro_central_sem_apoio` | goleiro centralizado na meta, sem apoio nem cobertura azul | Só ficam o goleiro azul e um jogador de linha, que começa afastado da bola. Inspecione o replay para avaliar a decisão isolada de chute; não se exige gol |
+| `regressao_goleiro_central_passe` | goleiro central, apoio à frente e cobertura recuada | Mantenha os amarelos imóveis com `ARARABOTS_INIMIGO_PARADO=1`; inspecione se alguém do time escolhe o chute ou passa |
 | `regressao_goleiro_bola_perto` | bola a 2000 mm da meta e goleiro central | Mantenha o goleiro imóvel com `ARARABOTS_INIMIGO_PARADO=1`; mede a decisão de chute de perto |
 | `regressao_passe` | gol fechado, apoio adiantado e livre | Tem de sair **passe** (~2,5 m/s), não chute de 6. Três robôs de linha de propósito: com dois, a prioridade de papéis (portador → cobertura → apoio) deixa o time **sem apoio**, e sem apoio não existe receptor — o time nunca passa |
 

@@ -884,12 +884,13 @@ CENARIOS = {
         "titulo": "Decisão de chute com goleiro no centro da meta",
         "descricao": (
             "Goleiro amarelo centralizado na meta bloqueia o chute reto. "
-            "O portador tem um apoio adiantado: observar no replay se a "
-            "estratégia escolhe um canto livre ou prefere passar. O cenário "
-            "não exige gol, pois o goleiro pode defender um chute correto."
+            "Há um apoio adiantado; observar no replay se alguém do time "
+            "escolhe um canto livre ou prefere passar. A estratégia escolhe "
+            "automaticamente quem vai à bola. Rode com "
+            "ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro imóvel. Não exige gol."
         ),
         "bola": (0.0, 0.0),
-        "azuis": [(0, -4300, 0, 0), (1, -600, 0, 0),
+        "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0),
                   (2, 1800, 900, 0), (3, -1600, -900, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
@@ -898,25 +899,26 @@ CENARIOS = {
         "titulo": "Chute com goleiro central, sem apoio",
         "descricao": (
             "Goleiro amarelo centralizado na meta, sem apoio nem cobertura "
-            "azul em campo. Isola a decisão do portador: observar no replay "
-            "se mira um canto livre ou mantém o chute bloqueado. Não exige gol."
+            "azul em campo. A estratégia escolhe quem vai à bola; observar no "
+            "replay se mira um canto livre ou mantém o chute bloqueado. Rode com "
+            "ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro imóvel. Não exige gol."
         ),
         "bola": (0.0, 0.0),
-        "azuis": [(0, -4300, 0, 0), (1, -600, 0, 0)],
+        "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
     "regressao_goleiro_central_passe": {        "tipo": "jogo",
         "titulo": "Goleiro central parado, com opção de passe",
         "descricao": (
-            "Goleiro amarelo no centro da meta. O portador tem apoio à frente "
-            "e cobertura azul recuada; avaliar no replay se tenta o canto ou "
-            "passa. Rode com ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro "
-            "imóvel. Não exige gol."
+            "Goleiro amarelo no centro da meta. Há um companheiro à frente "
+            "e outro recuado; avaliar no replay se alguém escolhe o canto ou "
+            "passa. A estratégia escolhe quem vai à bola. Rode com "
+            "ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro imóvel. Não exige gol."
         ),
         "bola": (0.0, 0.0),
-        "azuis": [(0, -4300, 0, 0), (1, -600, 0, 0),
-                  (2, 1800, 900, 0), (3, -1600, -900, 0)],
+        "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0),
+                  (2, 1800, 900, 0), (3, -2200, -1200, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
@@ -924,12 +926,12 @@ CENARIOS = {
         "titulo": "Goleiro central parado, bola perto da meta",
         "descricao": (
             "Bola a 2000 mm da linha do gol e goleiro amarelo no centro da "
-            "meta. Só o portador azul fica ativo; avaliar a decisão de chute "
-            "de perto. Rode com ARARABOTS_INIMIGO_PARADO=1 para manter o "
+            "meta. Um jogador de linha azul começa afastado da bola; avaliar a "
+            "decisão de chute de perto. Rode com ARARABOTS_INIMIGO_PARADO=1 para manter o "
             "goleiro imóvel. Não exige gol."
         ),
         "bola": (2400.0, 0.0),
-        "azuis": [(0, -4300, 0, 0), (1, 1800, 0, 0)],
+        "azuis": [(0, -4300, 0, 0), (1, 1000, 1000, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
