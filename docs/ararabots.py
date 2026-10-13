@@ -924,8 +924,11 @@ CENARIOS = {
                   (2, 1800, 900, 0)],
         "amarelos": [(0, 4400, 0, 180)],
         "comando": ("FORCE_START", "BLUE"),
-        "bola_sorteio": ((3500.0, 3650.0), (-850.0, 850.0)),
-        "randomizar_area_goleiro": "passe",
+        # A bola e os jogadores de linha azuis variam pelo campo, mas nunca
+        # dentro da area do goleiro amarelo.
+        "bola_sorteio": ((-4300.0, 4300.0), (-2800.0, 2800.0)),
+        "excluir_area_goleiro_amarelo": True,
+        "randomizar_area_goleiro": "passe_campo",
     },
     "regressao_goleiro_bola_perto": {        "tipo": "jogo",
         "titulo": "Goleiro central parado, bola perto da meta",
@@ -943,22 +946,24 @@ CENARIOS = {
         "randomizar_area_goleiro": "perto",
     },
     "regressao_passe": {        "tipo": "jogo",
-        "titulo": "Passe com o gol fechado (resultado conhecido: passe sai)",
+        "titulo": "Passe forçado com a boca do gol bloqueada",
         "descricao": (
-            "Goleiro central na meta e zagueiro azul (ID 2) como único "
-            "companheiro de linha. Se houver passe, deve ser para o zagueiro."
+            "Os tres amarelos cobrem toda a boca do gol, enquanto a diagonal "
+            "ate o zagueiro azul (ID 2) fica livre. A decisao esperada e "
+            "necessariamente passe para o ID 2, nunca chute direto."
         ),
         "bola": (3600.0, 0.0),
-        # TRES ROBOS AZUIS: goleiro, jogador que disputa a bola e zagueiro.
-        # O zagueiro e o unico receptor possivel do passe; nao ha robo de apoio
-        # extra. A largada aleatoria mantem os tres papeis no teste.
-        "azuis": [(0, -4300, 0, 0), (1, -2200, 1200, 0),
-                  (2, 1800, 900, 0)],
-        # Amarelos fecham o gol; o defensor amarelo nao deve bloquear o passe.
-        "amarelos": [(0, 4300, 0, 180), (1, 2200, -900, 180), (2, 3000, -600, 180)],
+        # O ID 1 e o unico azul proximo da bola; o ID 2 esta 650 mm a frente
+        # dela e e o unico receptor possivel. A linha bola->ID2 passa acima
+        # dos tres amarelos.
+        "azuis": [(0, -4300, 0, 0), (1, 3000, 0, 0),
+                  (2, 4250, 1400, 0)],
+        # A 400 mm da bola, os dois defensores tapam os cantos; o goleiro no
+        # centro tapa o vao restante. Assim melhor_alvo() devolve nota 0.0
+        # para o gol, abaixo de NOTA_CHUTE_DIRETO (0.3).
+        "amarelos": [(0, 4300, 0, 180), (1, 4000, -250, 180),
+                     (2, 4000, 250, 180)],
         "comando": ("FORCE_START", "BLUE"),
-        "bola_sorteio": ((3500.0, 3650.0), (-850.0, 850.0)),
-        "randomizar_area_goleiro": "passe",
     },
 
     # NOVOS CENÁRIOS DE KICKOFF
@@ -1434,13 +1439,36 @@ def mover_bola(x, y):
 ARQ_SORTEIO = "/tmp/ararabots_sorteio.json"
 
 
+def _na_area_goleiro_amarelo(x, y):
+    """Retangulo de penalti do lado amarelo, em milimetros."""
+    return 3500.0 <= x <= 4500.0 and -1000.0 <= y <= 1000.0
+
+
+def _sortear_posicao_fora_area_goleiro_amarelo(ocupadas=()):
+    """Sorteia uma posicao valida no campo, sem sobrepor entidades existentes."""
+    for _ in range(500):
+        x = random.uniform(-4300.0, 4300.0)
+        y = random.uniform(-2800.0, 2800.0)
+        if _na_area_goleiro_amarelo(x, y):
+            continue
+        if any(math.hypot(x - ox, y - oy) < 350.0 for ox, oy in ocupadas):
+            continue
+        return x, y
+    raise RuntimeError("nao foi possivel sortear uma posicao fora da area do goleiro")
+
+
 def sortear_bola(nome, cen):
     """Sorteia a bola UMA vez no posicionar e grava para o rodar ler."""
     faixa = cen.get("bola_sorteio")
     if not faixa:
         return cen
     (x0, x1), (y0, y1) = faixa
-    bola = (round(random.uniform(x0, x1)), round(random.uniform(y0, y1)))
+    for _ in range(500):
+        bola = (round(random.uniform(x0, x1)), round(random.uniform(y0, y1)))
+        if not cen.get("excluir_area_goleiro_amarelo") or not _na_area_goleiro_amarelo(*bola):
+            break
+    else:
+        raise RuntimeError("nao foi possivel sortear a bola fora da area do goleiro")
     with open(ARQ_SORTEIO, "w") as f:
         json.dump({"cenario": nome, "bola": bola}, f)
     return {**cen, "bola": bola}
@@ -1468,6 +1496,23 @@ def _instanciar_cenario(cenario):
     c = dict(cenario)
     c["azuis"] = list(cenario.get("azuis", []))
     c["amarelos"] = list(cenario.get("amarelos", []))
+    if perfil == "passe_campo":
+        # O goleiro amarelo fica na meta; bola e jogadores de linha azuis
+        # podem nascer em qualquer outra parte do campo.
+        bx, by = cenario["bola"]
+        ocupadas = [(bx, by)]
+        for rid, x, y, _ in c["azuis"] + c["amarelos"]:
+            if rid == 0:
+                ocupadas.append((x, y))
+        blue = []
+        for rid, x, y, d in c["azuis"]:
+            if rid in (1, 2):
+                x, y = _sortear_posicao_fora_area_goleiro_amarelo(ocupadas)
+                ocupadas.append((x, y))
+            blue.append((rid, x, y, d))
+        c["bola"] = (bx, by)
+        c["azuis"] = blue
+        return c
     # Usa o retangulo de penalti do campo simulado: x=3500..4500, y=-1000..1000.
     # O gol adversario esta em +x; todos os sorteios ficam dentro dessa area.
     if cenario.get("bola_sorteio"):
