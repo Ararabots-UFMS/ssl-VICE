@@ -978,6 +978,7 @@ CENARIOS = {
                   (2, 4250, 1400, 0)],
         "amarelos": [(0, 4300, 0, 180), (1, 4000, -250, 180),
                      (2, 4000, 250, 180)],
+        "inimigos_parados": True,
         "comando": ("FORCE_START", "BLUE"),
     },
     "nota_chute_gol": {        "tipo": "jogo",
@@ -993,6 +994,7 @@ CENARIOS = {
         "azuis": [(0, -4300, 0, 0), (1, 3000, 0, 0),
                   (2, 4250, 1400, 0)],
         "amarelos": [(0, 4300, 0, 180)],
+        "inimigos_parados": True,
         "comando": ("FORCE_START", "BLUE"),
     },
 
@@ -3665,6 +3667,10 @@ def rodar(nome, duracao=12.0):
         return 2
 
     cen = _instanciar_cenario(bola_sorteada(nome, CENARIOS[nome]))
+    if cen.get("inimigos_parados"):
+        # A decisão da nota de chute precisa ser observável sem que o adversário
+        # em jogo corrido ataque a bola ou feche a linha de passe.
+        os.environ["ARARABOTS_INIMIGO_PARADO"] = "1"
     perfil = os.environ.get("CAMPO", "original")
 
     print(f"\n>> {cen['titulo']}")
