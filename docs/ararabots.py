@@ -970,12 +970,13 @@ CENARIOS = {
         "descricao": (
             "Cenário direcionado à decisão da skill de nota de chute. Os três "
             "amarelos fecham a boca do gol e o azul ID 2 está adiantado, fora "
-            "do corredor do portador e com diagonal livre. Resultado esperado: "
-            "alvo do tipo passe para o ID 2; não deve escolher chute ao gol."
+            "do corredor do portador e com linha curta e livre. O receptor "
+            "fica pelo menos 600 mm adiantado, limite exigido pela estratégia. "
+            "Resultado esperado: passe para o ID 2, não chute ao gol."
         ),
         "bola": (3100.0, 0.0),
         "azuis": [(0, -4300, 0, 0), (1, 3000, 0, 0),
-                  (2, 3200, 1400, 0)],
+                  (2, 3700, 900, 0)],
         "amarelos": [(0, 4300, 0, 180), (1, 4000, -250, 180),
                      (2, 4000, 250, 180)],
         "inimigos_parados": True,
