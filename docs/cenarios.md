@@ -45,7 +45,7 @@ No painel (aba `Tool` da GUI): bloco **2 · escolher e rodar** → tipo → cen�
 | `regressao_goleiro_central_passe` | goleiro, bola e atacante sorteados na área; zagueiro azul como único companheiro de linha | Sem apoio extra: se escolher passe, o alvo é o zagueiro (ID 2). Use `ARARABOTS_INIMIGO_PARADO=1` |
 | `regressao_goleiro_bola_perto` | bola, jogador azul e goleiro sorteados dentro da área, com a bola perto da linha do gol | Sem apoio; o goleiro amarelo permanece na própria área com `ARARABOTS_INIMIGO_PARADO=1` |
 | `regressao_passe` | boca do gol bloqueada por três amarelos; zagueiro ID 2 como receptor | A linha ao gol não tem vão, mas a diagonal até o ID 2 está livre. O resultado esperado é obrigatoriamente passe para o zagueiro. |
-| `nota_chute_passe` | gol fechado, ID 2 adiantado com linha livre e portador alinhado atrás da bola; adversários parados automaticamente | Exercita a nota baixa da skill: deve aproximar-se e passar para ID 2, mesmo sem abertura para o gol. |
+| `nota_chute_passe` | gol fechado, ID 2 adiantado com linha livre e portador alinhado no ponto de espera; adversários parados automaticamente | Exercita a nota baixa da skill e a aproximação final do chute: deve passar para ID 2, mesmo sem abertura para o gol. Começa no ponto de espera porque o planejador ficava oscilando na fase de contorno. |
 | `nota_chute_gol` | goleiro central parado e receptor elegível; adversários parados automaticamente | Controle da nota alta: a abertura ampla para o gol deve fazer a estratégia preferir o chute direto ao passe. |
 
 ---

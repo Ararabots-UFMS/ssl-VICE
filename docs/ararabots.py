@@ -976,11 +976,10 @@ CENARIOS = {
             "à bola no log. Resultado esperado: passe para o ID 2, não chute ao gol."
         ),
         "bola": (3100.0, 0.0),
-        # O portador nasce 540 mm atras da bola, alinhado com a linha do passe.
-        # Nascer a 100 mm e com 56 graus de erro punha o alvo perto dentro da
-        # zona que o casco nao alcanca: o planejador evitava a bola, sem alvo
-        # alcançavel para sair do contorno.
-        "azuis": [(0, -4300, 0, 0), (1, 2800, -450, 56),
+        # O portador nasce no ponto de espera (300 mm atras da bola), alinhado
+        # com a linha do passe. O teste anterior ficava em 'contornar' a
+        # 500-600 mm: o planejador evitava a bola e nao alcancava este ponto.
+        "azuis": [(0, -4300, 0, 0), (1, 2934, -250, 56),
                   (2, 3700, 900, 0)],
         "amarelos": [(0, 4300, 0, 180), (1, 4000, -250, 180),
                      (2, 4000, 250, 180)],
