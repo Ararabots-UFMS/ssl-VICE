@@ -971,7 +971,7 @@ CENARIOS = {
             "Cenário direcionado à decisão da skill de nota de chute. Os três "
             "amarelos fecham a boca do gol e o azul ID 2 está adiantado, fora "
             "do corredor do portador e com linha curta e livre. O receptor "
-            "fica pelo menos 600 mm adiantado, limite exigido pela estratégia. "
+            "fica 700 mm adiantado, com margem sobre o limite da estratégia. "
             "Rode com DIAG_JOGO=1 para ver fase, alvo de movimento e distância "
             "à bola no log. Resultado esperado: passe para o ID 2, não chute ao gol."
         ),
@@ -979,8 +979,8 @@ CENARIOS = {
         # O portador nasce no ponto de espera (300 mm atras da bola), alinhado
         # com a linha do passe. O teste anterior ficava em 'contornar' a
         # 500-600 mm: o planejador evitava a bola e nao alcancava este ponto.
-        "azuis": [(0, -4300, 0, 0), (1, 2934, -250, 56),
-                  (2, 3700, 900, 0)],
+        "azuis": [(0, -4300, 0, 0), (1, 2916, -237, 52),
+                  (2, 3800, 900, 0)],
         "amarelos": [(0, 4300, 0, 180), (1, 4000, -250, 180),
                      (2, 4000, 250, 180)],
         "inimigos_parados": True,

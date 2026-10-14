@@ -1604,10 +1604,11 @@ def montar_comandos(tt):
             _dist_diag = hypot(_r_o.position_x - tt.ball.position_x,
                                _r_o.position_y - tt.ball.position_y)
             _registrar_diag_jogo(
-                "[JG] MOV r%d fase=%s d_bola=%.0f alvo=%.0f,%.0f "
-                "evita_bola=%s kick=%.1f" %
-                (rid, _fase_diag, _dist_diag, alvo_x, alvo_y,
-                 cmd.ball, cmd.kick))
+                "[JG] MOV r%d fase=%s tipo=%s receptor=%s d_bola=%.0f "
+                "alvo=%.0f,%.0f evita_bola=%s kick=%.1f" %
+                (rid, _fase_diag, tipo_alvo,
+                 (tt.estado or {}).get("alvo_passe", (None, None, None))[2],
+                 _dist_diag, alvo_x, alvo_y, cmd.ball, cmd.kick))
         comandos.append(cmd)
     return comandos
 
