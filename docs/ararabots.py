@@ -972,7 +972,8 @@ CENARIOS = {
             "amarelos fecham a boca do gol e o azul ID 2 está adiantado, fora "
             "do corredor do portador e com linha curta e livre. O receptor "
             "fica pelo menos 600 mm adiantado, limite exigido pela estratégia. "
-            "Resultado esperado: passe para o ID 2, não chute ao gol."
+            "Rode com DIAG_JOGO=1 para ver fase, alvo de movimento e distância "
+            "à bola no log. Resultado esperado: passe para o ID 2, não chute ao gol."
         ),
         "bola": (3100.0, 0.0),
         # O portador nasce 540 mm atras da bola, alinhado com a linha do passe.
