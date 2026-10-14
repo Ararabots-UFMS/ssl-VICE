@@ -8,6 +8,23 @@ from strategy.skills import aproximacao, avaliacao_chute, chute, experimento, ge
 from strategy.skills import bola as skill_bola
 from strategy.tatics.goalkeeper import Goalkeeper
 
+_diag_jogo_arquivo_iniciado = False
+
+
+def _registrar_diag_jogo(linha):
+    """Mostra e guarda o diagnostico do portador no container da estrategia."""
+    global _diag_jogo_arquivo_iniciado
+    if not os.environ.get("DIAG_JOGO"):
+        return
+    print(linha, flush=True)
+    try:
+        modo = "a" if _diag_jogo_arquivo_iniciado else "w"
+        with open("/tmp/diag_jogo.log", modo, encoding="utf-8") as arquivo:
+            arquivo.write(linha + "\n")
+        _diag_jogo_arquivo_iniciado = True
+    except OSError:
+        pass
+
 
 # CONSTANTES E PREDICADOS DE CHUTE E DE BOLA: moram na CAMADA DE SKILLS.
 #
@@ -1586,10 +1603,11 @@ def montar_comandos(tt):
                           if getattr(tt, "estado", None) is not None else None)
             _dist_diag = hypot(_r_o.position_x - tt.ball.position_x,
                                _r_o.position_y - tt.ball.position_y)
-            print("[JG] MOV r%d fase=%s d_bola=%.0f alvo=%.0f,%.0f "
-                  "evita_bola=%s kick=%.1f" %
-                  (rid, _fase_diag, _dist_diag, alvo_x, alvo_y,
-                   cmd.ball, cmd.kick), flush=True)
+            _registrar_diag_jogo(
+                "[JG] MOV r%d fase=%s d_bola=%.0f alvo=%.0f,%.0f "
+                "evita_bola=%s kick=%.1f" %
+                (rid, _fase_diag, _dist_diag, alvo_x, alvo_y,
+                 cmd.ball, cmd.kick))
         comandos.append(cmd)
     return comandos
 
