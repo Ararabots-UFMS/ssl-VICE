@@ -965,6 +965,36 @@ CENARIOS = {
                      (2, 4000, 250, 180)],
         "comando": ("FORCE_START", "BLUE"),
     },
+    "nota_chute_passe": {        "tipo": "jogo",
+        "titulo": "Nota baixa: passar com receptor livre",
+        "descricao": (
+            "Cenário direcionado à decisão da skill de nota de chute. Os três "
+            "amarelos fecham a boca do gol e o azul ID 2 está adiantado, fora "
+            "do corredor do portador e com diagonal livre. Resultado esperado: "
+            "alvo do tipo passe para o ID 2; não deve escolher chute ao gol."
+        ),
+        "bola": (3600.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, 3000, 0, 0),
+                  (2, 4250, 1400, 0)],
+        "amarelos": [(0, 4300, 0, 180), (1, 4000, -250, 180),
+                     (2, 4000, 250, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
+    "nota_chute_gol": {        "tipo": "jogo",
+        "titulo": "Nota alta: chutar apesar de haver receptor",
+        "descricao": (
+            "Controle do cenário nota_chute_passe: há um receptor azul "
+            "elegível, mas o goleiro central deixa uma abertura ampla na boca "
+            "do gol. Resultado esperado: a nota supera o limiar de chute direto "
+            "e o alvo escolhido é o gol, não o companheiro. Rode com "
+            "ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro na posição."
+        ),
+        "bola": (3600.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, 3000, 0, 0),
+                  (2, 4250, 1400, 0)],
+        "amarelos": [(0, 4300, 0, 180)],
+        "comando": ("FORCE_START", "BLUE"),
+    },
 
     # NOVOS CENÁRIOS DE KICKOFF
     "kickoff_favor": {        "tipo": "kickoff",
