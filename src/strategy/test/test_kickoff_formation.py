@@ -2,8 +2,6 @@
 
 from math import hypot
 
-import pytest
-
 from strategy.tatics.kickoff import OurKickoff, TheirKickoff
 
 # The planner's centre obstacle: the 500mm circle grown by a robot radius.
@@ -37,13 +35,13 @@ def test_on_their_kickoff_everyone_keeps_out():
 
 def test_their_kickoff_play_builds_the_tactic_not_itself():
     """run() constructed TheirKickoffAction again, with arguments it does not take."""
-    pytest.importorskip("rclpy")
+    from strategy.context import GameConfig, TickContext, TreeDeps
     from strategy.plays.kickoff import TheirKickoffAction
 
-    node = TheirKickoffAction.__new__(TheirKickoffAction)
-    node.ally_robots = {0: None, 1: None, 2: None}
-    node.on_positive_half = True
+    node = TheirKickoffAction("TheirKickoffAction", TreeDeps.null())
+    context = TickContext(ally_robots={0: None, 1: None, 2: None},
+                          config=GameConfig(on_positive_half=True))
 
-    _, commands = node.run()
+    _, commands = node.run(context)
 
     assert sorted(c.robot_id for c in commands) == [0, 1, 2]

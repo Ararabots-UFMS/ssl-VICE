@@ -1,10 +1,12 @@
 """Camada de SKILLS: as acoes atomicas da estrategia.
 
-Tres camadas, e esta e a de baixo:
+Esta e a camada de baixo; as outras estao em docs/estrategia-regras.md:
 
-    plays/    quando uma jogada se aplica e quem faz o que
-    tatics/   o comportamento de um robo dentro da jogada
-    skills/   as acoes atomicas - este pacote
+    plays/      quando uma jogada se aplica
+    tatics/     a ordem das etapas dentro da jogada
+    analysis/   os fatos do ciclo, calculados uma vez
+    roles/      para onde cada robo vai, por papel
+    skills/     as acoes atomicas - este pacote
 
 REGRAS DESTA CAMADA
 -------------------
@@ -15,8 +17,8 @@ REGRAS DESTA CAMADA
 2. As constantes MEDIDAS moram junto da skill que as usa, com o numero e a
    fonte no comentario. Constante medida que aparece em dois lugares e defeito.
 3. Estado, quando inevitavel (a trava de armamento do chute), entra como
-   parametro - nunca como atributo de modulo. As taticas sao reconstruidas a
-   cada ciclo; so o dicionario 'estado' da jogada sobrevive.
+   parametro - nunca como atributo de modulo. Quem guarda e a jogada, numa
+   dataclass de memoria (ver roles/ e analysis/).
 
 O QUE AINDA NAO ESTA AQUI
 -------------------------

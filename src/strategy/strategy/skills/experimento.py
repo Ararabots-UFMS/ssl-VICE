@@ -93,6 +93,41 @@ def desligado(nome):
     return os.path.exists("/tmp/ararabots_sem_" + nome.lower())
 
 
+# Switches that turn ON something measured as worse, kept so it can be re-measured.
+#
+#   PAPEIS_FIXOS              roles fixed by id (isolates election from hysteresis)
+#   SO_POSICIONAR             carrier stops behind the ball and never pushes
+#   COM_DESTINO_LONGO         push towards the target itself (lost the ball, 09/10)
+#   COM_CHEGADA_EM_MOVIMENTO  arrive at the push point moving (lost 60%, 09/10)
+CHAVES_LIGA = ("PAPEIS_FIXOS", "SO_POSICIONAR", "COM_DESTINO_LONGO",
+               "COM_CHEGADA_EM_MOVIMENTO")
+
+
+def ligado(nome):
+    """The opt-in experiment 'nome' is ON? ARARABOTS_<nome> or /tmp/ararabots_<nome>."""
+    if nome not in CHAVES_LIGA:
+        raise ValueError("chave de experimento desconhecida: %r" % (nome,))
+    if os.environ.get("ARARABOTS_" + nome):
+        return True
+    return os.path.exists("/tmp/ararabots_" + nome.lower())
+
+
+ARQUIVO_MIRA_Y = "/tmp/ararabots_mira_y"
+
+
+def mira_y(padrao):
+    """Y do ponto de mira dentro do gol, se a campanha de chutes pediu um.
+
+    Arquivo e nao variavel de ambiente porque muda a cada tentativa, com a
+    estrategia no ar. Sem o arquivo, vale o padrao (o centro do gol).
+    """
+    try:
+        with open(ARQUIVO_MIRA_Y) as arquivo:
+            return float(arquivo.read().strip())
+    except (OSError, ValueError):
+        return padrao
+
+
 def estado():
     """Dicionario {chave: ligada?}, para o diagnostico e para o replay."""
     return {c: (not desligado(c)) for c in CHAVES}
