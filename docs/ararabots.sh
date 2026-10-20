@@ -19,6 +19,13 @@
 #                                     COND=depois ./ararabots.sh lotes -> so o
 #                                     codigo novo (o 'antes' e so linha de base)
 #                                     CENARIOS="a b" ./ararabots.sh lotes FUNC
+#      ./ararabots.sh campanha [n]    CAMPANHA DE CHUTES: n tentativas (padrao
+#                                     200) com bola e robo em posicoes
+#                                     aleatorias -> docs/campanha/tentativas.csv,
+#                                     graficos/ e resumo.md. Retoma de onde parou.
+#                                     SEED=2 BLOCO=25 ./ararabots.sh campanha 500
+#                                     argumentos extras vao para o
+#                                     campanha_chute.py (--miras 0, --inimigos 2)
 #      ./ararabots.sh ajustes on|off|status [tracker|filtro|tudo]
 #                                     correcoes fora de src/strategy/ que ainda
 #                                     sao EXPERIMENTAIS (as duas de src/vision/)
@@ -2218,7 +2225,58 @@ PY
 # ==============================================================================
 #  Despachante
 # ==============================================================================
-uso() { sed -n '2,40p' "$0"; }
+# ============================================================================
+# CAMPANHA DE CHUTES: posicoes aleatorias, uma linha de CSV por tentativa.
+#
+# O 'validar' relanca a cadeia inteira a cada repeticao (~1 min). Aqui ela sobe
+# uma vez por BLOCO e o campanha_chute.py so teleporta entre as tentativas, que
+# passam a custar segundos. O bloco existe para o estado nao envelhecer: a cada
+# BLOCO tentativas a cadeia e relancada do zero.
+cmd_campanha() {
+    local total="${1:-200}"
+    shift 2>/dev/null || true
+    local bloco="${BLOCO:-25}" seed="${SEED:-1}"
+    local pasta="$SCRIPT_DIR/campanha" csv="$SCRIPT_DIR/campanha/tentativas.csv"
+    local feitas antes falhas=0
+
+    if [ -z "$(docker ps -q -f name=^vice$)" ] || ! pgrep -f "[g]rSim" >/dev/null; then
+        echo ">> o ambiente nao esta de pe; subindo headless"
+        cmd_preparar --headless || return 1
+    fi
+
+    _campanha_feitas() {
+        [ -f "$csv" ] || { echo 0; return; }
+        awk -F, -v s="$seed" 'NR > 1 && $2 == s && $14 != "ERRO"' "$csv" | wc -l
+    }
+
+    while :; do
+        feitas="$(_campanha_feitas)"
+        [ "$feitas" -ge "$total" ] && break
+        echo "############ campanha: $feitas de $total (seed $seed)"
+        cmd_cenario portador_alinhado >/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            falhas=$((falhas + 1))
+            echo "   ! a cadeia nao ficou pronta: $(cat "$MOTIVO_BLOQUEIO" 2>/dev/null) (tentativa $falhas de 3)"
+            [ "$falhas" -ge 3 ] && { echo "   XX desisto; veja ./ararabots.sh cenario portador_alinhado"; return 1; }
+            continue
+        fi
+        antes="$feitas"
+        ros_run "python3 /root/ssl-VICE/docs/campanha_chute.py --n $bloco --total $total --seed $seed $*"
+        # O container escreve como root; devolve a pasta ao usuario do host.
+        docker exec vice chown -R "$(id -u):$(id -g)" /root/ssl-VICE/docs/campanha 2>/dev/null
+        grsim_sobreviveu || echo "   !! o grSim caiu neste bloco"
+        if [ "$(_campanha_feitas)" -le "$antes" ]; then
+            falhas=$((falhas + 1))
+            [ "$falhas" -ge 3 ] && { echo "   XX tres blocos sem nenhuma tentativa valida"; return 1; }
+        else
+            falhas=0
+        fi
+    done
+    python3 "$SCRIPT_DIR/campanha_graficos.py" "$pasta"
+}
+
+
+uso() { sed -n '2,47p' "$0"; }
 
 case "${1:-menu}" in
     instalar)  shift; cmd_instalar "$@" ;;
@@ -2226,6 +2284,7 @@ case "${1:-menu}" in
     cenario)   shift; cmd_cenario  "$@" ;;
     validar)   shift; cmd_validar  "$@" ;;
     lotes)     shift; cmd_lotes    "$@" ;;
+    campanha)  shift; cmd_campanha "$@" ;;
     limpar)    shift; cmd_limpar   "$@" ;;
     grsim)     shift; cmd_grsim    "$@" ;;
     parar)     shift; cmd_parar    "$@" ;;
