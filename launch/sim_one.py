@@ -8,7 +8,8 @@ def generate_launch_description():
             Node(
                package="vision",
                executable="visionNode",
-               parameters=[{"ip": "224.5.23.2", "port": 10020}],
+               # local_only: another grSim on the network multicasts to this group too.
+               parameters=[{"ip": "224.5.23.2", "port": 10020, "local_only": True}],
             ),
             Node(
                 package="control_unit",
