@@ -980,7 +980,7 @@ CENARIOS = {
         # com a linha do passe. O teste anterior ficava em 'contornar' a
         # 500-600 mm: o planejador evitava a bola e nao alcancava este ponto.
         "azuis": [(0, -4300, 0, 0), (1, 2916, -237, 52),
-                  (2, 3800, 900, 0)],
+                  (2, 3900, 1400, 0)],
         "amarelos": [(0, 4300, 0, 180), (1, 4000, -250, 180),
                      (2, 4000, 250, 180)],
         "inimigos_parados": True,
@@ -989,15 +989,17 @@ CENARIOS = {
     "nota_chute_gol": {        "tipo": "jogo",
         "titulo": "Nota alta: chutar apesar de haver receptor",
         "descricao": (
-            "Controle do cenário nota_chute_passe: há um receptor azul "
-            "elegível, mas o goleiro central deixa uma abertura ampla na boca "
-            "do gol. Resultado esperado: a nota supera o limiar de chute direto "
-            "e o alvo escolhido é o gol, não o companheiro. Rode com "
-            "ARARABOTS_INIMIGO_PARADO=1 para manter o goleiro na posição."
+            "Mesmo posicionamento inicial de nota_chute_passe: o portador começa "
+            "alinhado no ponto de espera e há um receptor azul elegível com linha "
+            "livre. Aqui só o goleiro amarelo fica na boca do gol, abrindo um vão "
+            "amplo. Resultado esperado: a nota de chute supera o limiar direto e "
+            "a primeira ação é chutar ao gol, sem passar. Os amarelos ficam parados."
         ),
-        "bola": (3600.0, 0.0),
-        "azuis": [(0, -4300, 0, 0), (1, 3000, 0, 0),
-                  (2, 4250, 1400, 0)],
+        "bola": (3100.0, 0.0),
+        # Mesma largada alinhada e mesmo receptor do controle de passe; só a
+        # cobertura amarela muda para deixar o gol aberto.
+        "azuis": [(0, -4300, 0, 0), (1, 2916, -237, 52),
+                  (2, 3900, 1400, 0)],
         "amarelos": [(0, 4300, 0, 180)],
         "inimigos_parados": True,
         "comando": ("FORCE_START", "BLUE"),

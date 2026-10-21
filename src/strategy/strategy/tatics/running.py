@@ -157,6 +157,57 @@ def _dist_bola(robo, ball):
                  robo.position_y - ball.position_y)
 
 
+def _atualizar_recepcao_passe(ally_robots, ball, estado):
+    """Confirma recepcao por geometria e transfere o papel do portador.
+
+    GameState nao carrega o infravermelho do grSim/robo. Usamos tres evidencias:
+    a bola saiu do ponto inicial do passe, o receptor entrou no raio de posse e
+    ficou mais perto dela que o passador. Dois ciclos filtram cruzamentos.
+    """
+    if estado is None:
+        return False
+    alvo = estado.get("alvo_passe")
+    origem = estado.get("passe_origem")
+    if alvo is None or origem is None:
+        return False
+
+    rid_receptor = alvo[2]
+    bx0, by0, rid_passador = origem
+    receptor = ally_robots.get(rid_receptor)
+    passador = ally_robots.get(rid_passador)
+    if receptor is None or passador is None:
+        estado["passe_recepcao_ciclos"] = 0
+        return False
+
+    deslocamento = hypot(ball.position_x - bx0, ball.position_y - by0)
+    d_receptor = _dist_bola(receptor, ball)
+    d_passador = _dist_bola(passador, ball)
+    recebeu = (deslocamento >= 300.0
+               and d_receptor <= RAIO_POSSE
+               and d_receptor + 25.0 < d_passador)
+    estado["passe_recepcao_ciclos"] = (
+        estado.get("passe_recepcao_ciclos", 0) + 1 if recebeu else 0)
+    if estado["passe_recepcao_ciclos"] < 2:
+        return False
+
+    if os.environ.get("DIAG_JOGO"):
+        _registrar_diag_jogo(
+            "[JG] PASSE_RECEBIDO rid=%d passador=%d d_receptor=%.0f "
+            "d_passador=%.0f deslocamento=%.0f"
+            % (rid_receptor, rid_passador, d_receptor, d_passador, deslocamento))
+
+    # A proxima decisao pertence a quem recebeu. A histerese mantem esse robo
+    # como portador enquanto ele assume a bola, mesmo se o passador estiver perto.
+    estado["portador"] = rid_receptor
+    estado["portador_ciclos"] = 0
+    for chave in ("alvo_passe", "passe_origem", "passe_recepcao_ciclos",
+                  "mira_tipo", "mira_ponto", "mira_ciclos", "mira_crua",
+                  "mira_segurada"):
+        estado.pop(chave, None)
+    estado["chute_armado"] = {}
+    return True
+
+
 def distribuir_papeis(ally_robots, ball, situacao, estado=None, sentido=1.0):
     """Quem vai a bola, quem apoia, quem cobre. SEMPRE os tres papeis.
 
@@ -545,11 +596,13 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
     bx, by = ball.position_x, ball.position_y
     gol_x, gol_y, nota_gol = avaliacao_chute.melhor_alvo(
         ball, gol_ataque, enemy_robots)
-    if nota_gol > avaliacao_chute.NOTA_CHUTE_DIRETO:
-        if estado is not None:
-            estado.pop("alvo_passe", None)
-        return gol_x, gol_y, "gol"
-
+    if os.environ.get("DIAG_JOGO"):
+        _registrar_diag_jogo(
+            "[JG] NOTA_CHUTE bola=%.0f,%.0f nota=%.3f "
+            "limiar_direto=%.3f limiar_baixa=%.3f amostras=%d inimigos=%d"
+            % (bx, by, nota_gol, avaliacao_chute.NOTA_CHUTE_DIRETO,
+               avaliacao_chute.NOTA_CHUTE_BAIXA_CHANCE,
+               avaliacao_chute.AMOSTRAS_ANGULARES, len(enemy_robots or {})))
     # PASSE COM ALVO CONGELADO.
     #
     # BUG QUE ISTO CORRIGE, e era o que impedia a angulacao: o alvo do passe e
@@ -591,12 +644,60 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
         if congelado is not None:
             rid_c = congelado[2]
             atual = ally_robots.get(rid_c)
-            if (atual is not None and papeis.get(rid_c) in (PAPEL_APOIO, PAPEL_COBERTURA)
-                    and posicionamento.pode_receber(atual, bx, by, gol_ataque)
-                    and linha_livre(bx, by, atual.position_x, atual.position_y,
-                                    enemy_robots)):
+            papel_c = papeis.get(rid_c)
+            # O passe pode estar em voo. Medir o avanco a partir da bola
+            # atual faz o receptor parecer "atras" conforme a bola percorre
+            # a diagonal ate ele, cancelando a jogada antes da recepcao.
+            # A guarda de retencao deve usar a origem, como na decisao inicial.
+            origem_passe = estado.get("passe_origem")
+            bx_origem, by_origem = (origem_passe[:2] if origem_passe is not None
+                                    else (bx, by))
+            avanco_c = (posicionamento.a_frente_da_bola(
+                atual, bx_origem, by_origem, gol_ataque)
+                if atual is not None else None)
+            papel_ok = papel_c in (PAPEL_APOIO, PAPEL_COBERTURA)
+            # A entrada exige 600 mm de avanco. Depois de escolhido, o passe
+            # sobrevive enquanto o receptor continuar a frente da origem da
+            # jogada. A linha segue validada contra a posicao real do receptor.
+            avanco_ok = (atual is not None and avanco_c is not None
+                         and avanco_c >= AVANCO_MINIMO_RETENCAO_PASSE)
+            linha_ok = (linha_livre(bx, by, atual.position_x, atual.position_y,
+                                    enemy_robots) if atual is not None else False)
+            if atual is not None and papel_ok and avanco_ok and linha_ok:
                 return congelado[0], congelado[1], "passe"
+            if os.environ.get("DIAG_JOGO"):
+                causas = []
+                if atual is None:
+                    causas.append("receptor_ausente")
+                if atual is not None and not papel_ok:
+                    causas.append("papel_invalido")
+                if atual is not None and not avanco_ok:
+                    causas.append("avanco_insuficiente")
+                if atual is not None and not linha_ok:
+                    causas.append("linha_fechada")
+                _registrar_diag_jogo(
+                    "[JG] PASSE_INVALIDADO rid=%s papel=%s pos=%s avanco=%s "
+                    "minimo=%.0f linha_livre=%s causa=%s"
+                    % (rid_c, papel_c,
+                       ("%.0f,%.0f" % (atual.position_x, atual.position_y)
+                        if atual is not None else "ausente"),
+                       ("%.0f" % avanco_c if avanco_c is not None else "n/a"),
+                       AVANCO_MINIMO_RETENCAO_PASSE, linha_ok,
+                       "+".join(causas)))
             estado.pop("alvo_passe", None)
+            estado.pop("passe_origem", None)
+            estado.pop("passe_recepcao_ciclos", None)
+
+    # Uma vez escolhido, o passe tem prioridade sobre uma melhora posterior
+    # da nota de chute: a bola pode abrir o gol enquanto o portador se alinha,
+    # mas isso nao deve trocar o alvo no meio da mesma jogada. Se o passe
+    # congelado foi invalidado acima, a decisao direta volta a valer.
+    if nota_gol > avaliacao_chute.NOTA_CHUTE_DIRETO:
+        if estado is not None:
+            estado.pop("alvo_passe", None)
+            estado.pop("passe_origem", None)
+            estado.pop("passe_recepcao_ciclos", None)
+        return gol_x, gol_y, "gol"
 
     for rid, papel in papeis.items():
         if papel != PAPEL_APOIO or rid not in ally_robots:
@@ -606,6 +707,15 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
                 and linha_livre(bx, by, a.position_x, a.position_y, enemy_robots)):
             if estado is not None:
                 estado["alvo_passe"] = (a.position_x, a.position_y, rid)
+                rid_portador = next((r for r, p in papeis.items()
+                                     if p == PAPEL_PORTADOR), None)
+                estado["passe_origem"] = (bx, by, rid_portador)
+                estado["passe_recepcao_ciclos"] = 0
+                if os.environ.get("DIAG_JOGO"):
+                    _registrar_diag_jogo(
+                        "[JG] PASSE_ALVO_FIXO rid=%d pos=%.0f,%.0f avanco=%.0f"
+                        % (rid, a.position_x, a.position_y,
+                           posicionamento.a_frente_da_bola(a, bx, by, gol_ataque)))
             return a.position_x, a.position_y, "passe"
 
     # Sem robo PAPEL_APOIO, o zagueiro (COBERTURA) pode receber o passe.
@@ -618,12 +728,23 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
                 and linha_livre(bx, by, a.position_x, a.position_y, enemy_robots)):
             if estado is not None:
                 estado["alvo_passe"] = (a.position_x, a.position_y, rid)
+                rid_portador = next((r for r, p in papeis.items()
+                                     if p == PAPEL_PORTADOR), None)
+                estado["passe_origem"] = (bx, by, rid_portador)
+                estado["passe_recepcao_ciclos"] = 0
+                if os.environ.get("DIAG_JOGO"):
+                    _registrar_diag_jogo(
+                        "[JG] PASSE_ALVO_FIXO rid=%d pos=%.0f,%.0f avanco=%.0f"
+                        % (rid, a.position_x, a.position_y,
+                           posicionamento.a_frente_da_bola(a, bx, by, gol_ataque)))
             return a.position_x, a.position_y, "passe"
 
     # Sem passe viavel, ainda tenta o maior vao quando a nota e baixa, mas nao nula.
     if nota_gol > avaliacao_chute.NOTA_CHUTE_BAIXA_CHANCE:
         if estado is not None:
             estado.pop("alvo_passe", None)
+            estado.pop("passe_origem", None)
+            estado.pop("passe_recepcao_ciclos", None)
         return gol_x, gol_y, "gol"
     return None, None, "bloqueado"
 
@@ -635,6 +756,11 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
 # usa. O racional medido de cada uma esta la; aqui fica so o nome, porque
 # constante medida escrita em dois lugares e defeito esperando acontecer.
 AVANCO_MINIMO_PASSE = posicionamento.AVANCO_MINIMO_PASSE
+# Depois de escolhido, o passe fica congelado enquanto o receptor continuar
+# a frente da bola. O teste mostrou que a bola avanca durante o alinhamento e
+# reduz o avanco relativo do receptor de 800 para 253 mm, embora ele quase nao
+# se mova. A escolha inicial ainda exige AVANCO_MINIMO_PASSE (600 mm).
+AVANCO_MINIMO_RETENCAO_PASSE = 0.0
 APOIO_RECUO = posicionamento.APOIO_RECUO
 APOIO_AVANCO = posicionamento.APOIO_AVANCO
 APOIO_ABERTURA = posicionamento.APOIO_ABERTURA
@@ -1144,6 +1270,8 @@ def montar_comandos(tt):
     rodava (DefenseAction instanciava Atack). Uma logica so evita que elas
     divirjam de novo.
     """
+    _atualizar_recepcao_passe(tt.ally_robots, tt.ball,
+                              getattr(tt, "estado", None))
     situacao = situacao_de_jogo(tt.ally_robots, tt.enemy_robots, tt.ball)
     papeis = distribuir_papeis(tt.ally_robots, tt.ball, situacao,
                                getattr(tt, "estado", None),
@@ -1407,7 +1535,10 @@ def montar_comandos(tt):
             _r_o, tt.ball, alvo_chute, tipo_alvo, _sentido_x, _travas, rid,
             (gol_ataque.x, gol_ataque.y),
             so_lado_certo=not experimento.desligado("ORIENTACAO_LADO"),
-            pode_armar=not _mira_emprestada,
+            # A decisao de alvo e a permissao para disparar precisam concordar:
+            # o receptor/cobertura pode mirar e ficar parado, mas nao dispara.
+            # So o papel que devolveu chuta=True pode acionar o kick.
+            pode_armar=chuta and not _mira_emprestada,
             # A fase vale para o PORTADOR: e ele que contorna. Os outros papeis
             # seguem a regra de lado de sempre.
             exigir_corpo_alinhado=not experimento.desligado("DISPARO_ALINHADO"),
@@ -1604,11 +1735,10 @@ def montar_comandos(tt):
             _dist_diag = hypot(_r_o.position_x - tt.ball.position_x,
                                _r_o.position_y - tt.ball.position_y)
             _registrar_diag_jogo(
-                "[JG] MOV r%d fase=%s tipo=%s receptor=%s d_bola=%.0f "
-                "alvo=%.0f,%.0f evita_bola=%s kick=%.1f" %
-                (rid, _fase_diag, tipo_alvo,
-                 (tt.estado or {}).get("alvo_passe", (None, None, None))[2],
-                 _dist_diag, alvo_x, alvo_y, cmd.ball, cmd.kick))
+                "[JG] PLACA r%d papel=%s xx=%.0f yy=%.0f arma=%s dispara=%s"
+                % (rid, papel, _xx, _yy, arma,
+                chute.na_janela_de_disparo(_xx, _yy))
+            )
         comandos.append(cmd)
     return comandos
 
