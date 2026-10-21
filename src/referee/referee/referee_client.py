@@ -1,5 +1,6 @@
 import socket
 import struct
+import os
 
 class RefereeClient:
     """Client that handles the UDP multicast communication for SSL referee messages.
@@ -12,6 +13,7 @@ class RefereeClient:
         self.ip = ip
         self.port = port
         self.buffer_size = buffer_size
+        self.allowed_source_ip = os.environ.get("ARARABOTS_SIM_SOURCE_IP") or None
         self.sock = None
 
     def connect(self, interface_ip: str | None = None):
@@ -39,8 +41,10 @@ class RefereeClient:
     def receive(self):
         """Receive a message from the multicast group and return it as raw data."""
         try:
-            data, addr = self.sock.recvfrom(self.buffer_size)
-            return data, addr
+            while True:
+                data, addr = self.sock.recvfrom(self.buffer_size)
+                if not self.allowed_source_ip or addr[0] == self.allowed_source_ip:
+                    return data, addr
         except socket.timeout:
             return None
         except Exception as e:

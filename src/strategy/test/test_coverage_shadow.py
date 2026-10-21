@@ -1,4 +1,4 @@
-from math import hypot, pi
+from math import atan2, hypot, pi
 from types import SimpleNamespace as S
 
 import pytest
@@ -6,7 +6,10 @@ import pytest
 from strategy import diagnostico
 from strategy.analysis.alvo_chute import AlvoChute
 from strategy.context import GameConfig, TickContext
-from strategy.roles.atribuicao import PAPEL_COBERTURA
+from strategy.analysis.jogo import AnaliseJogo
+from strategy.analysis.mundo import Mundo
+from strategy.roles.atribuicao import PAPEL_COBERTURA, PAPEL_PORTADOR
+from strategy.roles.cobertura import _passe_da_sombra
 from strategy.skills import chute, posicionamento
 from strategy.tatics.running import JogoCorrido
 
@@ -246,9 +249,57 @@ def test_cobertura_arma_chute_na_posicao_travada_do_replay(monkeypatch):
 
     cmd = tt.comandos()[0]
 
-    assert cmd.kick > 0
+    assert cmd.kick == 0
+    r.orientation = cmd.angle
+    alinhado = tt.comandos()[0]
+    assert alinhado.kick > 0
     assert not cmd.ball
     assert cmd.target_x > r.position_x
+
+
+def test_zagueiro_passa_para_cobertura_sem_mudar_trajetoria(monkeypatch):
+    monkeypatch.setenv("ARARABOTS_FORCAR_COBERTURA", "1")
+    ball = robo(-2600.0)
+    chutador = robo(-2720.0)
+
+    def comando(aliados):
+        return {c.robot_id: c for c in Jogo(aliados, ball, False).comandos()}[1]
+
+    sozinho = comando({1: chutador})
+    com_receptor = comando({1: chutador, 2: robo(-1200.0, 200.0)})
+
+    assert (com_receptor.target_x, com_receptor.target_y) == (
+        sozinho.target_x, sozinho.target_y)
+    assert com_receptor.defensive_half == -1
+    assert not com_receptor.ball
+    assert com_receptor.angle == pytest.approx(atan2(200.0, 1400.0))
+    assert com_receptor.kick == chute.FORCA_PASSE
+    assert sozinho.angle == pytest.approx(0.0)
+    assert sozinho.kick == chute.FORCA_CHUTE
+
+
+def test_mira_zagueiro_prioriza_portador_e_rejeita_passe_lateral():
+    ball = robo(-2600.0)
+    aliados = {1: robo(-2720.0), 2: robo(-1200.0, 100.0),
+               3: robo(-1100.0, 200.0)}
+    papeis = {1: PAPEL_COBERTURA, 2: PAPEL_COBERTURA, 3: PAPEL_PORTADOR}
+    gol = S(x=4500.0, y=0.0)
+
+    def mira():
+        mundo = Mundo(aliados=aliados, inimigos={}, bola=ball, on_positive_half=False,
+                      nosso_gol=S(x=-4500.0, y=0.0), gol_ataque=gol, situacao="SOLTA")
+        a = AnaliseJogo(mundo=mundo, papeis=papeis,
+                        alvo=AlvoChute(ponto=None, tipo="bloqueado", emprestada=False,
+                                       receptor=None))
+        return _passe_da_sombra(a, 1, -1.0, 0.0)
+
+    alvo, tipo = mira()
+    assert (alvo, tipo) == ((-1100.0, 200.0), "passe")
+
+    aliados[3].position_y = 1000.0
+    aliados[2].position_y = 1000.0
+    alvo, tipo = mira()
+    assert (alvo, tipo) == ((4500.0, 0.0), "gol")
 
 
 @pytest.mark.parametrize("side", [-1, 1])

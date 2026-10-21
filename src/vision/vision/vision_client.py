@@ -1,6 +1,7 @@
 import socket
 import struct
 import logging
+import os
 from typing import Optional
 from rclpy.logging import get_logger
 
@@ -26,6 +27,7 @@ class Client:
         self.port = port
         self.interface_ip = interface_ip or ""
         self.timeout = timeout
+        self.allowed_source_ip = os.environ.get("ARARABOTS_SIM_SOURCE_IP") or None
         self.sock: Optional[socket.socket] = None
         self.logger = logger or logging.getLogger(__name__)
         self.local_only = local_only
@@ -107,7 +109,8 @@ class Client:
                 self.logger.warning(f"Socket error: {e}")
                 return None
             # A foreign packet is skipped, not returned as None: None means "empty".
-            if not self.local_only or self._from_this_machine(source[0]):
+            if ((not self.local_only or self._from_this_machine(source[0]))
+                    and (not self.allowed_source_ip or source[0] == self.allowed_source_ip)):
                 break
 
         # Parse the protobuf message from the received data

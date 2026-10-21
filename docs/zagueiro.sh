@@ -7,6 +7,11 @@ source "$ZAGUEIRO_SCRIPT_DIR/ararabots.sh"
 export ARARABOTS_FORCAR_COBERTURA=1
 export ARARABOTS_SO_NOSSOS=1
 export ARARABOTS_ROBOS=2
+# Os nodes do teste vivem todos nesta maquina. O ROS e os multicasts da rede
+# compartilhada podem trazer outro jogo para dentro do cenario.
+export ROS_LOCALHOST_ONLY=1
+ARARABOTS_SIM_SOURCE_IP="$(python3 -c 'import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(("224.5.23.2", 10020)); print(s.getsockname()[0]); s.close()')" || exit 1
+export ARARABOTS_SIM_SOURCE_IP
 
 selecionar_categoria() {
   case "$1" in

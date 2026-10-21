@@ -1,5 +1,5 @@
 from strategy.skills.skills import Skills
-from strategy.skills import geometria, posicionamento
+from strategy.skills import chute, geometria, posicionamento
 from strategy.skills.bola import prever_direcao_chute, cruzamento_da_bola, GOL_MEIA_LARGURA
 from utils.math_util import Vector2D
 from math import atan2, hypot
@@ -356,7 +356,9 @@ class Goalkeeper:
         )
         robot_command.field_border = True
         robot_command.ally_ids = []
-        if pronto and forca is not None:
+        # Positioned behind the ball is not enough: the body must point at the target.
+        if (pronto and forca is not None
+                and chute.alinhado_ao_alvo(self.gk, self.ball, (ax, ay))):
             robot_command.kick = forca
         else:
             try:

@@ -87,10 +87,13 @@ a linha de passe está livre), ele vira campo da análise. Um papel nunca chama
 | `fase()` | `None` | fase entregue à trava de chute (`chute.chutar_em`) |
 | `velocidade_chegada(a, rid, x, y)` | `(0, 0)` | chegar em movimento em vez de parar |
 | `evita_bola(a, rid)` | `True` | planejador contorna a bola |
+| `mira(a, rid)` | a mira da análise | alvo, tipo e se pode armar o chute *deste* robô (o zagueiro usa para afastar da sombra) |
+| `metade_defensiva(a, rid)` | `0` | `+1`/`-1`: o planejador mantém o robô naquela metade (`defensive_half`) |
 | `diagnosticar(a, rid, cmd)` | nada | linhas extras com `DIAG_JOGO=1` |
 
-O resto — orientação, armar o chute, força, bandeiras de obstáculo — é **igual
-para todo papel** e mora em `Papel.comando`. Não sobrescreva `comando` (o goleiro
+O resto — orientação, armar o chute, força, bandeiras de obstáculo, e manter o
+alvo fora da nossa área penal — é **igual para todo papel** e mora em
+`Papel.comando`. Não sobrescreva `comando` (o goleiro
 é a exceção documentada, porque tem regra própria de chute e área).
 
 **R6 — Papéis são entregues em um lugar só: `roles/atribuicao.py`.** Todo nome

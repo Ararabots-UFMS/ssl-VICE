@@ -2466,11 +2466,17 @@ class OurFreekick(_BaseFreekick):
                 else:
                     alvo_x, alvo_y = self._posicao_de_apoio(ordem_apoio)
                     ordem_apoio += 1
+                perto_da_bola = self._dist_ate_bola(rid) <= DIST_RECEPCAO
+                alvo_recepcao = (self.attack_goal.x, self.attack_goal.y)
+                ang_recepcao = (atan2(self.attack_goal.y - self.ball.position_y,
+                                      self.attack_goal.x - self.ball.position_x)
+                                if perto_da_bola else
+                                atan2(self.ball.position_y - alvo_y,
+                                      self.ball.position_x - alvo_x))
                 cmd = self.skills_factory.move_with_angle(
                     robot_id=rid, target_x=alvo_x, target_y=alvo_y,
                     vel_x=0.0, vel_y=0.0,
-                    angle=atan2(self.ball.position_y - alvo_y,
-                                self.ball.position_x - alvo_x),
+                    angle=ang_recepcao,
                 )
                 self._obstaculos(cmd, rid, evitar_bola=True)
 
@@ -2483,10 +2489,10 @@ class OurFreekick(_BaseFreekick):
                 # sempre que a bola esta ao alcance: se o disparo acontecer, a
                 # bola chegou de verdade.
                 #
-                # A direcao nao importa e nao e escolhida: o corpo ja aponta para
-                # a bola porque e assim que o apoio se posiciona. O objetivo aqui
-                # e medir, nao finalizar.
-                if self._dist_ate_bola(rid) <= DIST_RECEPCAO:
+                # Perto da bola, o receptor aponta ao gol e so arma depois
+                # que sua orientacao medida acompanha essa mira.
+                if (perto_da_bola and skill_chute.alinhado_ao_alvo(
+                        self.ally_robots[rid], self.ball, alvo_recepcao)):
                     cmd.kick = FORCA_RECEPCAO
                 else:
                     cmd.deactivate_kick()
