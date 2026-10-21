@@ -70,6 +70,17 @@ def test_set_static_obstacles(manager):
     assert manager._static_obstacles == {'border_area': True, 'center_area': False}
 
 
+@pytest.mark.parametrize('side', [-1, 0, 1])
+def test_defensive_half_survives_target_conversion(manager, test_robot, side):
+    cmd = _make_command(1, (side * 1000, 0))
+    cmd.planning_options.defensive_half = side
+    manager._robots = [test_robot]
+    manager._movement_commands = [cmd]
+    target = manager._build_target_array().targets[0]
+    assert target.planning_options.defensive_half == side
+    assert cmd.planning_options.defensive_half == side
+
+
 def test_set_goal_keeper(manager):
     request = MagicMock()
     request.robot_id = 3

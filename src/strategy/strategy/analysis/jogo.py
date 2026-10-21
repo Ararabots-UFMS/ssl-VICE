@@ -7,7 +7,7 @@ from strategy import diagnostico
 from strategy.analysis.alvo_chute import AlvoChute, MemoriaMira, alvo_do_chute
 from strategy.analysis.mundo import Mundo, analisar_mundo
 from strategy.context import TickContext
-from strategy.roles.atribuicao import MemoriaPapeis, distribuir_papeis
+from strategy.roles.atribuicao import MemoriaPapeis, distribuir_papeis, eleger_buscador
 from strategy.skills import experimento
 
 
@@ -24,6 +24,8 @@ class AnaliseJogo:
     mundo: Mundo
     papeis: Dict[int, str]
     alvo: AlvoChute
+    # With no carrier assigned, the defender that goes for the ball.
+    buscador: Optional[int] = None
 
     # Shortcuts for the fields every role reads.
     @property
@@ -42,6 +44,7 @@ class AnaliseJogo:
 def analisar(context: TickContext, memoria: MemoriaAnalise) -> AnaliseJogo:
     mundo = analisar_mundo(context)
     papeis = distribuir_papeis(mundo, memoria.papeis)
+    diagnostico.publicar_papeis(papeis)
     if diagnostico.ativo():
         diagnostico.log("[JG] chaves=%s" % experimento.estado())
         diagnostico.log("[JG] situacao=%s papeis=%s" % (mundo.situacao, papeis))
@@ -49,4 +52,5 @@ def analisar(context: TickContext, memoria: MemoriaAnalise) -> AnaliseJogo:
                         % (mundo.on_positive_half, mundo.gol_ataque.x, mundo.nosso_gol.x,
                            mundo.bola.position_x, mundo.bola.position_y))
     alvo = alvo_do_chute(mundo, papeis, memoria.mira)
-    return AnaliseJogo(mundo=mundo, papeis=papeis, alvo=alvo)
+    return AnaliseJogo(mundo=mundo, papeis=papeis, alvo=alvo,
+                       buscador=eleger_buscador(mundo, papeis))

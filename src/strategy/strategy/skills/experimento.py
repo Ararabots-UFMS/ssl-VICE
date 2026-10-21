@@ -84,11 +84,16 @@ CHAVES = ("ORIENTACAO_LADO", "ORBITA", "PROTECAO", "PRESSAO_BOLA",
           "CHEGADA_ALINHADA", "PARAR_E_MIRAR")
 
 
+def _ligada(valor):
+    """An environment switch is on unless unset, empty or '0'."""
+    return valor not in (None, "", "0")
+
+
 def desligado(nome):
     """A modificacao 'nome' esta DESLIGADA (isto e, vale o codigo antigo)?"""
     if nome not in CHAVES:                      # erro de digitacao nao passa calado
         raise ValueError("chave de experimento desconhecida: %r" % (nome,))
-    if os.environ.get("ARARABOTS_SEM_" + nome):
+    if _ligada(os.environ.get("ARARABOTS_SEM_" + nome)):
         return True
     return os.path.exists("/tmp/ararabots_sem_" + nome.lower())
 
@@ -99,15 +104,17 @@ def desligado(nome):
 #   SO_POSICIONAR             carrier stops behind the ball and never pushes
 #   COM_DESTINO_LONGO         push towards the target itself (lost the ball, 09/10)
 #   COM_CHEGADA_EM_MOVIMENTO  arrive at the push point moving (lost 60%, 09/10)
+#   FORCAR_COBERTURA          every field robot defends, to test the defender
+#                             alone (docs/zagueiro.sh)
 CHAVES_LIGA = ("PAPEIS_FIXOS", "SO_POSICIONAR", "COM_DESTINO_LONGO",
-               "COM_CHEGADA_EM_MOVIMENTO")
+               "COM_CHEGADA_EM_MOVIMENTO", "FORCAR_COBERTURA")
 
 
 def ligado(nome):
     """The opt-in experiment 'nome' is ON? ARARABOTS_<nome> or /tmp/ararabots_<nome>."""
     if nome not in CHAVES_LIGA:
         raise ValueError("chave de experimento desconhecida: %r" % (nome,))
-    if os.environ.get("ARARABOTS_" + nome):
+    if _ligada(os.environ.get("ARARABOTS_" + nome)):
         return True
     return os.path.exists("/tmp/ararabots_" + nome.lower())
 

@@ -88,6 +88,7 @@ class MovementManager(Node):
             options.avoid_ball = cmd.planning_options.avoid_ball
             options.aggressiveness = cmd.planning_options.aggressiveness
             options.avoid_center_area = cmd.planning_options.avoid_center_area
+            options.defensive_half = cmd.planning_options.defensive_half
 
             # The team-wide switch adds the centre circle; it never cancels a robot's own
             # request. Strategy sets it False at start-up, which did exactly that.

@@ -29,8 +29,8 @@ AS DUAS LICOES QUE ESTE MODULO CARREGA, ambas pagas em lote de teste:
 
 from math import atan2, cos, hypot, pi, sin
 
-from strategy.skills.bola import onde_a_bola_vai
-from strategy.skills.geometria import no_campo, norm_ang
+from strategy.skills.bola import onde_a_bola_vai, velocidade
+from strategy.skills.geometria import no_campo, norm_ang, tempo_de_chegada
 
 # Onde o CENTRO do robo precisa estar para a bola cair na placa: 73 (placa) + 21
 # (raio da bola). Medido nos replays: chegamos a 95 e 99 mm, dentro da janela,
@@ -90,6 +90,90 @@ TOL_EMPURRAO = 0.80
 # Avanco alem da bola/ponto de interceptacao, por situacao.
 AVANCO_PORTADOR = 500.0
 AVANCO_SOLTA = 1600.0
+
+# Ate quanto tempo no futuro vale procurar um ponto de bloqueio. Acima disso a
+# bola ja teria atravessado o campo inteiro (9000 mm a 900 mm/s = 10s, mas um
+# chute de verdade e muito mais rapido - ver skills/bola.py).
+HORIZONTE_BLOQUEIO = 2.0  # s
+PASSO_BLOQUEIO = 0.05     # s
+
+# Teto de velocidade PLAUSIVEL para a bola. Acima disto e ruido do filtro, nao
+# chute real.
+#
+# MEDIDO (e e por isso que isto existe): num teleporte de cenario de teste, a
+# bola salta de posicao e o Kalman que alimenta /game_state interpreta o salto
+# como velocidade - vimos leitura de ate 28000 mm/s por uma fracao de segundo,
+# contra um chute real de ~5900 mm/s no maximo documentado (skills/chute.py).
+# Sem o teto, essa leitura extrapola um alvo a centenas de mm da trajetoria
+# real - foi o que mandou a cobertura para y>1000 enquanto a bola ia por
+# y<450. So acontece em teleporte: num jogo de verdade a bola nunca salta de
+# posicao, mas o teto fica porque QUALQUER filtro pode ter um pico de ruido, e
+# o custo de errar para o lado conservador (cair para 'cobertura_na_linha') e
+# bem menor que o de confiar cegamente num numero absurdo.
+VELOCIDADE_BOLA_MAX_PLAUSIVEL = 6500.0  # mm/s
+
+
+def ponto_de_bloqueio_a_tempo(rx, ry, ball, nosso_gol,
+                              horizonte=HORIZONTE_BLOQUEIO,
+                              passo=PASSO_BLOQUEIO):
+    """Ponto na trajetoria da bola que o robo alcanca ANTES (ou junto) dela.
+
+    POR QUE ISTO PRECISOU EXISTIR
+    ------------------------------
+    'posicionamento.cobertura_na_linha' planta o robo numa FRACAO FIXA do
+    caminho bola->nosso-gol, pela posicao ATUAL da bola - nunca pela
+    velocidade dela. O ponto pode estar geometricamente certo e ainda assim
+    ser inalcancavel a tempo, porque o robo tambem gasta tempo para chegar
+    la.
+
+    MEDIDO no cenario 'cobertura_chute_longe' (bola a 1900-6000 mm/s vinda do
+    meio-campo, ninguem nosso sobre a linha de tiro): com a fracao fixa,
+    4 a 5 de 6 execucoes terminam em GOL CONTRA, sem relacao clara entre
+    velocidade da bola e resultado - o padrao esperado de uma defesa que
+    acerta por coincidencia geometrica, nao por calculo.
+
+    O QUE FAZ: varre a trajetoria prevista da bola (posicao + velocidade
+    constante - ela nao tem motor, so desacelera, e desprezar isso so torna a
+    estimativa mais conservadora) em passos de tempo, e devolve o PRIMEIRO
+    ponto em que o 'tempo_de_chegada' do robo e <= o tempo da bola chegar la.
+    E o ponto mais proximo da bola - logo, o mais cedo - que o robo ainda
+    alcanca a tempo.
+
+    DUAS GUARDAS, as duas para nao desviar a cobertura atras de bola que nao
+    ameaca:
+      - bola abaixo do limiar de 'chutada' (ver skills/bola.py): devolve None,
+        nao ha o que interceptar por tempo numa bola rolando devagar.
+      - velocidade nao aponta para o NOSSO gol: devolve None. Sem isso, uma
+        bola saindo de perto (ex: o proprio reposicionamento dela num cenario
+        de teste) faz a cobertura correr atras de um alvo que nao e ameaca.
+
+    Devolve None se nenhuma das duas guardas passar, OU se nenhum ponto do
+    horizonte e alcancavel - quem chama entao cai para 'cobertura_na_linha'.
+    """
+    vx, vy = velocidade(ball)
+    speed = hypot(vx, vy)
+    if speed < 1.0:
+        return None
+    if speed > VELOCIDADE_BOLA_MAX_PLAUSIVEL:
+        escala = VELOCIDADE_BOLA_MAX_PLAUSIVEL / speed
+        vx, vy, speed = vx * escala, vy * escala, VELOCIDADE_BOLA_MAX_PLAUSIVEL
+
+    bx, by = ball.position_x, ball.position_y
+    dist_agora = hypot(bx - nosso_gol.x, by - nosso_gol.y)
+    # a bola precisa estar se aproximando do NOSSO gol, nao so se movendo
+    aproximando = (vx * (nosso_gol.x - bx) + vy * (nosso_gol.y - by)) > 0
+    if not aproximando:
+        return None
+
+    t = passo
+    while t <= horizonte:
+        bx_t, by_t = bx + vx * t, by + vy * t
+        if hypot(bx_t - nosso_gol.x, by_t - nosso_gol.y) >= dist_agora:
+            break  # a bola ja passou do ponto mais proximo do gol - sem sentido seguir
+        if tempo_de_chegada(rx, ry, bx_t, by_t) <= t:
+            return no_campo(bx_t, by_t)
+        t += passo
+    return None
 
 # --- contorno em orbita: pegar a bola POR TRAS quando ela esta atras de nos ---
 #

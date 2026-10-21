@@ -70,3 +70,7 @@ class Apoio(Papel):
         if a.tipo_alvo == "bloqueado":
             return posicionamento.recuo_de_apoio(bx, by, uax, uay, pax, pay, lado)
         return posicionamento.oferta_de_passe(bx, by, uax, uay, pax, pay, lado)
+
+    def evita_bola(self, a: AnaliseJogo, rid: int) -> bool:
+        # Any robot may touch the ball; for the support it is never a route obstacle.
+        return False

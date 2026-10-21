@@ -12,7 +12,7 @@ from typing import Dict, Optional, Tuple
 from strategy import diagnostico
 from strategy.analysis.jogo import AnaliseJogo
 from strategy.context import GOALKEEPER_ID
-from strategy.skills import chute, experimento
+from strategy.skills import chute, experimento, posicionamento
 from strategy.skills.skills import Skill, Skills
 
 # Diagnostics only: who is actually on the ball.
@@ -54,22 +54,33 @@ class Papel(ABC):
         """Whether the planner routes around the ball for this robot."""
         return True
 
+    def mira(self, a: AnaliseJogo, rid: int):
+        """(target, type, may_arm) for this robot's kick. Default: the analysis' aim."""
+        return a.alvo_chute, a.tipo_alvo, not a.alvo.emprestada
+
+    def metade_defensiva(self, a: AnaliseJogo, rid: int) -> int:
+        """Half of the field the planner keeps this robot in: +1/-1 by x sign, 0 = any."""
+        return 0
+
     def diagnosticar(self, a: AnaliseJogo, rid: int, cmd: Skill) -> None:
         """Extra DIAG_JOGO output for this role. Runs only with diagnostics on."""
 
     def comando(self, a: AnaliseJogo, rid: int, ordem: int,
                 travas: Dict[int, object]) -> Skill:
         robo, ball = a.mundo.aliados[rid], a.bola
-        alvo_x, alvo_y = self.alvo(a, rid, ordem)
+        # No field robot is sent into our penalty area: only the keeper may enter.
+        alvo_x, alvo_y = posicionamento.fora_da_area_penal(*self.alvo(a, rid, ordem),
+                                                           a.mundo.nosso_gol)
 
         # Body orientation and kick in one call; see chute.chutar_em for why the
         # movement target must never be reachable.
         gol = a.mundo.gol_ataque
+        ponto, tipo, pode_armar = self.mira(a, rid)
         ang, arma, forca = chute.chutar_em(
-            robo, ball, a.alvo_chute, a.tipo_alvo, a.mundo.sentido, travas, rid,
+            robo, ball, ponto, tipo, a.mundo.sentido, travas, rid,
             (gol.x, gol.y),
             so_lado_certo=not experimento.desligado("ORIENTACAO_LADO"),
-            pode_armar=not a.alvo.emprestada,
+            pode_armar=pode_armar,
             exigir_corpo_alinhado=not experimento.desligado("DISPARO_ALINHADO"),
             fase=self.fase())
 
@@ -80,6 +91,7 @@ class Papel(ABC):
         cmd.ball = self.evita_bola(a, rid)
         cmd.field_border = True
         cmd.penalty_area = True
+        cmd.defensive_half = self.metade_defensiva(a, rid)
 
         if diagnostico.ativo():
             self._diagnostico_comum(a, rid, alvo_x, alvo_y, arma)
