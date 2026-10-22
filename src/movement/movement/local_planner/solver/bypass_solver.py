@@ -14,7 +14,7 @@ from utils.math_util import Vector2D
 
 # Perpendicular sampling sigma, as a fraction of the start-goal distance.
 MIN_SPREAD = 0.03
-MAX_SPREAD = 0.6  # desvio lateral maior: contornar um inimigo no meio do caminho
+MAX_SPREAD = 0.35
 # The penalty rectangle already includes the robot radius. This extra room keeps
 # the planned trajectory off its edge despite tracking and vision noise.
 PENALTY_CORNER_CLEARANCE = 50.0
