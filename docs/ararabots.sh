@@ -123,7 +123,8 @@ _descobrir_raiz() {
 }
 
 RAIZ="$(_descobrir_raiz)"
-VICE="$RAIZ/ssl-VICE"
+# ARARABOTS_VICE points at another checkout (a git worktree, say) to run it instead.
+VICE="${ARARABOTS_VICE:-$RAIZ/ssl-VICE}"
 PY="$SCRIPT_DIR/ararabots.py"
 
 # O zagueiro restringe o DDS ao loopback para nao descobrir nodes de outros
