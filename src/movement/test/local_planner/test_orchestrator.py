@@ -131,6 +131,79 @@ class TestOrchestrator:
         assert planner.validate_continuity(traj) is True
 
 
+@pytest.mark.parametrize("side", [FieldSide.LEFT, FieldSide.RIGHT])
+def test_penalty_area_bypass_hugs_front_edge_without_recovery(side):
+    """Crossing from one side of the area needs two repeatable corner turns."""
+    geometry = _geometry()
+    area = PenaltyAreaObstacle(geometry, side)
+    obstacles = [FieldBorderObstacle(geometry), area]
+    sign = -1 if side is FieldSide.LEFT else 1
+    start = MotionState(Vector2D(sign * 4000.0, -1400.0), Vector2D(0, 0))
+    goal = MotionState(Vector2D(sign * 4000.0, 1400.0), Vector2D(0, 0))
+    planner = Orchestrator(SolverConfig(max_iterations=0))
+
+    trajectory = planner.find(start, goal, obstacles)
+
+    assert trajectory.status == PlanningStatus.BYPASS_FOUND
+    assert trajectory.get_destination().position.distance(goal.position) < 1e-6
+    assert planner.validate_continuity(trajectory)
+    front_x = area._bounds()[1 if side is FieldSide.LEFT else 0]
+    assert abs(trajectory.via_state.position.x - front_x) == pytest.approx(50.0)
+    segment = trajectory.root
+    while segment is not None:
+        assert not CollisionEngine.is_collision(segment, obstacles)
+        segment = segment.child
+
+
+def test_replanning_at_penalty_corners_keeps_moving():
+    geometry = _geometry()
+    obstacles = [
+        FieldBorderObstacle(geometry),
+        PenaltyAreaObstacle(geometry, FieldSide.LEFT),
+    ]
+    planner = Orchestrator(SolverConfig(max_iterations=0))
+    state = MotionState(Vector2D(-4000.0, -1400.0), Vector2D(0, 0))
+    goal = MotionState(Vector2D(-4000.0, 1400.0), Vector2D(0, 0))
+
+    for _ in range(40):
+        trajectory = planner.find(state, goal, obstacles)
+        assert trajectory.status != PlanningStatus.RECOVERY
+        sampler = TrajectorySampler(trajectory.root)
+        t = min(0.1, sampler.duration)
+        position = sampler.positions(np.array([t]))[0]
+        velocity = sampler.velocities(np.array([t]))[0]
+        state = MotionState(Vector2D(*position), Vector2D(*velocity))
+        assert not any(obstacle.isCollidingAt(state.position) for obstacle in obstacles)
+        if state.position.distance(goal.position) < 20.0:
+            break
+
+    assert state.position.distance(goal.position) < 20.0
+
+
+def test_escape_from_penalty_edge_reaches_nearby_legal_coverage_point():
+    """Replay: a cobertura ficou 4 mm dentro da margem da area em x=-3414."""
+    from types import SimpleNamespace as S
+
+    lines = [
+        S(name="LeftFieldRightPenaltyStretch", x1=-4500, y1=1000,
+          x2=-3500, y2=1000),
+        S(name="LeftFieldLeftPenaltyStretch", x1=-4500, y1=-1000,
+          x2=-3500, y2=-1000),
+    ]
+    geometry = S(field_lines=lines, field_length=9000, field_width=6000)
+    area = PenaltyAreaObstacle(geometry, FieldSide.LEFT)
+    border = FieldBorderObstacle(geometry)
+    start = MotionState(Vector2D(-3414, 134), Vector2D(0, 0))
+    goal = MotionState(Vector2D(-3350, 134), Vector2D(0, 0))
+    planner = Orchestrator(SolverConfig(max_iterations=0))
+
+    trajectory = planner.find(start, goal, [border, area])
+
+    assert trajectory.status == PlanningStatus.DIRECT_PATH
+    assert trajectory.get_destination().position.distance(goal.position) < 1e-3
+    assert not area.isCollidingAt(trajectory.get_destination().position)
+
+
 class TestEscapingObstacles:
     """
     A robot pressed against another robot had every candidate path collide at t=0, so
@@ -363,3 +436,259 @@ class TestRecoveryBraking:
         stop = planner._get_recovery_trajectory(start).get_destination()
 
         assert stop.position.distance(start.position) == pytest.approx(0.0, abs=1.0)
+
+
+class TestFinalVelocity:
+    def test_the_plan_ends_moving_at_the_requested_velocity(self):
+        planner = Orchestrator()
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(3000, 1000), Vector2D(1500, 500))
+
+        end = planner.find(start, goal, []).get_destination()
+
+        assert end.position.distance(goal.position) == pytest.approx(0.0, abs=1e-3)
+        assert end.velocity.distance(goal.velocity) == pytest.approx(0.0, abs=1e-3)
+
+    def test_a_final_velocity_over_the_limit_is_scaled_down_keeping_its_heading(self):
+        """Unclamped, the steering solver cannot end there and returns an empty plan."""
+        config = SolverConfig()
+        planner = Orchestrator(config)
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(3000, 1000), Vector2D(5000, 2500))
+
+        trajectory = planner.find(start, goal, [])
+        end = trajectory.get_destination()
+
+        assert trajectory.get_total_duration() > 0.0
+        assert end.position.distance(goal.position) == pytest.approx(0.0, abs=1e-3)
+        assert end.velocity.size() == pytest.approx(config.max_velocity.x)
+        assert end.velocity.y == pytest.approx(end.velocity.x / 2.0)
+
+    def test_an_arrival_velocity_with_no_room_for_its_run_up_gives_way_to_arriving(self):
+        """The goal sits 10mm off an obstacle, to be crossed moving away from it."""
+        np.random.seed(3)
+        planner = Orchestrator()
+        wall = GenericCircleObstacle(Vector2D(-1000.0, 0.0), 900)   # edge at x = -10
+        start = MotionState(Vector2D(1500.0, 0.0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(0.0, 0.0), Vector2D(400.0, 0.0))
+
+        end = planner.find(start, goal, [wall]).get_destination()
+
+        assert planner.status is not PlanningStatus.RECOVERY
+        assert end.position.distance(goal.position) == pytest.approx(0.0, abs=1e-3)
+        assert end.velocity.size() == pytest.approx(0.0, abs=1e-3)
+
+
+class TestOccupiedGoal:
+    """
+    A goal inside another robot's zone fell straight through to recovery: the robot
+    stopped where it was, a metre from a ball an opponent was touching.
+    """
+
+    # Touching a ball at the origin from the far side.
+    ENEMY = Vector2D(111.0, 0.0)
+    RADIUS = 200.0
+    KICK_POINT = Vector2D(-88.0, 0.0)
+
+    def _enemy(self, velocity=Vector2D(0.0, 0.0)):
+        return EnemyRobotObstacle(MotionState(self.ENEMY, velocity), radius=self.RADIUS)
+
+    def test_it_closes_in_on_a_goal_an_opponent_stands_on(self):
+        planner = Orchestrator()
+        enemy = self._enemy()
+        start = MotionState(Vector2D(-1000.0, 0.0), Vector2D(0, 0))
+        goal = MotionState(self.KICK_POINT, Vector2D(0, 0))
+
+        trajectory = planner.find(start, goal, [enemy])
+
+        assert trajectory.status == PlanningStatus.PARTIAL
+        assert not CollisionEngine.is_collision(trajectory.root, [enemy])
+        end = trajectory.get_destination()
+        assert end.velocity.size() == pytest.approx(0.0, abs=1e-6)
+        gap = end.position.distance(self.ENEMY) - self.RADIUS
+        clearance = planner.config.approach_clearance
+        # A tenth of the line bisected four times is under 6mm on this run.
+        assert clearance <= gap < clearance + 6.0
+
+    def test_it_holds_once_it_cannot_get_any_closer(self):
+        planner = Orchestrator()
+        start = MotionState(Vector2D(-95.0, 0.0), Vector2D(0, 0))
+        goal = MotionState(self.KICK_POINT, Vector2D(0, 0))
+
+        trajectory = planner.find(start, goal, [self._enemy()])
+
+        assert trajectory.root is not None
+        assert trajectory.get_destination().position.distance(start.position) < 1.0
+
+    def test_an_opponent_on_the_move_is_given_its_path(self):
+        planner = Orchestrator()
+        enemy = EnemyRobotObstacle(
+            MotionState(Vector2D(400.0, 0.0), Vector2D(-650.0, 0.0)), radius=self.RADIUS
+        )
+        start = MotionState(Vector2D(-1000.0, 0.0), Vector2D(0, 0))
+        goal = MotionState(self.KICK_POINT, Vector2D(0, 0))
+
+        trajectory = planner.find(start, goal, [enemy])
+
+        assert trajectory.status == PlanningStatus.PARTIAL
+        assert not CollisionEngine.is_collision(trajectory.root, [enemy])
+        assert trajectory.get_destination().position.x > start.position.x + 100.0
+
+    def test_a_blocked_route_to_a_free_goal_is_still_a_recovery(self):
+        """Closing in is for a goal nothing can reach, not for a route not found yet."""
+        planner = Orchestrator(SolverConfig(max_iterations=0))
+        wall = EnemyRobotObstacle(MotionState(Vector2D(0, 0), Vector2D(0, 0)), radius=200)
+        start = MotionState(Vector2D(-1000.0, 0.0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(1000.0, 0.0), Vector2D(0, 0))
+
+        trajectory = planner.find(start, goal, [wall])
+
+        assert trajectory.status == PlanningStatus.RECOVERY
+        assert trajectory.get_destination().position.distance(start.position) < 1.0
+
+
+class TestSpeedCap:
+    """speed_scale is how a caller asks for a plan slower than the robot's limits."""
+
+    START = MotionState(Vector2D(-2000.0, 0.0), Vector2D(0, 0))
+    GOAL = MotionState(Vector2D(2000.0, 0.0), Vector2D(0, 0))
+
+    @staticmethod
+    def _top_speed(trajectory):
+        sampler = TrajectorySampler(trajectory.root)
+        velocities = sampler.velocities(np.linspace(0.0, sampler.duration, 600))
+        return float(np.hypot(velocities[:, 0], velocities[:, 1]).max())
+
+    def test_the_plan_stays_under_the_fraction_asked_for(self):
+        planner = Orchestrator()
+        limit = planner.config.max_velocity.x
+
+        full = planner.find(self.START, self.GOAL, [])
+        capped = planner.find(self.START, self.GOAL, [], speed_scale=0.6)
+
+        assert self._top_speed(full) == pytest.approx(limit, rel=1e-3)
+        assert self._top_speed(capped) == pytest.approx(0.6 * limit, rel=1e-3)
+        assert capped.get_destination().position.distance(self.GOAL.position) < 1e-3
+
+    def test_a_bypass_respects_it_too(self):
+        np.random.seed(5)
+        planner = Orchestrator()
+        enemy = EnemyRobotObstacle(MotionState(Vector2D(0, 0), Vector2D(0, 0)), radius=200)
+
+        trajectory = planner.find(self.START, self.GOAL, [enemy], speed_scale=0.5)
+
+        assert trajectory.status == PlanningStatus.BYPASS_FOUND
+        assert self._top_speed(trajectory) <= 0.5 * planner.config.max_velocity.x + 1.0
+
+    def test_a_robot_already_faster_than_the_cap_slows_into_it(self):
+        """The cap dropping mid-move must never produce a plan that speeds up."""
+        planner = Orchestrator()
+        moving = MotionState(Vector2D(-2000.0, 0.0), Vector2D(2400.0, 0.0))
+
+        trajectory = planner.find(moving, self.GOAL, [], speed_scale=0.6)
+
+        sampler = TrajectorySampler(trajectory.root)
+        speeds = np.abs(sampler.velocities(np.linspace(0.0, sampler.duration, 600))[:, 0])
+        assert speeds.max() == pytest.approx(2400.0, abs=1.0)
+        assert np.all(np.diff(speeds[:200]) <= 1e-6)
+        assert trajectory.get_destination().position.distance(self.GOAL.position) < 1e-3
+
+    def test_the_shared_generator_is_left_alone(self):
+        planner = Orchestrator()
+        planner.find(self.START, self.GOAL, [], speed_scale=0.3)
+
+        assert self._top_speed(planner.find(self.START, self.GOAL, [])) == pytest.approx(
+            planner.config.max_velocity.x, rel=1e-3
+        )
+
+    def test_a_final_velocity_is_scaled_to_fit_the_cap(self):
+        planner = Orchestrator()
+        goal = MotionState(self.GOAL.position, Vector2D(2000.0, 0.0))
+
+        trajectory = planner.find(self.START, goal, [], speed_scale=0.4)
+
+        assert trajectory.get_destination().velocity.x == pytest.approx(
+            0.4 * planner.config.max_velocity.x, rel=1e-6
+        )
+
+
+class TestRecoveryBrakesInAStraightLine:
+    """Each axis used to stop on its own, so a robot moving at an angle curved as it braked."""
+
+    def test_it_stops_along_its_direction_of_travel_within_the_acceleration_limit(self):
+        planner = Orchestrator()
+        start = MotionState(Vector2D(0, 0), Vector2D(2000.0, 500.0))
+
+        recovery = planner._get_recovery_trajectory(start)
+
+        stop = recovery.get_destination()
+        assert stop.velocity.size() == pytest.approx(0.0, abs=1e-6)
+        assert stop.position.y / stop.position.x == pytest.approx(500.0 / 2000.0)
+        (primitive,) = recovery.root.motion_path.motion_path
+        assert primitive.acceleration.size() == pytest.approx(planner.config.max_acceleration.x)
+
+
+class TestRoutesKeepRoomFromTheBall:
+    BALL = Vector2D(0.0, 0.0)
+
+    def _ball(self):
+        return GenericCircleObstacle(self.BALL, 60, clearance=70.0)   # edge at 150
+
+    @staticmethod
+    def _closest(trajectory):
+        sampler = TrajectorySampler(trajectory.root)
+        points = sampler.positions(np.linspace(0.0, sampler.duration, 800))
+        return float(np.hypot(points[:, 0], points[:, 1]).min())
+
+    def test_going_round_it_stays_clear_of_the_edge(self):
+        np.random.seed(11)
+        planner = Orchestrator()
+        start = MotionState(Vector2D(1500.0, 0.0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(-300.0, 0.0), Vector2D(0, 0))
+
+        trajectory = planner.find(start, goal, [self._ball()])
+
+        assert trajectory.status == PlanningStatus.BYPASS_FOUND
+        assert self._closest(trajectory) >= 219.0
+
+    def test_a_goal_inside_the_room_is_still_reached_where_it_was_asked(self):
+        planner = Orchestrator()
+        start = MotionState(Vector2D(-1500.0, 0.0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(-180.0, 0.0), Vector2D(0, 0))
+
+        trajectory = planner.find(start, goal, [self._ball()])
+
+        assert trajectory.get_destination().position.distance(goal.position) < 1e-3
+
+    def test_a_robot_that_drifted_into_the_room_is_not_sent_on_an_escape(self):
+        """Only the obstacle's own edge triggers one; the room is for routes."""
+        np.random.seed(11)
+        planner = Orchestrator()
+        start = MotionState(Vector2D(0.0, 190.0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(-300.0, 0.0), Vector2D(0, 0))
+
+        trajectory = planner.find(start, goal, [self._ball()])
+
+        assert trajectory.status != PlanningStatus.RECOVERY
+        assert trajectory.root.init_pos.distance(start.position) < 1e-6
+        assert self._closest(trajectory) >= 179.0
+
+
+class TestUnsolvedSteer:
+    def test_an_empty_direct_path_is_not_taken_for_a_clear_one(self):
+        """The steer returns an empty path when it cannot solve; empty collides with nothing."""
+        from movement.entities.motion.motion_path import MotionPath
+        from movement.entities.trajectory.trajectory_segment import TrajectorySegment
+
+        class Unsolved:
+            def generate(self, start, target):
+                return TrajectorySegment(start.position, start.velocity, MotionPath([]))
+
+        planner = Orchestrator(SolverConfig(max_iterations=0))
+        planner.generator = Unsolved()
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(1000.0, 0.0), Vector2D(0, 0))
+
+        trajectory = planner.find(start, goal, [])
+
+        assert trajectory.status != PlanningStatus.DIRECT_PATH

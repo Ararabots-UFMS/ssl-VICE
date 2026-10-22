@@ -9,9 +9,11 @@ That makes a traversal a pure function of its context, so a test builds a contex
 calls ``run`` and asserts on the returned skill, with no ROS running.
 """
 
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Iterable, List, Optional, Sequence as SequenceT, Tuple
 
+from strategy import diagnostico
 from strategy.context import TickContext, TreeDeps
 from strategy.commons.task_status import TaskStatus
 
@@ -87,5 +89,19 @@ class Selector(TreeNode):
         for c in self.children:
             status, action = c.run(context)
             if status != TaskStatus.FAILURE:
+                if status == TaskStatus.RUNNING:
+                    self._avisar_running(c)
                 return status, action
         return TaskStatus.FAILURE, None
+
+    def _avisar_running(self, filho: BehaviourNode) -> None:
+        # A RUNNING child blocks every later sibling; it froze the team twice with
+        # nothing in the log saying who held the tree.
+        if not diagnostico.ativo():
+            return
+        agora = time.monotonic()
+        if agora - getattr(self, "_ultimo_aviso_running", 0.0) > 1.0:
+            self._ultimo_aviso_running = agora
+            irmaos = [o.name for o in self.children if o is not filho]
+            diagnostico.log("[BT] %s parou em RUNNING no filho '%s'; nao rodaram: %s"
+                            % (self.name, filho.name, irmaos))

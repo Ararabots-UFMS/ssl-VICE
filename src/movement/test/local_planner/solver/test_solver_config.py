@@ -14,8 +14,8 @@ class TestSolverConfig:
         assert config.field_width == 9000.0
         # Bounds are magnitudes and must be positive on both axes: MoveConstraints
         # derives min = -max, so a negative y inverted the bounds and broke braking.
-        assert config.max_velocity == Vector2D(2000.0, 2000.0)
-        assert config.max_acceleration == Vector2D(1500.0, 1500.0)
+        assert config.max_velocity == Vector2D(2500.0, 2500.0)
+        assert config.max_acceleration == Vector2D(3000.0, 3000.0)
         assert config.continuity_threshold == 1e-3
         # 0.2s advanced 400mm between samples at top speed, wide enough to tunnel
         # straight through an obstacle.

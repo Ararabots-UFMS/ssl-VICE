@@ -115,3 +115,125 @@ class TestGeneratedTrajectoriesHoldTheirConstraints:
             velocity = segment.get_state(float(t)).velocity
             assert abs(velocity.x) <= config.max_velocity.x + 1.0
             assert abs(velocity.y) <= config.max_velocity.y + 1.0
+
+
+class TestLimitsApplyToTheWholeMotion:
+    """
+    Each axis was handed the full limits, so a diagonal ran at 3536mm/s and 4243mm/s²
+    under limits of 2500 and 3000 - 41% more than a robot was ever asked to give along
+    an axis.
+    """
+
+    @pytest.fixture
+    def planner_generator(self):
+        config = SolverConfig()
+        return TrajectoryGenerator(
+            MotionConstraints(config.max_velocity, config.max_acceleration)
+        ), config
+
+    @staticmethod
+    def _peaks(segment):
+        speeds = [
+            segment.get_state(float(t)).velocity.size()
+            for t in np.linspace(0.0, segment.get_total_duration(), 400)
+        ]
+        accelerations = [
+            p.acceleration.size() for p in segment.motion_path.motion_path if p.duration > 1e-9
+        ]
+        return max(speeds), max(accelerations)
+
+    @pytest.mark.parametrize("goal", [(4000.0, 4000.0), (4000.0, 1000.0), (-500.0, 3000.0)])
+    def test_a_move_from_rest_stays_within_both_limits_in_any_direction(self, planner_generator, goal):
+        generator, config = planner_generator
+        start = MotionState(Vector2D(0.0, 0.0), Vector2D(0.0, 0.0))
+
+        segment = generator.generate(start, MotionState(Vector2D(*goal), Vector2D(0.0, 0.0)))
+
+        speed, acceleration = self._peaks(segment)
+        assert speed <= config.max_velocity.x + 1.0
+        assert acceleration <= config.max_acceleration.x + 1.0
+
+    def test_a_move_along_an_axis_keeps_practically_all_of_its_speed(self, planner_generator):
+        generator, config = planner_generator
+        start = MotionState(Vector2D(0.0, 0.0), Vector2D(0.0, 0.0))
+
+        segment = generator.generate(start, MotionState(Vector2D(4000.0, 0.0), Vector2D(0.0, 0.0)))
+
+        speed, _ = self._peaks(segment)
+        assert speed == pytest.approx(config.max_velocity.x, rel=1e-3)
+
+    def test_a_diagonal_runs_as_fast_as_an_axis_move_of_the_same_length(self, planner_generator):
+        generator, _ = planner_generator
+        start = MotionState(Vector2D(0.0, 0.0), Vector2D(0.0, 0.0))
+        side = 4000.0 / 2 ** 0.5
+
+        straight = generator.generate(start, MotionState(Vector2D(4000.0, 0.0), Vector2D(0.0, 0.0)))
+        diagonal = generator.generate(start, MotionState(Vector2D(side, side), Vector2D(0.0, 0.0)))
+
+        assert diagonal.get_total_duration() == pytest.approx(
+            straight.get_total_duration(), rel=5e-3
+        )
+
+    def test_the_acceleration_limit_holds_from_any_start(self, planner_generator):
+        generator, config = planner_generator
+        rng = random.Random(3)
+
+        for _ in range(300):
+            angle = rng.uniform(0.0, 6.283)
+            speed = rng.uniform(0.0, config.max_velocity.x)
+            start = MotionState(
+                Vector2D(rng.uniform(-3000, 3000), rng.uniform(-2000, 2000)),
+                Vector2D(speed * np.cos(angle), speed * np.sin(angle)),
+            )
+            goal = MotionState(
+                Vector2D(rng.uniform(-3000, 3000), rng.uniform(-2000, 2000)), Vector2D(0.0, 0.0)
+            )
+
+            segment = generator.generate(start, goal)
+
+            assert segment.get_local_destination().position.distance(goal.position) < 1.0
+            _, acceleration = self._peaks(segment)
+            assert acceleration <= config.max_acceleration.x + 1.0
+
+
+class TestSharedLimitsNeverCostAPath:
+    """
+    About one state in ten thousand could not be synchronised under a share and came back
+    empty. The bypass search minimises duration, so it singled those out as the best route.
+    """
+
+    @pytest.fixture
+    def planner_generator(self):
+        config = SolverConfig()
+        return TrajectoryGenerator(MotionConstraints(config.max_velocity, config.max_acceleration))
+
+    def test_the_state_that_first_failed(self, planner_generator):
+        start = MotionState(
+            Vector2D(-2241.1605495197346, -1930.117904329045),
+            Vector2D(-1763.573922314115, -1589.8579411626222),
+        )
+        goal = MotionState(Vector2D(-3745.396999114707, -1471.2009374622776), Vector2D(0.0, 0.0))
+
+        end = planner_generator.generate(start, goal).get_local_destination()
+
+        assert end.position.distance(goal.position) < 1e-3
+        assert end.velocity.size() < 1e-3
+
+    def test_every_move_to_rest_ends_within_the_planners_tolerance(self, planner_generator):
+        rng = random.Random(4)
+
+        for _ in range(4000):
+            angle = rng.uniform(0.0, 6.283)
+            speed = rng.uniform(0.0, 2500.0)
+            start = MotionState(
+                Vector2D(rng.uniform(-4000, 4000), rng.uniform(-2500, 2500)),
+                Vector2D(speed * np.cos(angle), speed * np.sin(angle)),
+            )
+            goal = MotionState(
+                Vector2D(rng.uniform(-4000, 4000), rng.uniform(-2500, 2500)), Vector2D(0.0, 0.0)
+            )
+
+            end = planner_generator.generate(start, goal).get_local_destination()
+
+            assert end.position.distance(goal.position) < 1e-3, f"start={start} goal={goal}"
+            assert end.velocity.size() < 1e-3, f"start={start} goal={goal}"

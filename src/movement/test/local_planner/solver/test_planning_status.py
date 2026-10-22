@@ -4,7 +4,14 @@ from movement.local_planner.solver import PlanningStatus
 class TestPlanningStatus:
     def test_all_expected_members_present(self):
         names = {member.name for member in PlanningStatus}
-        assert names == {"SUCCESS", "DIRECT_PATH", "BYPASS_FOUND", "FAILED", "RECOVERY"}
+        assert names == {
+            "SUCCESS",
+            "DIRECT_PATH",
+            "BYPASS_FOUND",
+            "FAILED",
+            "RECOVERY",
+            "PARTIAL",
+        }
 
     def test_members_have_unique_values(self):
         values = [member.value for member in PlanningStatus]

@@ -28,6 +28,7 @@ class Vision(Node):
             "port": 10006,
             "verbose": False,
             "interface_ip": "",
+            "local_only": False,
             "socket_timeout": 0.0,
             "num_cams": 4,
             "max_time_undetected": 0.5,
@@ -63,6 +64,7 @@ class Vision(Node):
             port=self.port,
             interface_ip=self.interface_ip if self.interface_ip else None,
             timeout=self.socket_timeout,
+            local_only=self.get_parameter("local_only").value,
             logger=self.get_logger(),
         )
         self.get_logger().info(f"Binding client on {self.ip}:{self.port}")

@@ -57,7 +57,7 @@ class Controller(Node):
 
         # Controllers
         self.robot_controller = RobotTrajectoryController()
-        self.orientation_controller = PController(kp=1, max_output=2)
+        self.orientation_controller = PController(kp=4, max_output=6)
         self.target_orientations = {}
 
         # ROS Interfaces
@@ -173,7 +173,7 @@ class Controller(Node):
             out.linear_velocity_y = float(vel_cmd.y)
             out.angular_velocity = float(vel_ang_cmd)
             out.orientation = cur.orientation
-            out.kick = float(self.kick_cache.get(rid, 0.0))
+            out.kick = 0.0 if self.is_halt else float(self.kick_cache.get(rid, 0.0))
 
             team_cmd.robots.append(out)
 

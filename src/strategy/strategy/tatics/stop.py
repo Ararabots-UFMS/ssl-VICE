@@ -1,8 +1,7 @@
-from math import cos, sin, pi, atan2
-
 from strategy.skills.skills import Skills
 from utils.math_util import Vector2D
-from utils.field_util import CenterGoal
+from math import cos, sin, pi, atan2
+from strategy.campo import CenterGoal
 
 
 class GoalkeeperKickoff:
@@ -64,7 +63,11 @@ class goAwayFromBall:
         return positions
 
     def _get_ball_angle(self, robot_id: int) -> float:
-        robot = self.ally_robots[robot_id]
+        # .get() em vez de indexacao direta: se o robo nao estiver em campo,
+        # devolvemos 0.0 em vez de derrubar o node inteiro com KeyError.
+        robot = self.ally_robots.get(robot_id)
+        if robot is None:
+            return 0.0
         dx = self.ball.position_x - robot.position_x
         dy = self.ball.position_y - robot.position_y
         return atan2(dy, dx)
@@ -84,12 +87,33 @@ class goAwayFromBall:
         for idx, rid in enumerate(field_ids):
             target = targets[idx]
 
-            angle = self._get_ball_angle(idx)
+            # 'rid', nao 'idx'.
+            #
+            # Passava o indice do enumerate (0, 1, 2...) no lugar do id do robo.
+            # Com o robo 0 ausente virava ally_robots[0] -> KeyError, e o
+            # strategyNode MORRIA - nenhuma jogada rodava, nem o freekick. Com o
+            # robo 0 presente nao quebrava, mas calculava o angulo do robo errado.
+            angle = self._get_ball_angle(rid)
 
+            # USA O ALVO CALCULADO, nao um ponto fixo.
+            #
+            # _generate_positions distribui os robos num circulo de 600 mm em
+            # torno da bola - que e o que a regra do STOP pede (ninguem a menos
+            # de 500 mm). O resultado era calculado na linha acima e DESCARTADO:
+            # todo mundo recebia (2000, 1400).
+            #
+            # Consequencia: durante qualquer STOP o time inteiro converge para
+            # UM ponto no campo de ataque, longe da bola. Medido nesta sessao no
+            # cenario 'passe' - o cobrador nascia em (852,976) em vez de
+            # (-400,0) e o receptor em (1996,1366), os dois a caminho de
+            # (2000,1400), e a cobranca comecava com o time desmanchado.
+            #
+            # O HANDOVER §6.5 ja registrava isto como "outro problema no mesmo
+            # metodo, NAO corrigido".
             robot_command = self.skills_factory.move_with_angle(
                 robot_id=rid,
-                target_x=2000,
-                target_y=1400,
+                target_x=target.x,
+                target_y=target.y,
                 angle=angle,
             )
 

@@ -27,6 +27,10 @@ from typing import Any, Mapping, Optional, Tuple
 # mutated, which is the same reason the real fields use a mapping proxy.
 EMPTY_MAP: Mapping[int, Any] = MappingProxyType({})
 
+# The goalkeeper's robot id. The movement manager is told the same id at start-up
+# (SetGoalKeeper), so change it here and nowhere else.
+GOALKEEPER_ID = 0
+
 
 class NullLogger:
     """A logger that discards everything, for tests and for headless tree building."""
@@ -100,6 +104,8 @@ class TickContext:
     referee_command: str = ""
     config: Optional[GameConfig] = None
     vision_capture_stamp: float = 0.0
+    # Field geometry as vision reports it; None in tests that do not need it.
+    geometry: Optional[Any] = None
 
     @classmethod
     def from_game_state(
@@ -118,6 +124,7 @@ class TickContext:
             referee_command=msg.referee.command,
             config=config,
             vision_capture_stamp=float(getattr(msg, "vision_capture_stamp", 0.0)),
+            geometry=getattr(msg, "geometry", None),
         )
 
     @property

@@ -226,3 +226,44 @@ class TestStretched:
             assert self.UMIN <= acceleration <= self.UMAX
             velocity += acceleration * duration
             assert abs(velocity) <= self.VMAX + 1e-6
+
+
+class TestStartingBeyondTheLimit:
+    """
+    A start faster than the limit fell back to the unbounded profile, which speeds UP
+    toward a far goal. It happens whenever the limit is lowered while the robot moves.
+    """
+
+    def test_it_brakes_into_the_limit_instead_of_speeding_up(self, solver):
+        control = solver.optimal(0.0, 2.5, 20.0, 0.0, umin=-1.0, umax=1.0, vmin=-1.5, vmax=1.5)
+
+        velocities = peak_velocities(2.5, control)
+        assert max(velocities) == pytest.approx(2.5)
+        assert velocities[1] == pytest.approx(1.5)
+        x, v = integrate_1d(0.0, 2.5, control)
+        assert x == pytest.approx(20.0, abs=1e-6)
+        assert v == pytest.approx(0.0, abs=1e-6)
+
+    def test_the_same_holds_moving_the_other_way(self, solver):
+        control = solver.optimal(0.0, -2.5, -20.0, 0.0, umin=-1.0, umax=1.0, vmin=-1.5, vmax=1.5)
+
+        velocities = peak_velocities(-2.5, control)
+        assert min(velocities) == pytest.approx(-2.5)
+        assert velocities[1] == pytest.approx(-1.5)
+        x, v = integrate_1d(0.0, -2.5, control)
+        assert x == pytest.approx(-20.0, abs=1e-6)
+        assert v == pytest.approx(0.0, abs=1e-6)
+
+    def test_a_goal_too_close_to_slow_down_for_still_only_brakes(self, solver):
+        control = solver.optimal(0.0, 2.5, 1.0, 0.0, umin=-1.0, umax=1.0, vmin=-1.5, vmax=1.5)
+
+        assert max(peak_velocities(2.5, control)) == pytest.approx(2.5)
+        x, v = integrate_1d(0.0, 2.5, control)
+        assert x == pytest.approx(1.0, abs=1e-6)
+        assert v == pytest.approx(0.0, abs=1e-6)
+
+    def test_a_start_inside_the_limit_is_unchanged(self, solver):
+        control = solver.optimal(0.0, 1.0, 20.0, 0.0, umin=-1.0, umax=1.0, vmin=-1.5, vmax=1.5)
+
+        assert [segment[0] for segment in control] == [1.0, 0.0, -1.0]
+        assert max(peak_velocities(1.0, control)) == pytest.approx(1.5)

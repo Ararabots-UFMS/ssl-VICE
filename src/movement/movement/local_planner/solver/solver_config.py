@@ -11,14 +11,17 @@ class SolverConfig:
     field_width: float = 9000.0
     # Magnitudes: MoveConstraints derives min = -max from them, so a negative value
     # inverts the bounds and breaks the trapezoidal steer. Rejected in __post_init__.
-    max_velocity: Vector2D = field(default_factory=lambda: Vector2D(2000.0, 2000.0))  # mm/s
-    max_acceleration: Vector2D = field(default_factory=lambda: Vector2D(1500.0, 1500.0)) # mm/s²
+    max_velocity: Vector2D = field(default_factory=lambda: Vector2D(2500.0, 2500.0))  # mm/s
+    max_acceleration: Vector2D = field(default_factory=lambda: Vector2D(3000.0, 3000.0)) # mm/s²
     continuity_threshold: float = 1e-3
     # How much faster a newly sampled bypass must be to replace the previous one.
     bypass_cost_margin: float = 0.15
     # How far past an obstacle's boundary to place an escape point: adaptDestination
     # returns the boundary itself, where isCollidingAt is still true.
     escape_margin: float = 20.0
+    # How far short of an occupied goal's obstacle to stop. Under escape_margin, so a
+    # robot resting there is not read as inside by vision noise and escaped back out.
+    approach_clearance: float = 10.0
     # Collision sampling step, ~80 mm of travel at full speed.
     collision_time_step: float = 0.04
 

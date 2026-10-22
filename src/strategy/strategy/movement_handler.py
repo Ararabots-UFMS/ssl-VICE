@@ -1,11 +1,15 @@
 from typing import Iterable
+
 from movement_interfaces.msg import MovementCommand, MovementCommandArray
+from movement_interfaces.srv import SetGoalKeeper, SetStaticObstacles
 from system_interfaces.srv import SetOrientation, UpdateKick
+
+from strategy.context import GOALKEEPER_ID
 from strategy.skills.skills import Skill
 
 
 class MovementHandler:
-    def __init__(self, node):
+    def __init__(self, node, wait_for_services: bool = True):
 
         self.node = node
 
@@ -16,8 +20,15 @@ class MovementHandler:
 
         self.orientation_client = self.node.create_client(SetOrientation, "set_orientation")
         self.kick_client = self.node.create_client(UpdateKick, "update_kick")
+        self.static_obstacles_client = self.node.create_client(
+            SetStaticObstacles, "SetStaticObstacles")
+        self.goalkeeper_client = self.node.create_client(SetGoalKeeper, "SetGoalKeeper")
 
-        self._wait_for_services()
+        if wait_for_services:
+            self._wait_for_services()
+            # Before the first command, not lazily with it: the two calls used to race
+            # the first targets, and the robot moved 3 mm in 0.6 s after FORCE_START.
+            self._configure_manager()
 
     def handle_movement(self, skills: Iterable[Skill]) -> None:
         commands = []
@@ -28,14 +39,30 @@ class MovementHandler:
             if skill.angle is not None:
                 self._send_orientation(skill.robot_id, skill.angle)
 
-        self._send_movement(commands)
+        # The manager replaces its whole list with each message, so an empty cycle
+        # sends nothing rather than an empty array that would stop everyone.
+        if commands:
+            self._send_movement(commands)
 
     def _wait_for_services(self):
-        while not self.orientation_client.wait_for_service(timeout_sec=3.0):
-            self.node.get_logger().info('Aguardando serviço "set_orientation"...')
-        while not self.kick_client.wait_for_service(timeout_sec=3.0):
-            self.node.get_logger().info('Aguardando serviço "kick_command"...')
-    
+        for client, name in (
+            (self.static_obstacles_client, "SetStaticObstacles"),
+            (self.goalkeeper_client, "SetGoalKeeper"),
+            (self.orientation_client, "set_orientation"),
+            (self.kick_client, "update_kick"),
+        ):
+            while not client.wait_for_service(timeout_sec=3.0):
+                self.node.get_logger().info(f'Aguardando serviço "{name}"...')
+
+    def _configure_manager(self) -> None:
+        req = SetStaticObstacles.Request()
+        req.border_area = True
+        req.center_area = False
+        self.static_obstacles_client.call_async(req)
+        req = SetGoalKeeper.Request()
+        req.robot_id = GOALKEEPER_ID
+        self.goalkeeper_client.call_async(req)
+
     def _movement_command(self, skill: Skill) -> MovementCommand:
         """
         One robot's target, with the obstacles it is allowed to ignore.
@@ -54,6 +81,7 @@ class MovementHandler:
         cmd.planning_options.avoid_penalty_area = bool(skill.penalty_area)
         cmd.planning_options.avoid_center_area = bool(skill.center_area)
         cmd.planning_options.avoid_ball = bool(skill.ball)
+        cmd.planning_options.defensive_half = skill.defensive_half
         return cmd
 
     def _send_movement(self, commands: list[MovementCommand]) -> None:

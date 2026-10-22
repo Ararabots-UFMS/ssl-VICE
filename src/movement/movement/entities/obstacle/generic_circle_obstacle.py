@@ -1,3 +1,5 @@
+from copy import copy
+
 import numpy as np
 
 from movement.entities.obstacle.static_obstacle import StaticObstacle
@@ -5,10 +7,35 @@ from movement.entities.obstacle.static_obstacle import StaticObstacle
 from utils.math_util import Vector2D
 
 
+# How far outside a grown obstacle the robot or its goal is left. Less, and a route
+# has to leave along the tangent to count as clear.
+ROUTE_EDGE = 10.0
+
+
 class GenericCircleObstacle(StaticObstacle):
-    def __init__(self, center: Vector2D, radius: float, padding: float = 90.0):
+    def __init__(
+        self, center: Vector2D, radius: float, padding: float = 90.0, clearance: float = 0.0
+    ):
         self.center: Vector2D = center
         self.radius: float = radius + padding
+        # Room a passing route keeps beyond the edge. Only for_route applies it.
+        self.clearance: float = clearance
+
+    def for_route(self, start: Vector2D, goal: Vector2D) -> "GenericCircleObstacle":
+        """
+        Grown by the clearance, but never over the robot or its goal: a route has to be
+        able to start and end where they are, so near them only the edge is kept.
+        """
+        if self.clearance <= 0.0:
+            return self
+        nearest = min(self.center.distance(start), self.center.distance(goal))
+        radius = min(self.radius + self.clearance, nearest - ROUTE_EDGE)
+        if radius <= self.radius:
+            return self
+        grown = copy(self)
+        grown.radius = radius
+        grown.clearance = 0.0
+        return grown
 
     def distanceTo(self, curPosition: Vector2D) -> float:
         return self.center.distance(curPosition) - self.radius
