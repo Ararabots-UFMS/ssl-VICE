@@ -19,8 +19,31 @@ import matplotlib.pyplot as plt   # noqa: E402
 import numpy as np                # noqa: E402
 
 GOL_X, GOL_MEIA = 4500.0, 500.0
-CORES = {"gol": "#2a9d8f", "fora": "#e76f51", "curto": "#e9c46a",
+CORES = {"gol": "#2a9d8f", "defendido": "#3a86ff", "fora": "#e76f51", "curto": "#e9c46a",
          "sem_chute": "#8d99ae", "gol_contra": "#6a040f"}
+# A shot blocked by the keeper's body: robot radius plus ball radius.
+RAIO_BLOQUEIO = 111.0
+
+
+def fracao_coberta(bx, by, kx, ky):
+    """Fraction of the goal mouth, seen from the ball, that the keeper's body hides."""
+    a1 = math.atan2(-GOL_MEIA - by, GOL_X - bx)
+    a2 = math.atan2(GOL_MEIA - by, GOL_X - bx)
+    dk = math.hypot(kx - bx, ky - by)
+    if dk <= RAIO_BLOQUEIO:
+        return 1.0
+    ak = math.atan2(ky - by, kx - bx)
+    meia = math.asin(RAIO_BLOQUEIO / dk)
+    sobra = max(0.0, min(a2, ak + meia) - max(a1, ak - meia))
+    return sobra / (a2 - a1)
+
+
+def ate_o_desfecho(b):
+    """A ball path up to the goal line or the touch line: after that it is not the shot."""
+    for i, (x, y) in enumerate(b):
+        if x >= GOL_X or abs(x) > 4500 or abs(y) > 3000:
+            return b[:i + 1]
+    return b
 
 
 def carregar(pasta):
@@ -153,29 +176,30 @@ def main():
     eixos[1].set_title("Miss distance by angle"); eixos[1].set_yscale("symlog", linthresh=100); eixos[1].grid(alpha=0.3)
     salvar(fig, saida, "04_precisao_por_angulo.png")
 
-    # 5. Accuracy by aim point.
+    # 5. Accuracy by aim point; skipped when the strategy chose its own aim.
     miras = sorted(set(mira[~np.isnan(mira)]))
-    fig, eixos = plt.subplots(1, 3, figsize=(15, 3.9))
-    taxas = [wilson(int(gol[chutou & (mira == m)].sum()), int((chutou & (mira == m)).sum())) for m in miras]
-    eixos[0].bar([str(int(m)) for m in miras], [t[0] * 100 for t in taxas], color="#2a9d8f",
-                 yerr=[[max(0.0, t[0] - t[1]) * 100 for t in taxas], [max(0.0, t[2] - t[0]) * 100 for t in taxas]], capsize=3)
-    eixos[0].set_xlabel("aim point inside the goal, y (mm)"); eixos[0].set_ylabel("goals per shot (%)")
-    eixos[0].set_title("Goal rate by aim point"); eixos[0].set_ylim(0, 108)
-    dados = [erro_y[ok & (mira == m)] for m in miras]
-    if all(len(d) for d in dados):
-        eixos[1].boxplot(dados, tick_labels=[str(int(m)) for m in miras], showfliers=False)
-    eixos[1].axhline(0, color="#999", lw=0.8)
-    eixos[1].set_xlabel("aim point, y (mm)"); eixos[1].set_ylabel("landing y - aim y (mm)")
-    eixos[1].set_title("Signed miss by aim point (outliers hidden)")
-    for m in miras:
-        sel = ok & (mira == m)
-        eixos[2].scatter(np.clip(y_linha[sel], -1500, 1500), np.full(sel.sum(), m) + np.random.default_rng(0).uniform(-40, 40, sel.sum()),
-                         s=10, alpha=0.6)
-        eixos[2].plot([m], [m], marker="x", color="k")
-    eixos[2].axvline(-GOL_MEIA, color="#e76f51"); eixos[2].axvline(GOL_MEIA, color="#e76f51")
-    eixos[2].set_xlabel("where the shot met the goal line, y (mm, clipped at 1500)"); eixos[2].set_ylabel("aim y (mm)")
-    eixos[2].set_title("Landing point per aim (x = aim, red = posts)")
-    salvar(fig, saida, "05_precisao_por_mira.png")
+    if miras:
+        fig, eixos = plt.subplots(1, 3, figsize=(15, 3.9))
+        taxas = [wilson(int(gol[chutou & (mira == m)].sum()), int((chutou & (mira == m)).sum())) for m in miras]
+        eixos[0].bar([str(int(m)) for m in miras], [t[0] * 100 for t in taxas], color="#2a9d8f",
+                     yerr=[[max(0.0, t[0] - t[1]) * 100 for t in taxas], [max(0.0, t[2] - t[0]) * 100 for t in taxas]], capsize=3)
+        eixos[0].set_xlabel("aim point inside the goal, y (mm)"); eixos[0].set_ylabel("goals per shot (%)")
+        eixos[0].set_title("Goal rate by aim point"); eixos[0].set_ylim(0, 108)
+        dados = [erro_y[ok & (mira == m)] for m in miras]
+        if all(len(d) for d in dados):
+            eixos[1].boxplot(dados, tick_labels=[str(int(m)) for m in miras], showfliers=False)
+        eixos[1].axhline(0, color="#999", lw=0.8)
+        eixos[1].set_xlabel("aim point, y (mm)"); eixos[1].set_ylabel("landing y - aim y (mm)")
+        eixos[1].set_title("Signed miss by aim point (outliers hidden)")
+        for m in miras:
+            sel = ok & (mira == m)
+            eixos[2].scatter(np.clip(y_linha[sel], -1500, 1500), np.full(sel.sum(), m) + np.random.default_rng(0).uniform(-40, 40, sel.sum()),
+                             s=10, alpha=0.6)
+            eixos[2].plot([m], [m], marker="x", color="k")
+        eixos[2].axvline(-GOL_MEIA, color="#e76f51"); eixos[2].axvline(GOL_MEIA, color="#e76f51")
+        eixos[2].set_xlabel("where the shot met the goal line, y (mm, clipped at 1500)"); eixos[2].set_ylabel("aim y (mm)")
+        eixos[2].set_title("Landing point per aim (x = aim, red = posts)")
+        salvar(fig, saida, "05_precisao_por_mira.png")
 
     # 6. Where the error comes from.
     fig, eixos = plt.subplots(1, 3, figsize=(15, 3.9))
@@ -219,10 +243,41 @@ def main():
             for texto in arquivo:
                 t = json.loads(texto)
                 if t["bola"]:
-                    b = np.array(t["bola"])
+                    b = np.array(ate_o_desfecho(t["bola"]))
                     ax.plot(b[:, 0], b[:, 1], color=CORES.get(t["resultado"], "#000"), lw=0.6, alpha=0.5)
         ax.set_title("Ball path of every attempt, by outcome")
         salvar(fig, saida, "08_trajetorias.png")
+
+    # 9. Against a goalkeeper.
+    kx, ky = col(linhas, "goleiro_x"), col(linhas, "goleiro_y")
+    tem_goleiro = ~np.isnan(kx)
+    defendido = res == "defendido"
+    cobertura = np.array([fracao_coberta(bx[i], by[i], kx[i], ky[i]) if tem_goleiro[i] else np.nan
+                          for i in range(n)])
+    if tem_goleiro.any():
+        fig, eixos = plt.subplots(1, 3, figsize=(16, 4.4))
+        ax = eixos[0]
+        ax.add_patch(plt.Rectangle((3500, -1000), 1000, 2000, fill=False, color="#555"))
+        ax.plot([GOL_X, GOL_X], [-GOL_MEIA, GOL_MEIA], color="#2a9d8f", lw=4)
+        for k in nomes:
+            sel = tem_goleiro & (res == k)
+            ax.scatter(kx[sel], ky[sel], s=16, color=CORES[k], label=k)
+        ax.set_xlim(3400, 4600); ax.set_ylim(-1100, 1100); ax.set_aspect("equal")
+        ax.legend(fontsize=7); ax.set_title("Where the keeper stood, by outcome")
+        ax.set_xlabel("x (mm)"); ax.set_ylabel("y (mm)")
+        taxa_por_faixa(eixos[1], cobertura[tem_goleiro], gol[tem_goleiro], np.linspace(0, 1, 11),
+                       "share of the goal mouth the keeper hides, seen from the ball",
+                       "Goals per attempt, by how much goal is left")
+        sel = tem_goleiro & chutou & ~np.isnan(y_linha)
+        for k in nomes:
+            m = sel & (res == k)
+            eixos[2].scatter(ky[m], np.clip(y_linha[m], -1500, 1500), s=12, color=CORES[k], label=k)
+        eixos[2].axhline(-GOL_MEIA, color="#e76f51", lw=0.8); eixos[2].axhline(GOL_MEIA, color="#e76f51", lw=0.8)
+        eixos[2].plot([-1000, 1000], [-1000, 1000], color="#999", lw=0.8, ls=":")
+        eixos[2].set_xlabel("keeper y (mm)"); eixos[2].set_ylabel("where the shot met the goal line, y (mm)")
+        eixos[2].set_title("Does it shoot away from the keeper? (dotted = at the keeper)")
+        eixos[2].grid(alpha=0.3)
+        salvar(fig, saida, "09_goleiro.png")
 
     # Summary.
     def med(v):
@@ -241,8 +296,20 @@ def main():
              "- |body error at the kick|: median %.1f deg, p90 %.1f deg" % med(np.abs(erro_corpo[chutou])),
              "- Time to kick: median %.1f s, p90 %.1f s" % med(t_chute[chutou]),
              "- Ball speed leaving the kick: median %.0f mm/s" % med(vel[chutou])[0],
-             "- Ball pushed toward our goal by more than 100 mm: %d attempts" % int((recuo > 100).sum()), "",
-             "## By aim point", "", "| aim y | shots | goals per shot | median signed miss (mm) |", "|---|---|---|---|"]
+             "- Ball pushed toward our goal by more than 100 mm: %d attempts" % int((recuo > 100).sum()), ""]
+    if tem_goleiro.any():
+        texto += ["## Against the keeper", "",
+                  f"- Saved by the keeper: {int(defendido.sum())} ({defendido.mean() * 100:.1f}% of attempts, "
+                  f"{defendido[chutou].mean() * 100:.1f}% of shots)",
+                  "", "| share of goal hidden | attempts | goals |", "|---|---|---|"]
+        for a, b in ((0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.01)):
+            m = tem_goleiro & (cobertura >= a) & (cobertura < b)
+            texto.append(f"| {a:.1f}-{min(b, 1):.1f} | {int(m.sum())} | "
+                         f"{(gol[m].mean() * 100 if m.any() else float('nan')):.0f}% |")
+        texto.append("")
+    if miras:
+        texto += ["## By aim point", "", "| aim y | shots | goals per shot | median signed miss (mm) |",
+                  "|---|---|---|---|"]
     for m in miras:
         sel = chutou & (mira == m)
         pm, _, _ = wilson(int(gol[sel].sum()), int(sel.sum()))
