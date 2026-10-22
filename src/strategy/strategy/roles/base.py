@@ -71,7 +71,7 @@ class Papel(ABC):
             so_lado_certo=not experimento.desligado("ORIENTACAO_LADO"),
             pode_armar=not a.alvo.emprestada,
             exigir_corpo_alinhado=not experimento.desligado("DISPARO_ALINHADO"),
-            fase=self.fase())
+            fase=self.fase(), tol_corpo=a.alvo.tolerancia)
 
         vel_x, vel_y = self.velocidade_chegada(a, rid, alvo_x, alvo_y)
         cmd = _SKILLS.move_with_angle(robot_id=rid, target_x=alvo_x, target_y=alvo_y,
