@@ -78,10 +78,23 @@ import os
 #                     1600 mm fixos). Era a "investida fantasma": 11% dos
 #                     quadros medidos entravam na perseguicao com a bola
 #                     praticamente parada.
+#   RECORTE_AREA      o alvo do empurrao para na borda da area penal, na linha de
+#                     tiro. Dentro dela o planejador o jogava para a borda mais
+#                     proxima, fora da linha: contato torto e bola empurrada para
+#                     dentro da area (20/10/2026, tentativas 67, 115, 465).
+#   DISPARO_PELO_VAO  no chute ao gol, o corpo tem de estar dentro do vao que a
+#                     mira escolheu (menos meio grau), e nao a 20 graus dela.
+#                     Com goleiro, 4 de 6 defesas foram chutes num vao de 2-5
+#                     graus disparados com o corpo 4-10 graus fora (21/10/2026).
+#   CHEGADA_NA_LINHA  so entra no empurrao alinhado a ate 40 mm da linha de tiro
+#                     e perto da bola; sai a 90. Entrava a 90 e saia a 160, e o
+#                     grSim so dispara com a bola a 40 mm do centro do chutador:
+#                     16% dos primeiros toques eram empurroes (21/10/2026).
 CHAVES = ("ORIENTACAO_LADO", "ORBITA", "PROTECAO", "PRESSAO_BOLA",
           "MIRA_FIRME", "EMPURRAO", "PLANEJADOR", "DISPARO_ALINHADO",
           "PERSEGUICAO", "CHEGADA_EM_MOVIMENTO", "DESTINO_LONGO",
-          "CHEGADA_ALINHADA", "PARAR_E_MIRAR")
+          "CHEGADA_ALINHADA", "PARAR_E_MIRAR", "RECORTE_AREA",
+          "DISPARO_PELO_VAO", "CHEGADA_NA_LINHA")
 
 
 def _ligada(valor):
@@ -106,8 +119,12 @@ def desligado(nome):
 #   COM_CHEGADA_EM_MOVIMENTO  arrive at the push point moving (lost 60%, 09/10)
 #   FORCAR_COBERTURA          every field robot defends, to test the defender
 #                             alone (docs/zagueiro.sh)
+#   DISPARO_PREVISTO          the kick gate also checks the body 100 ms ahead: saves
+#                             6 -> 1, but pushes 12% -> 24% and no-kicks 3 -> 8 on
+#                             the same 200 keeper placements (21/10). Kept to retune
+#                             the look-ahead (Sumatra uses 10-47 ms).
 CHAVES_LIGA = ("PAPEIS_FIXOS", "SO_POSICIONAR", "COM_DESTINO_LONGO",
-               "COM_CHEGADA_EM_MOVIMENTO", "FORCAR_COBERTURA")
+               "COM_CHEGADA_EM_MOVIMENTO", "FORCAR_COBERTURA", "DISPARO_PREVISTO")
 
 
 def ligado(nome):

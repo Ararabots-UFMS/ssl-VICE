@@ -76,13 +76,15 @@ class Papel(ABC):
         # movement target must never be reachable.
         gol = a.mundo.gol_ataque
         ponto, tipo, pode_armar = self.mira(a, rid)
+        # The gap tolerance belongs to the analysis' aim; a role's own target keeps the default.
+        tol_corpo = a.alvo.tolerancia if ponto == a.alvo_chute else None
         ang, arma, forca = chute.chutar_em(
             robo, ball, ponto, tipo, a.mundo.sentido, travas, rid,
             (gol.x, gol.y),
             so_lado_certo=not experimento.desligado("ORIENTACAO_LADO"),
             pode_armar=pode_armar,
             exigir_corpo_alinhado=not experimento.desligado("DISPARO_ALINHADO"),
-            fase=self.fase())
+            fase=self.fase(), tol_corpo=tol_corpo)
 
         vel_x, vel_y = self.velocidade_chegada(a, rid, alvo_x, alvo_y)
         cmd = _SKILLS.move_with_angle(robot_id=rid, target_x=alvo_x, target_y=alvo_y,

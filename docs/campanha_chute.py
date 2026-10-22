@@ -34,6 +34,11 @@ ARQUIVO_MIRA = "/tmp/ararabots_mira_y"      # read by strategy/skills/experiment
 VEL_CHUTE = 1500.0                          # ball faster than this was kicked, not pushed
 SALTO = 400.0                               # more than this in one frame is not motion
 VEL_MAX_BOLA = 9000.0                       # mm/s; nothing in grSim moves the ball faster
+GOLEIRO_ID = 0                              # their keeper: yellow 0; other yellows from 1
+RAIO_ROBO = 90.0
+DEFESA_RAIO = 200.0                         # a shot that passes this close to the keeper hit it
+CENTRO_ATE_PLACA = 73.0                     # robot centre to the kicker plate (grSim)
+MOVEU = 25.0                                # the ball has been touched once it moved this far
 
 CAMPOS = [
     "tentativa", "seed", "bola_x", "bola_y", "robo_x", "robo_y", "robo_dir",
@@ -41,7 +46,8 @@ CAMPOS = [
     "mira_y", "inimigos", "resultado", "chutou", "t_chute", "bola_chute_x",
     "bola_chute_y", "dist_chute_gol", "arrasto", "recuo", "vel_saida",
     "erro_corpo", "erro_direcao", "y_na_linha", "erro_y", "bola_fim_x",
-    "bola_fim_y", "duracao", "trombadas", "fantasmas", "motivo",
+    "bola_fim_y", "duracao", "trombadas", "fantasmas", "motivo", "goleiro_x", "goleiro_y",
+    "toque_xx", "toque_yy", "toque_armado", "toque_foi_chute",
 ]
 
 
@@ -68,10 +74,19 @@ def plano(seed, i, args):
         if no_campo(rx, ry, 200.0) and not na_area(rx, ry, 200.0):
             break
     rdir = rng.uniform(-180.0, 180.0)
-    mira = rng.choice(args.miras)
+    mira = rng.choice(args.miras) if args.miras else None
 
     inimigos = []
-    for rid in range(args.inimigos):
+    if args.goleiro == "gol":
+        # Standing on the goal line, anywhere across the mouth.
+        inimigos.append((GOLEIRO_ID, GOL_X - RAIO_ROBO - 10.0,
+                         rng.uniform(-GOL_MEIA + RAIO_ROBO, GOL_MEIA - RAIO_ROBO), 180.0))
+    elif args.goleiro == "area":
+        inimigos.append((GOLEIRO_ID,
+                         rng.uniform(MEIO_CAMPO_X - AREA_FUNDO + RAIO_ROBO, GOL_X - RAIO_ROBO - 10.0),
+                         rng.uniform(-AREA_MEIA + RAIO_ROBO, AREA_MEIA - RAIO_ROBO), 180.0))
+    primeiro = 1 if args.goleiro != "nenhum" else 0
+    for rid in range(primeiro, primeiro + args.inimigos):
         while True:
             ex = rng.uniform(max(bx, -1000.0), MEIO_CAMPO_X - 300.0)
             ey = rng.uniform(-MEIO_CAMPO_Y + 300.0, MEIO_CAMPO_Y - 300.0)
@@ -80,7 +95,8 @@ def plano(seed, i, args):
             if livre:
                 break
         inimigos.append((rid, ex, ey, 180.0))
-    return dict(bola=(bx, by), robo=(rx, ry, rdir), mira=mira, inimigos=inimigos)
+    return dict(bola=(bx, by), robo=(rx, ry, rdir), mira=mira, inimigos=inimigos,
+                goleiro=args.goleiro != "nenhum")
 
 
 def criar_no():
@@ -244,7 +260,8 @@ def velocidade(q, i, janela=0.05):
 def medir(q, p):
     """Everything the CSV says about one attempt, from its recorded frames."""
     bx0, by0 = p["bola"]
-    alvo = (GOL_X, p["mira"])
+    # With the strategy choosing its own aim, errors are measured against the goal centre.
+    alvo = (GOL_X, p["mira"] if p["mira"] is not None else 0.0)
     m = dict(chutou=0, resultado="sem_chute")
     q = limpar(q)
     if len(q) < 5:
@@ -252,6 +269,12 @@ def medir(q, p):
         m["motivo"] = "sem quadros"
         return m
     t0 = q[0][0]
+    # A robot that never moved means the chain was down (network change, dead node),
+    # not that the strategy chose not to kick.
+    if max(math.hypot(f[3] - q[0][3], f[4] - q[0][4]) for f in q) < 100.0:
+        m["resultado"] = "ERRO"
+        m["motivo"] = "robo parado: a cadeia caiu?"
+        return m
     m["duracao"] = round(q[-1][0] - t0, 2)
     m["bola_fim_x"], m["bola_fim_y"] = round(q[-1][1]), round(q[-1][2])
     m["recuo"] = round(max(0.0, bx0 - min(f[1] for f in q)))
@@ -291,12 +314,19 @@ def medir(q, p):
         if "y_na_linha" in m:
             m["erro_y"] = round(m["y_na_linha"] - alvo[1])
 
+    goleiro = next((e for e in p["inimigos"] if e[0] == GOLEIRO_ID), None) \
+        if p.get("goleiro") else None
+    defendido = ik is not None and goleiro is not None and any(
+        math.hypot(f[1] - goleiro[1], f[2] - goleiro[2]) < DEFESA_RAIO for f in q[ik:])
+    m.update(primeiro_toque(q, ik))
     if contra:
         m["resultado"] = "gol_contra"
     elif cruzou is not None and abs(cruzou) <= GOL_MEIA:
         m["resultado"] = "gol"
     elif ik is None:
         m["resultado"] = "sem_chute"
+    elif defendido:
+        m["resultado"] = "defendido"
     elif cruzou is not None or not no_campo(q[-1][1], q[-1][2], 0.0):
         m["resultado"] = "fora"
     else:
@@ -304,9 +334,37 @@ def medir(q, p):
     return m
 
 
+def primeiro_toque(q, ik):
+    """Where the ball sat on the robot's front at the first touch, and if it was the kick.
+
+    grSim fires only with the ball on the plate: 0-31.5 mm in front of it and within
+    40 mm of its centre. A first touch outside that is a push.
+    """
+    bx0, by0 = q[0][1], q[0][2]
+    for i, f in enumerate(q):
+        if math.hypot(f[1] - bx0, f[2] - by0) < MOVEU:
+            continue
+        _, bx, by, rx, ry, rth, kick = q[max(0, i - 1)]
+        if math.hypot(bx - rx, by - ry) > 250.0:
+            return {}                   # something else moved it
+        dx, dy = bx - rx, by - ry
+        xx = dx * math.cos(rth) + dy * math.sin(rth) - CENTRO_ATE_PLACA
+        yy = -dx * math.sin(rth) + dy * math.cos(rth)
+        foi_chute = ik is not None and abs(q[ik][0] - f[0]) < 0.15
+        return dict(toque_xx=round(xx), toque_yy=round(yy), toque_armado=int(kick > 0.0),
+                    toque_foi_chute=int(foi_chute))
+    return {}
+
+
 def tentativa(no, i, p, args):
-    with open(ARQUIVO_MIRA, "w") as arquivo:
-        arquivo.write(str(p["mira"]))
+    if p["mira"] is None:
+        try:
+            os.remove(ARQUIVO_MIRA)       # the strategy picks its own aim
+        except OSError:
+            pass
+    else:
+        with open(ARQUIVO_MIRA, "w") as arquivo:
+            arquivo.write(str(p["mira"]))
     cen = dict(bola=p["bola"], azuis=[(PORTADOR,) + p["robo"]], amarelos=p["inimigos"])
 
     A.enviar_comando_arbitro("HALT")
@@ -364,11 +422,15 @@ def main():
     ap.add_argument("--dist-min", type=float, default=300.0, help="robot to ball")
     ap.add_argument("--dist-max", type=float, default=2500.0)
     ap.add_argument("--miras", default="-350,-175,0,175,350",
-                    help="aim points inside the goal (y, mm); '0' is the stock centre aim")
-    ap.add_argument("--inimigos", type=int, default=0, help="static yellow robots (ids 0..n-1)")
+                    help="aim points inside the goal (y, mm), or 'auto' to let the strategy choose")
+    ap.add_argument("--inimigos", type=int, default=0, help="other static yellow robots")
+    ap.add_argument("--goleiro", choices=["nenhum", "gol", "area"], default="nenhum",
+                    help="static yellow keeper: on the goal line, or anywhere in their area")
+    ap.add_argument("--tentativas", default="",
+                    help="run exactly these attempt numbers (e.g. 67,115), done or not")
     ap.add_argument("--plano", action="store_true", help="print the placements and exit")
     args = ap.parse_args()
-    args.miras = [float(v) for v in args.miras.split(",")]
+    args.miras = [] if args.miras == "auto" else [float(v) for v in args.miras.split(",")]
 
     caminho = os.path.join(args.saida, "tentativas.csv")
     feitas = set()
@@ -378,7 +440,9 @@ def main():
                       if int(l["seed"]) == args.seed and l["resultado"] != "ERRO"}
 
     fila, i = [], 0
-    while len(fila) < args.n and (args.total is None or i < args.total):
+    if args.tentativas:
+        fila = [int(v) for v in args.tentativas.split(",")]
+    while not args.tentativas and len(fila) < args.n and (args.total is None or i < args.total):
         if i not in feitas:
             fila.append(i)
         i += 1
@@ -406,7 +470,8 @@ def main():
                 p = plano(args.seed, i, args)
                 (bx, by), (rx, ry, rdir) = p["bola"], p["robo"]
                 m = tentativa(no, i, p, args)
-                a_gol = math.atan2(p["mira"] - by, GOL_X - bx)
+                # With the strategy choosing its aim, the goal centre stands in for it.
+                a_gol = math.atan2((p["mira"] or 0.0) - by, GOL_X - bx)
                 linha = dict(
                     tentativa=i, seed=args.seed, bola_x=round(bx), bola_y=round(by),
                     robo_x=round(rx), robo_y=round(ry), robo_dir=round(rdir),
@@ -417,6 +482,10 @@ def main():
                     # 0 = robot already behind the ball, 180 = ball between it and the goal.
                     angulo_contorno=round(abs(math.degrees(norm(math.atan2(by - ry, bx - rx) - a_gol))), 1),
                     mira_y=p["mira"], inimigos=len(p["inimigos"]))
+                gk = next((e for e in p["inimigos"] if e[0] == GOLEIRO_ID), None) \
+                    if p.get("goleiro") else None
+                if gk is not None:
+                    linha.update(goleiro_x=round(gk[1]), goleiro_y=round(gk[2]))
                 linha.update(m)
                 escritor.writerow(linha)
                 arquivo.flush()
@@ -427,8 +496,9 @@ def main():
                     bola=[[round(f[1]), round(f[2])] for f in limpos[::passo]],
                     robo=[[round(f[3]), round(f[4])] for f in limpos[::passo]])) + "\n")
                 trajetorias.flush()
+                mira_txt = "auto" if p["mira"] is None else f"{p['mira']:+5.0f}"
                 print(f"  #{i:4d} bola ({bx:5.0f},{by:5.0f}) robo a {linha['dist_robo_bola']:4d} mm "
-                      f"contorno {linha['angulo_contorno']:5.1f} mira {p['mira']:+5.0f} -> "
+                      f"contorno {linha['angulo_contorno']:5.1f} mira {mira_txt} -> "
                       f"{linha['resultado']:9s} erro_y={linha.get('erro_y', '')} "
                       f"t={linha.get('t_chute', '')}", flush=True)
                 erros_seguidos = erros_seguidos + 1 if linha["resultado"] == "ERRO" else 0

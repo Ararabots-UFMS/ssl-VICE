@@ -25,7 +25,9 @@
 #                                     graficos/ e resumo.md. Retoma de onde parou.
 #                                     SEED=2 BLOCO=25 ./ararabots.sh campanha 500
 #                                     argumentos extras vao para o
-#                                     campanha_chute.py (--miras 0, --inimigos 2)
+#                                     campanha_chute.py (--miras auto,
+#                                     --goleiro gol|area, --inimigos 2).
+#                                     CAMPANHA=nome grava em docs/nome/
 #      ./ararabots.sh ajustes on|off|status [tracker|filtro|tudo]
 #                                     correcoes fora de src/strategy/ que ainda
 #                                     sao EXPERIMENTAIS (as duas de src/vision/)
@@ -150,7 +152,7 @@ DDS_ENV=""
 [ -n "${MOVIMENTO_ANTIGO:-}" ] && MOVIMENTO_NOVO=""
 export MOVIMENTO_NOVO
 
-ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_SEM_RECORTE_AREA='${ARARABOTS_SEM_RECORTE_AREA:-}'; export ARARABOTS_SEM_DISPARO_PELO_VAO='${ARARABOTS_SEM_DISPARO_PELO_VAO:-}'; export ARARABOTS_SEM_CHEGADA_NA_LINHA='${ARARABOTS_SEM_CHEGADA_NA_LINHA:-}'; export ARARABOTS_DISPARO_PREVISTO='${ARARABOTS_DISPARO_PREVISTO:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 # GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
 #
 # O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
@@ -166,7 +168,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_SEM_RECORTE_AREA='${ARARABOTS_SEM_RECORTE_AREA:-}'; export ARARABOTS_SEM_DISPARO_PELO_VAO='${ARARABOTS_SEM_DISPARO_PELO_VAO:-}'; export ARARABOTS_SEM_CHEGADA_NA_LINHA='${ARARABOTS_SEM_CHEGADA_NA_LINHA:-}'; export ARARABOTS_DISPARO_PREVISTO='${ARARABOTS_DISPARO_PREVISTO:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -2229,7 +2231,9 @@ cmd_campanha() {
     local total="${1:-200}"
     shift 2>/dev/null || true
     local bloco="${BLOCO:-25}" seed="${SEED:-1}"
-    local pasta="$SCRIPT_DIR/campanha" csv="$SCRIPT_DIR/campanha/tentativas.csv"
+    # CAMPANHA names the output folder under docs/, one per experiment.
+    local nome="${CAMPANHA:-campanha}"
+    local pasta="$SCRIPT_DIR/$nome" csv="$SCRIPT_DIR/$nome/tentativas.csv"
     local feitas antes falhas=0
 
     if [ -z "$(docker ps -q -f name=^vice$)" ] || ! pgrep -f "[g]rSim" >/dev/null; then
@@ -2254,9 +2258,9 @@ cmd_campanha() {
             continue
         fi
         antes="$feitas"
-        ros_run "python3 /root/ssl-VICE/docs/campanha_chute.py --n $bloco --total $total --seed $seed $*"
+        ros_run "python3 /root/ssl-VICE/docs/campanha_chute.py --n $bloco --total $total --seed $seed --saida /root/ssl-VICE/docs/$nome $*"
         # O container escreve como root; devolve a pasta ao usuario do host.
-        docker exec vice chown -R "$(id -u):$(id -g)" /root/ssl-VICE/docs/campanha 2>/dev/null
+        docker exec vice chown -R "$(id -u):$(id -g)" /root/ssl-VICE/docs/$nome 2>/dev/null
         grsim_sobreviveu || echo "   !! o grSim caiu neste bloco"
         if [ "$(_campanha_feitas)" -le "$antes" ]; then
             falhas=$((falhas + 1))
@@ -2274,7 +2278,7 @@ if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
     return 0
 fi
 
-uso() { sed -n '2,47p' "$0"; }
+uso() { sed -n '2,49p' "$0"; }
 
 case "${1:-menu}" in
     instalar)  shift; cmd_instalar "$@" ;;

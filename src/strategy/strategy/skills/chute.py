@@ -33,6 +33,7 @@ O casco tem raio 90 mm e a bola 21: tocando o casco REDONDO a distancia trava em
 from math import atan2, cos, hypot, pi, sin
 
 from strategy.skills.geometria import norm_ang
+from strategy.skills import experimento
 
 # --- a geometria do chutador, medida no grSim -----------------------------
 CENTRO_ATE_PLACA = 73.0
@@ -210,7 +211,7 @@ def orientacao_do_corpo(robo, ball, alvo_chute, gol_ataque_xy,
 
 def chutar_em(robo, ball, ponto, tipo_alvo, sentido_ataque, travas, rid,
               gol_ataque_xy=None, so_lado_certo=True, pode_armar=True,
-              fase=None, exigir_corpo_alinhado=True):
+              fase=None, exigir_corpo_alinhado=True, tol_corpo=None):
     """"Chute a bola NAQUELE ponto": os tres canais, numa chamada.
 
     Devolve (angulo, armado, forca) - o que a estrategia precisa pedir para que
@@ -259,7 +260,7 @@ def chutar_em(robo, ball, ponto, tipo_alvo, sentido_ataque, travas, rid,
     # contorno. Ver o racional medido em armar_chute.
     armado = pode_armar and _mira and armar_chute(
         robo, ball, ponto, sentido_ataque, tipo_alvo, travas, rid,
-        exigir_corpo_alinhado=exigir_corpo_alinhado)
+        exigir_corpo_alinhado=exigir_corpo_alinhado, tol_corpo=tol_corpo)
     return angulo, armado, (forca_por_alvo(tipo_alvo) if armado else 0.0)
 
 
@@ -269,10 +270,14 @@ def chutar_em(robo, ball, ponto, tipo_alvo, sentido_ataque, travas, rid,
 # (running.TOL_MIRA) e e menos que a meia-face do chutador (~29 graus): dentro
 # disto, a bola sai na direcao pedida com erro que o gol absorve.
 TOL_CORPO_DISPARO = 0.35
+# An armed kick stays armed until the next tick disarms it, 100 ms later, and the
+# robot turns at up to 6 rad/s. Check where the body will point by then as well: with
+# only the present checked, kicks fired 4-7 deg off a 2 deg gap (21/10/2026).
+ANTECIPACAO_DISPARO = 0.1
 
 
 def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid,
-                exigir_corpo_alinhado=True):
+                exigir_corpo_alinhado=True, tol_corpo=None):
     """Decide se o chute deste robo fica ARMADO neste ciclo.
 
     'travas' e o dicionario de estado da jogada (estado["chute_armado"]): a
@@ -333,7 +338,13 @@ def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid,
     if exigir_corpo_alinhado:
         ang_saida = atan2(alvo_chute[1] - ball.position_y,
                           alvo_chute[0] - ball.position_x)
-        if abs(norm_ang(robo.orientation - ang_saida)) > TOL_CORPO_DISPARO:
+        tol = TOL_CORPO_DISPARO if tol_corpo is None else tol_corpo
+        fora = abs(norm_ang(robo.orientation - ang_saida)) > tol
+        if not fora and experimento.ligado("DISPARO_PREVISTO"):
+            previsto = robo.orientation + (getattr(robo, "velocity_orientation", 0.0) or 0.0) \
+                * ANTECIPACAO_DISPARO
+            fora = abs(norm_ang(previsto - ang_saida)) > tol
+        if fora:
             travas[rid] = False
             return False
     perto = d_bola < ALCANCE_CONTATO and frente_placa > MARGEM_FRENTE_PLACA

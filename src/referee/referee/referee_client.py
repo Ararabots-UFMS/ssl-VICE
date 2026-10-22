@@ -9,12 +9,16 @@ class RefereeClient:
     (useful when Docker or system networking requires specifying the interface).
     """
 
-    def __init__(self, ip: str, port: int, buffer_size: int):
+    def __init__(self, ip: str, port: int, buffer_size: int, local_only: bool = False):
         self.ip = ip
         self.port = port
         self.buffer_size = buffer_size
         self.allowed_source_ip = os.environ.get("ARARABOTS_SIM_SOURCE_IP") or None
         self.sock = None
+        # In simulation, another machine's game controller on the same group would
+        # otherwise steer our robots (seen on the university network, 21/10/2026).
+        self.local_only = local_only
+        self._is_local = {}
 
     def connect(self, interface_ip: str | None = None):
         """Sets up the multicast socket to receive data.
@@ -38,12 +42,28 @@ class RefereeClient:
         mreq = struct.pack("4s4s", group, local_ip)
         self.sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
+    def _from_this_machine(self, ip: str) -> bool:
+        """Whether ip belongs to this host: only a local address can be bound to."""
+        known = self._is_local.get(ip)
+        if known is None:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                probe.bind((ip, 0))
+                known = True
+            except OSError:
+                known = False
+            finally:
+                probe.close()
+            self._is_local[ip] = known
+        return known
+
     def receive(self):
         """Receive a message from the multicast group and return it as raw data."""
         try:
             while True:
                 data, addr = self.sock.recvfrom(self.buffer_size)
-                if not self.allowed_source_ip or addr[0] == self.allowed_source_ip:
+                if ((not self.allowed_source_ip or addr[0] == self.allowed_source_ip)
+                        and (not self.local_only or self._from_this_machine(addr[0]))):
                     return data, addr
         except socket.timeout:
             return None

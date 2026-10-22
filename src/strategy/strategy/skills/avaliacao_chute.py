@@ -24,11 +24,20 @@ def melhor_alvo(ball, gol, inimigos):
     de gol. Cada raio amostrado e validado pela mesma margem usada pelo VICE
     para verificar linhas de chute e passe.
     """
+    x, y, nota, _ = melhor_vao(ball, gol, inimigos)
+    return x, y, nota
+
+
+def melhor_vao(ball, gol, inimigos):
+    """Como melhor_alvo, e tambem as bordas do vao: (x, y, nota, (a_min, a_max)).
+
+    As bordas sao angulos absolutos vistos da bola; None quando nao ha vao.
+    """
     bx, by = float(ball.position_x), float(ball.position_y)
     gx, gy = float(gol.x), float(gol.y)
     dx = gx - bx
     if abs(dx) < 1e-6:
-        return None, None, 0.0
+        return None, None, 0.0, None
 
     half_width = LARGURA_GOL_MM / 2.0
     center_angle = atan2(gy - by, dx)
@@ -40,7 +49,7 @@ def melhor_alvo(ball, gol, inimigos):
     ))
     lo, hi = offsets
     if hi - lo < 1e-9:
-        return None, None, 0.0
+        return None, None, 0.0, None
 
     step = (hi - lo) / (AMOSTRAS_ANGULARES - 1)
     open_samples = []
@@ -70,11 +79,11 @@ def melhor_alvo(ball, gol, inimigos):
         i += 1
 
     if best is None:
-        return None, None, 0.0
+        return None, None, 0.0, None
 
     width, gap_lo, gap_hi = best
     target_angle = center_angle + (gap_lo + gap_hi) / 2.0
     target_y = by + tan(target_angle) * dx
     target_y = max(gy - half_width, min(gy + half_width, target_y))
     score = min(width / ANGULO_ABERTURA_NOTA_MAX, 1.0)
-    return gx, target_y, score
+    return gx, target_y, score, (center_angle + gap_lo, center_angle + gap_hi)
