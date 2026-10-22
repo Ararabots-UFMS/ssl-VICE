@@ -17,32 +17,26 @@ class PenaltyAreaObstacle(StaticObstacle):
         self.top_right_point = None
         self.bot_left_point = None
         self.bot_right_point = None
-        self.padding = padding
+        # Always grows the area: a negative margin let robots stand inside it.
+        self.padding = abs(padding)
 
+        # The two side lines of this area, whatever order their names come in: grSim
+        # names them the other way round from what this code first assumed, and that
+        # shrank both areas to |y| < 910 instead of growing them to 1090.
         if self.side is FieldSide.LEFT:
-            self.top_line = "LeftFieldRightPenaltyStretch"
-            self.bot_line = "LeftFieldLeftPenaltyStretch"
+            names = ("LeftFieldLeftPenaltyStretch", "LeftFieldRightPenaltyStretch")
         else:
-            self.top_line = "RightFieldRightPenaltyStretch"
-            self.bot_line = "RightFieldLeftPenaltyStretch"
-            self.padding = -self.padding
-
-        for line in geometry.field_lines:
-            if line.name == self.top_line:
-                # TODO CHECK ORDER OF x and y
-                self.top_left_point = Vector2D(
-                    line.x1 - self.padding, line.y1 + self.padding
-                )
-                self.top_right_point = Vector2D(
-                    line.x2 + self.padding, line.y2 + self.padding
-                )
-            if line.name == self.bot_line:
-                self.bot_left_point = Vector2D(
-                    line.x1 - self.padding, line.y1 - self.padding
-                )
-                self.bot_right_point = Vector2D(
-                    line.x2 + self.padding, line.y2 - self.padding
-                )
+            names = ("RightFieldLeftPenaltyStretch", "RightFieldRightPenaltyStretch")
+        lines = [line for line in geometry.field_lines if line.name in names]
+        if {line.name for line in lines} == set(names):
+            xs = [v for line in lines for v in (line.x1, line.x2)]
+            ys = [v for line in lines for v in (line.y1, line.y2)]
+            min_x, max_x = min(xs) - self.padding, max(xs) + self.padding
+            min_y, max_y = min(ys) - self.padding, max(ys) + self.padding
+            self.top_left_point = Vector2D(min_x, max_y)
+            self.top_right_point = Vector2D(max_x, max_y)
+            self.bot_left_point = Vector2D(min_x, min_y)
+            self.bot_right_point = Vector2D(max_x, min_y)
 
         if not all(
             points is not None
@@ -70,16 +64,15 @@ class PenaltyAreaObstacle(StaticObstacle):
                     x_inner = half_l - depth
                     x_outer = half_l
 
-                # Aplica padding (já invertido se RIGHT)
                 min_x = min(x_inner, x_outer)
                 max_x = max(x_inner, x_outer)
                 min_y = -half_w
                 max_y = half_w
 
-                self.top_left_point = self.top_left_point or Vector2D(min_x - self.padding, max_y + abs(self.padding))
-                self.top_right_point = self.top_right_point or Vector2D(max_x + self.padding, max_y + abs(self.padding))
-                self.bot_left_point = self.bot_left_point or Vector2D(min_x - self.padding, min_y - abs(self.padding))
-                self.bot_right_point = self.bot_right_point or Vector2D(max_x + self.padding, min_y - abs(self.padding))
+                self.top_left_point = self.top_left_point or Vector2D(min_x - self.padding, max_y + self.padding)
+                self.top_right_point = self.top_right_point or Vector2D(max_x + self.padding, max_y + self.padding)
+                self.bot_left_point = self.bot_left_point or Vector2D(min_x - self.padding, min_y - self.padding)
+                self.bot_right_point = self.bot_right_point or Vector2D(max_x + self.padding, min_y - self.padding)
             else:
                 # Sem dimensões: define área degenerada fora do campo para não interferir
                 off = 99999.0
