@@ -94,3 +94,30 @@ def test_receive_raises_runtime_error_on_socket_failures(monkeypatch):
 
     with pytest.raises(RuntimeError, match="Error receiving multicast message: boom"):
         client.receive()
+
+
+def test_local_only_skips_packets_from_other_machines():
+    """Another machine's game controller on the same group must not steer our robots."""
+    class TwoSenders:
+        def __init__(self):
+            self.queue = [(b"theirs", ("10.6.251.133", 11003)), (b"ours", ("127.0.0.1", 11003))]
+
+        def recvfrom(self, _):
+            return self.queue.pop(0)
+
+    client = RefereeClient("224.5.23.1", 11003, 65536, local_only=True)
+    client.sock = TwoSenders()
+    client._is_local = {"10.6.251.133": False, "127.0.0.1": True}
+
+    assert client.receive() == (b"ours", ("127.0.0.1", 11003))
+
+
+def test_without_local_only_every_sender_is_accepted():
+    class OneSender:
+        def recvfrom(self, _):
+            return b"theirs", ("10.6.251.133", 11003)
+
+    client = RefereeClient("224.5.23.1", 11003, 65536)
+    client.sock = OneSender()
+
+    assert client.receive() == (b"theirs", ("10.6.251.133", 11003))

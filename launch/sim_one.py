@@ -46,6 +46,7 @@ def generate_launch_description():
             Node(
                  package="referee",
                  executable="referee_node",
+                 parameters=[{"local_only": True}],
              )
         ]
     )
