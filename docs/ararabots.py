@@ -1004,6 +1004,22 @@ CENARIOS = {
         "inimigos_parados": True,
         "comando": ("FORCE_START", "BLUE"),
     },
+    "nota_chute_gol_dinamico": {        "tipo": "jogo",
+        "titulo": "Nota de chute com goleiro em movimento",
+        "descricao": (
+            "Repete a largada e o receptor de nota_chute_gol, mas deixa o "
+            "goleiro amarelo se mover com a lógica normal do adversário: patrulha "
+            "a meta com a bola parada e tenta interceptar quando ela se move. "
+            "A primeira escolha é avaliada pela nota registrada naquele instante; "
+            "com o ângulo fechado, passar também pode ser a decisão correta."
+        ),
+        "bola": (3100.0, 0.0),
+        "azuis": [(0, -4300, 0, 0), (1, 2916, -237, 52),
+                  (2, 3900, 1400, 0)],
+        "amarelos": [(0, 4300, 0, 180)],
+        # Sem inimigos_parados: comandar_amarelos move o goleiro durante o teste.
+        "comando": ("FORCE_START", "BLUE"),
+    },
 
     # NOVOS CENÁRIOS DE KICKOFF
     "kickoff_favor": {        "tipo": "kickoff",

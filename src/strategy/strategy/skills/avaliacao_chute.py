@@ -2,15 +2,42 @@
 
 from math import atan2, pi, tan
 
-from strategy.skills.geometria import linha_livre
-
-
 LARGURA_GOL_MM = 1000.0
 FOLGA_CHUTE_MM = 180.0
 AMOSTRAS_ANGULARES = 81
 ANGULO_ABERTURA_NOTA_MAX = 0.3
 NOTA_CHUTE_DIRETO = 0.3
 NOTA_CHUTE_BAIXA_CHANCE = 0.1
+VELOCIDADE_CHUTE_ESTIMADA = 5800.0  # mm/s; ~5.8 m/s medidos nos replays
+
+
+def _linha_livre_prevendo_movimento(ball, alvo_x, alvo_y, inimigos):
+    """Testa colisao no tempo: bola e adversarios avancam simultaneamente.
+
+    E uma previsao curta e linear, nao uma simulacao do controlador adversario.
+    Robos sem velocidade reportada ficam tratados como estacionarios, o que
+    preserva o resultado geometrico usado nos cenarios com inimigos parados.
+    """
+    bx, by = float(ball.position_x), float(ball.position_y)
+    dx, dy = float(alvo_x) - bx, float(alvo_y) - by
+    distancia = (dx * dx + dy * dy) ** 0.5
+    if distancia <= 1.0:
+        return True
+    ux, uy = dx / distancia, dy / distancia
+    vx_bola = ux * VELOCIDADE_CHUTE_ESTIMADA
+    vy_bola = uy * VELOCIDADE_CHUTE_ESTIMADA
+    duracao = distancia / VELOCIDADE_CHUTE_ESTIMADA
+    for robo in (inimigos or {}).values():
+        rx = float(robo.position_x) - bx
+        ry = float(robo.position_y) - by
+        rvx = float(getattr(robo, "velocity_x", 0.0)) - vx_bola
+        rvy = float(getattr(robo, "velocity_y", 0.0)) - vy_bola
+        velocidade_rel2 = rvx * rvx + rvy * rvy
+        t = (0.0 if velocidade_rel2 <= 1e-9 else
+             max(0.0, min(duracao, -(rx * rvx + ry * rvy) / velocidade_rel2)))
+        if ((rx + rvx * t) ** 2 + (ry + rvy * t) ** 2) ** 0.5 < FOLGA_CHUTE_MM:
+            return False
+    return True
 
 
 def _angulo_relativo(angulo, referencia):
@@ -21,8 +48,9 @@ def melhor_alvo(ball, gol, inimigos):
     """Devolve (x, y, nota) do maior vao livre da boca do gol.
 
     A nota e uma heuristica angular em [0, 1], nao uma probabilidade calibrada
-    de gol. Cada raio amostrado e validado pela mesma margem usada pelo VICE
-    para verificar linhas de chute e passe.
+    de gol. A linha de chute e testada no tempo: a bola avanca a velocidade
+    estimada de chute e cada adversario avanca pela velocidade observada. Cada
+    raio continua usando a mesma margem de colisao do VICE.
     """
     bx, by = float(ball.position_x), float(ball.position_y)
     gx, gy = float(gol.x), float(gol.y)
@@ -49,7 +77,8 @@ def melhor_alvo(ball, gol, inimigos):
         angle = center_angle + offset
         target_y = by + tan(angle) * dx
         target_y = max(gy - half_width, min(gy + half_width, target_y))
-        is_open = linha_livre(bx, by, gx, target_y, inimigos, FOLGA_CHUTE_MM)
+        is_open = _linha_livre_prevendo_movimento(
+            ball, gx, target_y, inimigos)
         open_samples.append(is_open)
 
     best = None

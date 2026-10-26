@@ -21,7 +21,7 @@ No painel (aba `Tool` da GUI): bloco **2 · escolher e rodar** → tipo → cen�
 
 | tipo | para que serve | quantos |
 |---|---|---|
-| `jogo` | jogo corrido — o que a competição é | 7 |
+| `jogo` | jogo corrido — o que a competição é | 10 |
 | `bola_parada` | cobrança de falta: a parte mais madura da base (5 gols em 6) | 9 |
 | `kickoff` | início de partida, a favor e contra | 2 |
 | `orientacao` | teste da correção de 03/10: o corpo não vira as costas para a bola | 3 |
@@ -47,6 +47,7 @@ No painel (aba `Tool` da GUI): bloco **2 · escolher e rodar** → tipo → cen�
 | `regressao_passe` | boca do gol bloqueada por três amarelos; zagueiro ID 2 como receptor | A linha ao gol não tem vão, mas a diagonal até o ID 2 está livre. O resultado esperado é obrigatoriamente passe para o zagueiro. |
 | `nota_chute_passe` | gol fechado, ID 2 adiantado com linha livre e portador alinhado no ponto de espera; adversários parados automaticamente | Exercita a nota baixa da skill e a aproximação final do chute: deve passar para ID 2, mesmo sem abertura para o gol. Começa no ponto de espera porque o planejador ficava oscilando na fase de contorno. |
 | `nota_chute_gol` | mesma largada alinhada e mesmo receptor de `nota_chute_passe`, mas só com o goleiro adversário parado | Controle da nota alta: a abertura ampla para o gol deve fazer a primeira ação ser um chute direto, sem passe. Assim o cenário isola a escolha do alvo sem oscilar na aproximação. |
+| `nota_chute_gol_dinamico` | mesma largada e receptor, com o goleiro adversário se movendo | Mede a escolha da primeira ação com o goleiro patrulhando a meta e tentando interceptar a bola. A decisão esperada depende da nota calculada no instante: se o goleiro fechar o ângulo, passar pode ser correto. |
 
 ---
 

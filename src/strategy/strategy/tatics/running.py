@@ -1,5 +1,6 @@
 from utils.math_util import Vector2D
 import os
+import time
 
 from math import atan2, hypot
 
@@ -598,9 +599,9 @@ def _alvo_do_chute_cru(ball, gol_ataque, ally_robots, enemy_robots, papeis,
         ball, gol_ataque, enemy_robots)
     if os.environ.get("DIAG_JOGO"):
         _registrar_diag_jogo(
-            "[JG] NOTA_CHUTE bola=%.0f,%.0f nota=%.3f "
+            "[JG] NOTA_CHUTE t_mono=%.6f bola=%.0f,%.0f nota=%.3f "
             "limiar_direto=%.3f limiar_baixa=%.3f amostras=%d inimigos=%d"
-            % (bx, by, nota_gol, avaliacao_chute.NOTA_CHUTE_DIRETO,
+            % (time.monotonic(), bx, by, nota_gol, avaliacao_chute.NOTA_CHUTE_DIRETO,
                avaliacao_chute.NOTA_CHUTE_BAIXA_CHANCE,
                avaliacao_chute.AMOSTRAS_ANGULARES, len(enemy_robots or {})))
     # PASSE COM ALVO CONGELADO.
@@ -1695,6 +1696,17 @@ def montar_comandos(tt):
             print("[JG] arma=%s frente=%s d=%.0f tipo=%s"
                   % (arma, _frente, d_bola, tipo_alvo), flush=True)
         cmd.kick = forca        # chutar_em ja devolve 0 quando nao armado
+        if os.environ.get("DIAG_JOGO") and arma and alvo_chute is not None:
+            _goleiro = (tt.enemy_robots or {}).get(0)
+            if _goleiro is not None:
+                _gx, _gy = _goleiro.position_x, _goleiro.position_y
+            else:
+                _gx = _gy = float("nan")
+            _registrar_diag_jogo(
+                "[JG] CHUTE_ARMADO rid=%d tipo=%s bola=%.0f,%.0f "
+                "alvo=%.0f,%.0f forca=%.2f goleiro=%.0f,%.0f"
+                % (rid, tipo_alvo, tt.ball.position_x, tt.ball.position_y,
+                   alvo_chute[0], alvo_chute[1], forca, _gx, _gy))
         # A BOLA E OBSTACULO ATE O ROBO ESTAR ATRAS DELA.
         #
         # Era 'cmd.ball = (papel != PAPEL_PORTADOR)': para o portador a bola
