@@ -166,10 +166,10 @@ def criar_no():
                     longe = math.hypot(bolas[0][0] - self.bola[0], bolas[0][1] - self.bola[1]) > 1000.0
                 if longe and self.gravando:
                     self.fantasmas += 1
-                else:
-                    self.bola = bolas[0]
+                    continue            # a ghost: keep it out of the trajectory too
+                self.bola = bolas[0]
                 if self.gravando and self.robo:
-                    self.quadros.append((quadro.t_capture,) + bolas[0] + self.robo + (self.kick,))
+                    self.quadros.append((quadro.t_capture,) + self.bola + self.robo + (self.kick,))
 
         def _comando(self, msg):
             for r in msg.robots:

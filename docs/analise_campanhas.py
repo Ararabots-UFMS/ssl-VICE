@@ -41,7 +41,7 @@ PERTO_DO_GOL = [
     ("area_na_linha", "+ push target on the line (stopped at 50)"),
     ("area_centro", "+ push through the ball centre"),
 ]
-ORDEM = ["gol", "defendido", "fora", "curto", "sem_chute"]
+ORDEM = ["gol", "defendido", "fora", "curto", "sem_chute", "gol_contra"]
 
 
 def carregar(pasta, seed=None):
@@ -79,7 +79,7 @@ def resumo(nome, d, ks=None):
 def linha_md(r):
     c = r["c"]
     return (f"| {r['nome']} | {r['n']} | **{r['gol'] * 100:.1f}%** ({r['lo'] * 100:.0f}–{r['hi'] * 100:.0f}) | "
-            f"{c['defendido']} | {c['fora']} | {c['curto']} | {c['sem_chute']} | "
+            f"{c['defendido']} | {c['fora']} | {c['curto']} | {c['sem_chute']} | {c['gol_contra']} | "
             f"{r['t50']:.1f} / {r['t90']:.1f} | {r['empurrou']} |")
 
 
@@ -116,9 +116,9 @@ def mira_da_estrategia():
 
 def main():
     os.makedirs(SAIDA, exist_ok=True)
-    print("| experiment | attempts | goals (95% CI) | saved | wide | short | no kick | "
+    print("| experiment | attempts | goals (95% CI) | saved | wide | short | no kick | own goal | "
           "time to kick median / p90 (s) | ball pushed >300 mm first |")
-    print("|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|")
 
     # 1. Outcomes of every experiment.
     tabela = []
@@ -142,7 +142,7 @@ def main():
             esq += v
     ax.set_yticks(range(len(tabela)), [f"{r['nome']} (n={r['n']})" for r in tabela], fontsize=8)
     ax.invert_yaxis(); ax.set_xlabel("% of attempts"); ax.set_xlim(0, 100)
-    ax.legend(ncol=5, fontsize=8, loc="lower center", bbox_to_anchor=(0.5, 1.0))
+    ax.legend(ncol=6, fontsize=8, loc="lower center", bbox_to_anchor=(0.5, 1.0))
     ax.set_title("Outcome of every experiment", pad=24)
     salvar(fig, "01_resultados.png")
 
