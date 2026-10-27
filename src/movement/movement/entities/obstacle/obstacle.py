@@ -54,6 +54,13 @@ class Obstacle(ABC):
                 return True
         return False
 
+    def for_route(self, start: Vector2D, goal: Vector2D) -> "Obstacle":
+        """
+        This obstacle as a route from start to goal should see it. Shapes that want a
+        passing path to keep extra room return a grown copy; the rest are used as is.
+        """
+        return self
+
     def bounds(self) -> tuple | None:
         """
         Conservative axis-aligned box holding everything this obstacle can occupy over

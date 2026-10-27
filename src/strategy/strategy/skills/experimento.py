@@ -1,0 +1,157 @@
+"""Chaves de experimento: ligar e desligar UMA modificacao por vez.
+
+POR QUE ISTO EXISTE
+-------------------
+Quatro mudancas de comportamento entraram no mesmo dia (03/10/2026). Medir as
+quatro juntas produz um numero que nao se sabe atribuir - a regra do projeto e
+UMA mudanca por lote. Para medir o antes e o depois de cada uma sem trocar de
+branch no meio do lote, cada uma tem uma chave propria.
+
+O DEFAULT E O COMPORTAMENTO NOVO. A chave DESLIGA a modificacao, devolvendo o
+codigo antigo. Assim o lote "desligada" mede a linha de base e o lote "ligada"
+mede a mudanca, com o MESMO binario.
+
+COMO LIGAR A CHAVE (os dois jeitos funcionam):
+
+    variavel de ambiente:   ARARABOTS_SEM_ORBITA=1 ./ararabots.sh validar 3 ...
+    arquivo em /tmp:        touch /tmp/ararabots_sem_orbita
+
+A variavel e o caminho normal - ela esta plumbada no 'ros_d' do ararabots.sh,
+que e quem sobe o strategyNode. O arquivo existe porque bandeira lida pela
+ESTRATEGIA nao chega la quando alguem roda o node na mao; e e o padrao que o
+projeto ja usava (/tmp/ararabots_papeis_fixos).
+
+ATENCAO, ja custou lote: bandeira em /tmp NAO sobrevive a remontagem do
+container, e o 'validar' remonta quando a contagem de robos do cenario difere da
+atual. Com variavel de ambiente isso nao acontece.
+"""
+
+import os
+
+# As quatro modificacoes de 03/10/2026 que mudam comportamento.
+#
+#   ORIENTACAO_LADO  o corpo nao vira as costas para a bola (chute.py)
+#   ORBITA           bola atras de nos -> contorna e pega por tras (aproximacao.py)
+#   PROTECAO         saida sob pressao por varredura, fugindo de quem prensa
+#   PRESSAO_BOLA     pressao medida na BOLA, nao no corpo do robo
+#
+# As duas de 07/10/2026, que sairam da LEITURA DOS REPLAYS do lote de 03/10 -
+# as duas respondem "por que a bola nao andava em nenhuma condicao":
+#
+#   MIRA_FIRME       a mira escolhida vale por 2 s mesmo que o ciclo seguinte
+#                    diga 'bloqueado'. A trava existia e excluia justamente a
+#                    transicao que acontecia: medido em 'orientacao_terco',
+#                    132 ciclos 'passe' alternando com 148 'bloqueado', e como
+#                    TODA direcao do ciclo sai da mira, a linha de tiro girava
+#                    e o portador orbitava a bola a 314-652 mm sem nunca
+#                    encostar nela (alinhamento mediano t = 0,11).
+#   EMPURRAO         no contato, o alvo fica ALEM da bola quando a chegada esta
+#                    alinhada. Era 53 mm AQUEM dela em 100% dos quadros de
+#                    contato medidos (sonda guiada por replay), e o casco
+#                    impede chegar a menos de 111 mm: o erro residual virava
+#                    ~0,13 m/s e a bola nao saia do lugar.
+#   PLANEJADOR       o contorno passa a ser do PLANEJADOR (avoid_ball), em vez
+#                    do arco feito a mao na tatica. Ver a secao de cabecalho em
+#                    skills/aproximacao.py: era o unico papel para o qual nos
+#                    DESLIGAVAMOS o desvio da bola, e reimplementavamos a volta
+#                    com um alvo que pulava 0,9 rad por ciclo.
+#   DISPARO_ALINHADO o chute exige o CORPO na linha de tiro. Sem isto o robo
+#                    dispara no meio do contorno, na direcao em que o corpo
+#                    estiver: medido 120 graus de erro em 'portador_longe_atras'
+#                    e 28 em 'portador_bola_diagonal', os dois com disparo.
+#   CHEGADA_EM_MOVIMENTO  na fase de empurrar, pede target_vel na direcao de
+#                     saida em vez de zero. Mandavamos "chegue e PARE" em todo
+#                     comando, e um alvo de 300 mm com chegada parada limita a
+#                     media a 335 mm/s por construcao.
+#   PARAR_E_MIRAR     para no ponto de espera, gira ate a linha de tiro, e so
+#                     entao empurra. O corpo chegava a 120 graus fora porque a
+#                     orientacao e um P de 2 rad/s e ele chega antes de girar.
+#   CHEGADA_ALINHADA  o ponto de espera deixa de ser posicao e passa a ser
+#                     ESTADO: chega-se nele apontado para a bola. Sem isto o
+#                     planejador chegava a -121/-142 graus da direcao certa.
+#   DESTINO_LONGO     na fase de empurrar, o destino e o ALVO (gol ou apoio),
+#                     nao um ponto a 300-500 mm que depende de onde o robo
+#                     esta. Mede o tremor do replanejamento e a velocidade de
+#                     cruzeiro de uma vez.
+#   PERSEGUICAO       so persegue bola REALMENTE viajando (600 mm/s, nao 250),
+#                     e mira so ate onde ela chega (meio segundo de bola, nao
+#                     1600 mm fixos). Era a "investida fantasma": 11% dos
+#                     quadros medidos entravam na perseguicao com a bola
+#                     praticamente parada.
+#   RECORTE_AREA      o alvo do empurrao para na borda da area penal, na linha de
+#                     tiro. Dentro dela o planejador o jogava para a borda mais
+#                     proxima, fora da linha: contato torto e bola empurrada para
+#                     dentro da area (20/10/2026, tentativas 67, 115, 465).
+#   DISPARO_PELO_VAO  no chute ao gol, o corpo tem de estar dentro do vao que a
+#                     mira escolheu (menos meio grau), e nao a 20 graus dela.
+#                     Com goleiro, 4 de 6 defesas foram chutes num vao de 2-5
+#                     graus disparados com o corpo 4-10 graus fora (21/10/2026).
+#   CHEGADA_NA_LINHA  so entra no empurrao alinhado a ate 40 mm da linha de tiro
+#                     e perto da bola; sai a 90. Entrava a 90 e saia a 160, e o
+#                     grSim so dispara com a bola a 40 mm do centro do chutador:
+#                     16% dos primeiros toques eram empurroes (21/10/2026).
+CHAVES = ("ORIENTACAO_LADO", "ORBITA", "PROTECAO", "PRESSAO_BOLA",
+          "MIRA_FIRME", "EMPURRAO", "PLANEJADOR", "DISPARO_ALINHADO",
+          "PERSEGUICAO", "CHEGADA_EM_MOVIMENTO", "DESTINO_LONGO",
+          "CHEGADA_ALINHADA", "PARAR_E_MIRAR", "RECORTE_AREA",
+          "DISPARO_PELO_VAO", "CHEGADA_NA_LINHA")
+
+
+def _ligada(valor):
+    """An environment switch is on unless unset, empty or '0'."""
+    return valor not in (None, "", "0")
+
+
+def desligado(nome):
+    """A modificacao 'nome' esta DESLIGADA (isto e, vale o codigo antigo)?"""
+    if nome not in CHAVES:                      # erro de digitacao nao passa calado
+        raise ValueError("chave de experimento desconhecida: %r" % (nome,))
+    if _ligada(os.environ.get("ARARABOTS_SEM_" + nome)):
+        return True
+    return os.path.exists("/tmp/ararabots_sem_" + nome.lower())
+
+
+# Switches that turn ON something measured as worse, kept so it can be re-measured.
+#
+#   PAPEIS_FIXOS              roles fixed by id (isolates election from hysteresis)
+#   SO_POSICIONAR             carrier stops behind the ball and never pushes
+#   COM_DESTINO_LONGO         push towards the target itself (lost the ball, 09/10)
+#   COM_CHEGADA_EM_MOVIMENTO  arrive at the push point moving (lost 60%, 09/10)
+#   FORCAR_COBERTURA          every field robot defends, to test the defender
+#                             alone (docs/zagueiro.sh)
+#   DISPARO_PREVISTO          the kick gate also checks the body 100 ms ahead: saves
+#                             6 -> 1, but pushes 12% -> 24% and no-kicks 3 -> 8 on
+#                             the same 200 keeper placements (21/10). Kept to retune
+#                             the look-ahead (Sumatra uses 10-47 ms).
+CHAVES_LIGA = ("PAPEIS_FIXOS", "SO_POSICIONAR", "COM_DESTINO_LONGO",
+               "COM_CHEGADA_EM_MOVIMENTO", "FORCAR_COBERTURA", "DISPARO_PREVISTO")
+
+
+def ligado(nome):
+    """The opt-in experiment 'nome' is ON? ARARABOTS_<nome> or /tmp/ararabots_<nome>."""
+    if nome not in CHAVES_LIGA:
+        raise ValueError("chave de experimento desconhecida: %r" % (nome,))
+    if _ligada(os.environ.get("ARARABOTS_" + nome)):
+        return True
+    return os.path.exists("/tmp/ararabots_" + nome.lower())
+
+
+ARQUIVO_MIRA_Y = "/tmp/ararabots_mira_y"
+
+
+def mira_y(padrao):
+    """Y do ponto de mira dentro do gol, se a campanha de chutes pediu um.
+
+    Arquivo e nao variavel de ambiente porque muda a cada tentativa, com a
+    estrategia no ar. Sem o arquivo, vale o padrao (o centro do gol).
+    """
+    try:
+        with open(ARQUIVO_MIRA_Y) as arquivo:
+            return float(arquivo.read().strip())
+    except (OSError, ValueError):
+        return padrao
+
+
+def estado():
+    """Dicionario {chave: ligada?}, para o diagnostico e para o replay."""
+    return {c: (not desligado(c)) for c in CHAVES}

@@ -193,3 +193,32 @@ class TestUnsteerableViaPointsAreRejected:
             generate = self._stuck_segment
 
         assert solver.solve(self.START, self.GOAL, [], _AlwaysStuck()) is None
+
+
+class _SecondLegUnsolved:
+    """A generator whose steer to the goal comes back empty, as an unsolved one does."""
+
+    def __init__(self, real, goal):
+        self.real = real
+        self.goal = goal
+
+    def generate(self, start, target):
+        if target is self.goal:
+            return TrajectorySegment(start.position, start.velocity, MotionPath([]))
+        return self.real.generate(start, target)
+
+
+class TestUnsolvedLegs:
+    def test_a_route_whose_second_leg_goes_nowhere_is_not_a_route(self, sampler, generator):
+        """
+        An empty leg has no duration and collides with nothing, so the candidate looked
+        like the fastest route found. The robot drove to the via point and stayed there.
+        """
+        solver = BypassSolver(max_iterations=30, sampler=sampler, collision_time_step=0.05)
+        start = MotionState(Vector2D(0, 0), Vector2D(0, 0))
+        goal = MotionState(Vector2D(2000, 0), Vector2D(0, 0))
+        obstacles = [GenericCircleObstacle(Vector2D(1000, 0), 300, padding=0)]
+
+        route = solver.solve(start, goal, obstacles, _SecondLegUnsolved(generator, goal))
+
+        assert route is None

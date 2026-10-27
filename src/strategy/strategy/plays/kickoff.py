@@ -2,8 +2,7 @@ from strategy.behaviour import LeafNode, RunResult, Selector, Sequence
 from strategy.commons.check_state import CheckState
 from strategy.commons.task_status import TaskStatus
 from strategy.context import TickContext, TreeDeps
-from strategy.tatics.kickoff import OurKickoff
-
+from strategy.tatics.kickoff import OurKickoff, TheirKickoff
 
 
 class CheckIfOurKickoff(LeafNode):
@@ -39,10 +38,7 @@ class TheirKickoffAction(LeafNode):
         if not context.ally_robots or context.on_positive_half is None:
             return TaskStatus.RUNNING, None
 
-        # Carried over as-is from before this refactor: this branch builds OurKickoff,
-        # not TheirKickoff. Left alone deliberately so the refactor does not change
-        # what the robots do on the field.
-        executor = OurKickoff(
+        executor = TheirKickoff(
             ally_robots=context.ally_robots, on_positive_half=context.on_positive_half
         )
 
@@ -51,8 +47,6 @@ class TheirKickoffAction(LeafNode):
 
 class Kickoff(Sequence):
     def __init__(self, name: str, deps: TreeDeps):
-        """List with possible inputs to this state"""
-
         commands = ["PREPARE_KICKOFF_BLUE", "PREPARE_KICKOFF_YELLOW"]
 
         check_kickoff = CheckState("CheckKickoff", deps, commands)

@@ -1,6 +1,7 @@
 import socket
 import struct
 import logging
+import os
 from typing import Optional
 from rclpy.logging import get_logger
 
@@ -10,20 +11,27 @@ MAX_PACKET_SIZE = 4096  # SSL-Vision packets are safely under this size
 
 class Client:
     def __init__(self, ip: str, port: int, interface_ip: Optional[str] = None, 
-                timeout: float = 0.0, logger: Optional[logging.Logger] = None):
+                timeout: float = 0.0, logger: Optional[logging.Logger] = None,
+                local_only: bool = False):
         """UDP multicast client for ssl-vision.
 
         ip: multicast group address (e.g. 224.5.23.2)
         port: multicast UDP port
         interface_ip: specific local interface IP to join from. If None/empty, uses INADDR_ANY.
         timeout: socket timeout in seconds (0 => non-blocking)
+        local_only: drop packets sent by other machines. For simulation: another
+            grSim on the same network multicasts to this group too, and its world
+            gets merged into ours (a second ball, robots that are not there).
         """
         self.ip = ip
         self.port = port
         self.interface_ip = interface_ip or ""
         self.timeout = timeout
+        self.allowed_source_ip = os.environ.get("ARARABOTS_SIM_SOURCE_IP") or None
         self.sock: Optional[socket.socket] = None
         self.logger = logger or logging.getLogger(__name__)
+        self.local_only = local_only
+        self._is_local = {}     # source ip -> bool, so each address is tested once
 
 
     def connect(self):
@@ -69,20 +77,41 @@ class Client:
         self.sock = sock
         self.logger.info(f"Multicast client connected to {self.ip}:{self.port}")
 
+    def _from_this_machine(self, ip: str) -> bool:
+        """Whether ip belongs to this host: only a local address can be bound to."""
+        known = self._is_local.get(ip)
+        if known is None:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                probe.bind((ip, 0))
+                known = True
+            except OSError:
+                known = False
+                self.logger.warning(f"Ignoring vision packets from {ip}: not this machine")
+            finally:
+                probe.close()
+            self._is_local[ip] = known
+        return known
+
     def receive(self):
         """Try to receive and decode one SSL_WrapperPacket. """
 
         # Ensure socket is connected
         if self.sock is None:
             raise RuntimeError("Client socket not connected. Call connect() first.")
-        try:
-            # Max packet size for SSL-Vision is safely under 4096 bytes; allocate a bit more than old 2048.
-            data, _ = self.sock.recvfrom(MAX_PACKET_SIZE)
-        except (BlockingIOError, socket.timeout):
-            return None
-        except OSError as e:
-            self.logger.warning(f"Socket error: {e}")
-            return None
+        while True:
+            try:
+                # Max packet size for SSL-Vision is safely under 4096 bytes; allocate a bit more than old 2048.
+                data, source = self.sock.recvfrom(MAX_PACKET_SIZE)
+            except (BlockingIOError, socket.timeout):
+                return None
+            except OSError as e:
+                self.logger.warning(f"Socket error: {e}")
+                return None
+            # A foreign packet is skipped, not returned as None: None means "empty".
+            if ((not self.local_only or self._from_this_machine(source[0]))
+                    and (not self.allowed_source_ip or source[0] == self.allowed_source_ip)):
+                break
 
         # Parse the protobuf message from the received data
         packet = SSL_WrapperPacket()

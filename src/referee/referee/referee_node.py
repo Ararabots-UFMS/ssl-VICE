@@ -43,6 +43,8 @@ class RefereeNode(Node):
         self.declare_parameter("verbose", False)
         # Optional local interface IP to use for multicast membership (e.g. 127.0.0.1 or host iface)
         self.declare_parameter("interface", "")
+        # Ignore game controllers on other machines (simulation on a shared network).
+        self.declare_parameter("local_only", False)
 
     def get_params(self):
         self.ip = self.get_parameter("ip").get_parameter_value().string_value
@@ -52,10 +54,12 @@ class RefereeNode(Node):
         )
         self.verbose = self.get_parameter("verbose").get_parameter_value().bool_value
         self.interface = self.get_parameter("interface").get_parameter_value().string_value
+        self.local_only = self.get_parameter("local_only").get_parameter_value().bool_value
 
     def setup_referee_client(self):
         # Setup UDP multicast client
-        self.client = RefereeClient(ip=self.ip, port=self.port, buffer_size=self.buffer_size)
+        self.client = RefereeClient(ip=self.ip, port=self.port, buffer_size=self.buffer_size,
+                                    local_only=self.local_only)
 
         self.get_logger().info(f"Binding referee client on {self.ip}:{self.port} (interface={self.interface or 'any'})")
         # Pass interface if explicitly set, otherwise let client use INADDR_ANY

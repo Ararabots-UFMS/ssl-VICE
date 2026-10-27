@@ -42,7 +42,9 @@ ensure_container() {
         fi
 
         echo ":: Starting new container '$CONTAINER_NAME'..."
+        # --init: tail as PID 1 never reaps, so every killed ROS node stayed a zombie.
         docker run -d --name $CONTAINER_NAME \
+            --init \
             --network host \
             --privileged \
             --device=/dev/input \

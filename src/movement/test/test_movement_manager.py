@@ -70,6 +70,17 @@ def test_set_static_obstacles(manager):
     assert manager._static_obstacles == {'border_area': True, 'center_area': False}
 
 
+@pytest.mark.parametrize('side', [-1, 0, 1])
+def test_defensive_half_survives_target_conversion(manager, test_robot, side):
+    cmd = _make_command(1, (side * 1000, 0))
+    cmd.planning_options.defensive_half = side
+    manager._robots = [test_robot]
+    manager._movement_commands = [cmd]
+    target = manager._build_target_array().targets[0]
+    assert target.planning_options.defensive_half == side
+    assert cmd.planning_options.defensive_half == side
+
+
 def test_set_goal_keeper(manager):
     request = MagicMock()
     request.robot_id = 3
@@ -281,6 +292,20 @@ def test_the_static_obstacle_override_wins_over_the_command(manager, test_robot1
     manager._movement_commands = [_make_command(1, (100.0, 200.0), avoid_center_area=False)]
     manager._robots = [test_robot1]
     manager._static_obstacles = {'center_area': True, 'border_area': True}
+
+    options = manager._build_target_array().targets[0].planning_options
+
+    assert options.avoid_center_area is True
+
+
+def test_a_switched_off_override_does_not_cancel_the_commands_own_request(manager, test_robot1):
+    """
+    Strategy calls SetStaticObstacles(center_area=False) once at start-up. Applied as a
+    plain overwrite, that dropped the centre-circle flag of every kickoff robot.
+    """
+    manager._movement_commands = [_make_command(1, (100.0, 200.0), avoid_center_area=True)]
+    manager._robots = [test_robot1]
+    manager._static_obstacles = {'center_area': False, 'border_area': True}
 
     options = manager._build_target_array().targets[0].planning_options
 

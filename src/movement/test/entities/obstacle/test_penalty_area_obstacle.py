@@ -62,16 +62,40 @@ class TestConstructorLeftSide:
 
 
 class TestConstructorRightSide:
-    def test_padding_is_negated(self, right_geometry):
+    def test_padding_stays_positive(self, right_geometry):
         obs = PenaltyAreaObstacle(right_geometry, FieldSide.RIGHT, padding=100)
-        assert obs.padding == -100
+        assert obs.padding == 100
 
-    def test_corners_computed(self, right_geometry):
+    def test_corners_grow_like_the_left_side(self, right_geometry):
+        """It used to shrink by the padding: robots could stand 90 mm inside the area."""
         obs = PenaltyAreaObstacle(right_geometry, FieldSide.RIGHT, padding=100)
-        assert obs.top_left_point == Vector2D(2100, 900)
-        assert obs.top_right_point == Vector2D(2900, 900)
-        assert obs.bot_left_point == Vector2D(2100, -900)
-        assert obs.bot_right_point == Vector2D(2900, -900)
+        assert obs.top_left_point == Vector2D(1900, 1100)
+        assert obs.top_right_point == Vector2D(3100, 1100)
+        assert obs.bot_left_point == Vector2D(1900, -1100)
+        assert obs.bot_right_point == Vector2D(3100, -1100)
+
+
+class TestGrSimGeometry:
+    """The line names and coordinates exactly as grSim sends them (Division B)."""
+
+    @pytest.fixture
+    def grsim(self):
+        return _geometry([
+            _line("LeftFieldLeftPenaltyStretch", -4490, 1000, -3490, 1000),
+            _line("LeftFieldRightPenaltyStretch", -4490, -1000, -3490, -1000),
+            _line("RightFieldLeftPenaltyStretch", 4490, -1000, 3490, -1000),
+            _line("RightFieldRightPenaltyStretch", 4490, 1000, 3490, 1000),
+        ])
+
+    @pytest.mark.parametrize("side, sign", [(FieldSide.LEFT, -1), (FieldSide.RIGHT, 1)])
+    def test_the_whole_area_plus_the_margin_is_kept_out(self, grsim, side, sign):
+        obs = PenaltyAreaObstacle(grsim, side, padding=90)
+        min_x, min_y, max_x, max_y = obs.bounds()
+        assert (min_y, max_y) == (-1090, 1090)
+        assert sorted(abs(v) for v in (min_x, max_x)) == [3400, 4580]
+        # A robot centre just inside the real area, near its corner, must collide.
+        assert obs.isCollidingAt(Vector2D(sign * 4000, 950))
+        assert obs.isCollidingAt(Vector2D(sign * 3450, -1050))
 
 
 class TestConstructorFallback:
