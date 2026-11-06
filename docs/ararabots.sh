@@ -26,8 +26,28 @@
 #                                     SEED=2 BLOCO=25 ./ararabots.sh campanha 500
 #                                     argumentos extras vao para o
 #                                     campanha_chute.py (--miras auto,
-#                                     --goleiro gol|area, --inimigos 2).
-#                                     CAMPANHA=nome grava em docs/nome/
+#                                     --goleiro gol|area, --inimigos 2,
+#                                     --bola-vel 0,800,1600 --geometrias
+#                                     cruza,de_frente,foge_gol,foge_nosso).
+#                                     CAMPANHA=nome grava em docs/nome/.
+#                                     UMA PASTA POR GRADE: mudar --bola-vel
+#                                     muda o sorteio, entao a tentativa 7 da
+#                                     seed 1 nao e a mesma nas duas grades.
+#      ./ararabots.sh rolando [n]     A CAMPANHA DE BOLA ANDANDO, pronta: n
+#                                     colocacoes (padrao 60) so com o atacante,
+#                                     as quatro geometrias misturadas e a
+#                                     velocidade tirada da geometria. Retoma de
+#                                     onde parou; no fim desenha os graficos.
+#                                     PAR=INTERCEPTAR_SO_RAPIDA ./ararabots.sh rolando 50
+#                                     -> A/B PAREADO: cada colocacao roda duas
+#                                     vezes, com e sem a chave, e o par e a
+#                                     unidade de comparacao.
+#                                     SEEDS="11 12 13 14 15" ./ararabots.sh rolando 200
+#                                     -> divide o total entre as seeds e grava
+#                                     tudo num CSV so: uma seed sozinha nao e
+#                                     amostra do campo, e um conjunto fixo de
+#                                     colocacoes.
+#                                     BLOCO=10 CAMPANHA=nome tambem valem.
 #      ./ararabots.sh ajustes on|off|status [tracker|filtro|tudo]
 #                                     correcoes fora de src/strategy/ que ainda
 #                                     sao EXPERIMENTAIS (as duas de src/vision/)
@@ -152,7 +172,7 @@ DDS_ENV=""
 [ -n "${MOVIMENTO_ANTIGO:-}" ] && MOVIMENTO_NOVO=""
 export MOVIMENTO_NOVO
 
-ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_SEM_RECORTE_AREA='${ARARABOTS_SEM_RECORTE_AREA:-}'; export ARARABOTS_SEM_DISPARO_PELO_VAO='${ARARABOTS_SEM_DISPARO_PELO_VAO:-}'; export ARARABOTS_SEM_CHEGADA_NA_LINHA='${ARARABOTS_SEM_CHEGADA_NA_LINHA:-}'; export ARARABOTS_DISPARO_PREVISTO='${ARARABOTS_DISPARO_PREVISTO:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_SEM_RECORTE_AREA='${ARARABOTS_SEM_RECORTE_AREA:-}'; export ARARABOTS_SEM_DISPARO_PELO_VAO='${ARARABOTS_SEM_DISPARO_PELO_VAO:-}'; export ARARABOTS_SEM_CHEGADA_NA_LINHA='${ARARABOTS_SEM_CHEGADA_NA_LINHA:-}'; export ARARABOTS_DISPARO_PREVISTO='${ARARABOTS_DISPARO_PREVISTO:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SEM_ATRITO_PREVISAO='${ARARABOTS_SEM_ATRITO_PREVISAO:-}'; export ARARABOTS_COM_ENCONTRO='${ARARABOTS_COM_ENCONTRO:-}'; export ARARABOTS_SEM_INTERCEPTAR_SO_RAPIDA='${ARARABOTS_SEM_INTERCEPTAR_SO_RAPIDA:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 # GOLEIRO_PATRULHA precisa ATRAVESSAR para dentro do container.
 #
 # O modo era ligado no menu com 'export', mas quem comanda o goleiro adversario e
@@ -168,7 +188,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_SEM_RECORTE_AREA='${ARARABOTS_SEM_RECORTE_AREA:-}'; export ARARABOTS_SEM_DISPARO_PELO_VAO='${ARARABOTS_SEM_DISPARO_PELO_VAO:-}'; export ARARABOTS_SEM_CHEGADA_NA_LINHA='${ARARABOTS_SEM_CHEGADA_NA_LINHA:-}'; export ARARABOTS_DISPARO_PREVISTO='${ARARABOTS_DISPARO_PREVISTO:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_SEM_RECORTE_AREA='${ARARABOTS_SEM_RECORTE_AREA:-}'; export ARARABOTS_SEM_DISPARO_PELO_VAO='${ARARABOTS_SEM_DISPARO_PELO_VAO:-}'; export ARARABOTS_SEM_CHEGADA_NA_LINHA='${ARARABOTS_SEM_CHEGADA_NA_LINHA:-}'; export ARARABOTS_DISPARO_PREVISTO='${ARARABOTS_DISPARO_PREVISTO:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SEM_ATRITO_PREVISAO='${ARARABOTS_SEM_ATRITO_PREVISAO:-}'; export ARARABOTS_COM_ENCONTRO='${ARARABOTS_COM_ENCONTRO:-}'; export ARARABOTS_SEM_INTERCEPTAR_SO_RAPIDA='${ARARABOTS_SEM_INTERCEPTAR_SO_RAPIDA:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -524,9 +544,52 @@ cmd_limpar() {
 
 
 # ============================================================================
+# Copia boa do ~/.grsim.xml, mantida por _grsim_config_sa.
+GRSIM_CFG="$HOME/.grsim.xml"
+GRSIM_CFG_BOM="$HOME/.grsim.xml.bom"
+
+# O ~/.grsim.xml ESTA VALIDO? Se nao, restaura e avisa.
+#
+# DEFEITO QUE ISTO CORRIGE, medido em 28/10/2026: o grSim reescreve o proprio
+# config ao fechar, e quando ele morre de pkill -9 (o 'parar' faz isso, e um
+# lote interrompido tambem) o arquivo fica com tag desbalanceada - vimos
+# "mismatched tag: line 105". A partir dai TODO lote morre no passo [4/10]:
+# grSim a 0,0 Hz, visao com bolas=0, e o portao reprovando sem dizer que a
+# causa e um XML quebrado no HOME. Perdemos duas rodadas de 12 tentativas
+# assim, e o traceback do ElementTree passava no meio da saida sem parecer
+# importante.
+#
+# A copia boa e refeita toda vez que o arquivo valida, entao ela acompanha as
+# mudancas legitimas de config em vez de congelar uma versao antiga.
+_grsim_config_sa() {
+    local campo_config="$VICE/src/simulation/configure_division_b.py"
+    if python3 -c "import xml.etree.ElementTree as E,sys; E.parse(sys.argv[1])" \
+            "$GRSIM_CFG" 2>/dev/null; then
+        cp -f "$GRSIM_CFG" "$GRSIM_CFG_BOM" 2>/dev/null
+        return 0
+    fi
+    echo "   !! ~/.grsim.xml esta corrompido (o grSim morreu salvando)."
+    local origem=""
+    for c in "$GRSIM_CFG_BOM" "$HOME/.grsim.xml.before-division-b"; do
+        [ -f "$c" ] && python3 -c "import xml.etree.ElementTree as E,sys; E.parse(sys.argv[1])" \
+            "$c" 2>/dev/null && { origem="$c"; break; }
+    done
+    if [ -z "$origem" ]; then
+        echo "   XX nenhuma copia boa para restaurar - conserte ~/.grsim.xml na mao"
+        printf '%s' "~/.grsim.xml corrompido e sem copia boa" > "$MOTIVO_BLOQUEIO" 2>/dev/null
+        return 1
+    fi
+    cp -f "$GRSIM_CFG" "$GRSIM_CFG.quebrado-$(date +%Y%m%d-%H%M%S)" 2>/dev/null
+    cp -f "$origem" "$GRSIM_CFG" || return 1
+    python3 "$campo_config" >/dev/null 2>&1
+    echo "   -> restaurado de $(basename "$origem") e reconfigurado para Division B"
+    return 0
+}
+
 cmd_grsim() {
     BIN="$RAIZ/grSim/bin/grSim"
     local campo_config="$VICE/src/simulation/configure_division_b.py"
+    _grsim_config_sa || return 1
     # O grSim ja cria paredes visiveis com colisao. Fixamos as dimensoes
     # SSL B antes de iniciar: campo 9x6 m, margem de 0,3 m ate as paredes.
     if ! python3 "$campo_config" --check; then
@@ -1174,8 +1237,31 @@ cmd_cenario() {
         echo "   ! arbitro sem mensagens no ROS; reiniciando ssl-gc para reabrir o UDP"
         docker restart ssl-gc || return 2
     fi
-    if ! ros_run "python3 /tmp/ararabots.py pronto tudo 70"; then
+    # O MOTIVO TEM DE SOBREVIVER AQUI TAMBEM, e nao sobrevivia.
+    #
+    # Este 'return 2' saia sem escrever $MOTIVO_BLOQUEIO. Quem chama com a
+    # saida descartada - a campanha, o validar - imprimia
+    # "! a cadeia nao ficou pronta: " com a frase EM BRANCO, e nao havia como
+    # saber o que faltou. Medido em 27/10/2026: o strategyNode morria no
+    # arranque ('PlanningOptions' sem 'defensive_half', mensagens de uma
+    # compilacao velha depois de uma troca de branch) e a campanha so dizia
+    # ":". Levou uma leitura de /tmp/strategy.log dentro do container para
+    # achar - exatamente o que a regra do motivo-no-CSV existe para evitar.
+    #
+    # O 'pronto tudo' JA sabe o que faltou ("! faltou: servicos arbitro
+    # estrategia-comandando"); so precisava chegar aqui. Junto vai a ultima
+    # linha de erro do strategy.log, porque 'estrategia-comandando' tem uma
+    # causa que nao se ve de fora: o node subiu e morreu.
+    local _pronto
+    if ! _pronto="$(ros_run "python3 /tmp/ararabots.py pronto tudo 70" 2>&1)"; then
+        echo "$_pronto"
+        local _falta _erro
+        _falta="$(printf '%s' "$_pronto" | grep -oE "faltou: .*" | head -1)"
+        _erro="$(docker exec vice grep -hoE "^[A-Za-z_.]*(Error|Exception):.*" /tmp/strategy.log 2>/dev/null | tail -1)"
+        printf '%s' "a cadeia nao ficou pronta - ${_falta:-sem detalhe}${_erro:+ | strategyNode: $_erro}" \
+            > "$MOTIVO_BLOQUEIO" 2>/dev/null
         echo "   !! a cadeia nao ficou pronta - o resultado NAO vale"
+        [ -n "$_erro" ] && echo "      strategyNode morreu: $_erro"
         return 2
     fi
 
@@ -2241,9 +2327,44 @@ cmd_campanha() {
         cmd_preparar --headless || return 1
     fi
 
+    # A COLUNA E ACHADA PELO NOME, NAO PELA POSICAO.
+    #
+    # Isto era 'awk ... $14 != "ERRO"'. Em 27/10/2026 entraram tres colunas
+    # novas (bola_vx, bola_vy, geometria) ANTES de 'resultado', que foi de
+    # campo 14 para 17 - e $14 passou a ser 'angulo_contorno'. A contagem nao
+    # da erro nenhum: ela so para de bater, e o laco de blocos ou roda para
+    # sempre ou desiste achando que tres blocos nao produziram nada. Lendo o
+    # cabecalho isso nao acontece de novo na proxima coluna.
     _campanha_feitas() {
         [ -f "$csv" ] || { echo 0; return; }
-        awk -F, -v s="$seed" 'NR > 1 && $2 == s && $14 != "ERRO"' "$csv" | wc -l
+        awk -F, -v s="$seed" '
+            NR == 1 { for (i = 1; i <= NF; i++) { if ($i == "seed") cs = i; if ($i == "resultado") cr = i; if ($i == "tentativa") ct = i }
+                      # CONTA COLOCACOES, NAO LINHAS: com --par cada colocacao
+                      # escreve DUAS linhas (antes e depois) e o laco de blocos
+                      # pararia na metade do alvo.
+                      if (!cs || !cr || !ct) { print "XX cabecalho sem seed/resultado/tentativa" > "/dev/stderr"; exit 1 }
+                      next }
+            $cs == s && $cr != "ERRO" && !(seen[$ct]++)' "$csv" | wc -l
+    }
+
+    # PLACAR PARCIAL A CADA BLOCO. Um lote de 200 leva ~2 h; sem isto so se
+    # sabe o resultado no fim, e um lote que degradou no meio (visao de outro
+    # grSim, grSim caido) e descoberto duas horas depois.
+    #
+    # Le o CSV INTEIRO, todas as seeds: e o numero do lote, nao do bloco.
+    _campanha_placar() {
+        [ -f "$csv" ] || return 0
+        awk -F, '
+            NR == 1 { for (i = 1; i <= NF; i++) c[$i] = i; next }
+            $c["resultado"] == "ERRO" { next }
+            { n++; r[$c["resultado"]]++; if ($c["chutou"] == 1) k++ }
+            END {
+                if (!n) { exit }
+                printf "   == placar: %d tentativas | gol %d (%.0f%%) | chutou %d",
+                       n, r["gol"], 100 * r["gol"] / n, k
+                for (x in r) if (x != "gol") printf " | %s %d", x, r[x]
+                printf "\n"
+            }' "$csv"
     }
 
     while :; do
@@ -2260,8 +2381,13 @@ cmd_campanha() {
         antes="$feitas"
         ros_run "python3 /root/ssl-VICE/docs/campanha_chute.py --n $bloco --total $total --seed $seed --saida /root/ssl-VICE/docs/$nome $*"
         # O container escreve como root; devolve a pasta ao usuario do host.
-        docker exec vice chown -R "$(id -u):$(id -g)" /root/ssl-VICE/docs/$nome 2>/dev/null
+        # A RAIZ DO CAMINHO, nao so a folha: com CAMPANHA=campanha_20/cruza o
+        # chown pegava 'cruza' e deixava 'campanha_20' de root - e o host nao
+        # conseguia nem criar um arquivo ao lado. ${nome%%/*} e o primeiro
+        # componente.
+        docker exec vice chown -R "$(id -u):$(id -g)" "/root/ssl-VICE/docs/${nome%%/*}" 2>/dev/null
         grsim_sobreviveu || echo "   !! o grSim caiu neste bloco"
+        _campanha_placar
         if [ "$(_campanha_feitas)" -le "$antes" ]; then
             falhas=$((falhas + 1))
             [ "$falhas" -ge 3 ] && { echo "   XX tres blocos sem nenhuma tentativa valida"; return 1; }
@@ -2270,6 +2396,139 @@ cmd_campanha() {
         fi
     done
     python3 "$SCRIPT_DIR/campanha_graficos.py" "$pasta"
+}
+
+
+cmd_rolando() {
+    # CAMPANHA DE CHUTE COM A BOLA ANDANDO, numa linha e sem decorar flags.
+    #
+    # POR QUE ISTO E UM SUBCOMANDO E NAO UM SCRIPT NOVO: a ferramenta e uma
+    # so. Aqui dentro nao ha receita de montagem nenhuma - sao os argumentos
+    # desta grade, fixos, passados para 'cmd_campanha'. Mudar qualquer um
+    # deles MUDA O SORTEIO: a tentativa 7 da seed 11 nao e a mesma, e as
+    # pastas nao se comparam. Por isso eles vivem aqui, num lugar so.
+    #
+    # A GRADE: so o atacante (sem goleiro, sem companheiro, sem adversario),
+    # as quatro geometrias MISTURADAS numa unica campanha (ele tem de
+    # funcionar em todas, nao numa), e --bola-vel auto - a velocidade sai da
+    # geometria para que a bola chegue ao contato ainda ANDANDO (com atrito de
+    # 1350 mm/s2, lancar um valor fixo dava bola parada no toque).
+    #
+    # --miras fica no PADRAO (-350..350) de proposito: e a grade de
+    # docs/campanha_gatilho. 'auto' mudaria o sorteio e as duas pastas
+    # deixariam de se comparar.
+    local total="${1:-60}"
+    shift 2>/dev/null || true
+    : "${SEEDS:=11}" "${BLOCO:=10}"
+    local chave="${PAR:-}"
+    : "${CAMPANHA:=campanha_rolando${chave:+_$(echo "$chave" | tr 'A-Z_' 'a-z-')}}"
+    export BLOCO CAMPANHA
+
+    # VARIAS SEEDS NA MESMA PASTA = posicoes mesmo aleatorias.
+    #
+    # Uma seed sozinha nao e amostra do campo, e um conjunto fixo de 'total'
+    # colocacoes: 20 de 20 na seed 11 e 38 de 40 na seed 12 (03/11/2026) podem
+    # ser as duas verdade sem que nenhuma diga a taxa real. SEEDS divide o
+    # total entre as seeds e grava tudo num CSV so.
+    #
+    # Retomar continua funcionando porque '_campanha_feitas' conta so as
+    # linhas DA SEED corrente ($cs == s): cada seed sabe o seu progresso
+    # dentro da pasta compartilhada.
+    local -a lista=($SEEDS)
+    local n_seeds="${#lista[@]}"
+    local por_seed=$(( (total + n_seeds - 1) / n_seeds ))
+
+    # HEADLESS A FORCA, e nao um aviso. Em modo janela a fisica do grSim so
+    # avanca quando a janela esta visivel e desobstruida; com ela coberta a
+    # bola nao anda e a tentativa mede nada. O portao sabia disso e so
+    # IMPRIMIA "mantenha a janela visivel" - porque /tmp/ararabots_modo_grsim
+    # dizia 'janela' e ele respeita escolha deliberada. Numa campanha nao
+    # existe escolha deliberada por janela: ninguem fica olhando 2 h de lote.
+    # Aconteceu em 03/11/2026, no lote de fumaca de 6.
+    echo headless > /tmp/ararabots_modo_grsim
+    if pgrep -x grSim >/dev/null && ! ps -o args= -C grSim 2>/dev/null | grep -q -- --headless; then
+        echo ">> o grSim estava em modo JANELA; derrubando e subindo headless"
+        cmd_grsim --headless >/dev/null 2>&1 || {
+            echo "   XX nao subi o grSim headless; veja ./ararabots.sh grsim --headless"; return 1; }
+    fi
+
+    # PRE-VOO DA REDE. O grSim multicasta visao em 224.5.23.2:10020 e o grupo
+    # nao tem dono: outra maquina na mesma rede publica junto, e o no de visao
+    # do ROS consome as duas. Medido em 03/11/2026: as MESMAS 40 colocacoes
+    # deram 38/40 com a rede limpa e 16/40 com outro grSim no ar. Isto bloqueia
+    # antes de queimar horas de lote; campanha_chute.py bloqueia de novo se o
+    # outro grSim subir no meio (ver LIMITE_ESTRANHOS).
+    local estranhos
+    estranhos="$(python3 - <<'PREVOO'
+import socket, struct, time, collections
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+try:
+    s.bind(("", 10020))
+    s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
+                 struct.pack("4sl", socket.inet_aton("224.5.23.2"), socket.INADDR_ANY))
+except OSError:
+    raise SystemExit                      # sem acesso ao grupo: nao e o nosso portao
+locais, conta = {}, collections.Counter()
+def daqui(ip):
+    if ip not in locais:
+        p = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            p.bind((ip, 0)); locais[ip] = True
+        except OSError:
+            locais[ip] = False
+        finally:
+            p.close()
+    return locais[ip]
+s.settimeout(0.5)
+fim = time.time() + 3.0
+while time.time() < fim:
+    try:
+        _, o = s.recvfrom(65535)
+    except socket.timeout:
+        continue
+    if not daqui(o[0]):
+        conta[o[0]] += 1
+print(" ".join(f"{ip}({n})" for ip, n in conta.most_common() if n > 10))
+PREVOO
+)"
+    if [ -n "$estranhos" ]; then
+        echo "XX OUTRO grSim NA REDE transmitindo visao: $estranhos"
+        echo "   O grupo 224.5.23.2:10020 nao tem dono: o no de visao do ROS"
+        echo "   consome a visao DELE junto com a nossa, e a estrategia passa a"
+        echo "   ver dois robos e duas bolas. As MESMAS 40 colocacoes deram"
+        echo "   38/40 com a rede limpa e 16/40 assim (03/11/2026)."
+        echo "   Peca para fechar o grSim dele, ou tire esta maquina da rede."
+        return 1
+    fi
+
+    echo ">> campanha bola rolando: $total colocacoes em $n_seeds seed(s)" \
+         "($por_seed cada: $SEEDS) -> docs/$CAMPANHA"
+    if [ -n "$chave" ]; then
+        # PAREADO E INTERLEAVADO, NAO DOIS LOTES. Rodar 'antes' numa campanha e
+        # 'depois' noutra inventa resultado: a MESMA linha de base deu 4/12 num
+        # lote e 13/16 noutro (31/10/2026), o que produziu p=0,06 e p=0,89 para a
+        # MESMA mudanca. Com --par cada colocacao e jogada duas vezes seguidas,
+        # uma com a chave ligada e outra com ela desligada, e o par e a unidade.
+        echo "   pareado na chave $chave (cada colocacao roda antes E depois)"
+    fi
+
+    local s
+    for s in "${lista[@]}"; do
+        [ "$n_seeds" -gt 1 ] && echo "###### seed $s ($por_seed colocacoes)"
+        SEED="$s" cmd_campanha "$por_seed" \
+            --bola-vel auto \
+            --geometrias cruza,de_frente,foge_gol,foge_nosso \
+            --goleiro nenhum --inimigos 0 \
+            ${chave:+--par "$chave"} "$@" || return 1
+    done
+
+    echo
+    echo ">> pronto. tentativas:  docs/$CAMPANHA/tentativas.csv"
+    echo "   replays:            docs/$CAMPANHA/replays/"
+    echo "   graficos gerais:    docs/$CAMPANHA/graficos/"
+    python3 "$SCRIPT_DIR/graficos_bola_rolando.py" "$SCRIPT_DIR/$CAMPANHA" \
+        && echo "   graficos do caso:   docs/$CAMPANHA/graficos/"
 }
 
 
@@ -2287,6 +2546,7 @@ case "${1:-menu}" in
     validar)   shift; cmd_validar  "$@" ;;
     lotes)     shift; cmd_lotes    "$@" ;;
     campanha)  shift; cmd_campanha "$@" ;;
+    rolando)   shift; cmd_rolando  "$@" ;;
     limpar)    shift; cmd_limpar   "$@" ;;
     grsim)     shift; cmd_grsim    "$@" ;;
     parar)     shift; cmd_parar    "$@" ;;

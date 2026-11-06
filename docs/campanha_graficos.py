@@ -20,7 +20,8 @@ import numpy as np                # noqa: E402
 
 GOL_X, GOL_MEIA = 4500.0, 500.0
 CORES = {"gol": "#2a9d8f", "defendido": "#3a86ff", "fora": "#e76f51", "curto": "#e9c46a",
-         "sem_chute": "#8d99ae", "gol_contra": "#6a040f"}
+         "sem_chute": "#8d99ae", "nao_alcancou": "#4a4e69", "gol_empurrado": "#7b6d8d",
+         "gol_contra": "#6a040f"}
 # A shot blocked by the keeper's body: robot radius plus ball radius.
 RAIO_BLOQUEIO = 111.0
 
