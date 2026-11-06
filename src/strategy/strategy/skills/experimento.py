@@ -86,6 +86,18 @@ import os
 #                     mira escolheu (menos meio grau), e nao a 20 graus dela.
 #                     Com goleiro, 4 de 6 defesas foram chutes num vao de 2-5
 #                     graus disparados com o corpo 4-10 graus fora (21/10/2026).
+#   INTERCEPTAR_SO_RAPIDA  o ramo de interceptacao pura (que deixa 'fase' em
+#                     None, e por isso NUNCA arma o chute) so vale com a bola
+#                     acima de 600 mm/s, nao 250. Com 250, bola rolando de
+#                     passe mantinha o portador 15 s fora da maquina de fases:
+#                     fase=None em 24/24 amostras, e armado no toque decide
+#                     95% x 40% de gol (28/10/2026).
+#   ATRITO_PREVISAO   onde_a_bola_vai conta a desaceleracao da bola (1350
+#                     mm/s2, medida 28/10) em vez de extrapolar em linha reta,
+#                     e para no ponto de parada. A reta errava 169 mm em meio
+#                     segundo, contra uma placa de chutador de +-40 mm: o
+#                     portador chegava AO LADO da bola. Nas 20 de 28/10, 13 de
+#                     19 primeiros toques nao foram o chute.
 #   CHEGADA_NA_LINHA  so entra no empurrao alinhado a ate 40 mm da linha de tiro
 #                     e perto da bola; sai a 90. Entrava a 90 e saia a 160, e o
 #                     grSim so dispara com a bola a 40 mm do centro do chutador:
@@ -94,7 +106,11 @@ CHAVES = ("ORIENTACAO_LADO", "ORBITA", "PROTECAO", "PRESSAO_BOLA",
           "MIRA_FIRME", "EMPURRAO", "PLANEJADOR", "DISPARO_ALINHADO",
           "PERSEGUICAO", "CHEGADA_EM_MOVIMENTO", "DESTINO_LONGO",
           "CHEGADA_ALINHADA", "PARAR_E_MIRAR", "RECORTE_AREA",
-          "DISPARO_PELO_VAO", "CHEGADA_NA_LINHA")
+          "DISPARO_PELO_VAO", "CHEGADA_NA_LINHA", "ATRITO_PREVISAO",
+          "INTERCEPTAR_SO_RAPIDA", "AVANCO_ANTES_DA_AREA",
+          "TOL_POR_ALCANCE", "NAO_INTERCEPTAR_EM_CONTATO",
+          "INTERCEPTAR_ATE_A_PARADA",
+          "MARGEM_ATE_A_TRAVE")
 
 
 def _ligada(valor):
@@ -123,8 +139,13 @@ def desligado(nome):
 #                             6 -> 1, but pushes 12% -> 24% and no-kicks 3 -> 8 on
 #                             the same 200 keeper placements (21/10). Kept to retune
 #                             the look-ahead (Sumatra uses 10-47 ms).
+#   COM_ENCONTRO              a interceptacao preve a bola no TEMPO DE ENCONTRO
+#                             em vez de 0,5 s fixos. MEDIDO E PIOR: 16 pares,
+#                             gol 13/16 -> 9/16, melhora 0 e piora 4 (28/10).
+#                             Ver tempo_de_encontro em skills/aproximacao.py.
 CHAVES_LIGA = ("PAPEIS_FIXOS", "SO_POSICIONAR", "COM_DESTINO_LONGO",
-               "COM_CHEGADA_EM_MOVIMENTO", "FORCAR_COBERTURA", "DISPARO_PREVISTO")
+               "COM_CHEGADA_EM_MOVIMENTO", "FORCAR_COBERTURA", "DISPARO_PREVISTO",
+               "COM_ENCONTRO")
 
 
 def ligado(nome):

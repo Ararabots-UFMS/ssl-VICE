@@ -29,6 +29,7 @@ AS DUAS LICOES QUE ESTE MODULO CARREGA, ambas pagas em lote de teste:
 
 from math import atan2, cos, hypot, pi, sin
 
+from strategy.skills import experimento
 from strategy.skills.bola import onde_a_bola_vai, velocidade
 from strategy.skills.geometria import no_campo, norm_ang, tempo_de_chegada
 
@@ -397,17 +398,106 @@ def destino_de_empurrao(bx, by, dir_alvo):
     return no_campo(dir_alvo[0], dir_alvo[1])
 
 
-def ponto_de_interceptacao(rx, ry, ball, avanco, segundos=0.5):
+# Velocidade com que o portador cobre a reta ate a bola, MEDIDA em 28/10/2026
+# (distancia inicial / tempo ate a primeira investida, 32 tentativas): 539 mm/s.
+#
+# NAO confundir com os 161 mm/s de distancia / tempo ate TER a bola. A
+# diferenca entre os dois numeros e exatamente o que esta sendo corrigido aqui:
+# ele chega perto rapido e depois gasta investida atras de investida.
+VEL_APROX_PORTADOR = 539.0
+
+# Teto do horizonte de encontro. Alem disto a previsao nao vale nada: a bola
+# para em v/1350 segundos, e 3 s cobrem bola a 4 m/s.
+TETO_ENCONTRO = 3.0
+
+
+def tempo_de_encontro(rx, ry, ball, teto=TETO_ENCONTRO):
+    """Daqui a quanto tempo robo e bola podem se encontrar.
+
+    POR QUE ISTO SUBSTITUI O HORIZONTE FIXO DE 0,5 s
+    ------------------------------------------------
+    'ponto_de_interceptacao' mirava onde a bola estaria em MEIO SEGUNDO,
+    sempre, independente de o robo levar 0,5 s ou 4 s para chegar la. Com a
+    bola a 2,5 m/s e o robo a 1 m de distancia, meio segundo de previsao poe o
+    alvo no rastro da bola: ele persegue o lugar onde ela ESTEVE, chega atras,
+    e recomeca. MEDIDO em 28/10: mediana de 2 investidas por tentativa, tempo
+    ate a posse de 2,97 s, e em 7 de 12 tentativas a bola ja tinha PARADO
+    quando ele enfim a pegou.
+
+    Aqui o horizonte e resolvido: procura-se o instante t em que o tempo de
+    viagem do robo ate a bola prevista e o proprio t. Ponto fixo, que converge
+    em poucas voltas porque a bola desacelera e o deslocamento dela satura.
+
+    Nao precisa ser exato - 'onde_a_bola_vai' ja trava no ponto de parada,
+    entao superestimar t e inofensivo: o alvo para onde a bola morre.
+
+    MEDIDO E REPROVADO EM 28/10/2026. Fica aqui, atras de ARARABOTS_COM_ENCONTRO,
+    com os numeros, para ninguem reimplementar a mesma ideia.
+
+        16 colocacoes pareadas, geometrias misturadas, bola 1,1-4,1 m/s:
+            horizonte 0,5 s fixo   gol 13/16   chutou 14   bola andando 6/16
+            tempo de encontro      gol  9/16   chutou 10   bola andando 7/16
+        pareado: melhora 0, piora 4, empata 12  (teste de sinal p = 1,00)
+
+    POR QUE A IDEIA ELEGANTE PERDE: mirar o ponto de parada da bola e um alvo
+    LONGE, e o portador passa a viajar para um lugar onde nada esta acontecendo
+    ainda, em vez de encurtar a distancia para a bola. Nas tentativas que
+    pioraram, as investidas SUBIRAM (2->4, 2->5, 1->5) - ele chega ao ponto de
+    encontro, a bola nao esta exatamente la (o Kalman subnotifica a velocidade),
+    e ele recomeca. E a mesma licao de 09/10 com a perseguicao proporcional: a
+    peca "feia" - seguir a bola de perto - estava carregando uma tarefa.
+    """
+    t = 0.0
+    for _ in range(12):
+        fx, fy = onde_a_bola_vai(ball, t)
+        novo = min(teto, hypot(fx - rx, fy - ry) / VEL_APROX_PORTADOR)
+        if abs(novo - t) < 0.02:
+            return novo
+        t = novo
+    return t
+
+
+def ponto_de_interceptacao(rx, ry, ball, avanco, segundos=None):
     """Onde ir quando a bola JA esta viajando: o ponto previsto, e alem dele.
 
     Com a bola em movimento nao ha o que contornar - o lado por onde se chega
     deixa de ser escolha nossa e passa a ser a trajetoria dela. Mirar alem do
     ponto previsto evita chegar freando (ver skills/bola.py).
+
+    O horizonte e 0,5 s FIXO. Resolver o tempo de encontro parece obviamente
+    melhor e FOI MEDIDO E REPROVADO - ver tempo_de_encontro.
     """
+    if segundos is None:
+        segundos = (tempo_de_encontro(rx, ry, ball)
+                    if experimento.ligado("COM_ENCONTRO") else 0.5)
     fx, fy = onde_a_bola_vai(ball, segundos)
     dx, dy = fx - rx, fy - ry
     n = hypot(dx, dy) or 1.0
-    return no_campo(fx + (dx / n) * avanco, fy + (dy / n) * avanco)
+    alvo = (fx + (dx / n) * avanco, fy + (dy / n) * avanco)
+
+    # NAO INTERCEPTAR ALEM DE ONDE A BOLA CONSEGUE CHEGAR.
+    #
+    # Mirar alem do ponto previsto existe para nao chegar freando, e isso vale
+    # enquanto a bola ainda vai andar. Depois do ponto de PARADA nao vale nada:
+    # a bola nunca chega la, e o robo chega la passando POR CIMA dela.
+    #
+    # DEFEITO MEDIDO em 03/11/2026, t0 do lote de 20 headless
+    # (docs/campanha_corrigida2, a unica falha em 20): bola lancada a 2148 mm/s
+    # rumo a NOSSA meta, parada prevista e real em (-739, 1052). O alvo de
+    # interceptacao ficava ~1500 mm adiante disso, para dentro do nosso campo.
+    # O portador chegou correndo no sentido -x, encontrou a bola JA PARADA e a
+    # arrastou 3,1 m ate (-3859, 779) - DENTRO da nossa area, onde ele nao
+    # entra. Ficou 17 s a 470 mm dela. sem_chute, 19,8 s.
+    #
+    # O corte de area nao pega isto: ele recorta o alvo na BORDA da area, que
+    # ainda estava 2,6 m depois da bola.
+    if not experimento.desligado("INTERCEPTAR_ATE_A_PARADA"):
+        parada = onde_a_bola_vai(ball, 1e9)       # saturado no ponto de parada
+        de_frente = (parada[0] - fx) * (alvo[0] - fx) + (parada[1] - fy) * (alvo[1] - fy)
+        if de_frente <= 0.0 or hypot(alvo[0] - fx, alvo[1] - fy) > hypot(
+                parada[0] - fx, parada[1] - fy):
+            alvo = parada
+    return no_campo(alvo[0], alvo[1])
 
 
 def ponto_de_aproximacao(rx, ry, bx, by, dir_alvo, avanco_base, contornar=True,

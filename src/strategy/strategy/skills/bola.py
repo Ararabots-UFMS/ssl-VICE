@@ -11,6 +11,8 @@ que a ESTRATEGIA enxerga, nao da fisica.
 
 from math import atan2, cos, hypot, pi, sin
 
+from strategy.skills import experimento
+
 # Acima desta velocidade a bola JA FOI CHUTADA - ninguem persegue, intercepta.
 #
 # POR QUE ISTO PRECISA EXISTIR: o contato SUBTRAI velocidade da bola
@@ -97,15 +99,51 @@ def avanco_da_perseguicao(ball, teto):
     return min(teto, hypot(vx, vy) * 0.5)
 
 
+# Desaceleracao da bola, MEDIDA no grSim em 28/10/2026 (sonda efemera, bola
+# lancada do repouso e seguida ate parar, via /game_state):
+#
+#     v inicial    rola      para em
+#       600 mm/s   134 mm      0,70 s
+#      1200 mm/s   530 mm      1,21 s
+#      1800 mm/s   954 mm      1,33 s
+#
+# ~1350 mm/s2 nos tres. Nao e detalhe: a 1200 mm/s a bola morre em 1,2 s, e o
+# portador leva de 1 a 4,5 s para alcanca-la.
+DESACELERACAO_BOLA = 1350.0
+
+
 def onde_a_bola_vai(ball, segundos=0.5):
     """Posicao prevista da bola daqui a 'segundos'.
 
-    A previsao e conservadora POR CONSTRUCAO, porque a velocidade vem do Kalman
-    (ver o cabecalho do modulo): erra para perto, nunca para longe. Serve para
-    escolher ONDE ESPERAR, nao para cronometrar nada.
+    A PREVISAO CONTA O ATRITO, E ANTES NAO CONTAVA.
+
+    Era extrapolacao reta: posicao + v * t. A bola do grSim perde 1350 mm/s2
+    (ver DESACELERACAO_BOLA), entao a reta erra 1/2 * a * t^2 = 169 mm em meio
+    segundo - e erra a distancia INTEIRA que falta quando a bola para antes do
+    horizonte: a 600 mm/s ela anda 134 mm e a reta previa 300.
+
+    169 mm contra uma placa de chutador de +-40 mm. Era o portador chegando AO
+    LADO da bola em vez de atras dela: nas 20 tentativas de 28/10, 13 dos 19
+    primeiros toques NAO foram o chute - ele encostava torto, perdia a bola, e
+    so acertava na segunda investida.
+
+    O destino para no ponto de parada: prever alem dele e prometer uma bola que
+    nao vai estar la.
+
+    A velocidade ainda vem do Kalman, que subnotifica (cabecalho do modulo), e
+    por isso a previsao segue errando PARA PERTO. Isto corrige o erro que da
+    para corrigir sem confiar mais no filtro do que ele merece.
     """
     vx, vy = velocidade(ball)
-    return ball.position_x + vx * segundos, ball.position_y + vy * segundos
+    if experimento.desligado("ATRITO_PREVISAO"):
+        return ball.position_x + vx * segundos, ball.position_y + vy * segundos
+    v = hypot(vx, vy)
+    if v < 1.0:
+        return ball.position_x, ball.position_y
+    # Tempo ate parar; alem dele a bola nao anda mais.
+    t = min(segundos, v / DESACELERACAO_BOLA)
+    dist = v * t - 0.5 * DESACELERACAO_BOLA * t * t
+    return ball.position_x + (vx / v) * dist, ball.position_y + (vy / v) * dist
 
 
 def _norm_ang(ang):

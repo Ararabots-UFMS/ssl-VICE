@@ -35,6 +35,14 @@ DESENCOSTAR = "desencostar"
 TOL_CORPO_MIRA = 0.25
 # Only worth stopping to aim close to the ball; far away it turns while driving.
 RAIO_MIRA_PARADO = 600.0
+# Limites da BOLA em jogo (meio campo 4500 x 3000), com folga para o raio dela.
+LIMITE_BOLA_X, LIMITE_BOLA_Y = 4400.0, 2900.0
+# Dentro disto a bola e NOSSA: quem manda e a maquina de fases, nao a
+# interceptacao. ALCANCE_CONTATO do chute e 260; aqui um pouco mais, porque a
+# bola escapa e volta entre quadros.
+RAIO_BOLA_NOSSA = 320.0
+# Folga entre onde o empurrao pode deixar a bola e a borda da caixa da area.
+FOLGA_BOLA_AREA = 80.0
 # 2 s of aiming without turning, then push anyway: standing still loses the ball.
 CICLOS_MAX_MIRANDO = 20
 # Error drop per tick that still counts as turning (0.1 rad/s).
@@ -95,7 +103,53 @@ class Portador(Papel):
 
         # Ball already kicked: intercept beyond it. Catching a ball in flight brakes
         # it (robot.cpp:168); the 1.6 m follow-through is what produces the kick.
-        if skill_bola.bola_ja_saiu(ball):
+        # SO VAI PARA A INTERCEPTACAO PURA SE A BOLA ESTIVER MESMO VOANDO.
+        #
+        # DEFEITO MEDIDO EM 28/10/2026. Este ramo sai ANTES da maquina de
+        # fases, e deixa 'fase' em None - o proprio cabecalho do modulo diz
+        # "(ball already kicked, legacy loose ball) leave it empty". Mas e a
+        # FASE que libera o gatilho: chute.orientacao_do_corpo so devolve
+        # "pode armar" em 'empurrar' ou 'mirar'.
+        #
+        # Com a bola rolando, 'bola_ja_saiu' (250 mm/s no Kalman) fica VERDADE
+        # a execucao inteira: medimos fase=None em 24 de 24 amostras. O
+        # portador roda 15 s num ramo que nunca arma, e so marca quando a bola
+        # ja parou e ele cai na maquina de fases por acaso:
+        #
+        #     chutador armado no toque:  20 de 21 viram gol (95%)
+        #     nao armado:                12 de 30 (40%), 15 sem_chute
+        #
+        # 250 mm/s foi escolhido para "a bola JA FOI CHUTADA - ninguem
+        # persegue, intercepta", pensando em bola de chute (4-6 m/s). Uma bola
+        # de passe a 1-3 m/s morre em 1-2 s e e para COLETAR, nao para
+        # interceptar. VEL_PERSEGUIR (600) e o limiar que o proprio bola.py ja
+        # documentava para "REALMENTE viajando".
+        rapida = (skill_bola.bola_ja_saiu(ball)
+                  if experimento.desligado("INTERCEPTAR_SO_RAPIDA")
+                  else skill_bola.bola_viajando(ball))
+
+        # BOLA QUE NOS MESMOS ESTAMOS EMPURRANDO NAO E BOLA VIAJANDO.
+        #
+        # DEFEITO MEDIDO em 03/11/2026, nas DUAS unicas falhas do lote de 20
+        # headless (docs/campanha_corrigida). O ramo da interceptacao sai
+        # ANTES da maquina de fases e deixa fase=None, e so a fase libera o
+        # gatilho - entao ele nunca arma. Com a bola em contato isso se
+        # realimenta: o robo empurra, a bola anda, a bola andando parece bola
+        # viajando, ele volta a interceptar, empurra mais. Nada quebra o laco.
+        #
+        #   t0  contato a 1,92 s em (-784, 1058); o portador empurrou a bola
+        #       3,2 m ATE A NOSSA PROPRIA META, (-4229, 189), e ficou 18 s
+        #       parado a 950 mm dela. 3 investidas, nenhum chute.
+        #   t4  contato a 0,65 s; manteve ~120 mm por ~10 s empurrando a bola
+        #       de y=1847 a y=3193 - PARA FORA do campo (meia-largura 3000).
+        #
+        # Em contato quem decide e a maquina de fases: ela contorna, mira e
+        # chuta. Interceptar so faz sentido com a bola LONGE e vindo.
+        if rapida and not experimento.desligado("NAO_INTERCEPTAR_EM_CONTATO"):
+            if hypot(bx - rx, by - ry) < RAIO_BOLA_NOSSA:
+                rapida = False
+
+        if rapida:
             avanco = aproximacao.AVANCO_SOLTA if solta else aproximacao.AVANCO_PORTADOR
             return self._fora_das_areas(
                 ball, aproximacao.ponto_de_interceptacao(rx, ry, ball, avanco))
@@ -122,10 +176,67 @@ class Portador(Papel):
         if experimento.ligado("COM_DESTINO_LONGO") and not experimento.desligado("PLANEJADOR"):
             return self._fora_das_areas(ball, aproximacao.destino_de_empurrao(bx, by, direcao))
         ponto = aproximacao.ponto_de_aproximacao(
-            rx, ry, bx, by, direcao, avanco,
+            rx, ry, bx, by, direcao,
+            self._avanco_antes_da_area(ball, direcao, avanco),
             contornar=not experimento.desligado("ORBITA"),
             empurrar=not experimento.desligado("EMPURRAO"))
         return self._fora_das_areas(ball, ponto)
+
+    @staticmethod
+    def _avanco_antes_da_area(ball, direcao, avanco):
+        """Encurta o empurrao para que A BOLA nao saia de jogo.
+
+        DEFEITO MEDIDO em 03/11/2026, nas 4 tentativas sem gol da campanha
+        pareada de 20 pares (docs/campanha_gatilho). DUAS delas, e e o mesmo
+        defeito nas duas:
+
+            t9  a bola para em (2879, 427) depois de rolar livre - lugar
+                legal, 1,6 m do gol, tiro livre. O portador empurra para o
+                gol e a bola atravessa x=3380, a borda da caixa da area
+                DELES. Bola final (3684, 52), DENTRO. O portador nao entra;
+                fica 11 s parado a 320 mm dela. sem_chute, 14,9 s.
+            t6  a bola para em (3091, -1383), fora da caixa pelo y. O
+                empurrao para o gol entra na caixa 410 mm adiante, em
+                (3380, -1100). Bola final (3445, -317), dentro. Mesmo fim.
+
+        POR QUE '_fora_das_areas' NAO RESOLVIA: ela recorta o ALVO DO ROBO, e
+        o robo para na borda - certo, e e justamente isso que garante que a
+        bola siga sozinha para dentro e fique fora de alcance para sempre.
+        Nada olhava para onde a BOLA ia parar.
+
+        POR QUE ENCURTAR, e nao proibir a fase: trocar EMPURRAR por MIRAR
+        manda o robo para ponto_de_espera, 300 mm atras da bola, e
+        ALCANCE_CONTATO e 260 - ele nunca toca a bola e nunca arma. O
+        empurrao E o passo que leva ao contato; o defeito e so o alvo 500 mm
+        ATRAVES da bola. Com o avanco cortado ele ainda fecha os ~130 mm do
+        contato e o gatilho dispara, mas nao tem para onde empurrar a bola
+        depois.
+        """
+        if experimento.desligado("AVANCO_ANTES_DA_AREA"):
+            return avanco
+        bx, by = ball.position_x, ball.position_y
+        ang = atan2(direcao[1] - by, direcao[0] - bx)
+        raio = 9000.0
+        fim = (bx + cos(ang) * raio, by + sin(ang) * raio)
+        corte = campo.recortar_antes_das_areas(bx, by, fim[0], fim[1])
+        # A BORDA DO CAMPO CONTA IGUAL. Bola fora e jogada morta, exatamente
+        # como bola na area. MEDIDO em 03/11/2026, t4 do lote de 20 headless:
+        # o portador manteve contato por ~10 s empurrando a bola de y=1847
+        # para y=3193 - meia-largura do campo e 3000 - e a tentativa acabou
+        # em 2,7 s de bola viva, sem chute. A versao anterior desta funcao
+        # so olhava as caixas de area e deixou isso passar.
+        borda = geometria.no_campo(corte[0], corte[1],
+                                   LIMITE_BOLA_X, LIMITE_BOLA_Y)
+        livre = hypot(borda[0] - bx, borda[1] - by)
+        if livre >= avanco + FOLGA_BOLA_AREA:
+            return avanco
+        # Perto da caixa o empurrao vai para ZERO, nao para um empurrao curto.
+        # MEDIDO: em t9 o avanco pedido era 500 e a bola andou 805 mm a partir
+        # do repouso; em t6 ela andou 1123 em 11 s de investidas repetidas. O
+        # empurrao nao anda "o avanco" uma vez - ele e reemitido todo ciclo
+        # enquanto a fase vive, e a bola vai somando. Nenhum fator de
+        # seguranca segura isso: aqui perto nao se empurra, so se chuta.
+        return 0.0
 
     @staticmethod
     def _fora_das_areas(ball, ponto):

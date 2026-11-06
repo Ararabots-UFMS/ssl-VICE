@@ -33,6 +33,7 @@ O casco tem raio 90 mm e a bola 21: tocando o casco REDONDO a distancia trava em
 from math import atan2, cos, hypot, pi, sin
 
 from strategy.skills.geometria import norm_ang
+from strategy import campo
 from strategy.skills import experimento
 
 # --- a geometria do chutador, medida no grSim -----------------------------
@@ -275,6 +276,73 @@ TOL_CORPO_DISPARO = 0.35
 # only the present checked, kicks fired 4-7 deg off a 2 deg gap (21/10/2026).
 ANTECIPACAO_DISPARO = 0.1
 
+# 20 GRAUS FIXOS SO VALEM DE PERTO. A tolerancia tem de SAIR DO ALCANCE.
+#
+# "dentro disto a bola sai na direcao pedida com erro que o gol absorve" e
+# verdade a 1 m e falso a 4: o desvio lateral no alvo e alcance * tan(tol).
+#
+#     1,0 m -> 20 graus valem 364 mm     (o gol absorve)
+#     3,6 m -> 20 graus valem 1310 mm    (passa longe do gol)
+#     6,8 m -> 20 graus valem 2475 mm
+#
+# DEFEITO MEDIDO em 03/11/2026, tentativa 4 de docs/campanha_gatilho (uma das
+# 4 sem gol em 20): disparou com o corpo a 8,1 graus do tiro, a 3634 mm do
+# gol. A bola saiu em -41,7 graus onde o gol pedia -31,1 e cruzou a linha em
+# y=-925 - meia-largura do gol e 500. Era o unico 'fora' da campanha, e o
+# unico chute dos 30 com erro de corpo acima de 6 graus: a mediana e 1,8.
+#
+# MEIA_GOL_SEGURA = 500 e a meia-largura real do gol, sem desconto: o erro de
+# corpo nao e o unico (arrasto da bola e erro de direcao somam), mas apertar
+# mais bloquearia chutes que entraram.
+#
+# NAO MEDIDO AINDA em campanha: 1 chute em 30 muda de decisao por este corte
+# (e dois gols de longe passam a girar um pouco mais antes de sair).
+MEIA_GOL_SEGURA = 500.0
+
+
+def tolerancia_de_disparo(ball, alvo_chute):
+    """Quanto o corpo pode estar torto e a bola ainda cair dentro do alvo."""
+    if experimento.desligado("TOL_POR_ALCANCE") or alvo_chute is None:
+        return TOL_CORPO_DISPARO
+    d = hypot(alvo_chute[0] - ball.position_x, alvo_chute[1] - ball.position_y)
+    if d <= 1.0:
+        return TOL_CORPO_DISPARO
+    return min(TOL_CORPO_DISPARO, atan2(margem_do_alvo(alvo_chute), d))
+
+
+def margem_do_alvo(alvo_chute):
+    """Quanto o alvo pedido ainda tem de gol de cada lado.
+
+    MIRAR NA TRAVE NAO DEIXA 500 mm DE FOLGA, DEIXA 150.
+    A versao anterior desta checagem usava MEIA_GOL_SEGURA sempre, como se
+    todo chute fosse para o MEIO do gol - e o portador mira onde a tatica
+    pede, nao no meio.
+    
+    DEFEITO MEDIDO em 03/11/2026, t15 do lote de 40 da seed 12
+    (docs/campanha_seed12b): mira +350, erro de corpo 3,7 graus e de direcao
+    2,5 a 3211 mm do gol. A bola cruzou a linha em y=530 - 30 mm fora. Os dois
+    erros estavam DENTRO da tolerancia, porque ela foi calculada com 500 mm de
+    folga quando a folga real ate a trave era 150. Com a margem certa a
+    tolerancia cai de 8,9 para 2,7 graus e o disparo nao sai.
+
+    MARGEM_MINIMA existe para que uma mira exatamente na trave nao zere a
+    tolerancia e trave o chute para sempre.
+
+    CHAVE PROPRIA (MARGEM_ATE_A_TRAVE) de proposito: 2,7 graus e apertado
+    perto do p90 de erro de corpo medido (3,1-3,9), e um portao que nunca abre
+    nao faz o robo mirar melhor - faz ele empurrar a bola para fora. Isto tem
+    de ser pareado antes de valer.
+    """
+    if experimento.desligado("MARGEM_ATE_A_TRAVE"):
+        return MEIA_GOL_SEGURA
+    if abs(abs(alvo_chute[0]) - campo.GOL_X) > 500.0:
+        return MEIA_GOL_SEGURA              # passe: nao e a linha do gol
+    return max(MARGEM_MINIMA, MEIA_GOL_SEGURA - abs(alvo_chute[1]))
+
+
+# Mira na trave nao pode zerar a tolerancia: 0,05 rad = 2,9 graus.
+MARGEM_MINIMA = 150.0
+
 
 def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid,
                 exigir_corpo_alinhado=True, tol_corpo=None):
@@ -338,7 +406,7 @@ def armar_chute(robo, ball, alvo_chute, sentido_ataque, tipo_alvo, travas, rid,
     if exigir_corpo_alinhado:
         ang_saida = atan2(alvo_chute[1] - ball.position_y,
                           alvo_chute[0] - ball.position_x)
-        tol = TOL_CORPO_DISPARO if tol_corpo is None else tol_corpo
+        tol = tolerancia_de_disparo(ball, alvo_chute) if tol_corpo is None else tol_corpo
         fora = abs(norm_ang(robo.orientation - ang_saida)) > tol
         if not fora and experimento.ligado("DISPARO_PREVISTO"):
             previsto = robo.orientation + (getattr(robo, "velocity_orientation", 0.0) or 0.0) \
