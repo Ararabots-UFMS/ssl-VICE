@@ -4,6 +4,7 @@ Every direction the roles use (body orientation, approach side, push point) come
 from this one decision, so it is made once per tick and locked against flicker.
 """
 
+import time as _time
 from dataclasses import dataclass
 from math import atan2, hypot
 from typing import Dict, Optional, Tuple
@@ -28,6 +29,45 @@ PRESSAO_MIN = 1
 TOL_MIN_VAO = 0.035
 # Half a degree inside each edge: about the ball's own width seen from 3 m.
 MARGEM_VAO = 0.009
+# TROCA FAVORAVEL: de quanto a nota tem de melhorar para quebrar a trava.
+#
+# A trava (CICLOS_MIN_MIRA) existe por medicao: a mira alternando passe/
+# bloqueado 132/148 ciclos girava a linha de tiro e o portador orbitava a bola
+# sem encostar nela (07/10/2026). Entao a troca NAO pode ser por qualquer
+# melhora - seria desligar a trava e trazer o giro de volta.
+#
+# Duas saidas, as duas conservadoras:
+#   1. a mira travada saiu de qualquer vao aberto - ela virou impossivel, e
+#      insistir nela e chutar no goleiro;
+#   2. a nota de agora supera a nota DE QUANDO a travada foi adotada por esta
+#      margem - melhora material, nao ruido.
+#
+# 0,15 e meia faixa entre o corte de baixa chance (0,1) e o de chute direto
+# (0,3): menor que isso e flutuacao do proprio amostrador de 81 raios.
+GANHO_MIN_TROCA = 0.15
+# Tolerancia em y para dizer que a mira travada "ainda cabe" num vao: metade da
+# largura da bola. Sem folga, ruido de 1 mm no amostrador derrubaria a trava.
+MARGEM_FORA = 25.0
+# PISO DE NOTA PARA CHUTAR AO GOL (chave NOTA_MIN_DISPARO).
+#
+# POR QUE: no lote de 20 contra goleiro varrendo (06/11/2026) a nota no
+# disparo tinha mediana 0,424, e ela NAO separava resultado - gol 0,424,
+# defendido 0,398. Ou seja ele disparava em vao mediocre e o goleiro chegava.
+# O corte de fabrica e NOTA_CHUTE_DIRETO = 0,3, herdado de quando nao havia
+# goleiro adversario no teste.
+#
+# 0,45 fica logo acima da mediana observada, entao cerca de metade dos
+# disparos de hoje passariam a esperar. O risco e oposto e real: esperar
+# demais virou 'sem_chute' 10 em 200 no lote de bola rolando. Por isso tem
+# chave propria e lote medido - nao e numero de fe.
+NOTA_MIN_DISPARO = 0.45
+
+
+def _piso_nota():
+    """O corte de nota para chutar ao gol neste ciclo."""
+    if experimento.desligado("NOTA_MIN_DISPARO"):
+        return avaliacao_chute.NOTA_CHUTE_DIRETO
+    return NOTA_MIN_DISPARO
 
 Ponto = Tuple[float, float]
 
@@ -40,6 +80,7 @@ class MemoriaMira:
     ciclos: int = 0
     crua: Optional[str] = None          # this tick's choice before the lock
     segurada: bool = False              # the lock kept last tick's aim
+    nota: Optional[float] = None        # nota do vao quando ESTA mira foi adotada
     # Pass receiver frozen at decision time as (x, y, rid): a moving receiver made
     # the push point jump every tick and the carrier never lined up (0 of 1272 frames).
     alvo_passe: Optional[Tuple[float, float, int]] = None
@@ -66,6 +107,51 @@ def _tolerancia(ball, ax, ay, vao):
     return max(TOL_MIN_VAO, min(chute.TOL_CORPO_DISPARO, folga))
 
 
+# A ultima mira ja relatada, para o probe nao repetir a mesma linha 60x/s.
+_ultimo_relato = [None]
+
+
+def _diag_mira(nota_gol) -> None:
+    """Mostra a nota trabalhando: TODOS os vaos, o escolhido e os descartados.
+
+    POR QUE ISTO EXISTE: a nota e o vao escolhido nao apareciam em lugar
+    nenhum. Com goleiro adversario em campo, "ele chutou no canto errado" e
+    "ele achou o unico vao que havia" produzem o mesmo CSV, e sem ver os
+    candidatos descartados nao da para separar os dois.
+    """
+    if not diagnostico.ativo():
+        return
+    u = avaliacao_chute.ULTIMO_VAO
+    if not u:
+        return
+    # So quando a decisao MUDA: a 60 Hz a mesma linha sairia 60 vezes por
+    # segundo e o arquivo deixaria de ser legivel.
+    marca = (u.get("mira"), round(float(u.get("nota") or 0.0), 2), len(u.get("vaos") or ()))
+    if marca == _ultimo_relato[0]:
+        return
+    _ultimo_relato[0] = marca
+    decisao = ("direto" if nota_gol > avaliacao_chute.NOTA_CHUTE_DIRETO else
+               "baixa_chance" if nota_gol > avaliacao_chute.NOTA_CHUTE_BAIXA_CHANCE else
+               "bloqueado")
+    forcada = experimento.mira_y(None)
+    # RELOGIO DE PAREDE NA LINHA, e nao so a ordem.
+    #
+    # Sem ele quem le o arquivo nao sabe QUAL decisao foi a do disparo, e pegar
+    # a ultima linha e errado: ela costuma ser depois do chute, com a bola ja
+    # na linha do gol. Medido em 06/11/2026 (campanha_nota3 t2): a ultima linha
+    # dizia nota=0.184 mira=489 com a bola em (4272,693), enquanto a decisao do
+    # chute era nota=0.498 mira=188. time.time() porque e o mesmo relogio do
+    # processo da campanha, que roda no mesmo container.
+    diagnostico.log_e_arquivo(
+        "[MR] t=%.3f bola=%.0f,%.0f abertas=%s/%s nota=%.3f mira=%s decisao=%s%s vaos=%s"
+        % (_time.time(), u["bola"][0], u["bola"][1], u.get("abertas"), u.get("amostras"),
+           float(u.get("nota") or 0.0), u.get("mira"), decisao,
+           "" if forcada is None else " FORCADA=%.0f" % forcada,
+           " | ".join("y=%+.0f nota=%.3f %s"
+                      % (v["y"], v["nota"], "ESCOLHIDO" if v["escolhido"] else "descartado")
+                      for v in (u.get("vaos") or ())) or "nenhum"))
+
+
 def _cru(mundo: Mundo, papeis: Dict[int, str], memoria: MemoriaMira):
     """Goal if the line is clear, else the APOIO (or COBERTURA), else nothing.
 
@@ -75,7 +161,8 @@ def _cru(mundo: Mundo, papeis: Dict[int, str], memoria: MemoriaMira):
     ball, aliados, inimigos = mundo.bola, mundo.aliados, mundo.inimigos
     bx, by = ball.position_x, ball.position_y
     gol_x, gol_y, nota_gol, vao = avaliacao_chute.melhor_vao(ball, mundo.gol_ataque, inimigos)
-    if nota_gol > avaliacao_chute.NOTA_CHUTE_DIRETO:
+    _diag_mira(nota_gol)
+    if nota_gol > _piso_nota():
         memoria.alvo_passe = None
         y = experimento.mira_y(gol_y)
         return gol_x, y, "gol", _tolerancia(ball, gol_x, y, vao)
@@ -103,7 +190,13 @@ def _cru(mundo: Mundo, papeis: Dict[int, str], memoria: MemoriaMira):
                 memoria.alvo_passe = (a.position_x, a.position_y, rid)
                 return a.position_x, a.position_y, "passe", None
 
-    if nota_gol > avaliacao_chute.NOTA_CHUTE_BAIXA_CHANCE:
+    # O RAMO DE BAIXA CHANCE TAMBEM RESPEITA O PISO.
+    #
+    # Sem isto o piso nao faria nada na campanha: sem companheiro em campo a
+    # tentativa de passe falha, cai aqui, e 0,1 libera o mesmo chute que o
+    # piso acabou de recusar.
+    if nota_gol > max(avaliacao_chute.NOTA_CHUTE_BAIXA_CHANCE, _piso_nota()
+                      if not experimento.desligado("NOTA_MIN_DISPARO") else 0.0):
         memoria.alvo_passe = None
         return gol_x, gol_y, "gol", _tolerancia(ball, gol_x, gol_y, vao)
     return None, None, "bloqueado", None
@@ -117,6 +210,54 @@ def _mira_existe(tipo, papeis, memoria: MemoriaMira) -> bool:
     if receptor is not None and papeis.get(receptor[2]) == PAPEL_COBERTURA:
         return True
     return any(p == PAPEL_APOIO for p in papeis.values())
+
+
+def _troca_favoravel(memoria: MemoriaMira, ant_p):
+    """A mira travada deve ser abandonada agora? Devolve o motivo, ou None.
+
+    Le o vao recem-calculado em avaliacao_chute.ULTIMO_VAO - este mesmo ciclo,
+    por '_cru'. Nao recalcula nada: so compara.
+    """
+    u = avaliacao_chute.ULTIMO_VAO
+    if not u or ant_p is None:
+        return None
+    vaos = u.get("vaos") or ()
+    y_ant = ant_p[1]
+    # 1. a mira travada saiu de todos os vaos abertos
+    dentro = any(v["y_lo"] - MARGEM_FORA <= y_ant <= v["y_hi"] + MARGEM_FORA
+                 for v in vaos)
+    if not dentro:
+        return "travada_bloqueada"
+    # 2. a nota de agora supera a de quando a travada foi adotada
+    nota_ant = memoria.nota
+    nota_hoje = float(u.get("nota") or 0.0)
+    if nota_ant is not None and nota_hoje >= nota_ant + GANHO_MIN_TROCA:
+        return "nota_subiu"
+    return None
+
+
+_ultimo_uso = [None]
+
+
+def _diag_uso(y, tipo, segurada, ciclos) -> None:
+    """A mira EM VIGOR, depois da trava - que nao e a avaliacao do ciclo.
+
+    POR QUE SEPARADO DO [MR]: '_mira_firme' segura a mira anterior por ate
+    CICLOS_MIN_MIRA ciclos, entao no instante do disparo a mira em uso pode
+    ser mais VELHA que o melhor_vao daquele ciclo. Medido em 06/11/2026
+    (campanha_nota3 t1): o [MR] do chute dizia mira=-252 e a bola cruzou em
+    +465. Sem esta linha nao da para saber se o atacante errou a mira dele ou
+    se mirou numa mira travada de 20 ciclos atras.
+    """
+    if not diagnostico.ativo():
+        return
+    marca = (None if y is None else round(y), tipo, bool(segurada))
+    if marca == _ultimo_uso[0]:
+        return
+    _ultimo_uso[0] = marca
+    diagnostico.log_e_arquivo(
+        "[MU] t=%.3f uso_y=%s tipo=%s segurada=%s ciclos=%s"
+        % (_time.time(), None if y is None else round(y, 1), tipo, int(bool(segurada)), ciclos))
 
 
 def _mira_firme(memoria: MemoriaMira, ax, ay, tipo, tol, papeis):
@@ -133,15 +274,35 @@ def _mira_firme(memoria: MemoriaMira, ax, ay, tipo, tol, papeis):
     else:
         segura = ant_vale and n < CICLOS_MIN_MIRA and _mira_existe(ant_t, papeis, memoria)
 
+    # TROCA FAVORAVEL: a trava solta quando a mira nova e materialmente melhor.
+    #
+    # MEDIDO (campanha_guarda20, 06/11/2026): 18 dos 20 chutes sairam com a
+    # mira SEGURADA, a mira em vigor trocava a cada 2,18 s - o periodo da
+    # trava - e a nota no disparo tinha mediana 0,424 contra um maximo de 1,0.
+    # Com goleiro varrendo a 354 mm/s, 2,18 s sao ~770 mm, mais que a
+    # meia-largura do gol: a mira seguia onde o goleiro ESTAVA, nao onde ele
+    # esta. E a nota nao separava gol (0,424) de defesa (0,398).
+    if segura and ant_t == "gol" and not experimento.desligado("TROCA_FAVORAVEL"):
+        motivo = _troca_favoravel(memoria, ant_p)
+        if motivo:
+            segura = False
+            memoria.ciclos = CICLOS_MIN_MIRA   # nao segura de novo no ciclo seguinte
+
     memoria.crua = tipo
     memoria.segurada = bool(segura)
     if segura:
         memoria.ciclos = n + 1
+        _diag_uso(ant_p[1], ant_t, True, n + 1)
         return ant_p[0], ant_p[1], ant_t, memoria.tolerancia
 
     memoria.tipo = tipo
     memoria.ponto = None if ax is None else (ax, ay)
     memoria.tolerancia = tol
+    # A NOTA DE QUANDO ESTA MIRA FOI ADOTADA, para a troca favoravel comparar
+    # com a de agora em vez de com a do ciclo anterior.
+    memoria.nota = (float(avaliacao_chute.ULTIMO_VAO.get("nota") or 0.0)
+                    if tipo == "gol" and avaliacao_chute.ULTIMO_VAO else None)
+    _diag_uso(ay, tipo, False, 0)
     memoria.ciclos = 0
     return ax, ay, tipo, tol
 

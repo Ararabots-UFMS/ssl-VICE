@@ -98,6 +98,18 @@ import os
 #                     segundo, contra uma placa de chutador de +-40 mm: o
 #                     portador chegava AO LADO da bola. Nas 20 de 28/10, 13 de
 #                     19 primeiros toques nao foram o chute.
+#   TROCA_FAVORAVEL   a trava da mira solta quando a mira nova e materialmente
+#                     melhor: a travada saiu de todo vao aberto, ou a nota de
+#                     agora supera por GANHO_MIN_TROCA a nota de quando a
+#                     travada foi adotada. Medido no lote de 20 contra goleiro
+#                     varrendo (06/11/2026): 18 de 20 disparos com a mira
+#                     SEGURADA, trocando a cada 2,18 s - e a 354 mm/s o goleiro
+#                     anda ~770 mm nesse tempo, mais que a meia-largura do gol.
+#   NOTA_MIN_DISPARO  exige nota >= NOTA_MIN_DISPARO para chutar ao gol, em vez
+#                     do NOTA_CHUTE_DIRETO de 0,3 herdado de quando nao havia
+#                     goleiro no teste. No mesmo lote a nota no disparo tinha
+#                     mediana 0,424 e NAO separava gol (0,424) de defesa
+#                     (0,398).
 #   CHEGADA_NA_LINHA  so entra no empurrao alinhado a ate 40 mm da linha de tiro
 #                     e perto da bola; sai a 90. Entrava a 90 e saia a 160, e o
 #                     grSim so dispara com a bola a 40 mm do centro do chutador:
@@ -110,7 +122,8 @@ CHAVES = ("ORIENTACAO_LADO", "ORBITA", "PROTECAO", "PRESSAO_BOLA",
           "INTERCEPTAR_SO_RAPIDA", "AVANCO_ANTES_DA_AREA",
           "TOL_POR_ALCANCE", "NAO_INTERCEPTAR_EM_CONTATO",
           "INTERCEPTAR_ATE_A_PARADA",
-          "MARGEM_ATE_A_TRAVE")
+          "MARGEM_ATE_A_TRAVE",
+          "TROCA_FAVORAVEL", "NOTA_MIN_DISPARO")
 
 
 def _ligada(valor):
