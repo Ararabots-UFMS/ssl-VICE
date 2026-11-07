@@ -32,6 +32,7 @@ MEIO_CAMPO_X, MEIO_CAMPO_Y = 4500.0, 3000.0
 AREA_FUNDO, AREA_MEIA = 1000.0, 1000.0      # penalty area: depth, half width
 PORTADOR = 1                                # id 0 is the goalkeeper for the tactic
 ARQUIVO_MIRA = "/tmp/ararabots_mira_y"      # read by strategy/skills/experimento.py
+ARQUIVO_DIAG = "/tmp/diag_jogo.log"         # written by strategy/diagnostico.py
 VEL_CHUTE = 1500.0                          # ball faster than this was kicked, not pushed
 SALTO = 400.0                               # more than this in one frame is not motion
 VEL_MAX_BOLA = 9000.0                       # mm/s; nothing in grSim moves the ball faster
@@ -76,7 +77,9 @@ CAMPOS = [
     "toque_xx", "toque_yy", "toque_armado", "toque_foi_chute",
     "alcancou", "encostou", "t_toque", "t_encosto", "toque_x", "toque_y",
     "investidas", "t_1a_investida", "vel_bola_toque", "bola_parada_no_toque",
-    "rolagem_prevista", "cond", "chaves_off",
+    "rolagem_prevista", "cond", "chaves_off", "gk_y_chute", "gk_dist_min",
+    "mira_escolhida", "nota_chute", "vaos", "folga_gk",
+    "mira_em_uso", "mira_segurada",
 ]
 
 
@@ -260,10 +263,29 @@ def plano(seed, i, args):
             if not posto_legal(bx + ux * andou, by + uy * andou, mira):
                 continue
 
-        inimigos = []
+        inimigos, guarda = [], None
         if args.goleiro == "gol":
             inimigos.append((GOLEIRO_ID, GOL_X - RAIO_ROBO - 10.0,
                              rng.uniform(-GOL_MEIA + RAIO_ROBO, GOL_MEIA - RAIO_ROBO), 180.0))
+        elif args.goleiro == "guarda":
+            # GUARDA: o goleiro inimigo VARRE poste a poste, movido pela
+            # fisica do grSim.
+            #
+            # POR QUE NAO TELEPORTE: a primeira versao disto teleportava o
+            # goleiro a 20 Hz com 'mover_robo'. Ele andava e nao defendia -
+            # medido em campanha_conf_guarda t1, bola a 52 mm do centro dele
+            # (o corpo tem 90 mm de raio) e resultado 'gol'. Teleporte nao tem
+            # colisao continua e a bola tunela.
+            #
+            # O repo ja tinha o caminho certo: 'comandar_amarelos' com
+            # GOLEIRO_PATRULHA=1 manda VELOCIDADE (_cmd_amarelo), entao o corpo
+            # e movido pela fisica e bate na bola. 1,2 m/s com freio a 250 mm,
+            # calibrado pelo time: a 3 m/s ele passava direto e oscilava
+            # 1849 mm num gol de 1000.
+            guarda = True
+            inimigos.append((GOLEIRO_ID, GOL_X - RAIO_ROBO - 10.0,
+                             rng.uniform(-(GOL_MEIA - RAIO_ROBO), GOL_MEIA - RAIO_ROBO),
+                             180.0))
         elif args.goleiro == "area":
             inimigos.append((GOLEIRO_ID,
                              rng.uniform(MEIO_CAMPO_X - AREA_FUNDO + RAIO_ROBO, GOL_X - RAIO_ROBO - 10.0),
@@ -279,7 +301,7 @@ def plano(seed, i, args):
             inimigos.append((rid, ex, ey, 180.0))
         return dict(bola=(bx, by), bola_vel=(bvx, bvy), geometria=geo,
                     robo=(rx, ry, rdir), mira=mira, inimigos=inimigos,
-                    goleiro=args.goleiro != "nenhum")
+                    goleiro=args.goleiro != "nenhum", guarda=guarda)
 
     raise SystemExit(
         "nao consegui sortear a tentativa %d: nenhuma colocacao satisfaz "
@@ -300,9 +322,35 @@ def criar_no():
             super().__init__("gravador_campanha")
             self.bola = None
             self.robo = None
+            # O GOLEIRO INIMIGO VAI PARA DENTRO DO QUADRO.
+            #
+            # Sem isto o veredito 'defendido' comparava a trajetoria da bola
+            # com a posicao INICIAL do goleiro (o p["inimigos"] do sorteio).
+            # Com goleiro parado da no mesmo; com goleiro em GUARDA o veredito
+            # sai contra onde ele COMECOU, nao onde ele estava - 'defendido'
+            # em bola que passou longe, e 'gol' em bola que ele pegou. O
+            # quadro cru ja trazia robots_yellow; so ninguem lia.
+            self.goleiro = None
+            # AS TRES LISTAS CRUAS DO REPLAY DE VERDADE.
+            #
+            # O replay proprio desta campanha desenhava a bola e UM robo
+            # nosso: com goleiro inimigo em campo era impossivel conferir uma
+            # defesa, porque o goleiro nao aparecia. O ararabots.py ja tem o
+            # visualizador completo (gerar_replay / _MODELO_REPLAY), e ele JA
+            # desenha o adversario - esse defeito foi corrigido la, inclusive
+            # com o comentario dizendo que o dado "nunca foi gravado". Aqui so
+            # se grava no formato que ele espera.
+            #
+            #   visao_crua    (t_capture, bx, by, t_relativo)
+            #   robos_crus    (t_capture, id, x, y, orientacao)
+            #   amarelos_crus (t_capture, id, x, y, orientacao)
+            self.visao_crua = []
+            self.robos_crus = []
+            self.amarelos_crus = []
+            self.t0 = time.monotonic()
             self.kick = 0.0
             self.gravando = False
-            self.quadros = []       # (t_capture, bx, by, rx, ry, rth, kick)
+            self.quadros = []       # (t_capture, bx, by, rx, ry, rth, kick, gkx, gky)
             self.fantasmas = 0      # ball detections far from where the ball was
             self.estranhos = set()  # other machines multicasting vision
             self.estranhos_n = 0    # quantos pacotes deles, desde o ultimo zero
@@ -343,9 +391,26 @@ def criar_no():
                 if not pacote.HasField("detection"):
                     continue
                 quadro = pacote.detection
+                if self.gravando:
+                    for r in quadro.robots_blue:
+                        self.robos_crus.append((quadro.t_capture, int(r.robot_id),
+                                                float(r.x), float(r.y), float(r.orientation)))
+                    for r in quadro.robots_yellow:
+                        self.amarelos_crus.append((quadro.t_capture, int(r.robot_id),
+                                                   float(r.x), float(r.y), float(r.orientation)))
+                    if quadro.balls:
+                        b = quadro.balls[0]
+                        self.visao_crua.append((quadro.t_capture, float(b.x), float(b.y),
+                                                round(time.monotonic() - self.t0, 4)))
                 for r in quadro.robots_blue:
                     if r.robot_id == PORTADOR:
                         self.robo = (r.x, r.y, r.orientation)
+                for r in quadro.robots_yellow:
+                    if r.robot_id == GOLEIRO_ID:
+                        # (x, y, orientacao): o comando de velocidade precisa
+                        # da orientacao porque o grSim espera veltangent e
+                        # velnormal no referencial DO ROBO.
+                        self.goleiro = (r.x, r.y, r.orientation)
                 if not quadro.balls:
                     continue
                 # Cameras overlap, and one of them may report a second ball: keep the
@@ -360,7 +425,9 @@ def criar_no():
                     continue            # a ghost: keep it out of the trajectory too
                 self.bola = bolas[0]
                 if self.gravando and self.robo:
-                    self.quadros.append((quadro.t_capture,) + self.bola + self.robo + (self.kick,))
+                    self.quadros.append((quadro.t_capture,) + self.bola + self.robo
+                                        + (self.kick,)
+                                        + (self.goleiro[:2] if self.goleiro else (None, None)))
 
         def _comando(self, msg):
             for r in msg.robots:
@@ -455,7 +522,7 @@ def _na_frente(f):
     within 40 mm of the plate centre, so a ball 115 mm to the side is not a
     ball the attacker has.
     """
-    _, bx, by, rx, ry, rth, _ = f
+    _, bx, by, rx, ry, rth = f[:6]
     if math.hypot(bx - rx, by - ry) >= CONTATO:
         return None, None
     dx, dy = bx - rx, by - ry
@@ -621,10 +688,12 @@ def medir(q, p):
 
     ik, m["trombadas"] = chute_em(q, it or 0)
     cruzou = None
+    quadro_cruzou = None
     for a, b in zip(q, q[1:]):
         if a[1] < GOL_X <= b[1]:
             s = (GOL_X - a[1]) / (b[1] - a[1])
             cruzou = a[2] + s * (b[2] - a[2])
+            quadro_cruzou = b          # para medir o goleiro NESTE instante
             break
     contra = any(f[1] <= -GOL_X and abs(f[2]) <= GOL_MEIA for f in q)
 
@@ -633,7 +702,7 @@ def medir(q, p):
         ia = ik
         while ia > 0 and q[ik][0] - q[ia][0] < 0.06:
             ia -= 1
-        _, kx, ky, rx, ry, rth, _ = q[ia]
+        _, kx, ky, rx, ry, rth = q[ia][:6]
         m.update(chutou=1, t_chute=round(q[ik][0] - t0, 2), bola_chute_x=round(kx),
                  bola_chute_y=round(ky), dist_chute_gol=round(math.hypot(GOL_X - kx, alvo[1] - ky)),
                  arrasto=round(math.hypot(kx - bx0, ky - by0)))
@@ -651,13 +720,55 @@ def medir(q, p):
                 m["y_na_linha"] = round(depois[0][2] + vy / vx * (GOL_X - depois[0][1]))
         if cruzou is not None:
             m["y_na_linha"] = round(cruzou)
-        if "y_na_linha" in m:
+        if "y_na_linha" in m and p["mira"] is not None:
             m["erro_y"] = round(m["y_na_linha"] - alvo[1])
+        # COM MIRA LIVRE, erro_y FICA VAZIO - de proposito.
+        #
+        # 'alvo' cai no CENTRO do gol quando a campanha nao forca mira
+        # (ver o topo de medir). Sem goleiro isso passava, porque a mira livre
+        # da perto do centro. Com goleiro varrendo, a estrategia mira LONGE do
+        # centro de proposito - e um chute perfeito no canto aberto apareceria
+        # como erro de 400 mm. O sinal inverteria.
+        #
+        # O que mede pontaria contra defesa e 'folga_gk': a distancia entre
+        # onde a bola cruzou a linha e onde o goleiro estava NAQUELE instante.
+        # Folga grande com gol = achou o lado aberto. Folga pequena = chutou
+        # em cima dele.
 
-    goleiro = next((e for e in p["inimigos"] if e[0] == GOLEIRO_ID), None) \
+    # O GOLEIRO DO QUADRO, nao o do sorteio.
+    #
+    # Antes isto lia p["inimigos"], a colocacao INICIAL. Com goleiro parado da
+    # no mesmo; com '--goleiro guarda' ele varre a boca do gol durante a
+    # jogada e o veredito sairia contra onde ele comecou: 'defendido' em bola
+    # que passou longe, 'gol' em bola que ele pegou. f[7] e f[8] sao a posicao
+    # dele naquele instante, lida da visao crua.
+    #
+    # O fallback para a colocacao existe para os lotes em que a visao nao
+    # entregou o amarelo (goleiro desligado, ou quadro antes do teleporte):
+    # ai nao ha posicao por quadro e a inicial e o melhor que se tem.
+    gk0 = next((e for e in p["inimigos"] if e[0] == GOLEIRO_ID), None) \
         if p.get("goleiro") else None
-    defendido = ik is not None and goleiro is not None and any(
-        math.hypot(f[1] - goleiro[1], f[2] - goleiro[2]) < DEFESA_RAIO for f in q[ik:])
+    def _bateu(f):
+        gx, gy = (f[7], f[8]) if len(f) > 8 and f[7] is not None else \
+                 ((gk0[1], gk0[2]) if gk0 else (None, None))
+        return gx is not None and math.hypot(f[1] - gx, f[2] - gy) < DEFESA_RAIO
+    defendido = ik is not None and gk0 is not None and any(_bateu(f) for f in q[ik:])
+    # ONDE A GUARDA ESTAVA, para o lote ser legivel. Sem isto um 'gol' com
+    # goleiro em guarda nao diz se o atacante achou o lado aberto ou se a
+    # varredura so estava do outro lado por sorte.
+    if gk0 is not None and ik is not None:
+        fk = q[ik]
+        if len(fk) > 8 and fk[7] is not None:
+            m["gk_y_chute"] = round(fk[8])
+        def _d(f):
+            gx, gy = (f[7], f[8]) if len(f) > 8 and f[7] is not None else (gk0[1], gk0[2])
+            return math.hypot(f[1] - gx, f[2] - gy)
+        depois_do_chute = [_d(f) for f in q[ik:]]
+        if depois_do_chute:
+            m["gk_dist_min"] = round(min(depois_do_chute))
+        if quadro_cruzou is not None and len(quadro_cruzou) > 8 \
+                and quadro_cruzou[7] is not None:
+            m["folga_gk"] = round(abs(cruzou - quadro_cruzou[8]))
     m["_it"], m["_ik"], m["_quadros"] = it, ik, q
     m.update(primeiro_toque(q, ik, it))
     # A BALL WE NEVER TOUCHED SCORES NOTHING, either way. Launched at the
@@ -700,7 +811,7 @@ def primeiro_toque(q, ik, it=None):
     """
     if it is None:
         return {}
-    _, bx, by, rx, ry, rth, kick = q[max(0, it - 1)]
+    _, bx, by, rx, ry, rth, kick = q[max(0, it - 1)][:7]
     if math.hypot(bx - rx, by - ry) > 250.0:
         return {}                       # something else moved it
     dx, dy = bx - rx, by - ry
@@ -787,44 +898,6 @@ desenha(0);
 """
 
 
-def escrever_replay(q, m, p, i, caminho):
-    """One self-contained HTML per attempt, from the campaign's own raw frames.
-
-    The campaign recorded ball, robot pose and kick at full rate and threw all of
-    it away except a 150-point line in trajetorias.jsonl. That is enough for a
-    scatter plot and not enough to see WHY an attempt failed - where the ball sat
-    on the plate, whether the body was turned, when the kicker armed. The scenario
-    path has had gerar_replay() for exactly this reason; the campaign had nothing.
-    """
-    if len(q) < 3:
-        return None
-    it = m.get("_it")
-    ik = m.get("_ik")
-    vel = round(math.hypot(*p["bola_vel"]))
-    linhas = [("resultado", m.get("resultado", "")), ("alcancou", m.get("alcancou", "")),
-              ("chutou", m.get("chutou", "")), ("t_toque (s)", m.get("t_toque", "")),
-              ("t_chute (s)", m.get("t_chute", "")), ("erro_y (mm)", m.get("erro_y", "")),
-              ("vel_saida (mm/s)", m.get("vel_saida", "")),
-              ("erro_corpo (graus)", m.get("erro_corpo", "")),
-              ("toque xx/yy (mm)", f"{m.get('toque_xx','')} / {m.get('toque_yy','')}"),
-              ("1o toque foi chute", m.get("toque_foi_chute", "")),
-              ("trombadas", m.get("trombadas", "")), ("fantasmas", m.get("fantasmas", ""))]
-    ok = m.get("resultado") == "gol"
-    with open(caminho, "w") as arquivo:
-        arquivo.write(REPLAY_HTML % dict(
-            i=i, geo=p["geometria"], vel=vel,
-            resumo=f'robo a {round(math.hypot(p["robo"][0]-p["bola"][0], p["robo"][1]-p["bola"][1]))} mm '
-                   f'da bola, contorno {m.get("_contorno", "?")} graus, mira '
-                   f'{"auto" if p["mira"] is None else round(p["mira"])}',
-            tabela="".join(f"<tr><td>{k}</td><td>{v}</td></tr>" for k, v in linhas),
-            quadros=json.dumps([[round(f[0], 3), round(f[1], 1), round(f[2], 1),
-                                 round(f[3], 1), round(f[4], 1), round(f[5], 4), f[6]] for f in q]),
-            meta=json.dumps(dict(it=it, ik=ik, mira=p["mira"],
-                                 mx=q[it][1] if it is not None else p["bola"][0],
-                                 my=q[it][2] if it is not None else p["bola"][1])),
-        ))
-    return caminho
-
 
 def chaves_desligadas():
     """As chaves de experimento DESLIGADAS agora, lidas do disco.
@@ -880,7 +953,21 @@ def tentativa(no, i, p, args):
     A.posicionar(cen)                 # the geometry has to hold at t = 0
     girar(no, 0.3)
 
+    # O DIAGNOSTICO TAMBEM E POR TENTATIVA. O strategyNode nao reinicia entre
+    # tentativas e grava em append, entao sem truncar aqui o [MR] da tentativa
+    # 7 viria com as 6 anteriores dentro.
+    try:
+        open(ARQUIVO_DIAG, "w").close()
+    except OSError:
+        pass
+
     no.quadros = []
+    # POR TENTATIVA: sem isto o replay da tentativa 7 desenharia as 6
+    # anteriores em cima.
+    no.visao_crua = []
+    no.robos_crus = []
+    no.amarelos_crus = []
+    no.t0 = time.monotonic()
     no.fantasmas = 0
     no.estranhos_n = 0          # a contagem e POR TENTATIVA (ver LIMITE_ESTRANHOS)
     no.gravando = True
@@ -900,9 +987,23 @@ def tentativa(no, i, p, args):
         A.mover_bola(p["bola"][0], p["bola"][1], *p["bola_vel"])
     A.enviar_comando_arbitro("FORCE_START", "BLUE")
     inicio = time.monotonic()
+    # O APITO NO RELOGIO DE PAREDE, para casar com o t= das linhas [MR] (o
+    # probe da estrategia usa time.time(); mesmo container, mesmo relogio).
+    inicio_parede = time.time()
     chutado_em = parada_desde = None
+    gd = p.get("guarda")
     while time.monotonic() - inicio < args.duracao:
-        girar(no, 0.05)
+        # A GUARDA E COMANDADA AQUI, todo ciclo.
+        #
+        # TAXA IMPORTA, e esta medido no proprio repo (ararabots.py, o
+        # comentario acima de comandar_amarelos): comandando a 10 Hz o goleiro
+        # deslocou 7 mm em 5 s; a ~50 Hz o mesmo robo andou 250 mm em 3 s. Sem
+        # comando novo o grSim zera a velocidade dele. Por isso o laco gira a
+        # 50 Hz quando ha guarda, e nao aos 20 Hz do resto.
+        if gd and no.goleiro:
+            A.comandar_amarelos(no.bola, {GOLEIRO_ID: no.goleiro},
+                                {}, "nossa_falta", (0.0, 0.0))
+        girar(no, 0.02 if gd else 0.05)
         q = limpar(no.quadros)
         if len(q) < 3:
             continue
@@ -923,6 +1024,16 @@ def tentativa(no, i, p, args):
     A.enviar_comando_arbitro("HALT")
     m = medir(list(no.quadros), p)
     m["fantasmas"] = no.fantasmas
+    try:
+        with open(ARQUIVO_DIAG, encoding="utf-8", errors="replace") as arq:
+            m["_mr"] = [l.rstrip("\n") for l in arq
+                        if l.startswith("[MR]") or l.startswith("[MU]")]
+    except OSError:
+        m["_mr"] = []
+    m["_apito"] = inicio_parede
+    m["_cru"] = dict(visao_crua=list(no.visao_crua),
+                     robos_crus=list(no.robos_crus),
+                     amarelos_crus=list(no.amarelos_crus))
     return m
 
 
@@ -941,7 +1052,7 @@ def main():
     ap.add_argument("--miras", default="-350,-175,0,175,350",
                     help="aim points inside the goal (y, mm), or 'auto' to let the strategy choose")
     ap.add_argument("--inimigos", type=int, default=0, help="other static yellow robots")
-    ap.add_argument("--goleiro", choices=["nenhum", "gol", "area"], default="nenhum",
+    ap.add_argument("--goleiro", choices=["nenhum", "gol", "area", "guarda"], default="nenhum",
                     help="static yellow keeper: on the goal line, or anywhere in their area")
     ap.add_argument("--tentativas", default="",
                     help="run exactly these attempt numbers (e.g. 67,115), done or not")
@@ -1103,15 +1214,116 @@ def main():
                   # not see them (DictWriter raises on a field it does not know).
                   quadros_limpos = linha.pop("_quadros", [])
                   it_idx, ik_idx = linha.pop("_it", None), linha.pop("_ik", None)
+                  cru = linha.pop("_cru", {}) or {}
+                  mr = linha.pop("_mr", []) or []
+                  # A NOTA VAI PARA O CSV, e as linhas inteiras para o disco.
+                  #
+                  # Tres colunas resumem (a ultima decisao antes do fim) e o
+                  # arquivo guarda TODAS as decisoes da tentativa, com os vaos
+                  # descartados. Sem os descartados nao da para distinguir
+                  # "chutou no canto errado" de "era o unico vao que havia".
+                  apito = linha.pop("_apito", None)
+                  if mr:
+                      # A DECISAO DO CHUTE, nao a ultima do arquivo.
+                      #
+                      # mr[-1] e quase sempre DEPOIS do disparo, com a bola ja
+                      # na linha: em campanha_nota3 t2 a ultima linha dizia
+                      # nota=0.184 mira=489 (bola em 4272,693) e a decisao do
+                      # chute era nota=0.498 mira=188. Aqui pega a ultima
+                      # linha cujo t= nao passou do instante do chute.
+                      import re as _re
+                      alvo_t = None
+                      if apito is not None and linha.get("t_chute") not in (None, ""):
+                          alvo_t = apito + float(linha["t_chute"])
+                      esc = uso = None
+                      for l in mr:
+                          gt = _re.search(r"t=([\d.]+)", l)
+                          if alvo_t is not None and gt and float(gt.group(1)) > alvo_t:
+                              break
+                          if l.startswith("[MR]"):
+                              esc = l
+                          else:
+                              uso = l
+                      # A MIRA EM VIGOR no disparo, que pode ser mais velha
+                      # que a avaliacao do ciclo (ver _mira_firme: ela segura
+                      # a anterior por ate CICLOS_MIN_MIRA ciclos).
+                      if uso:
+                          gu = _re.search(r"uso_y=(\S+) tipo=(\S+) segurada=(\d)", uso)
+                          if gu:
+                              linha["mira_em_uso"] = gu.group(1)
+                              linha["mira_segurada"] = gu.group(3)
+                      esc = esc or mr[-1]
+                      g = _re.search(r"nota=([\d.]+) mira=(\S+) decisao=(\w+)", esc)
+                      if g:
+                          linha["nota_chute"] = g.group(1)
+                          linha["mira_escolhida"] = g.group(2)
+                      gv = _re.search(r"vaos=(.*)$", esc)
+                      if gv:
+                          linha["vaos"] = gv.group(1).replace(",", ";")
                   escritor.writerow(linha)
                   arquivo.flush()
                   if not args.sem_replay and quadros_limpos:
                       pasta_rep = os.path.join(args.saida, "replays", p["geometria"])
                       os.makedirs(pasta_rep, exist_ok=True)
-                      escrever_replay(quadros_limpos,
-                                      dict(m, _it=it_idx, _ik=ik_idx,
-                                           _contorno=linha["angulo_contorno"]),
-                                      p, i, os.path.join(pasta_rep, f"tentativa_{i:04d}.html"))
+                      # O REPLAY DE VERDADE, o do ararabots.py.
+                      #
+                      # O desta campanha desenhava a bola e UM robo nosso, e
+                      # com goleiro inimigo em campo isso nao serve: nao da
+                      # para conferir uma defesa sem ver o goleiro. O
+                      # 'gerar_replay' desenha os dois times, o setpoint
+                      # comandado e os eventos, da visao CRUA.
+                      # A SERIE DE MIRAS PARA O REPLAY DESENHAR.
+                      #
+                      # (t_relativo, uso_y, nota, aval_y, segurada). O t das
+                      # linhas e relogio de parede; o replay quer o relogio
+                      # relativo da gravacao, que comeca no apito.
+                      miras = []
+                      if apito is not None:
+                          nota_c = aval_c = None
+                          for l in mr:
+                              gt = _re.search(r"t=([\d.]+)", l)
+                              if not gt:
+                                  continue
+                              tn = float(gt.group(1)) - apito
+                              if l.startswith("[MR]"):
+                                  gn = _re.search(r"nota=([\d.]+) mira=(\S+)", l)
+                                  if gn:
+                                      nota_c = float(gn.group(1))
+                                      aval_c = None if gn.group(2) == "None" \
+                                          else float(gn.group(2))
+                                  continue
+                              gu = _re.search(r"uso_y=(\S+).*segurada=(\d)", l)
+                              if gu:
+                                  miras.append([round(tn, 4),
+                                                None if gu.group(1) == "None"
+                                                else float(gu.group(1)),
+                                                nota_c, aval_c, int(gu.group(2))])
+                      # A SEED VAI NO NOME. Sem ela, 5 seeds na mesma pasta escrevem
+                      # 'tentativa_0000' cinco vezes e as quatro primeiras
+                      # somem: o lote de 20 de 06/11/2026 deixou 4 replays, e
+                      # o de 200 deixou 40. O CSV ficava inteiro e a evidencia
+                      # visual, nao.
+                      base = f"tentativa_s{args.seed}_{i:04d}"
+                      destino = os.path.join(pasta_rep, base + ".html")
+                      feito = A.gerar_replay(dict(
+                          cru,
+                          cenario="campanha_%s_t%04d" % (p["geometria"], i),
+                          bola_inicial=list(p["bola"]),
+                          gol=linha["resultado"] == "gol",
+                          disparou=linha["chutou"] == 1,
+                          sentido_ataque=1,
+                          chaves_desligadas=linha.get("chaves_off") or "",
+                          miras=miras,
+                      ), destino)
+                      if mr:
+                          with open(os.path.join(pasta_rep, base + ".mira.txt"),
+                                    "w", encoding="utf-8") as arq:
+                              arq.write("\n".join(mr) + "\n")
+                      if feito is None:
+                          # gerar_replay devolve None quando nao houve quadro
+                          # de BOLA; a tentativa existe, o replay nao.
+                          print("   !! sem replay da tentativa %d: visao crua sem bola" % i,
+                                flush=True)
                   limpos = limpar(no.quadros)
                   passo = max(1, len(limpos) // 150)
                   trajetorias.write(json.dumps(dict(

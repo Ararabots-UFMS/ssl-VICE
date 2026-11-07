@@ -33,6 +33,9 @@
 #                                     UMA PASTA POR GRADE: mudar --bola-vel
 #                                     muda o sorteio, entao a tentativa 7 da
 #                                     seed 1 nao e a mesma nas duas grades.
+#      ./ararabots.sh guarda [n]      BOLA PARADA contra GOLEIRO EM GUARDA: o
+#                                     goleiro inimigo varre a boca do gol em
+#                                     laco, sem reagir a bola.
 #      ./ararabots.sh rolando [n]     A CAMPANHA DE BOLA ANDANDO, pronta: n
 #                                     colocacoes (padrao 60) so com o atacante,
 #                                     as quatro geometrias misturadas e a
@@ -188,7 +191,7 @@ ros_d()   { docker exec -d vice bash -c "export MIRA_CANTO='${MIRA_CANTO:-}'; ex
 # adversario ficava parado e parecia bug da logica.
 #
 # Com 'export' antes do encadeamento, ela vale para todo o resto da linha.
-ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_SEM_RECORTE_AREA='${ARARABOTS_SEM_RECORTE_AREA:-}'; export ARARABOTS_SEM_DISPARO_PELO_VAO='${ARARABOTS_SEM_DISPARO_PELO_VAO:-}'; export ARARABOTS_SEM_CHEGADA_NA_LINHA='${ARARABOTS_SEM_CHEGADA_NA_LINHA:-}'; export ARARABOTS_DISPARO_PREVISTO='${ARARABOTS_DISPARO_PREVISTO:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SEM_ATRITO_PREVISAO='${ARARABOTS_SEM_ATRITO_PREVISAO:-}'; export ARARABOTS_COM_ENCONTRO='${ARARABOTS_COM_ENCONTRO:-}'; export ARARABOTS_SEM_INTERCEPTAR_SO_RAPIDA='${ARARABOTS_SEM_INTERCEPTAR_SO_RAPIDA:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
+ros_run() { docker exec vice bash -c "export GOLEIRO_PATRULHA='${GOLEIRO_PATRULHA:-}'; export VARREDURA_ALCANCE='${VARREDURA_ALCANCE:-}'; export VARREDURA_MODO='${VARREDURA_MODO:-}'; export VARREDURA_VEL='${VARREDURA_VEL:-}'; export VARREDURA_VEL_ROBO='${VARREDURA_VEL_ROBO:-}'; export VARREDURA_FREIO='${VARREDURA_FREIO:-}'; export MIRA_CANTO='${MIRA_CANTO:-}'; export DIAG_FK='${DIAG_FK:-}'; export ARARABOTS_INIMIGO_PARADO='${ARARABOTS_INIMIGO_PARADO:-}'; export ARARABOTS_SO_NOSSOS='${ARARABOTS_SO_NOSSOS:-}'; export ARARABOTS_FORCAR_COBERTURA='${ARARABOTS_FORCAR_COBERTURA:-}'; export ROS_LOCALHOST_ONLY='${ROS_LOCALHOST_ONLY:-0}'; export ARARABOTS_SIM_SOURCE_IP='${ARARABOTS_SIM_SOURCE_IP:-}'; export DIAG_JOGO='${DIAG_JOGO:-}'; export MOVIMENTO_NOVO='${MOVIMENTO_NOVO:-}'; export ARARABOTS_SEM_ORIENTACAO_LADO='${ARARABOTS_SEM_ORIENTACAO_LADO:-}'; export ARARABOTS_SEM_ORBITA='${ARARABOTS_SEM_ORBITA:-}'; export ARARABOTS_SEM_PROTECAO='${ARARABOTS_SEM_PROTECAO:-}'; export ARARABOTS_SEM_PRESSAO_BOLA='${ARARABOTS_SEM_PRESSAO_BOLA:-}'; export ARARABOTS_SEM_MIRA_FIRME='${ARARABOTS_SEM_MIRA_FIRME:-}'; export ARARABOTS_SEM_EMPURRAO='${ARARABOTS_SEM_EMPURRAO:-}'; export ARARABOTS_SEM_PLANEJADOR='${ARARABOTS_SEM_PLANEJADOR:-}'; export ARARABOTS_SEM_DISPARO_ALINHADO='${ARARABOTS_SEM_DISPARO_ALINHADO:-}'; export ARARABOTS_SEM_PERSEGUICAO='${ARARABOTS_SEM_PERSEGUICAO:-}'; export ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_SEM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SO_POSICIONAR='${ARARABOTS_SO_POSICIONAR:-}'; export ARARABOTS_COM_DESTINO_LONGO='${ARARABOTS_COM_DESTINO_LONGO:-}'; export ARARABOTS_SEM_CHEGADA_ALINHADA='${ARARABOTS_SEM_CHEGADA_ALINHADA:-}'; export ARARABOTS_SEM_PARAR_E_MIRAR='${ARARABOTS_SEM_PARAR_E_MIRAR:-}'; export ARARABOTS_SEM_RECORTE_AREA='${ARARABOTS_SEM_RECORTE_AREA:-}'; export ARARABOTS_SEM_DISPARO_PELO_VAO='${ARARABOTS_SEM_DISPARO_PELO_VAO:-}'; export ARARABOTS_SEM_CHEGADA_NA_LINHA='${ARARABOTS_SEM_CHEGADA_NA_LINHA:-}'; export ARARABOTS_DISPARO_PREVISTO='${ARARABOTS_DISPARO_PREVISTO:-}'; export ARARABOTS_COM_CHEGADA_EM_MOVIMENTO='${ARARABOTS_COM_CHEGADA_EM_MOVIMENTO:-}'; export ARARABOTS_SEM_ATRITO_PREVISAO='${ARARABOTS_SEM_ATRITO_PREVISAO:-}'; export ARARABOTS_COM_ENCONTRO='${ARARABOTS_COM_ENCONTRO:-}'; export ARARABOTS_SEM_INTERCEPTAR_SO_RAPIDA='${ARARABOTS_SEM_INTERCEPTAR_SO_RAPIDA:-}'; $DDS_ENV source /opt/ros/humble/setup.bash && source /root/ssl-VICE/install/local_setup.bash && $*"; }
 vivo()    { docker exec vice pgrep -f "$1" >/dev/null 2>&1; }
 
 # Espera ATIVA: repete o teste ate passar, ou desiste no teto.
@@ -2532,6 +2535,77 @@ PREVOO
 }
 
 
+cmd_guarda() {
+    # CHUTE COM BOLA PARADA CONTRA GOLEIRO EM GUARDA.
+    #
+    # Escopo diferente do 'rolando': a bola fica PARADA (--bola-vel 0) e o que
+    # entra em campo e um goleiro inimigo que VARRE a boca do gol em laco, sem
+    # reagir a bola. E de proposito: a defesa vira um obstaculo de geometria
+    # conhecida, e o lote mede o ATACANTE escolhendo quando e para onde
+    # chutar. O nosso goleiro de verdade e outro teste, depois.
+    #
+    # MIRA LIVRE, e nao a grade fixa.
+    #
+    # POR QUE: a grade escreve /tmp/ararabots_mira_y, e
+    # analysis/alvo_chute.py:80 faz 'y = experimento.mira_y(gol_y)' - o arquivo
+    # VENCE o gol_y que 'melhor_vao' escolheu considerando os inimigos. Com
+    # goleiro em campo, mira forcada mede OBEDIENCIA, nao pontaria: nas 3 de
+    # 06/11/2026 o lote mandou chutar em -350 com o goleiro cruzando para la, e
+    # os dois 'defendido' nao eram falha do atacante.
+    #
+    # Com --miras auto a nota de chute decide, que e o que este lote mede.
+    # Consequencia aceita: nao compara com o lote de 200 (bola rolando), que
+    # rodou na grade fixa.
+    #
+    # DIAG_JOGO=1 liga o probe [MR], que registra TODOS os vaos candidatos com
+    # nota, o escolhido e os descartados - em
+    # replays/<geo>/tentativa_NNNN.mira.txt.
+    local total="${1:-20}"
+    shift 2>/dev/null || true
+    : "${CAMPANHA:=campanha_guarda}"
+    # GOLEIRO_PATRULHA=1 e o que faz o goleiro amarelo VARRER sempre, em vez
+    # de interceptar. Ja esta plumbado no 'ros_run', que exporta a variavel
+    # para dentro do container - ja se perderam horas com ela nao atravessando
+    # o docker exec.
+    # A VARREDURA DESTA CAMPANHA, MEDIDA - nao herdada e nao chutada.
+    #
+    # Com o default do time (alvo 600, freio 250) o goleiro cobria amplitude
+    # de 529-593 mm num gol de 1000, a ~300 mm/s. Subir a velocidade do alvo
+    # PIORA: a 800 mm/s ele cobriu 486 mm numa tentativa de 14,7 s, invertendo
+    # em +-200 porque o alvo atravessa 1120 mm em 1,4 s e ele nao chega.
+    #
+    # O gargalo nao e o freio nem a velocidade do robo - ele atinge 1502 mm/s
+    # de pico e fica parado em 1% das amostras. E o alvo fugindo do seguidor.
+    #
+    # MEDIDO, 15 s por cenario, amplitude lida do replay:
+    #     alvo 800 -> -272..+214  (486 mm)  284 mm/s
+    #     alvo 450 -> -404..+313  (717 mm)  291 mm/s
+    #     alvo 350 -> -520..+525 (1045 mm)  354 mm/s   <- cobre a meta inteira
+    #
+    # 350 cobre os 1000 mm poste a poste E anda mais rapido que o default,
+    # porque ele passa a andar JUNTO do alvo em vez de persegui-lo. O +-520
+    # passa 20 mm do poste de proposito: com 90 mm de raio o corpo cobre a
+    # trave, que e o que um goleiro faz.
+    #
+    # Por ambiente e nao na constante: o default do time vale para o teste de
+    # goleiro/zagueiro deles, e mudar a constante mexeria no adversario
+    # daquele teste em silencio.
+    # MODO 'postes': o alvo e a trave, e so inverte quando ele CHEGA. No modo
+    # triangulo (o do time, por tempo) o alvo rapido cruzava por cima dele e a
+    # zona morta de 60 mm do _ir_para o deixava parado metade do tempo - alvo
+    # mais rapido dava goleiro MAIS lento, e dentro de uma tentativa de 4 s ele
+    # varria meio gol. Numeros no comentario de VARREDURA_MODO.
+    : "${VARREDURA_MODO:=postes}" "${VARREDURA_VEL:=350}" \
+      "${VARREDURA_ALCANCE:=560}" "${VARREDURA_FREIO:=120}"
+    export CAMPANHA GOLEIRO_PATRULHA=1 VARREDURA_MODO VARREDURA_VEL \
+           VARREDURA_ALCANCE VARREDURA_FREIO
+    export DIAG_JOGO="${DIAG_JOGO:-1}"
+    echo ">> bola PARADA, goleiro inimigo VARRENDO poste a poste" \
+         "(alvo ${VARREDURA_VEL} mm/s, cobre os 1000 mm medidos)"
+    cmd_rolando "$total" --bola-vel 0 --goleiro guarda --miras auto "$@"
+}
+
+
 # Sourced by docs/zagueiro.sh for its helpers: stop here, before the dispatcher.
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
     return 0
@@ -2547,6 +2621,7 @@ case "${1:-menu}" in
     lotes)     shift; cmd_lotes    "$@" ;;
     campanha)  shift; cmd_campanha "$@" ;;
     rolando)   shift; cmd_rolando  "$@" ;;
+    guarda)    shift; cmd_guarda   "$@" ;;
     limpar)    shift; cmd_limpar   "$@" ;;
     grsim)     shift; cmd_grsim    "$@" ;;
     parar)     shift; cmd_parar    "$@" ;;

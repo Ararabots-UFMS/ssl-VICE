@@ -1392,8 +1392,26 @@ def _ir_para(rx, ry, ax, ay, vel=None, freio=400.0):
 # CONFIRMADO em 6 execucoes: ele varreu -473..+466 (antes +-380). Cobre a meta
 # de 1000 mm inteira, e nas 4 execucoes sem gol a bola parou com o goleiro a
 # menos de 55 mm dela em y - foram DEFESAS, nao erros de pontaria.
-VARREDURA_ALCANCE = GOL_MEIA_LARGURA + 20.0
-VARREDURA_VEL = 600.0
+# AJUSTAVEIS POR AMBIENTE, com o default EXATAMENTE no valor medido acima.
+#
+# Por que ambiente e nao numero novo: estes dois valores foram medidos para o
+# teste de goleiro/zagueiro do time (6 execucoes, varreu -473..+466). Trocar a
+# constante mudaria o adversario DELES de lado, em silencio. A campanha de
+# chute precisa de uma varredura mais rapida e que cubra a meta inteira, e
+# pede isso por variavel.
+#
+# MEDIDO em 06/11/2026 na campanha de chute (3 tentativas, replay): com o
+# default o goleiro cobriu amplitude de 496-602 mm num gol de 1000, a ~290
+# mm/s reais contra 600 pedidos. O gargalo e o FREIO do _ir_para
+# (v = vel * min(1, d/freio)): com o alvo andando perto dele, d fica pequeno e
+# ele freia sem parar. Subir so a velocidade do alvo piora - o time ja mediu
+# que a 900 mm/s ele cobria ~620 dos 1000.
+VARREDURA_ALCANCE = float(os.environ.get("VARREDURA_ALCANCE") or GOL_MEIA_LARGURA + 20.0)
+VARREDURA_VEL = float(os.environ.get("VARREDURA_VEL") or 600.0)
+# Velocidade MAXIMA do goleiro adversario e o freio dele. O freio e o que
+# limitava a varredura de verdade.
+VARREDURA_VEL_ROBO = float(os.environ.get("VARREDURA_VEL_ROBO") or 0.0)   # 0 = VEL_INIMIGO
+VARREDURA_FREIO = float(os.environ.get("VARREDURA_FREIO") or 250.0)
 
 # Acima disto a bola foi chutada/empurrada e o goleiro para de varrer para
 # interceptar. Empurrao fica em ~1500 mm/s e chute em 5000+; 400 mm/s so filtra
@@ -1401,11 +1419,48 @@ VARREDURA_VEL = 600.0
 VEL_BOLA_EM_JOGO = 400.0
 
 
-def _varredura_y():
+# MODO DA VARREDURA. 'triangulo' e o do time, por tempo. 'postes' manda o
+# goleiro para a trave e so inverte quando ele CHEGA.
+#
+# POR QUE 'postes' EXISTE, medido em 06/11/2026 (janela de 15 s, amplitude lida
+# do replay, gol de 1000 mm):
+#
+#     alvo 350 mm/s  -> vel real 354  amplitude 1045
+#     alvo 700 mm/s  -> vel real 271  amplitude  514
+#     alvo 800 mm/s  -> vel real 284  amplitude  486
+#     alvo 1000 mm/s -> vel real 248  amplitude  281
+#
+# Alvo MAIS rapido deixa o goleiro MAIS lento. Nao e perseguicao ruim: e a zona
+# morta de 60 mm do '_ir_para'. Um alvo triangular rapido cruza por cima dele
+# toda hora, e ele passa metade do tempo parado dentro dela.
+#
+# Com alvo 350 ele cobre os 1000 mm, mas o ciclo leva 4*560/350 = 6,4 s - e uma
+# tentativa de chute acaba em 3-5 s. Dentro da janela real ele varria so meio
+# gol. Levantar o teto de velocidade dele nao resolveu (testado: robo 1,2 m/s
+# com alvo 700 deu 514 mm; robo 1,8 com alvo 1000 deu 281).
+#
+# No modo 'postes' o alvo esta SEMPRE longe, entao nunca cai na zona morta e
+# ele anda no maximo o tempo todo.
+VARREDURA_MODO = os.environ.get("VARREDURA_MODO") or "triangulo"
+_varredura_destino = [None]
+
+
+def _varredura_y(gy=None):
+    if VARREDURA_MODO != "postes":
+        a = VARREDURA_ALCANCE
+        periodo = 4.0 * a / VARREDURA_VEL      # ida e volta completa
+        f = (time.time() % periodo) / periodo
+        return (-a + 4.0 * a * f) if f < 0.5 else (3.0 * a - 4.0 * a * f)
+
+    # POSTE A POSTE, por ESTADO e nao por tempo.
     a = VARREDURA_ALCANCE
-    periodo = 4.0 * a / VARREDURA_VEL          # ida e volta completa
-    f = (time.time() % periodo) / periodo
-    return (-a + 4.0 * a * f) if f < 0.5 else (3.0 * a - 4.0 * a * f)
+    if _varredura_destino[0] is None:
+        _varredura_destino[0] = a
+    # 'CHEGOU' com folga maior que a zona morta do _ir_para (60 mm), senao ele
+    # para a 60 mm do poste e nunca inverte - varreria um gol encurtado.
+    if gy is not None and abs(gy - _varredura_destino[0]) < 90.0:
+        _varredura_destino[0] = -_varredura_destino[0]
+    return _varredura_destino[0]
 
 
 def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=None):
@@ -1469,7 +1524,7 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
         # no canto sem que o goleiro corrija a rota atras da bola.
         vel_bola = math.hypot(bvx, bvy)
         if os.environ.get("GOLEIRO_PATRULHA") or vel_bola < VEL_BOLA_EM_JOGO:
-            alvo_y = _varredura_y()
+            alvo_y = _varredura_y(gy)
 
         # Mais velocidade e freio MAIS CURTO para o goleiro.
         #
@@ -1486,7 +1541,8 @@ def comandar_amarelos(bola, amarelos, azuis=None, modo="nossa_falta", bola_vel=N
         #
         # 1,2 m/s tem folga sobre os 600 mm/s do alvo, e frear a partir de
         # 250 mm faz ele chegar sem passar.
-        vx, vy = _ir_para(gx, gy, alvo_x, alvo_y, freio=250.0)
+        vx, vy = _ir_para(gx, gy, alvo_x, alvo_y,
+                          vel=VARREDURA_VEL_ROBO or None, freio=VARREDURA_FREIO)
         _cmd_amarelo(c, 0, gori, vx, vy)
 
     linha = [r for r in ids if r != 0]
@@ -2917,6 +2973,7 @@ function golCoberto(b, nossos){
 // porque o dado nem era gravado. Agora ele tem trilha propria, grossa, porque e
 // ele que decide se o gol sai.
 const trilhaGK = el('path',{fill:'none',stroke:'#ffd166','stroke-width':22,opacity:.75}); svg.appendChild(trilhaGK);
+const gMira = el('g'); svg.appendChild(gMira);
 const gAmarelos = el('g'); svg.appendChild(gAmarelos);
 const gCompanheiros = el('g'); svg.appendChild(gCompanheiros);
 const trilhaB = el('path',{fill:'none',stroke:'#ff9f1c','stroke-width':16,opacity:.45}); svg.appendChild(trilhaB);
@@ -3368,6 +3425,38 @@ function desenha(i){
     tc.textContent = 'recebeu (' + d.toFixed(0) + ' mm)';
     gCompanheiros.appendChild(tc);
   });
+  // A MIRA: linha da bola ate o ponto mirado na linha do gol.
+  //
+  // Cheia = a mira EM VIGOR, a que o chute segue. Pontilhada = a avaliacao
+  // DESTE ciclo, que pode apontar para outro lado porque _mira_firme segura a
+  // anterior por ate CICLOS_MIN_MIRA ciclos. Quando as duas coincidem, so a
+  // cheia aparece.
+  while (gMira.firstChild) gMira.removeChild(gMira.firstChild);
+  const MS = D.miras || [];
+  if (MS.length){
+    let k = -1;
+    for (let j = 0; j < MS.length; j++){ if (MS[j][0] <= q.t) k = j; else break; }
+    if (k >= 0){
+      const GX = 4500, m = MS[k], uso = m[1], nota = m[2], aval = m[3], seg = m[4];
+      if (Number.isFinite(uso)){
+        gMira.appendChild(el('line',{x1:q.b[0],y1:q.b[1],x2:GX,y2:uso,
+          stroke:'#f4a261','stroke-width':22,opacity:.95}));
+        gMira.appendChild(el('circle',{cx:GX,cy:uso,r:70,fill:'#f4a261'}));
+      }
+      if (Number.isFinite(aval) && Math.abs(aval - uso) > 20){
+        gMira.appendChild(el('line',{x1:q.b[0],y1:q.b[1],x2:GX,y2:aval,
+          stroke:'#8ecae6','stroke-width':16,'stroke-dasharray':'60 60',opacity:.85}));
+        gMira.appendChild(el('circle',{cx:GX,cy:aval,r:50,fill:'none',
+          stroke:'#8ecae6','stroke-width':16}));
+      }
+      const tm = el('text',{x:GX+160,y:(Number.isFinite(uso)?uso:0)-60,
+                            'font-size':150,fill:'#f4a261'});
+      tm.textContent = 'mira ' + (Number.isFinite(uso)?uso.toFixed(0):'--')
+                     + (Number.isFinite(nota)?('  nota ' + nota.toFixed(2)):'')
+                     + (seg ? '  (segurada)' : '');
+      gMira.appendChild(tm);
+    }
+  }
   const ev = D.eventos.find(x => x.flat_kick && Math.abs(x.t - q.t) < 0.25);
   marcaChute.setAttribute('r', ev ? 260 : 0);
   if (ev){ marcaChute.setAttribute('cx', q.b[0]); marcaChute.setAttribute('cy', q.b[1]); }
@@ -3733,6 +3822,17 @@ def gerar_replay(resultado, destino):
     alvos_t = sorted((para_tc(tn), [rid, round(ax), round(ay)])
                      for tn, rid, ax, ay in
                      ((r[0], r[1], r[2], r[3]) for r in (resultado.get("alvos") or [])))
+    # A MIRA, trazida ao relogio do replay pelo mesmo caminho dos alvos.
+    #
+    # POR QUE O REPLAY TEM DE MOSTRAR ISTO: sem a mira desenhada, "ele chutou
+    # no canto errado" e "ele acertou a mira que estava em vigor" sao a mesma
+    # imagem. E a mira EM VIGOR nao e a avaliacao do ciclo - _mira_firme
+    # segura a anterior por ate CICLOS_MIN_MIRA ciclos (medido em 06/11/2026:
+    # avaliacao +164 e mira em uso -297, lados opostos, no mesmo instante).
+    # Por isso vao as duas: 'uso' (a que o chute seguiu) e 'aval' (a do ciclo).
+    miras = sorted(
+        [round(para_tc(float(m[0])) - t0, 4), m[1], m[2], m[3], m[4]]
+        for m in (resultado.get("miras") or []))
     eventos = [{"t": round(para_tc(e["t"]) - t0, 4), **e}
                for e in (resultado.get("eventos_chutador") or [])]
 
@@ -3773,6 +3873,7 @@ def gerar_replay(resultado, destino):
     dados = _json.dumps({
         "quadros": quadros,
         "eventos": eventos,
+        "miras": miras,
         "cenario": resultado.get("cenario"),
         "gol": resultado.get("gol"),
         "gol_em": resultado.get("gol_em"),
