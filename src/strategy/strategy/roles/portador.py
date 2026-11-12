@@ -43,6 +43,12 @@ LIMITE_BOLA_X, LIMITE_BOLA_Y = 4400.0, 2900.0
 RAIO_BOLA_NOSSA = 320.0
 # Folga entre onde o empurrao pode deixar a bola e a borda da caixa da area.
 FOLGA_BOLA_AREA = 80.0
+# Avanco do empurrao quando ja nao cabe o avanco cheio (chave
+# AVANCO_MINIMO_NA_AREA). Nao e "um empurrao curto": e o minimo para o alvo de
+# movimento ficar ALEM da bola e o canal do chute continuar aberto - ver o
+# comentario em '_avanco_antes_da_area'. 150 mm passa do raio do robo (90) mais
+# o da bola (21), entao o alvo cai do outro lado dela.
+AVANCO_MINIMO_NA_AREA = 150.0
 # 2 s of aiming without turning, then push anyway: standing still loses the ball.
 CICLOS_MAX_MIRANDO = 20
 # Error drop per tick that still counts as turning (0.1 rad/s).
@@ -230,13 +236,30 @@ class Portador(Papel):
         livre = hypot(borda[0] - bx, borda[1] - by)
         if livre >= avanco + FOLGA_BOLA_AREA:
             return avanco
-        # Perto da caixa o empurrao vai para ZERO, nao para um empurrao curto.
-        # MEDIDO: em t9 o avanco pedido era 500 e a bola andou 805 mm a partir
-        # do repouso; em t6 ela andou 1123 em 11 s de investidas repetidas. O
-        # empurrao nao anda "o avanco" uma vez - ele e reemitido todo ciclo
-        # enquanto a fase vive, e a bola vai somando. Nenhum fator de
-        # seguranca segura isso: aqui perto nao se empurra, so se chuta.
-        return 0.0
+        # PERTO DA CAIXA O AVANCO CAI A UM MINIMO, NAO A ZERO.
+        #
+        # Zero quebrava o invariante do chute, que esta escrito em
+        # skills/chute.py (docstring de 'chutar_em'): o control so publica o
+        # TeamCommand - que leva o kick - ENQUANTO o robo esta indo a algum
+        # lugar. Robo que CHEGA ao alvo cala o canal, e o chute fica preso no
+        # cache, armado, sem nunca ser enviado. Com avanco zero o alvo de
+        # movimento e a PROPRIA BOLA, que e alcancavel: ele chega e o tiro
+        # nunca sai.
+        #
+        # MEDIDO em 06/11/2026, pareado de 10 na faixa x 2500-3400
+        # (docs/campanha_area10): nas duas falhas de 'sem_chute' o robo ficou
+        # 19,6 s com toque_armado=1 e ZERO disparos, e a bola foi escoltada
+        # para dentro da caixa nos dois bracos. E o mesmo caso que o docstring
+        # do 'chutar_em' descreve ('arma=True' 34 a 110 vezes por lote, zero
+        # disparos, robo a 92-96 mm da bola).
+        #
+        # AVANCO_MINIMO mantem o alvo ALEM da bola, entao o canal fica aberto e
+        # o tiro sai; e e pequeno o bastante para a bola nao ser empurrada para
+        # dentro da area antes disso. O chassi nao atravessa a bola, entao o
+        # alvo segue inalcancavel - que e tudo que o invariante pede.
+        if experimento.desligado("AVANCO_MINIMO_NA_AREA"):
+            return 0.0
+        return min(avanco, AVANCO_MINIMO_NA_AREA)
 
     @staticmethod
     def _fora_das_areas(ball, ponto):
