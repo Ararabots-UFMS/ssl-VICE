@@ -1,0 +1,239 @@
+[MR] t=1794441325.609 bola=3259,1856 abertas=66/81 nota=0.699 mira=175.9 decisao=direto vaos=y=+176 nota=0.699 ESCOLHIDO
+[MR] t=1794441325.709 bola=3258,1852 abertas=66/81 nota=0.702 mira=176.0 decisao=direto vaos=y=+176 nota=0.702 ESCOLHIDO
+[MR] t=1794441325.808 bola=3260,1852 abertas=65/81 nota=0.691 mira=181.7 decisao=direto vaos=y=+182 nota=0.691 ESCOLHIDO
+[MR] t=1794441325.910 bola=3259,1852 abertas=63/81 nota=0.670 mira=192.8 decisao=direto vaos=y=+193 nota=0.670 ESCOLHIDO
+[MR] t=1794441326.011 bola=3260,1852 abertas=60/81 nota=0.637 mira=209.4 decisao=direto vaos=y=+209 nota=0.637 ESCOLHIDO
+[MR] t=1794441326.110 bola=3258,1855 abertas=58/81 nota=0.615 mira=220.2 decisao=direto vaos=y=+220 nota=0.615 ESCOLHIDO
+[MR] t=1794441326.209 bola=3258,1853 abertas=54/81 nota=0.573 mira=241.8 decisao=direto vaos=y=+242 nota=0.573 ESCOLHIDO
+[MR] t=1794441326.309 bola=3258,1852 abertas=51/81 nota=0.541 mira=257.8 decisao=direto vaos=y=+258 nota=0.541 ESCOLHIDO
+[MR] t=1794441326.411 bola=3257,1855 abertas=47/81 nota=0.497 mira=278.7 decisao=direto vaos=y=+279 nota=0.497 ESCOLHIDO
+[MR] t=1794441326.510 bola=3258,1853 abertas=43/81 nota=0.455 mira=299.4 decisao=direto vaos=y=+299 nota=0.455 ESCOLHIDO
+[MR] t=1794441326.609 bola=3257,1854 abertas=38/81 nota=0.401 mira=324.7 decisao=direto vaos=y=+325 nota=0.401 ESCOLHIDO
+[MR] t=1794441326.710 bola=3259,1856 abertas=33/81 nota=0.347 mira=349.5 decisao=direto vaos=y=+350 nota=0.347 ESCOLHIDO
+[MR] t=1794441326.809 bola=3257,1854 abertas=29/81 nota=0.294 mira=373.9 decisao=baixa_chance vaos=y=-495 nota=0.005 descartado | y=+374 nota=0.294 ESCOLHIDO
+[MR] t=1794441326.908 bola=3257,1854 abertas=27/81 nota=0.230 mira=402.5 decisao=baixa_chance vaos=y=-459 nota=0.048 descartado | y=+402 nota=0.230 ESCOLHIDO
+[MU] t=1794441326.908 uso_y=None tipo=bloqueado segurada=0 ciclos=0
+[MR] t=1794441327.009 bola=3260,1852 abertas=25/81 nota=0.166 mira=430.5 decisao=baixa_chance vaos=y=-424 nota=0.091 descartado | y=+430 nota=0.166 ESCOLHIDO
+[MR] t=1794441327.109 bola=3259,1854 abertas=24/81 nota=0.144 mira=-381.2 decisao=baixa_chance vaos=y=-381 nota=0.144 ESCOLHIDO | y=+458 nota=0.102 descartado
+[MR] t=1794441327.211 bola=3260,1852 abertas=22/81 nota=0.187 mira=-347.8 decisao=baixa_chance vaos=y=-348 nota=0.187 ESCOLHIDO | y=+485 nota=0.037 descartado
+[MR] t=1794441327.309 bola=3260,1852 abertas=22/81 nota=0.230 mira=-315.1 decisao=baixa_chance vaos=y=-315 nota=0.230 ESCOLHIDO
+[MR] t=1794441327.409 bola=3260,1849 abertas=27/81 nota=0.284 mira=-275.3 decisao=baixa_chance vaos=y=-275 nota=0.284 ESCOLHIDO
+[MR] t=1794441327.509 bola=3259,1851 abertas=32/81 nota=0.338 mira=-236.6 decisao=direto vaos=y=-237 nota=0.338 ESCOLHIDO
+[MR] t=1794441327.608 bola=3262,1852 abertas=35/81 nota=0.369 mira=-213.7 decisao=direto vaos=y=-214 nota=0.369 ESCOLHIDO
+[MR] t=1794441327.710 bola=3258,1853 abertas=34/81 nota=0.359 mira=-221.4 decisao=direto vaos=y=-221 nota=0.359 ESCOLHIDO
+[MR] t=1794441327.809 bola=3258,1854 abertas=32/81 nota=0.337 mira=-236.7 decisao=direto vaos=y=-237 nota=0.337 ESCOLHIDO
+[MR] t=1794441327.909 bola=3258,1854 abertas=30/81 nota=0.316 mira=-252.0 decisao=direto vaos=y=-252 nota=0.316 ESCOLHIDO
+[MR] t=1794441328.009 bola=3259,1853 abertas=28/81 nota=0.294 mira=-267.5 decisao=baixa_chance vaos=y=-268 nota=0.294 ESCOLHIDO
+[MR] t=1794441328.109 bola=3260,1854 abertas=26/81 nota=0.273 mira=-283.2 decisao=baixa_chance vaos=y=-283 nota=0.273 ESCOLHIDO
+[MR] t=1794441328.210 bola=3260,1852 abertas=24/81 nota=0.252 mira=-299.1 decisao=baixa_chance vaos=y=-299 nota=0.252 ESCOLHIDO
+[MR] t=1794441328.310 bola=3262,1851 abertas=21/81 nota=0.220 mira=-323.1 decisao=baixa_chance vaos=y=-323 nota=0.220 ESCOLHIDO
+[MR] t=1794441328.409 bola=3261,1845 abertas=21/81 nota=0.178 mira=-356.0 decisao=baixa_chance vaos=y=-356 nota=0.178 ESCOLHIDO | y=+485 nota=0.038 descartado
+[MR] t=1794441328.509 bola=3313,1764 abertas=22/81 nota=0.153 mira=-379.3 decisao=baixa_chance vaos=y=-379 nota=0.153 ESCOLHIDO | y=+467 nota=0.085 descartado
+[MR] t=1794441328.610 bola=3374,1667 abertas=22/81 nota=0.138 mira=450.5 decisao=baixa_chance vaos=y=-412 nota=0.114 descartado | y=+450 nota=0.138 ESCOLHIDO
+[MR] t=1794441328.709 bola=3418,1596 abertas=24/81 nota=0.195 mira=433.8 decisao=baixa_chance vaos=y=-429 nota=0.095 descartado | y=+434 nota=0.195 ESCOLHIDO
+[MR] t=1794441328.809 bola=3469,1510 abertas=25/81 nota=0.275 mira=413.2 decisao=baixa_chance vaos=y=-466 nota=0.047 descartado | y=+413 nota=0.275 ESCOLHIDO
+[MR] t=1794441328.909 bola=3510,1448 abertas=26/81 nota=0.344 mira=396.9 decisao=direto vaos=y=-495 nota=0.007 descartado | y=+397 nota=0.344 ESCOLHIDO
+[MR] t=1794441329.009 bola=3544,1390 abertas=29/81 nota=0.419 mira=380.7 decisao=direto vaos=y=+381 nota=0.419 ESCOLHIDO
+[MR] t=1794441329.110 bola=3578,1337 abertas=33/81 nota=0.499 mira=364.6 decisao=direto vaos=y=+365 nota=0.499 ESCOLHIDO
+[MU] t=1794441329.110 uso_y=364.6 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441329.210 bola=3604,1297 abertas=37/81 nota=0.580 mira=348.3 decisao=direto vaos=y=+348 nota=0.580 ESCOLHIDO
+[MU] t=1794441329.210 uso_y=364.6 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441329.309 bola=3630,1258 abertas=41/81 nota=0.666 mira=332.0 decisao=direto vaos=y=+332 nota=0.666 ESCOLHIDO
+[MU] t=1794441329.309 uso_y=332.0 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441329.409 bola=3651,1222 abertas=44/81 nota=0.740 mira=320.0 decisao=direto vaos=y=+320 nota=0.740 ESCOLHIDO
+[MU] t=1794441329.409 uso_y=332.0 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441329.508 bola=3668,1196 abertas=48/81 nota=0.827 mira=303.0 decisao=direto vaos=y=+303 nota=0.827 ESCOLHIDO
+[MU] t=1794441329.509 uso_y=303.0 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441329.608 bola=3684,1171 abertas=51/81 nota=0.901 mira=290.6 decisao=direto vaos=y=+291 nota=0.901 ESCOLHIDO
+[MU] t=1794441329.609 uso_y=303.0 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441329.710 bola=3691,1152 abertas=54/81 nota=0.974 mira=277.1 decisao=direto vaos=y=+277 nota=0.974 ESCOLHIDO
+[MR] t=1794441329.809 bola=3702,1142 abertas=57/81 nota=1.000 mira=263.8 decisao=direto vaos=y=+264 nota=1.000 ESCOLHIDO
+[MU] t=1794441329.809 uso_y=263.8 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441329.910 bola=3705,1136 abertas=60/81 nota=1.000 mira=249.5 decisao=direto vaos=y=+250 nota=1.000 ESCOLHIDO
+[MU] t=1794441329.910 uso_y=263.8 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441330.009 bola=3706,1137 abertas=62/81 nota=1.000 mira=239.6 decisao=direto vaos=y=+240 nota=1.000 ESCOLHIDO
+[MR] t=1794441330.109 bola=3700,1138 abertas=65/81 nota=1.000 mira=223.9 decisao=direto vaos=y=+224 nota=1.000 ESCOLHIDO
+[MR] t=1794441330.211 bola=3703,1130 abertas=68/81 nota=1.000 mira=208.8 decisao=direto vaos=y=+209 nota=1.000 ESCOLHIDO
+[MR] t=1794441330.310 bola=3712,1074 abertas=71/81 nota=1.000 mira=195.2 decisao=direto vaos=y=+195 nota=1.000 ESCOLHIDO
+[MR] t=1794441330.409 bola=3726,1015 abertas=74/81 nota=1.000 mira=182.1 decisao=direto vaos=y=+182 nota=1.000 ESCOLHIDO
+[MR] t=1794441330.509 bola=3734,970 abertas=75/81 nota=1.000 mira=178.4 decisao=direto vaos=y=+178 nota=1.000 ESCOLHIDO
+[MR] t=1794441330.609 bola=3739,933 abertas=75/81 nota=1.000 mira=179.4 decisao=direto vaos=y=+179 nota=1.000 ESCOLHIDO
+[MR] t=1794441330.709 bola=3746,909 abertas=75/81 nota=1.000 mira=180.5 decisao=direto vaos=y=+180 nota=1.000 ESCOLHIDO
+[MR] t=1794441330.809 bola=3751,888 abertas=74/81 nota=1.000 mira=186.5 decisao=direto vaos=y=+186 nota=1.000 ESCOLHIDO
+[MR] t=1794441330.909 bola=3750,877 abertas=74/81 nota=1.000 mira=186.3 decisao=direto vaos=y=+186 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.009 bola=3752,869 abertas=73/81 nota=1.000 mira=191.7 decisao=direto vaos=y=+192 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.109 bola=3751,867 abertas=72/81 nota=1.000 mira=196.7 decisao=direto vaos=y=+197 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.211 bola=3751,871 abertas=71/81 nota=1.000 mira=202.0 decisao=direto vaos=y=+202 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.311 bola=3751,868 abertas=70/81 nota=1.000 mira=207.1 decisao=direto vaos=y=+207 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.409 bola=3754,870 abertas=70/81 nota=1.000 mira=207.5 decisao=direto vaos=y=+208 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.508 bola=3754,869 abertas=68/81 nota=1.000 mira=217.7 decisao=direto vaos=y=+218 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.609 bola=3752,870 abertas=67/81 nota=1.000 mira=222.4 decisao=direto vaos=y=+222 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.710 bola=3753,870 abertas=65/81 nota=1.000 mira=232.5 decisao=direto vaos=y=+232 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.808 bola=3753,870 abertas=62/81 nota=1.000 mira=247.2 decisao=direto vaos=y=+247 nota=1.000 ESCOLHIDO
+[MR] t=1794441331.909 bola=3751,870 abertas=61/81 nota=1.000 mira=251.7 decisao=direto vaos=y=+252 nota=1.000 ESCOLHIDO
+[MU] t=1794441331.909 uso_y=251.7 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441332.009 bola=3752,870 abertas=58/81 nota=1.000 mira=266.1 decisao=direto vaos=y=+266 nota=1.000 ESCOLHIDO
+[MU] t=1794441332.009 uso_y=251.7 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441332.110 bola=3754,869 abertas=56/81 nota=1.000 mira=275.8 decisao=direto vaos=y=+276 nota=1.000 ESCOLHIDO
+[MR] t=1794441332.210 bola=3752,866 abertas=54/81 nota=1.000 mira=284.8 decisao=direto vaos=y=+285 nota=1.000 ESCOLHIDO
+[MR] t=1794441332.311 bola=3753,867 abertas=51/81 nota=1.000 mira=298.6 decisao=direto vaos=y=+299 nota=1.000 ESCOLHIDO
+[MR] t=1794441332.409 bola=3752,868 abertas=48/81 nota=1.000 mira=312.0 decisao=direto vaos=y=+312 nota=1.000 ESCOLHIDO
+[MR] t=1794441332.509 bola=3753,867 abertas=45/81 nota=1.000 mira=325.3 decisao=direto vaos=y=+325 nota=1.000 ESCOLHIDO
+[MR] t=1794441332.609 bola=3752,867 abertas=41/81 nota=1.000 mira=342.4 decisao=direto vaos=y=+342 nota=1.000 ESCOLHIDO
+[MR] t=1794441332.710 bola=3751,866 abertas=37/81 nota=0.935 mira=359.3 decisao=direto vaos=y=+359 nota=0.935 ESCOLHIDO
+[MR] t=1794441332.811 bola=3754,868 abertas=32/81 nota=0.780 mira=384.3 decisao=direto vaos=y=-494 nota=0.013 descartado | y=+384 nota=0.780 ESCOLHIDO
+[MR] t=1794441332.910 bola=3753,868 abertas=30/81 nota=0.652 mira=404.3 decisao=direto vaos=y=-457 nota=0.089 descartado | y=+404 nota=0.652 ESCOLHIDO
+[MU] t=1794441332.910 uso_y=404.3 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441333.010 bola=3755,869 abertas=28/81 nota=0.498 mira=427.9 decisao=direto vaos=y=-411 nota=0.191 descartado | y=+428 nota=0.498 ESCOLHIDO
+[MU] t=1794441333.010 uso_y=404.3 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441333.110 bola=3752,870 abertas=25/81 nota=0.318 mira=-356.7 decisao=direto vaos=y=-357 nota=0.318 ESCOLHIDO | y=+458 nota=0.293 descartado
+[MR] t=1794441333.211 bola=3752,869 abertas=23/81 nota=0.447 mira=-305.6 decisao=direto vaos=y=-306 nota=0.447 ESCOLHIDO | y=+484 nota=0.115 descartado
+[MU] t=1794441333.211 uso_y=None tipo=bloqueado segurada=0 ciclos=0
+[MR] t=1794441333.309 bola=3754,871 abertas=23/81 nota=0.573 mira=-257.2 decisao=direto vaos=y=-257 nota=0.573 ESCOLHIDO
+[MU] t=1794441333.309 uso_y=-257.2 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441333.411 bola=3752,870 abertas=28/81 nota=0.701 mira=-212.0 decisao=direto vaos=y=-212 nota=0.701 ESCOLHIDO
+[MU] t=1794441333.411 uso_y=-257.2 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441333.510 bola=3755,870 abertas=33/81 nota=0.829 mira=-168.4 decisao=direto vaos=y=-168 nota=0.829 ESCOLHIDO
+[MU] t=1794441333.511 uso_y=-168.4 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441333.609 bola=3755,869 abertas=39/81 nota=0.983 mira=-119.6 decisao=direto vaos=y=-120 nota=0.983 ESCOLHIDO
+[MU] t=1794441333.609 uso_y=-119.6 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441333.710 bola=3753,870 abertas=41/81 nota=1.000 mira=-104.4 decisao=direto vaos=y=-104 nota=1.000 ESCOLHIDO
+[MU] t=1794441333.710 uso_y=-119.6 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441333.809 bola=3754,869 abertas=39/81 nota=0.983 mira=-119.9 decisao=direto vaos=y=-120 nota=0.983 ESCOLHIDO
+[MR] t=1794441333.909 bola=3755,869 abertas=37/81 nota=0.932 mira=-135.6 decisao=direto vaos=y=-136 nota=0.932 ESCOLHIDO
+[MR] t=1794441334.009 bola=3753,867 abertas=36/81 nota=0.908 mira=-143.9 decisao=direto vaos=y=-144 nota=0.908 ESCOLHIDO
+[MR] t=1794441334.109 bola=3752,866 abertas=35/81 nota=0.883 mira=-152.3 decisao=direto vaos=y=-152 nota=0.883 ESCOLHIDO
+[MR] t=1794441334.209 bola=3753,872 abertas=34/81 nota=0.852 mira=-160.4 decisao=direto vaos=y=-160 nota=0.852 ESCOLHIDO
+[MR] t=1794441334.309 bola=3753,871 abertas=32/81 nota=0.802 mira=-177.2 decisao=direto vaos=y=-177 nota=0.802 ESCOLHIDO
+[MR] t=1794441334.408 bola=3753,869 abertas=29/81 nota=0.727 mira=-203.0 decisao=direto vaos=y=-203 nota=0.727 ESCOLHIDO
+[MR] t=1794441334.509 bola=3752,866 abertas=28/81 nota=0.704 mira=-211.8 decisao=direto vaos=y=-212 nota=0.704 ESCOLHIDO
+[MR] t=1794441334.609 bola=3752,868 abertas=26/81 nota=0.652 mira=-229.8 decisao=direto vaos=y=-230 nota=0.652 ESCOLHIDO
+[MR] t=1794441334.709 bola=3752,869 abertas=24/81 nota=0.600 mira=-248.1 decisao=direto vaos=y=-248 nota=0.600 ESCOLHIDO
+[MR] t=1794441334.811 bola=3754,868 abertas=22/81 nota=0.549 mira=-266.6 decisao=direto vaos=y=-267 nota=0.549 ESCOLHIDO
+[MR] t=1794441334.908 bola=3754,869 abertas=22/81 nota=0.447 mira=-305.3 decisao=direto vaos=y=-305 nota=0.447 ESCOLHIDO | y=+488 nota=0.089 descartado
+[MU] t=1794441334.909 uso_y=None tipo=bloqueado segurada=0 ciclos=0
+[MR] t=1794441335.009 bola=3755,867 abertas=23/81 nota=0.396 mira=-325.3 decisao=direto vaos=y=-325 nota=0.396 ESCOLHIDO | y=+477 nota=0.166 descartado
+[MR] t=1794441335.110 bola=3754,869 abertas=25/81 nota=0.344 mira=-346.1 decisao=direto vaos=y=-346 nota=0.344 ESCOLHIDO | y=+462 nota=0.268 descartado
+[MR] t=1794441335.211 bola=3756,868 abertas=26/81 nota=0.345 mira=450.8 decisao=direto vaos=y=-367 nota=0.294 descartado | y=+451 nota=0.345 ESCOLHIDO
+[MR] t=1794441335.310 bola=3753,869 abertas=27/81 nota=0.421 mira=439.3 decisao=direto vaos=y=-389 nota=0.242 descartado | y=+439 nota=0.421 ESCOLHIDO
+[MR] t=1794441335.409 bola=3752,869 abertas=28/81 nota=0.523 mira=423.9 decisao=direto vaos=y=-423 nota=0.166 descartado | y=+424 nota=0.523 ESCOLHIDO
+[MU] t=1794441335.409 uso_y=423.9 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441335.510 bola=3753,867 abertas=30/81 nota=0.627 mira=408.3 decisao=direto vaos=y=-446 nota=0.115 descartado | y=+408 nota=0.627 ESCOLHIDO
+[MU] t=1794441335.510 uso_y=423.9 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441335.608 bola=3752,867 abertas=31/81 nota=0.704 mira=396.3 decisao=direto vaos=y=-469 nota=0.064 descartado | y=+396 nota=0.704 ESCOLHIDO
+[MU] t=1794441335.608 uso_y=396.3 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441335.709 bola=3751,871 abertas=32/81 nota=0.776 mira=384.2 decisao=direto vaos=y=-494 nota=0.013 descartado | y=+384 nota=0.776 ESCOLHIDO
+[MU] t=1794441335.709 uso_y=396.3 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441335.809 bola=3752,869 abertas=33/81 nota=0.830 mira=376.1 decisao=direto vaos=y=+376 nota=0.830 ESCOLHIDO
+[MR] t=1794441335.909 bola=3754,870 abertas=37/81 nota=0.930 mira=359.7 decisao=direto vaos=y=+360 nota=0.930 ESCOLHIDO
+[MU] t=1794441335.910 uso_y=359.7 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441336.008 bola=3754,870 abertas=39/81 nota=0.981 mira=351.2 decisao=direto vaos=y=+351 nota=0.981 ESCOLHIDO
+[MU] t=1794441336.008 uso_y=359.7 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441336.109 bola=3751,869 abertas=42/81 nota=1.000 mira=338.1 decisao=direto vaos=y=+338 nota=1.000 ESCOLHIDO
+[MR] t=1794441336.209 bola=3753,868 abertas=45/81 nota=1.000 mira=325.3 decisao=direto vaos=y=+325 nota=1.000 ESCOLHIDO
+[MR] t=1794441336.310 bola=3753,871 abertas=47/81 nota=1.000 mira=316.6 decisao=direto vaos=y=+317 nota=1.000 ESCOLHIDO
+[MR] t=1794441336.409 bola=3754,870 abertas=50/81 nota=1.000 mira=303.3 decisao=direto vaos=y=+303 nota=1.000 ESCOLHIDO
+[MR] t=1794441336.509 bola=3752,868 abertas=53/81 nota=1.000 mira=289.4 decisao=direto vaos=y=+289 nota=1.000 ESCOLHIDO
+[MR] t=1794441336.609 bola=3752,867 abertas=55/81 nota=1.000 mira=280.1 decisao=direto vaos=y=+280 nota=1.000 ESCOLHIDO
+[MR] t=1794441336.709 bola=3753,868 abertas=57/81 nota=1.000 mira=271.0 decisao=direto vaos=y=+271 nota=1.000 ESCOLHIDO
+[MR] t=1794441336.809 bola=3752,867 abertas=59/81 nota=1.000 mira=261.3 decisao=direto vaos=y=+261 nota=1.000 ESCOLHIDO
+[MR] t=1794441336.910 bola=3753,869 abertas=61/81 nota=1.000 mira=252.0 decisao=direto vaos=y=+252 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.009 bola=3752,869 abertas=63/81 nota=1.000 mira=242.2 decisao=direto vaos=y=+242 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.110 bola=3755,865 abertas=65/81 nota=1.000 mira=232.7 decisao=direto vaos=y=+233 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.211 bola=3756,869 abertas=67/81 nota=1.000 mira=223.0 decisao=direto vaos=y=+223 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.310 bola=3753,872 abertas=69/81 nota=1.000 mira=212.4 decisao=direto vaos=y=+212 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.409 bola=3752,867 abertas=71/81 nota=1.000 mira=202.1 decisao=direto vaos=y=+202 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.509 bola=3750,870 abertas=72/81 nota=1.000 mira=196.7 decisao=direto vaos=y=+197 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.610 bola=3753,868 abertas=74/81 nota=1.000 mira=186.7 decisao=direto vaos=y=+187 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.709 bola=3753,867 abertas=75/81 nota=1.000 mira=181.4 decisao=direto vaos=y=+181 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.808 bola=3754,868 abertas=75/81 nota=1.000 mira=181.7 decisao=direto vaos=y=+182 nota=1.000 ESCOLHIDO
+[MR] t=1794441337.910 bola=3754,869 abertas=74/81 nota=1.000 mira=186.8 decisao=direto vaos=y=+187 nota=1.000 ESCOLHIDO
+[MR] t=1794441338.008 bola=3752,868 abertas=73/81 nota=1.000 mira=191.8 decisao=direto vaos=y=+192 nota=1.000 ESCOLHIDO
+[MU] t=1794441338.009 uso_y=191.8 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441338.110 bola=3755,869 abertas=73/81 nota=1.000 mira=192.2 decisao=direto vaos=y=+192 nota=1.000 ESCOLHIDO
+[MU] t=1794441338.110 uso_y=191.8 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441338.210 bola=3752,868 abertas=72/81 nota=1.000 mira=196.8 decisao=direto vaos=y=+197 nota=1.000 ESCOLHIDO
+[MR] t=1794441338.309 bola=3752,867 abertas=72/81 nota=1.000 mira=197.0 decisao=direto vaos=y=+197 nota=1.000 ESCOLHIDO
+[MR] t=1794441338.409 bola=3753,867 abertas=71/81 nota=1.000 mira=202.2 decisao=direto vaos=y=+202 nota=1.000 ESCOLHIDO
+[MR] t=1794441338.509 bola=3755,868 abertas=71/81 nota=1.000 mira=202.5 decisao=direto vaos=y=+202 nota=1.000 ESCOLHIDO
+[MR] t=1794441338.609 bola=3751,870 abertas=70/81 nota=1.000 mira=207.1 decisao=direto vaos=y=+207 nota=1.000 ESCOLHIDO
+[MR] t=1794441338.709 bola=3751,869 abertas=69/81 nota=1.000 mira=212.1 decisao=direto vaos=y=+212 nota=1.000 ESCOLHIDO
+[MR] t=1794441338.809 bola=3754,869 abertas=68/81 nota=1.000 mira=217.7 decisao=direto vaos=y=+218 nota=1.000 ESCOLHIDO
+[MR] t=1794441338.910 bola=3752,868 abertas=67/81 nota=1.000 mira=222.4 decisao=direto vaos=y=+222 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.009 bola=3753,871 abertas=66/81 nota=1.000 mira=227.6 decisao=direto vaos=y=+228 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.110 bola=3753,870 abertas=65/81 nota=1.000 mira=232.5 decisao=direto vaos=y=+232 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.211 bola=3755,869 abertas=64/81 nota=1.000 mira=237.7 decisao=direto vaos=y=+238 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.309 bola=3754,870 abertas=62/81 nota=1.000 mira=247.2 decisao=direto vaos=y=+247 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.409 bola=3751,870 abertas=61/81 nota=1.000 mira=251.6 decisao=direto vaos=y=+252 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.509 bola=3753,869 abertas=59/81 nota=1.000 mira=261.5 decisao=direto vaos=y=+262 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.611 bola=3754,868 abertas=57/81 nota=1.000 mira=271.1 decisao=direto vaos=y=+271 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.708 bola=3753,870 abertas=55/81 nota=1.000 mira=280.3 decisao=direto vaos=y=+280 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.808 bola=3750,869 abertas=53/81 nota=1.000 mira=289.1 decisao=direto vaos=y=+289 nota=1.000 ESCOLHIDO
+[MR] t=1794441339.911 bola=3749,869 abertas=51/81 nota=1.000 mira=298.1 decisao=direto vaos=y=+298 nota=1.000 ESCOLHIDO
+[MR] t=1794441340.009 bola=3754,870 abertas=49/81 nota=1.000 mira=307.8 decisao=direto vaos=y=+308 nota=1.000 ESCOLHIDO
+[MR] t=1794441340.109 bola=3754,866 abertas=47/81 nota=1.000 mira=316.5 decisao=direto vaos=y=+316 nota=1.000 ESCOLHIDO
+[MU] t=1794441340.109 uso_y=316.5 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441340.209 bola=3753,864 abertas=46/81 nota=1.000 mira=320.8 decisao=direto vaos=y=+321 nota=1.000 ESCOLHIDO
+[MU] t=1794441340.210 uso_y=316.5 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441340.309 bola=3755,868 abertas=44/81 nota=1.000 mira=329.9 decisao=direto vaos=y=+330 nota=1.000 ESCOLHIDO
+[MR] t=1794441340.409 bola=3753,869 abertas=42/81 nota=1.000 mira=338.4 decisao=direto vaos=y=+338 nota=1.000 ESCOLHIDO
+[MR] t=1794441340.509 bola=3751,869 abertas=40/81 nota=1.000 mira=346.7 decisao=direto vaos=y=+347 nota=1.000 ESCOLHIDO
+[MR] t=1794441340.609 bola=3752,870 abertas=38/81 nota=0.956 mira=355.3 decisao=direto vaos=y=+355 nota=0.956 ESCOLHIDO
+[MR] t=1794441340.709 bola=3754,869 abertas=36/81 nota=0.906 mira=363.8 decisao=direto vaos=y=+364 nota=0.906 ESCOLHIDO
+[MR] t=1794441340.809 bola=3751,868 abertas=34/81 nota=0.856 mira=371.9 decisao=direto vaos=y=+372 nota=0.856 ESCOLHIDO
+[MR] t=1794441340.909 bola=3750,868 abertas=33/81 nota=0.804 mira=379.9 decisao=direto vaos=y=-494 nota=0.013 descartado | y=+380 nota=0.804 ESCOLHIDO
+[MR] t=1794441341.009 bola=3753,867 abertas=31/81 nota=0.729 mira=392.4 decisao=direto vaos=y=-482 nota=0.038 descartado | y=+392 nota=0.729 ESCOLHIDO
+[MR] t=1794441341.109 bola=3753,870 abertas=31/81 nota=0.676 mira=400.4 decisao=direto vaos=y=-457 nota=0.089 descartado | y=+400 nota=0.676 ESCOLHIDO
+[MR] t=1794441341.211 bola=3752,869 abertas=30/81 nota=0.600 mira=412.2 decisao=direto vaos=y=-434 nota=0.140 descartado | y=+412 nota=0.600 ESCOLHIDO
+[MR] t=1794441341.310 bola=3752,868 abertas=29/81 nota=0.549 mira=420.0 decisao=direto vaos=y=-423 nota=0.166 descartado | y=+420 nota=0.549 ESCOLHIDO
+[MR] t=1794441341.409 bola=3750,869 abertas=29/81 nota=0.523 mira=423.8 decisao=direto vaos=y=-411 nota=0.191 descartado | y=+424 nota=0.523 ESCOLHIDO
+[MR] t=1794441341.510 bola=3754,867 abertas=28/81 nota=0.473 mira=431.7 decisao=direto vaos=y=-400 nota=0.217 descartado | y=+432 nota=0.473 ESCOLHIDO
+[MU] t=1794441341.510 uso_y=431.7 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441341.609 bola=3754,868 abertas=28/81 nota=0.447 mira=435.5 decisao=direto vaos=y=-389 nota=0.243 descartado | y=+436 nota=0.447 ESCOLHIDO
+[MU] t=1794441341.609 uso_y=431.7 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441341.709 bola=3753,870 abertas=27/81 nota=0.420 mira=439.3 decisao=direto vaos=y=-389 nota=0.242 descartado | y=+439 nota=0.420 ESCOLHIDO
+[MR] t=1794441341.809 bola=3752,868 abertas=27/81 nota=0.370 mira=446.9 decisao=direto vaos=y=-367 nota=0.294 descartado | y=+447 nota=0.370 ESCOLHIDO
+[MR] t=1794441341.911 bola=3754,870 abertas=27/81 nota=0.344 mira=450.7 decisao=direto vaos=y=-357 nota=0.319 descartado | y=+451 nota=0.344 ESCOLHIDO
+[MR] t=1794441342.008 bola=3754,869 abertas=27/81 nota=0.345 mira=-346.0 decisao=direto vaos=y=-346 nota=0.345 ESCOLHIDO | y=+454 nota=0.319 descartado
+[MR] t=1794441342.110 bola=3753,867 abertas=26/81 nota=0.346 mira=-346.1 decisao=direto vaos=y=-346 nota=0.346 ESCOLHIDO | y=+458 nota=0.294 descartado
+[MR] t=1794441342.209 bola=3752,870 abertas=25/81 nota=0.370 mira=-335.9 decisao=direto vaos=y=-336 nota=0.370 ESCOLHIDO | y=+466 nota=0.242 descartado
+[MR] t=1794441342.311 bola=3756,869 abertas=24/81 nota=0.395 mira=-325.3 decisao=direto vaos=y=-325 nota=0.395 ESCOLHIDO | y=+473 nota=0.191 descartado
+[MR] t=1794441342.408 bola=3753,870 abertas=25/81 nota=0.446 mira=-305.5 decisao=direto vaos=y=-306 nota=0.446 ESCOLHIDO | y=+477 nota=0.166 descartado
+[MR] t=1794441342.509 bola=3754,868 abertas=23/81 nota=0.447 mira=-305.3 decisao=direto vaos=y=-305 nota=0.447 ESCOLHIDO | y=+484 nota=0.115 descartado
+[MU] t=1794441342.509 uso_y=None tipo=bloqueado segurada=0 ciclos=0
+[MR] t=1794441342.609 bola=3753,868 abertas=23/81 nota=0.524 mira=-276.1 decisao=direto vaos=y=-276 nota=0.524 ESCOLHIDO | y=+495 nota=0.038 descartado
+[MU] t=1794441342.609 uso_y=-276.1 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441342.709 bola=3752,868 abertas=22/81 nota=0.549 mira=-266.8 decisao=direto vaos=y=-267 nota=0.549 ESCOLHIDO
+[MU] t=1794441342.710 uso_y=-276.1 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441342.811 bola=3753,867 abertas=24/81 nota=0.601 mira=-247.9 decisao=direto vaos=y=-248 nota=0.601 ESCOLHIDO
+[MR] t=1794441342.909 bola=3752,869 abertas=25/81 nota=0.625 mira=-239.0 decisao=direto vaos=y=-239 nota=0.625 ESCOLHIDO
+[MR] t=1794441343.008 bola=3753,868 abertas=27/81 nota=0.677 mira=-220.6 decisao=direto vaos=y=-221 nota=0.677 ESCOLHIDO
+[MU] t=1794441343.008 uso_y=-220.6 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441343.110 bola=3755,868 abertas=28/81 nota=0.703 mira=-211.5 decisao=direto vaos=y=-212 nota=0.703 ESCOLHIDO
+[MU] t=1794441343.110 uso_y=-220.6 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441343.209 bola=3753,867 abertas=30/81 nota=0.754 mira=-194.3 decisao=direto vaos=y=-194 nota=0.754 ESCOLHIDO
+[MR] t=1794441343.309 bola=3752,868 abertas=31/81 nota=0.779 mira=-185.9 decisao=direto vaos=y=-186 nota=0.779 ESCOLHIDO
+[MR] t=1794441343.409 bola=3753,868 abertas=33/81 nota=0.831 mira=-168.8 decisao=direto vaos=y=-169 nota=0.831 ESCOLHIDO
+[MU] t=1794441343.409 uso_y=-168.8 tipo=gol segurada=0 ciclos=0
+[MR] t=1794441343.509 bola=3753,867 abertas=35/81 nota=0.883 mira=-152.2 decisao=direto vaos=y=-152 nota=0.883 ESCOLHIDO
+[MU] t=1794441343.510 uso_y=-168.8 tipo=gol segurada=1 ciclos=1
+[MR] t=1794441343.710 bola=3751,869 abertas=35/81 nota=0.881 mira=-152.5 decisao=direto vaos=y=-152 nota=0.881 ESCOLHIDO
+[MR] t=1794441343.809 bola=3751,870 abertas=34/81 nota=0.854 mira=-160.7 decisao=direto vaos=y=-161 nota=0.854 ESCOLHIDO
+[MR] t=1794441343.910 bola=3751,868 abertas=32/81 nota=0.805 mira=-177.5 decisao=direto vaos=y=-178 nota=0.805 ESCOLHIDO
+[MR] t=1794441344.009 bola=3754,867 abertas=32/81 nota=0.806 mira=-177.0 decisao=direto vaos=y=-177 nota=0.806 ESCOLHIDO
+[MR] t=1794441344.110 bola=3751,869 abertas=31/81 nota=0.778 mira=-186.0 decisao=direto vaos=y=-186 nota=0.778 ESCOLHIDO
+[MR] t=1794441344.209 bola=3753,869 abertas=30/81 nota=0.753 mira=-194.3 decisao=direto vaos=y=-194 nota=0.753 ESCOLHIDO
+[MR] t=1794441344.309 bola=3755,871 abertas=30/81 nota=0.751 mira=-193.9 decisao=direto vaos=y=-194 nota=0.751 ESCOLHIDO
+[MR] t=1794441344.409 bola=3754,871 abertas=29/81 nota=0.726 mira=-202.9 decisao=direto vaos=y=-203 nota=0.726 ESCOLHIDO
+[MR] t=1794441344.509 bola=3754,870 abertas=27/81 nota=0.675 mira=-220.5 decisao=direto vaos=y=-220 nota=0.675 ESCOLHIDO
+[MR] t=1794441344.609 bola=3751,867 abertas=26/81 nota=0.652 mira=-230.0 decisao=direto vaos=y=-230 nota=0.652 ESCOLHIDO
+[MR] t=1794441344.711 bola=3754,868 abertas=25/81 nota=0.626 mira=-238.6 decisao=direto vaos=y=-239 nota=0.626 ESCOLHIDO
+[MR] t=1794441344.809 bola=3754,869 abertas=23/81 nota=0.574 mira=-257.2 decisao=direto vaos=y=-257 nota=0.574 ESCOLHIDO
+[MR] t=1794441344.910 bola=3752,867 abertas=22/81 nota=0.524 mira=-276.3 decisao=direto vaos=y=-276 nota=0.524 ESCOLHIDO | y=+498 nota=0.013 descartado
+[MR] t=1794441345.009 bola=3751,866 abertas=24/81 nota=0.500 mira=-286.1 decisao=direto vaos=y=-286 nota=0.500 ESCOLHIDO | y=+487 nota=0.090 descartado
+[MR] t=1794441345.110 bola=3755,867 abertas=24/81 nota=0.448 mira=-305.3 decisao=direto vaos=y=-305 nota=0.448 ESCOLHIDO | y=+480 nota=0.141 descartado
+[MR] t=1794441345.209 bola=3754,869 abertas=24/81 nota=0.396 mira=-325.4 decisao=direto vaos=y=-325 nota=0.396 ESCOLHIDO | y=+473 nota=0.191 descartado
+[MR] t=1794441345.309 bola=3753,867 abertas=25/81 nota=0.396 mira=-325.6 decisao=direto vaos=y=-326 nota=0.396 ESCOLHIDO | y=+469 nota=0.217 descartado
+[MR] t=1794441345.409 bola=3752,870 abertas=25/81 nota=0.344 mira=-346.3 decisao=direto vaos=y=-346 nota=0.344 ESCOLHIDO | y=+462 nota=0.268 descartado
+[MU] t=1794441345.409 uso_y=None tipo=bloqueado segurada=0 ciclos=0
+[MR] t=1794441345.509 bola=3752,872 abertas=26/81 nota=0.318 mira=-356.8 decisao=direto vaos=y=-357 nota=0.318 ESCOLHIDO | y=+454 nota=0.318 descartado

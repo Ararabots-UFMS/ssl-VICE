@@ -1,0 +1,20 @@
+{
+  "seed": 82,
+  "bola_vel": [
+    0.0
+  ],
+  "geometrias": [
+    "cruza",
+    "de_frente",
+    "foge_gol",
+    "foge_nosso"
+  ],
+  "miras": [],
+  "inimigos": 0,
+  "goleiro": "guarda",
+  "x_min": 2500.0,
+  "x_max": 3400.0,
+  "y_max": 2700.0,
+  "dist_min": 300.0,
+  "dist_max": 2500.0
+}
