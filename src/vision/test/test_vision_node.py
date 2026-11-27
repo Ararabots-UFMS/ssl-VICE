@@ -30,13 +30,16 @@ from vision.vision_node import Vision  # noqa: E402
 
 
 class FakePacket:
-    def __init__(self, camera_id=None, geometry=False, tag=None):
+    def __init__(self, camera_id=None, geometry=False, tag=None, t_capture=50.0, t_sent=50.0):
         self.camera_id = camera_id
         self._geometry = geometry
         self.geometry = MagicMock() if geometry else None
         self.tag = tag
         self.detection = MagicMock()
         self.detection.camera_id = camera_id
+        # ssl-vision's clock, unrelated to the ROS one: only the difference means anything.
+        self.detection.t_capture = t_capture
+        self.detection.t_sent = t_sent
 
     def HasField(self, name):
         if name == "geometry":
@@ -44,9 +47,12 @@ class FakePacket:
         return not self._geometry
 
 
-def _node(packets, process_hz=60.0, now=1000.0):
+def _node(packets, process_hz=60.0, now=1000.0, stamp_at_capture=True):
     node = Vision.__new__(Vision)
     node.verbose = False
+    node.stamp_at_capture = stamp_at_capture
+    node._processing = (0, 0.0, 0.0, 0)
+    node._last_processing_report = 0.0
     node.frequency_tracker_process = process_hz
     node._pending_frame = {}
     node._last_process = 0.0
@@ -165,6 +171,57 @@ class TestProcessing:
         node._process_pending_frame()
 
         assert node.tracker.update_frame.call_args[1]["wall_stamp"] == pytest.approx(1234.5)
+
+
+def _stamp(processing, stamp_at_capture=True, now=1234.5):
+    node = _node([FakePacket(camera_id=0, t_capture=50.0, t_sent=50.0 + processing)],
+                 now=now, stamp_at_capture=stamp_at_capture)
+    node._drain_socket()
+    node._process_pending_frame()
+    return node.tracker.update_frame.call_args[1]["wall_stamp"]
+
+
+class TestCaptureStamp:
+    """vision_wall_stamp is the capture instant on the ROS clock, not the arrival."""
+
+    def test_ssl_visions_processing_time_is_taken_off_the_arrival(self):
+        assert _stamp(0.015) == pytest.approx(1234.5 - 0.015, abs=1e-6)
+
+    def test_a_negative_processing_time_falls_back_to_arrival(self):
+        assert _stamp(-0.002) == pytest.approx(1234.5, abs=1e-6)
+
+    def test_an_implausibly_long_processing_time_falls_back_to_arrival(self):
+        assert _stamp(Vision.MAX_PROCESSING_TIME + 0.01) == pytest.approx(1234.5, abs=1e-6)
+
+    def test_just_under_the_limit_is_still_trusted(self):
+        limit = Vision.MAX_PROCESSING_TIME
+        assert _stamp(limit - 0.001) == pytest.approx(1234.5 - limit + 0.001, abs=1e-6)
+
+    def test_it_can_be_turned_off(self):
+        assert _stamp(0.015, stamp_at_capture=False) == pytest.approx(1234.5, abs=1e-6)
+
+    def test_the_newest_camera_sets_the_frame_stamp(self):
+        node = _node([FakePacket(camera_id=0, t_capture=50.0, t_sent=50.030),
+                      FakePacket(camera_id=1, t_capture=50.0, t_sent=50.010)], now=1234.5)
+
+        node._drain_socket()
+        node._process_pending_frame()
+
+        assert node.tracker.update_frame.call_args[1]["wall_stamp"] == pytest.approx(1234.49, abs=1e-6)
+
+    def test_processing_time_is_reported_periodically(self):
+        node = _node([FakePacket(camera_id=0, t_sent=50.012),
+                      FakePacket(camera_id=1, t_sent=50.020),
+                      FakePacket(camera_id=2, t_sent=50.5)])
+        node._last_processing_report = 1000.0 - Vision.PROCESSING_REPORT_PERIOD - 0.1
+        node._drain_socket()
+
+        node._report_processing_time(1000.0)
+
+        message = node.get_logger().info.call_args[0][0]
+        assert "max 500.0 ms" in message
+        assert "1 out of range" in message
+        assert node._processing == (0, 0.0, 0.0, 0)
 
 
 class TestStaleReporting:

@@ -18,6 +18,10 @@ class Vision(Node):
 
     MAX_PACKETS_PER_DRAIN = 200
     STALE_REPORT_PERIOD = 5.0
+    # ssl-vision's own processing time (t_sent - t_capture) is trusted up to this; past
+    # it the two clocks or the packet are suspect and the arrival time is used instead.
+    MAX_PROCESSING_TIME = 0.1
+    PROCESSING_REPORT_PERIOD = 10.0
 
     def __init__(self):
         super().__init__("visionNode")
@@ -36,6 +40,9 @@ class Vision(Node):
             "frequency_tracker_update": 1000.0,
             "frequency_tracker_process": 60.0,
             "friction": 0.01,
+            # Stamp frames at capture (arrival minus ssl-vision's processing time)
+            # rather than at arrival.
+            "stamp_at_capture": True,
         }
 
         for name, default in default_params.items():
@@ -53,11 +60,14 @@ class Vision(Node):
         self.frequency_tracker_update = self.get_parameter("frequency_tracker_update").value
         self.frequency_tracker_process = self.get_parameter("frequency_tracker_process").value
         self.friction = self.get_parameter("friction").value
+        self.stamp_at_capture = self.get_parameter("stamp_at_capture").value
 
         self._pending_frame = {}
         self._last_process = 0.0
         self._stale_packets = 0
         self._last_stale_report = 0.0
+        self._processing = (0, 0.0, 0.0, 0)  # count, sum, max, out of range
+        self._last_processing_report = 0.0
         
         self.client = Client(
             ip=self.ip,
@@ -126,10 +136,26 @@ class Vision(Node):
             # Stamped on arrival, not when the frame is folded in, so the estimate
             # carries the instant it describes.
             now_sec = self.get_clock().now().nanoseconds / 1e9
+            stamp = self._capture_stamp(data.detection, now_sec)
             camera_id = data.detection.camera_id
             if camera_id in self._pending_frame:
                 self._stale_packets += 1
-            self._pending_frame[camera_id] = (data, now_sec)
+            self._pending_frame[camera_id] = (data, stamp)
+
+    def _capture_stamp(self, detection, arrival_sec):
+        """
+        The capture instant on the ROS clock: arrival minus ssl-vision's processing
+        time. Both t_ fields are on the vision host's clock, so only their difference
+        is used; out of range it falls back to the arrival time.
+        """
+        processing = detection.t_sent - detection.t_capture
+        in_range = 0.0 <= processing <= self.MAX_PROCESSING_TIME
+        count, total, peak, bad = self._processing
+        self._processing = (count + 1, total + processing, max(peak, processing),
+                            bad + (not in_range))
+        if self.stamp_at_capture and in_range:
+            return arrival_sec - processing
+        return arrival_sec
 
     def _process_pending_frame(self):
         if not self._pending_frame:
@@ -148,6 +174,20 @@ class Vision(Node):
         )
 
         self._report_stale_packets(now_sec)
+        self._report_processing_time(now_sec)
+
+    def _report_processing_time(self, now_sec):
+        if now_sec - self._last_processing_report < self.PROCESSING_REPORT_PERIOD:
+            return
+        count, total, peak, bad = self._processing
+        if self._last_processing_report and count:
+            self.get_logger().info(
+                f"ssl-vision processing time (t_sent - t_capture): mean "
+                f"{1000.0 * total / count:.1f} ms, max {1000.0 * peak:.1f} ms over {count} "
+                f"packets" + (f", {bad} out of range (stamped at arrival)" if bad else "")
+            )
+        self._last_processing_report = now_sec
+        self._processing = (0, 0.0, 0.0, 0)
 
     def _report_stale_packets(self, now_sec):
         """
