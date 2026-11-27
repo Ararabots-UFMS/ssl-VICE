@@ -140,3 +140,43 @@ class TestRobotTrajectoryController:
 
         assert command.x == pytest.approx(0.0)
         assert command.y > 0.0
+
+
+class TestFeedforwardGuard:
+    """
+    The guard drops the feedforward on an axis where it disagrees with the position
+    error. Predictive mode turns it off: there the reference no longer runs ahead.
+    """
+
+    def test_the_guard_is_on_by_default(self):
+        controller = PIDController(kp=1.0, ki=0.0, kd=0.0)
+        controller.slew_limit = 1e6
+
+        # Ahead of a reference that still moves forward: feedforward disagrees.
+        output = _follow(controller, 1.0, 1.0, 1.1, 1.0)
+
+        assert controller.feedforward_guard is True
+        assert output == pytest.approx(-0.1)
+
+    def test_without_the_guard_the_feedforward_always_applies(self):
+        controller = PIDController(kp=1.0, ki=0.0, kd=0.0, feedforward_guard=False)
+        controller.slew_limit = 1e6
+
+        output = _follow(controller, 1.0, 1.0, 1.1, 1.0)
+
+        assert output == pytest.approx(1.0 - 0.1)
+
+    def test_without_the_guard_a_robot_on_its_reference_gets_the_feedforward(self):
+        controller = PIDController(kp=4.0, ki=0.0, kd=0.4, feedforward_guard=False)
+
+        output = _follow(controller, 1.0, 1.5, 1.0, 1.5)
+
+        assert output == pytest.approx(1.5)
+
+    def test_it_is_threaded_through_to_both_axes(self):
+        robot_controller = RobotTrajectoryController(feedforward_guard=False)
+        controller = robot_controller.get_controller(4)
+
+        assert controller.x_controller.feedforward_guard is False
+        assert controller.y_controller.feedforward_guard is False
+        assert Vector2DTrajectoryController().x_controller.feedforward_guard is True

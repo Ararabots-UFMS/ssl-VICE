@@ -31,6 +31,7 @@ DEFAULT_PARAMS = {
     # As declared by the node.
     "overhead_max_future": 0.35,
     "vision_handoff_latency": 0.03,
+    "max_acceleration": 2000.0,
 }
 
 
@@ -68,6 +69,26 @@ def planner_node():
     node.par_executor = MagicMock()
 
     return node
+
+
+def test_max_acceleration_param_reaches_the_solver():
+    params = dict(DEFAULT_PARAMS, max_acceleration=1234.0)
+
+    with patch('rclpy.init'), \
+         patch('rclpy.node.Node.__init__', return_value=None), \
+         patch.object(MovementPlanner, 'create_subscription', return_value=MagicMock()), \
+         patch.object(MovementPlanner, 'create_publisher', return_value=MagicMock()), \
+         patch.object(MovementPlanner, 'create_timer', return_value=MagicMock()), \
+         patch.object(MovementPlanner, 'declare_parameter', return_value=MagicMock()), \
+         patch.object(MovementPlanner, 'get_parameter',
+                      side_effect=lambda name: MagicMock(value=params[name])), \
+         patch.object(MovementPlanner, 'get_logger', return_value=MagicMock()), \
+         patch.object(MovementPlanner, 'get_clock', _clock(0.0)):
+        node = MovementPlanner()
+
+    limit = node.planner.config.max_acceleration
+    assert (limit.x, limit.y) == (1234.0, 1234.0)
+    assert node.planner.generator.constrainsts.max_acceleration.x == 1234.0
 
 
 def _make_target(robot_id=1, initial_pos=(0, 0), initial_vel=(0, 0),

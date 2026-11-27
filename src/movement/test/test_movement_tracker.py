@@ -131,12 +131,14 @@ def test_build_control_reference_point():
     trajectory = _trajectory()
     state = MotionState(Vector2D(1500, -500), Vector2D(300, -200))
 
-    point = build_control_reference_point(2, trajectory.to_msg(2), state, time_offset=0.5)
+    point = build_control_reference_point(2, trajectory.to_msg(2), state, time_offset=0.5,
+                                          now_sec=123.4)
 
     assert point.robot_id == 2
     assert (point.pos.x, point.pos.y) == (1500, -500)
     assert (point.vel.x, point.vel.y) == (300, -200)
     assert point.timestamp == 0.5
+    assert point.wall_stamp == 123.4
     assert len(point.trajectory.segments) > 0
 
 
@@ -257,6 +259,8 @@ class TestUpdateActiveTrajectory:
         tracker.control_reference_pub.publish.assert_called_once()
         tracker.overhead_pub.publish.assert_called_once()
         assert data["time_offset"] == pytest.approx(0.5)
+        # Stamped with this tick, so the controller can tell how old it is.
+        assert tracker.control_reference_pub.publish.call_args[0][0].wall_stamp == 10.0
 
     def test_the_offset_is_clamped_and_the_overhead_stops_at_the_end(self, tracker):
         trajectory = _trajectory(1000.0)

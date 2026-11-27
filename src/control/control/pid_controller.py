@@ -12,7 +12,14 @@ DEFAULT_SLEW_LIMIT = 3.0  # m/s²
 
 
 class PIDController:
-    def __init__(self, kp: float, ki: float, kd: float, slew_limit: float = 3.0):
+    def __init__(
+        self,
+        kp: float,
+        ki: float,
+        kd: float,
+        slew_limit: float = 3.0,
+        feedforward_guard: bool = True,
+    ):
         self.kp = kp
         self.ki = ki
         self.kd = kd
@@ -27,6 +34,9 @@ class PIDController:
         # m/s². Should match what the robot can actually deliver: a command that steps
         # faster than that is answered with wheel slip, not acceleration.
         self.slew_limit: float = slew_limit
+        # The sign guard below. It only helps while the reference runs ahead of the
+        # robot; with the latency-aware (predictive) controller it costs braking.
+        self.feedforward_guard: bool = feedforward_guard
 
     def update_params(self, kp: float, ki: float, kd: float):
         self.kp = kp
@@ -138,7 +148,7 @@ class PIDController:
         # O QUE AINDA ESTA ERRADO, e nao e aqui: o rastreador replaneja a cada
         # ciclo a partir do estado planejado. Esta guarda e remendo no
         # consumidor; a correcao esta no produtor (pacote movement).
-        if feedforward * position_error > 0.0:
+        if not self.feedforward_guard or feedforward * position_error > 0.0:
             output = feedforward + proportional + integral_term + derivative
         else:
             output = proportional + integral_term + derivative
@@ -173,9 +183,10 @@ class Vector2DTrajectoryController:
         ki: float = DEFAULT_KI,
         kd: float = DEFAULT_KD,
         slew_limit: float = DEFAULT_SLEW_LIMIT,
+        feedforward_guard: bool = True,
     ):
-        self.x_controller = PIDController(kp, ki, kd, slew_limit)
-        self.y_controller = PIDController(kp, ki, kd, slew_limit)
+        self.x_controller = PIDController(kp, ki, kd, slew_limit, feedforward_guard)
+        self.y_controller = PIDController(kp, ki, kd, slew_limit, feedforward_guard)
 
     def update_params(self, kp: float, ki: float, kd: float):
         self.x_controller.update_params(kp, ki, kd)
@@ -212,7 +223,7 @@ class Vector2DTrajectoryController:
 class RobotTrajectoryController:
     """Robot controller for trajectory following"""
 
-    def __init__(self):
+    def __init__(self, feedforward_guard: bool = True):
         self.trajectory_controllers = {}
         self.last_targets = {}  # For position triggered reset
         self.reset_threshold = 0.5  # Reset if target jumps > 0.5m
@@ -221,6 +232,7 @@ class RobotTrajectoryController:
         self.default_ki = DEFAULT_KI
         self.default_kd = DEFAULT_KD
         self.default_slew_limit = DEFAULT_SLEW_LIMIT
+        self.default_feedforward_guard = feedforward_guard
 
     def get_controller(self, robot_id: int) -> Vector2DTrajectoryController:
         """Get or create trajectory controller for robot"""
@@ -230,6 +242,7 @@ class RobotTrajectoryController:
                 self.default_ki,
                 self.default_kd,
                 self.default_slew_limit,
+                self.default_feedforward_guard,
             )
         return self.trajectory_controllers[robot_id]
 
