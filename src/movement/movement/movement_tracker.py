@@ -108,6 +108,7 @@ def build_control_reference_point(
     trajectory_msg: Optional[TrajectoryMsg],
     state: Optional[MotionState],
     time_offset: float,
+    now_sec: float,
 ) -> Optional[TrajectoryPointMsg]:
     if state is None or trajectory_msg is None:
         return None
@@ -117,6 +118,8 @@ def build_control_reference_point(
     point.pos = state.position.to_msg()
     point.vel = state.velocity.to_msg()
     point.timestamp = float(time_offset)
+    # When `timestamp` was the plan's offset, so the controller can age the reference.
+    point.wall_stamp = float(now_sec)
     point.trajectory = trajectory_msg
     return point
 
@@ -347,6 +350,7 @@ class MovementTracker(Node):
             data.get("trajectory_msg"),
             current_state,
             new_offset,
+            now_sec,
         )
         if control_ref is not None:
             self.control_reference_pub.publish(control_ref)
