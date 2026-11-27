@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             "controller = control.control:main",
+            "identify_robot = control.identify_robot:main",
         ],
     },
 )
