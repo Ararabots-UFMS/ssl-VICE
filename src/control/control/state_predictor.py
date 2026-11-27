@@ -62,3 +62,67 @@ class RobotModel:
             x[..., 2:] = v_new
             t += dt
         return x
+
+
+class RobotStatePredictor:
+    """
+    Vision says where the robot was at capture; the commands already sent say what it
+    has been told since. Rolling the first through the second gives the state at any
+    later instant, without the lag a constant-velocity filter has while braking.
+
+      correct(t, x, y):  roll the estimate to the capture instant through the model,
+                         then a linear KF update on [x y vx vy] with the position.
+      state_at(t):       roll the corrected estimate on through the commands sent.
+
+    Ported from vice-loop-sim/predictor.py, where it was validated in closed loop.
+    """
+
+    def __init__(self, actuation_delay, tau, max_accel, meas_sd=15.0, accel_sd=1500.0,
+                 step=0.002, history=1.0):
+        self.model = RobotModel(actuation_delay, tau, max_accel, step=step, history=history)
+        self.R = np.eye(2) * meas_sd ** 2
+        self.accel_sd = accel_sd
+        self.t = None                  # instant the estimate refers to
+        self.x = np.zeros(4)
+        self.P = np.diag([meas_sd ** 2] * 2 + [3000.0 ** 2] * 2)
+        self._last_stamp = None
+
+    def record_command(self, t_sent, vx, vy):
+        """mm/s, field frame: exactly what was published, at the instant it was."""
+        self.model.record_command(t_sent, vx, vy)
+        self.model.prune(self.t if self.t is not None else t_sent)
+
+    def correct(self, t_capture, x, y):
+        if self._last_stamp is not None and t_capture <= self._last_stamp:
+            return
+        self._last_stamp = t_capture
+        z = np.array([x, y], dtype=float)
+        if self.t is None:
+            self.t, self.x = t_capture, np.array([z[0], z[1], 0.0, 0.0])
+            return
+        dt = max(0.0, t_capture - self.t)
+        self.x = self.model.roll(self.t, self.x, t_capture)
+        F = np.eye(4)
+        F[0, 2] = F[1, 3] = dt
+        G = np.array([[dt * dt / 2, 0], [0, dt * dt / 2], [dt, 0], [0, dt]])
+        Q = G @ G.T * self.accel_sd ** 2
+        self.P = F @ self.P @ F.T + Q
+        H = np.zeros((2, 4))
+        H[0, 0] = H[1, 1] = 1.0
+        S = H @ self.P @ H.T + self.R
+        K = self.P @ H.T @ np.linalg.inv(S)
+        self.x = self.x + K @ (z - H @ self.x)
+        I_KH = np.eye(4) - K @ H
+        self.P = I_KH @ self.P @ I_KH.T + K @ self.R @ K.T  # Joseph form
+        self.t = t_capture
+
+    @property
+    def last_capture(self):
+        return self.t
+
+    def state_at(self, t):
+        """(x, y, vx, vy) at t, or None before the first correct()."""
+        if self.t is None:
+            return None
+        x = self.x if t <= self.t else self.model.roll(self.t, self.x, t)
+        return tuple(float(v) for v in x)
