@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from movement.entities.motion.motion_state import MotionState
 from movement.local_planner.orchestrator import Orchestrator
 from movement.local_planner.obstacle_factory import ObstacleFactory
-from movement.local_planner.solver import PlanningStatus
+from movement.local_planner.solver import PlanningStatus, SolverConfig
 
 from movement_interfaces.msg import (
     TargetArray,
@@ -41,6 +41,10 @@ class MovementPlanner(Node):
         self.declare_parameter('overhead_max_future', 0.35)
         self.declare_parameter('vision_handoff_latency', 0.03)
         self.declare_parameter('accept_radius', 50.0)
+        # mm/s². Keep it at about 0.7 x min(the robot's measured max acceleration, the
+        # controller's slew_limit): planning to the very limit leaves no margin to
+        # brake late, and any lateness reaches the goal as overshoot.
+        self.declare_parameter('max_acceleration', 2000.0)
         
         # MotionState
         self.cur_targets: Optional[TargetArray] = None
@@ -52,7 +56,10 @@ class MovementPlanner(Node):
         self._parked: Dict[int, Vector2D] = {}
         
         # Tools
-        self.planner = Orchestrator()
+        max_acceleration = float(self.get_parameter('max_acceleration').value)
+        self.planner = Orchestrator(
+            SolverConfig(max_acceleration=Vector2D(max_acceleration, max_acceleration))
+        )
         self.factory = ObstacleFactory(logger=self.get_logger())
         self.par_executor = ThreadPoolExecutor(max_workers=self.get_parameter('max_threads').value)
         

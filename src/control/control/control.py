@@ -99,7 +99,11 @@ class Controller(Node):
         self._reference_trajectories: dict[int, tuple] = {}  # rid -> (key, Trajectory)
 
         # Controllers
-        self.robot_controller = RobotTrajectoryController()
+        # The feedforward sign guard patches a reference that runs ahead of the robot;
+        # predictive mode removes that cause, and the guard would only cost braking.
+        self.robot_controller = RobotTrajectoryController(
+            feedforward_guard=self.control_mode == "legacy"
+        )
         self.robot_controller.default_slew_limit = float(self.get_parameter("slew_limit").value)
         self.orientation_controller = PController(kp=4, max_output=6)
         self.target_orientations = {}

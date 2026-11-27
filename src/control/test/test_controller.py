@@ -273,6 +273,13 @@ class TestLegacy:
             _controller(control_mode="fast")
 
 
+@pytest.mark.parametrize("mode, guard", [("legacy", True), ("predictive", False)])
+def test_the_feedforward_guard_is_on_only_in_legacy(mode, guard):
+    node = _controller(control_mode=mode)
+
+    assert node.robot_controller.get_controller(1).x_controller.feedforward_guard is guard
+
+
 def test_slew_limit_param_reaches_the_trajectory_controller():
     node = _controller(slew_limit=2.5)
 

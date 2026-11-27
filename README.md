@@ -146,6 +146,33 @@ Faça a mesma coisa com o `ssl-vision`.
 
 ---
 
+## Modelo do robô e aceleração do planner
+
+O controlador (`control_mode:=predictive`, o padrão) prevê o estado do robô no instante
+em que o comando chega às rodas. Para isso usa três números do robô, medidos com
+`identify_robot`:
+
+| parâmetro | significado |
+|---|---|
+| `actuation_delay` (s) | do comando publicado até o robô reagir (serial, rádio, firmware) |
+| `tau` (s) | constante de tempo da malha de velocidade do próprio robô |
+| `max_accel` (m/s²) | aceleração que as rodas realmente entregam |
+
+Em `launch/sim_one.py` e `launch/real_one.py` eles ficam no dicionário `ROBOT`, e
+todos os parâmetros do controlador e do planner saem dele. Para medir:
+
+    ros2 launch launch/identify_sim.py        # ou identify_real.py no campo
+    ros2 run control identify_robot --ros-args -p confirm:=true -p robot_id:=0
+    ros2 run control identify_robot --fit identify_robot.csv
+
+**Invariante:** a aceleração do planner deve ficar em torno de
+`0.7 × min(max_accel medido, slew_limit)`. Planejar no limite não deixa margem para
+frear atrasado, e qualquer atraso chega ao alvo como overshoot.
+
+Para voltar ao controlador anterior: `control_mode:=legacy`.
+
+---
+
 ## Extras
 
 - [Configuração do VS Code](docs/vscode-setup.md) — Dev Container, IntelliSense para ROS2, Ruff com auto-format ao salvar
